@@ -69,6 +69,7 @@ type entry struct {
 	details             map[domain.ID]*detailSlot
 	peerPresence        map[string]map[string]peerResource
 	avatarWake          chan struct{}
+	accountAvatarGate   chan struct{}
 	avatarRoom          string // Most recently opened room roster, guarded by mu.
 	avatarMu            sync.Mutex
 	avatarTargets       map[string]string
@@ -214,15 +215,20 @@ func (m *Manager) save(ctx context.Context, cfg configuration) error {
 	return dir.Sync()
 }
 func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
+	var avatarGate chan struct{}
 	if old := m.entries[a.ID]; old != nil {
+		// A confirmed publication may still be saving the photo after disconnect.
+		avatarGate = old.accountAvatarGate
 		old.stop()
+	} else {
+		avatarGate = make(chan struct{}, 1)
 	}
 	state := "not_connected"
 	if cfg.Enabled {
 		state = "connecting"
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	e := &entry{detailsWake: make(chan struct{}, 1), avatarWake: make(chan struct{}, 1), avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
+	e := &entry{detailsWake: make(chan struct{}, 1), avatarWake: make(chan struct{}, 1), accountAvatarGate: avatarGate, avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
 	m.entries[a.ID] = e
 	m.workers.Add(1)
 	go func() {

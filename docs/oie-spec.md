@@ -215,6 +215,23 @@ full names are optional and are not verified legal identities.
 
 Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it. On the account detail screen, Disconnect stays in the footer while the details scroll.
 
+The account details let a connected XMPP account change its profile photo. The form
+accepts one PNG, JPEG, or GIF up to 512 KiB and keeps the selected file available
+after a failed submission. The published image is a static PNG with a maximum
+edge of 64 pixels. Servers must support XMPP User Avatar
+([XEP-0084](https://xmpp.org/extensions/xep-0084.html)) publication. The backend
+publishes the data before the metadata and updates the local photo only after
+confirmation. If metadata publication is refused after a server evicts the old
+data item, Oiê attempts to restore the old bytes while the previous photo is
+still active. Reconciliation reads the server after an uncertain response.
+
+| Account photo action | Expected result |
+| --- | --- |
+| Leave account details before saving | Discard the selection without publishing. |
+| Submit a malformed image or submit after disconnect | Refuse the upload and keep the current photo. |
+| Wait for confirmation or retry a refusal | Keep the form, focus, and conversation in place. Retain the file on refusal. |
+| Save a valid photo and repeat the same upload | Update only the selected account. Reuse the retained revision when the server already has the same image. |
+
 An Oiê contact can group multiple protocol identities. Link identity and Unlink identity are manual, reversible operations. Each account/protocol conversation retains its own timeline; linking does not merge histories or retarget pending sends.
 
 Support per-account contact add/remove and contact-request acceptance/decline where the protocol permits. Removing a contact preserves retained conversation history. Provider contact/presence subscriptions remain distinct from app-owned aliases and identity grouping.

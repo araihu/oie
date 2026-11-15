@@ -22,6 +22,8 @@ import (
 
 const avatarMetadataNS = "urn:xmpp:avatar:metadata"
 
+const avatarMetadataQuery = `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="urn:xmpp:avatar:metadata" max_items="1"/></pubsub>`
+
 var errAvatar = errors.New("profile image unavailable")
 
 type avatarInfo struct {
@@ -43,6 +45,24 @@ type avatarPEP struct {
 			} `xml:"item"`
 		} `xml:"items"`
 	} `xml:"http://jabber.org/protocol/pubsub pubsub"`
+}
+
+func avatarDataQuery(hash string) string {
+	return `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="urn:xmpp:avatar:data"><item id="` + hash + `"/></items></pubsub>`
+}
+
+func avatarItemData(payload, hash string) ([]byte, error) {
+	var data avatarPEP
+	if xml.Unmarshal([]byte("<root>"+payload+"</root>"), &data) != nil {
+		return nil, errAvatar
+	}
+	for _, item := range data.Pubsub.Items.Item {
+		if item.ID == hash {
+			image, _, err := decodeAvatar(item.Data, hash)
+			return image, err
+		}
+	}
+	return nil, errAvatar
 }
 
 func validSHA1(s string) bool {
@@ -72,6 +92,12 @@ func decodeAvatar(s, expected string) ([]byte, string, error) {
 	return data, hash, nil
 }
 func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, e *entry, s *mx.Session, address, expected string) error {
+	if address == e.account.Address {
+		if err := e.lockAccountAvatar(ctx); err != nil {
+			return err
+		}
+		defer e.unlockAccountAvatar()
+	}
 	cached, _ := host.Avatar(ctx, e.account.ID, address)
 	save := func(data []byte, source string) error {
 		if cached.SourceToken == source && cached.ImageHash != "" {
@@ -81,7 +107,7 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 		}
 		return host.StoreAvatar(ctx, e.account.ID, address, source, data)
 	}
-	payload, err := m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="urn:xmpp:avatar:metadata" max_items="1"/></pubsub>`)
+	payload, err := m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, avatarMetadataQuery)
 	if err == nil {
 		var pep avatarPEP
 		if xml.Unmarshal([]byte("<root>"+payload+"</root>"), &pep) == nil {
@@ -102,24 +128,15 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 							return nil
 						}
 					}
-					payload, err = m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="urn:xmpp:avatar:data"><item id="`+info.ID+`"/></items></pubsub>`)
+					payload, err = m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, avatarDataQuery(info.ID))
 					if err != nil {
 						return err
 					}
-					var data avatarPEP
-					if xml.Unmarshal([]byte("<root>"+payload+"</root>"), &data) != nil {
-						return errAvatar
+					decoded, err := avatarItemData(payload, info.ID)
+					if err != nil {
+						return err
 					}
-					for _, d := range data.Pubsub.Items.Item {
-						if d.ID == info.ID {
-							decoded, _, err := decodeAvatar(d.Data, info.ID)
-							if err != nil {
-								return err
-							}
-							return save(decoded, source)
-						}
-					}
-					return errAvatar
+					return save(decoded, source)
 				}
 			}
 		}

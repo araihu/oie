@@ -12,6 +12,13 @@ import (
 func avatar(a domain.Avatar) engineapi.Avatar {
 	return engineapi.Avatar{Id: string(a.ID), RevisionId: string(a.RevisionID), AccountId: string(a.AccountID), Address: a.Address, ImageHash: a.ImageHash, UpdatedAt: a.UpdatedAt}
 }
+func (s *Server) SetAccountAvatar(ctx context.Context, r engineapi.SetAccountAvatarRequestObject) (engineapi.SetAccountAvatarResponseObject, error) {
+	if err := s.engine.SetAccountAvatar(ctx, domain.ID(r.AccountId), r.Body.Image); err != nil {
+		return nil, err
+	}
+	return engineapi.SetAccountAvatar204Response{}, nil
+}
+
 func (s *Server) ListAccountAvatars(ctx context.Context, r engineapi.ListAccountAvatarsRequestObject) (engineapi.ListAccountAvatarsResponseObject, error) {
 	limit := 100
 	if r.Params.Limit != nil {

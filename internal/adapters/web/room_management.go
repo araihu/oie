@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -12,8 +11,6 @@ import (
 )
 
 // Match the room management upload limit in the engine API.
-const maxRoomAvatarUpload = 512 << 10
-
 func (s *Server) roomManagementFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
@@ -136,16 +133,8 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 		Action: action, ExpectedRevision: r.Form.Get("expectedRevision"), Target: &target, Value: &value, Reason: &reason, MessageId: message,
 	}
 	if action == engineapi.SetAvatar {
-		file, _, err := r.FormFile("image")
-		if err != nil || len(r.MultipartForm.File) != 1 || len(r.MultipartForm.File["image"]) != 1 {
-			if file != nil {
-				_ = file.Close()
-			}
-			return http.StatusBadRequest, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
-		}
-		defer func() { _ = file.Close() }()
-		data, err := io.ReadAll(io.LimitReader(file, maxRoomAvatarUpload+1))
-		if err != nil || len(data) == 0 || len(data) > maxRoomAvatarUpload {
+		data, err := readAvatarUpload(r)
+		if err != nil {
 			return http.StatusBadRequest, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
 		}
 		command.Image = &data

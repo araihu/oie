@@ -1351,6 +1351,35 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}/avatar:
+    parameters:
+    - $ref: '#/components/parameters/AccountID'
+    put:
+      operationId: setAccountAvatar
+      tags: [Accounts]
+      summary: Change the connected account's profile photo
+      description: Publishes a normalized PNG to the selected account's XMPP service. Only a confirmed publication
+        updates the retained photo. The account must be connected to a server that supports avatar publishing.
+      requestBody:
+        required: true
+        description: The replacement image to publish for the account.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAccountAvatar'
+            example:
+              image: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMIseoCAAH+ARmwLUGoAAAAAElFTkSuQmCC
+      responses:
+        '204':
+          description: The photo is published and retained.
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/accounts/{accountId}/avatars:
     parameters:
     - $ref: '#/components/parameters/AccountID'
@@ -4614,6 +4643,18 @@ components:
       example:
         items:
         - *id002
+    SetAccountAvatar:
+      description: A local image to publish as the connected account’s profile photo.
+      type: object
+      additionalProperties: false
+      required: [image]
+      properties:
+        image:
+          type: string
+          format: byte
+          maxLength: 699052
+          example: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMIseoCAAH+ARmwLUGoAAAAAElFTkSuQmCC
+          description: Base64-encoded PNG, JPEG, or GIF up to 512 KiB before encoding.
     Avatar:
       type: object
       additionalProperties: false
@@ -5917,6 +5958,7 @@ components:
           type: string
           format: byte
           maxLength: 699052
+          example: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMIseoCAAH+ARmwLUGoAAAAAElFTkSuQmCC
           description: Base64-encoded PNG, JPEG, or GIF, up to 512 KiB before encoding. Required for set_avatar only.
         reason:
           type: string

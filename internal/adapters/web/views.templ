@@ -10,6 +10,7 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/fileinput"
 	"github.com/araihu/goshtoso/components/head"
 	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
@@ -634,6 +635,7 @@ templ accountDetail(v view,a engineapi.Account){
 @accountAvatar(v,a,avatar.SizeLG)
 <div><h2>{a.Label}</h2><p>{a.Address}</p></div>
 </header>
+@accountPhotoForm(v,a)
 <p class="oie-history-status">{v.historyCaption(a.Id)}</p>
 <div id={"connection-error-"+a.Id} role="status" aria-live="polite">
 if problem:=v.connectionError(a.Id);problem!="" {
@@ -645,6 +647,23 @@ if problem:=v.connectionError(a.Id);problem!="" {
 </div>
 <footer class="oie-account-detail-footer">@disconnectAction(v,a.Id)</footer>
 </section>
+}
+templ accountPhotoForm(v view,a engineapi.Account){
+if !v.Preview && !v.Unavailable && a.Protocol=="xmpp" {
+{{ ctx = expressions.With(ctx, expressions.Set{FileInput: expressions.FileInput{BrowseLabel: v.Text.RoomAvatarBrowse, EmptyText: v.Text.RoomAvatarEmpty}}) }}
+@form.Form(form.Config{ID:"account-photo-form",Action:"/ui/accounts/avatar",Method:"post",RootAttrs:templ.Attributes{"enctype":"multipart/form-data","data-oie-action":"account-avatar"}}){
+<input type="hidden" name="csrf" value={v.CSRF}/>
+<input type="hidden" name="engineId" value={v.EngineID}/>
+<input type="hidden" name="accountId" value={a.Id}/>
+<input type="hidden" name="returnTo" value={v.accountsHref(a.Id)}/>
+<input type="hidden" name="formTarget" value={ "account-avatar-"+a.Id }/>
+<input type="hidden" name="lang" value={v.Locale}/>
+<fieldset class="oie-account-photo-fields" data-account-photo-fields disabled?={connectionState(v,a.Id)!="connected"}>
+@fileinput.FileInput(fileinput.Config{ID:"account-photo-image",Name:"image",Label:v.Text.AccountAvatarLabel,Appearance:fileinput.AppearanceUpload,Accept:"image/png,image/jpeg,image/gif",HelperText:v.Text.RoomAvatarHint,Required:true})
+@button.Button(button.WithType("submit")){ {v.Text.AccountAvatarSave} }
+</fieldset>
+}
+}
 }
 templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
 <div class="inline-flex shrink-0" data-account-status={a.Id} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>

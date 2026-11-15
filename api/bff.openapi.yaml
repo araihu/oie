@@ -10,6 +10,8 @@ servers:
 - url: http://127.0.0.1:8080
 security: []
 tags:
+- name: Accounts
+  description: Browser account actions
 - name: Settings
   description: Browser settings actions
 - name: Documents
@@ -144,6 +146,56 @@ paths:
               schema: {type: string}
         '503':
           description: The live regions could not be rendered.
+  /ui/accounts/avatar:
+    post:
+      tags: [Accounts]
+      operationId: updateBrowserAccountAvatar
+      summary: Upload a profile photo from the account details
+      description: Validates the browser form and publishes the uploaded image through the selected engine.
+      requestBody:
+        required: true
+        description: The selected account and its replacement profile photo.
+        content:
+          multipart/form-data:
+            example:
+              csrf: local-request-token
+              engineId: 019a5df0-0000-7000-8000-000000000001
+              accountId: 019a5df0-0000-7000-8000-000000000002
+              image: <PNG bytes>
+            schema:
+              type: object
+              required: [csrf, engineId, accountId, image]
+              properties:
+                csrf: {type: string, description: Token from the account details form., example: local-request-token}
+                engineId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                accountId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                image:
+                  type: string
+                  format: binary
+                  description: PNG, JPEG, or GIF up to 512 KiB.
+                  example: <PNG bytes>
+                formTarget: {type: string, description: Account panel to reopen for native form validation., example: account-avatar-019a5df0-0000-7000-8000-000000000002}
+                returnTo: {type: string, description: Workspace URL to reopen after submission., example: "/?open=accounts"}
+                lang: {type: string, description: Language used by the current account panel., example: pt-BR}
+      responses:
+        '200':
+          description: The photo was updated.
+          content:
+            application/json:
+              schema: {type: object}
+              example: {ok: true, message: Profile photo updated.}
+        '303':
+          description: A native form submission succeeded. See the account details.
+        '400':
+          description: The image or request is invalid.
+        '403':
+          description: The CSRF check failed.
+        '404':
+          description: The account does not exist.
+        '409':
+          description: The engine changed or the account is disconnected.
+        '503':
+          description: The service could not confirm the profile photo change.
   /ui/messages/forward:
     get:
       tags: [Messages]

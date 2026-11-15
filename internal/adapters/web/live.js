@@ -352,6 +352,11 @@ window.OieRuntime.register('live', life => {
       if(error)errorToast(message);
       return;
     }
+    if (form.dataset.oieAction === 'account-avatar') {
+      if (error && form.isConnected) errorToast(message);
+      else if (message && form.isConnected) announce(message, true);
+      return;
+    }
     if(error&&form.matches('[data-cancel-message]')){errorToast(message);return;}
     if(form.dataset.oieAction==='schedule-row'){if(error)errorToast(message);return;}
     const region = form.querySelector('[data-form-feedback]');
@@ -879,6 +884,9 @@ window.OieRuntime.register('live', life => {
         const existing = document.querySelector(`#account-blocks>section[data-account-id="${CSS.escape(fresh.dataset.accountId)}"]`);
         if (existing) {
           refreshAccountStatuses(existing,fresh);
+          const photoFields=existing.querySelector('[data-account-photo-fields]');
+          const nextPhotoFields=fresh.querySelector('[data-account-photo-fields]');
+          if(photoFields&&nextPhotoFields)photoFields.disabled=nextPhotoFields.disabled;
           const oldError=existing.querySelector('[id^="connection-error-"]'),newError=fresh.querySelector('[id^="connection-error-"]');
           if(oldError&&newError&&oldError.innerHTML!==newError.innerHTML)mutateDOM(oldError,newError.innerHTML);
           const controls=existing.querySelector('[id^="connection-controls-"]'),nextControls=fresh.querySelector('[id^="connection-controls-"]');
@@ -1019,6 +1027,7 @@ window.OieRuntime.register('live', life => {
     event.preventDefault();
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
+    const accountAvatar = form.dataset.oieAction === 'account-avatar';
     const scheduleDrawer = form.dataset.oieAction === 'schedule-row' && form.closest('[data-conversation-schedules]');
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
@@ -1060,6 +1069,9 @@ window.OieRuntime.register('live', life => {
       saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],privateMapLinks:privateMapLinks(),scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const fields = new FormData(form);
+    const photoInput = accountAvatar ? form.elements.namedItem('image') : null;
+    const submittedPhoto = photoInput?.files[0];
+    const photoSave = accountAvatar ? form.querySelector('button[type="submit"]') : null;
     let values = form.enctype === 'multipart/form-data' ? fields : new URLSearchParams(fields);
     const roomManagement = form.dataset.oieAction === 'room-management';
     const managementKey = roomManagement ? values.get('operationKey') : '';
@@ -1089,7 +1101,10 @@ window.OieRuntime.register('live', life => {
     if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);}
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
-    form.dataset.busy = 'true'; form.setAttribute('aria-busy','true'); buttons.forEach(button => button.disabled = true);syncRoomLeave();
+    form.dataset.busy = 'true'; form.setAttribute('aria-busy','true');
+    if (accountAvatar) photoSave?.setAttribute('aria-disabled','true');
+    else buttons.forEach(button => button.disabled = true);
+    syncRoomLeave();
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
     feedback(form,sending?'':text('saving'));
     pendingRequests++;
@@ -1139,7 +1154,13 @@ window.OieRuntime.register('live', life => {
           keepRoomOperation(null);
           if(roomCommand==='leave')document.dispatchEvent(new CustomEvent('oie:room-reaction-visibility-withdrawn'));
         }
-        if (roomManagement) {
+        if (accountAvatar && form.isConnected) {
+          if (photoInput && photoInput.files[0] === submittedPhoto) {
+            photoInput.value = '';
+            photoInput.dispatchEvent(new Event('change', {bubbles:true}));
+          }
+          if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+        } else if (roomManagement) {
           feedback(form, '');
           if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
         } else {
@@ -1171,7 +1192,8 @@ window.OieRuntime.register('live', life => {
       clearTimeout(timeout);
       if(!life.signal.aborted||form.isConnected){
         form.dataset.busy='false';form.removeAttribute('aria-busy');
-        buttons.forEach((button,index)=>button.disabled=disabled[index]);
+        if (accountAvatar) photoSave?.removeAttribute('aria-disabled');
+        else buttons.forEach((button,index)=>button.disabled=disabled[index]);
         if(life.signal.aborted)feedback(form,text('liveRetry'),true);
       }
       if(life.signal.aborted)return;

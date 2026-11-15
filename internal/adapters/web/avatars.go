@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"image/png"
 	"io"
 	"mime"
@@ -13,6 +14,53 @@ import (
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+const maxAvatarUpload = 512 << 10
+
+var errAvatarUpload = errors.New("invalid avatar upload")
+
+func readAvatarUpload(r *http.Request) ([]byte, error) {
+	if r.MultipartForm == nil || len(r.MultipartForm.File) != 1 || len(r.MultipartForm.File["image"]) != 1 {
+		return nil, errAvatarUpload
+	}
+	file, err := r.MultipartForm.File["image"][0].Open()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, maxAvatarUpload+1))
+	if err != nil || len(data) == 0 || len(data) > maxAvatarUpload {
+		return nil, errAvatarUpload
+	}
+	return data, nil
+}
+
+func (s *Server) updateAccountAvatar(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
+	account := r.PostForm.Get("accountId")
+	if len(r.PostForm["accountId"]) != 1 || !validOperationKey(account) {
+		return http.StatusBadRequest, mutationResult{Message: text.InvalidForm, Rejected: true}
+	}
+	image, err := readAvatarUpload(r)
+	if err != nil {
+		return http.StatusBadRequest, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
+	}
+	response, err := s.client.SetAccountAvatarWithResponse(ctx, account, engineapi.SetAccountAvatar{Image: image})
+	if err != nil {
+		return http.StatusServiceUnavailable, mutationResult{Message: text.AccountAvatarFailed}
+	}
+	switch status := response.StatusCode(); status {
+	case http.StatusNoContent:
+		return http.StatusOK, mutationResult{OK: true, Message: text.AccountAvatarUpdated}
+	case http.StatusBadRequest:
+		return status, mutationResult{Message: text.RoomAvatarInvalid, Rejected: true}
+	case http.StatusConflict:
+		return status, mutationResult{Message: text.AccountAvatarConnect, Rejected: true}
+	case http.StatusNotFound:
+		return status, mutationResult{Message: text.AccountMissing, Rejected: true}
+	default:
+		return http.StatusServiceUnavailable, mutationResult{Message: text.AccountAvatarFailed}
+	}
+}
 
 type avatarIdentity struct{ Account, Address string }
 

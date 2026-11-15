@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"unicode/utf8"
 
@@ -10,6 +11,7 @@ import (
 
 type AvatarFiles interface {
 	Normalize([]byte) ([]byte, error)
+	NormalizeProfile([]byte) ([]byte, error)
 	Put(context.Context, []byte) (string, error)
 	Read(context.Context, string) ([]byte, error)
 }
@@ -24,6 +26,34 @@ type AvatarHost interface {
 	AvatarTargets(context.Context, domain.ID) ([]domain.AvatarTarget, error)
 	AvatarImage(context.Context, string) ([]byte, error)
 	StoreAvatar(context.Context, domain.ID, string, string, []byte) error
+}
+
+const maxAccountAvatarUpload = 512 << 10
+
+type AccountAvatarProtocol interface {
+	SetAccountAvatar(context.Context, domain.Account, []byte) error
+}
+
+func (e *Engine) SetAccountAvatar(ctx context.Context, id domain.ID, image []byte) error {
+	if len(image) == 0 || len(image) > maxAccountAvatarUpload {
+		return ErrInvalid
+	}
+	account, err := e.Account(ctx, id)
+	if err != nil {
+		return err
+	}
+	protocol, ok := e.protocols.(AccountAvatarProtocol)
+	if !ok || e.avatarFiles == nil {
+		return ErrProtocolUnavailable
+	}
+	photo, err := e.avatarFiles.NormalizeProfile(image)
+	if err != nil {
+		return err
+	}
+	if err = protocol.SetAccountAvatar(ctx, account, photo); errors.Is(err, context.DeadlineExceeded) {
+		return ErrProtocolUnavailable
+	}
+	return err
 }
 
 func (e *Engine) SetAvatarFiles(files AvatarFiles) { e.avatarFiles = files }

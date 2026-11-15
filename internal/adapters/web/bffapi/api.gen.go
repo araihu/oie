@@ -877,6 +877,44 @@ type RenderWorkspaceParamsHXRequest string
 // RenderWorkspaceParamsXOieFragment defines parameters for RenderWorkspace.
 type RenderWorkspaceParamsXOieFragment string
 
+// UpdateBrowserAccountAvatarMultipartBody defines parameters for UpdateBrowserAccountAvatar.
+type UpdateBrowserAccountAvatarMultipartBody struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId externalRef0.ID `json:"accountId"`
+
+	// Csrf Token from the account details form.
+	//
+	// Example: local-request-token
+	Csrf string `json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `json:"engineId"`
+
+	// FormTarget Account panel to reopen for native form validation.
+	//
+	// Example: account-avatar-019a5df0-0000-7000-8000-000000000002
+	FormTarget *string `json:"formTarget,omitempty"`
+
+	// Image PNG, JPEG, or GIF up to 512 KiB.
+	//
+	// Example: <PNG bytes>
+	Image openapi_types.File `json:"image"`
+
+	// Lang Language used by the current account panel.
+	//
+	// Example: pt-BR
+	Lang *string `json:"lang,omitempty"`
+
+	// ReturnTo Workspace URL to reopen after submission.
+	//
+	// Example: /?open=accounts
+	ReturnTo *string `json:"returnTo,omitempty"`
+}
+
 // GetBrowserReadStateParams defines parameters for GetBrowserReadState.
 type GetBrowserReadStateParams struct {
 	// XOieEngineID Selected engine identity.
@@ -1175,6 +1213,9 @@ type GetBrowserSharedMediaParamsDownload string
 
 // GetBrowserSharedMediaParamsPreview defines parameters for GetBrowserSharedMedia.
 type GetBrowserSharedMediaParamsPreview string
+
+// UpdateBrowserAccountAvatarMultipartRequestBody defines body for UpdateBrowserAccountAvatar for multipart/form-data ContentType.
+type UpdateBrowserAccountAvatarMultipartRequestBody UpdateBrowserAccountAvatarMultipartBody
 
 // MarkBrowserMessagesReadJSONRequestBody defines body for MarkBrowserMessagesRead for application/json ContentType.
 type MarkBrowserMessagesReadJSONRequestBody = externalRef0.MarkMessagesRead

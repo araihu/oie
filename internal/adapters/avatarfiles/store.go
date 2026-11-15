@@ -73,6 +73,15 @@ func (s *Store) Put(ctx context.Context, data []byte) (string, error) {
 	return hash, nil
 }
 func (s *Store) Normalize(data []byte) ([]byte, error) {
+	return normalize(data, 256)
+}
+
+func (s *Store) NormalizeProfile(data []byte) ([]byte, error) {
+	// XEP-0084 recommends a small PNG. Bound dimensions before base64 encoding.
+	return normalize(data, 64)
+}
+
+func normalize(data []byte, maxSide int) ([]byte, error) {
 	if len(data) == 0 || len(data) > 1<<20 {
 		return nil, application.ErrInvalid
 	}
@@ -88,13 +97,13 @@ func (s *Store) Normalize(data []byte) ([]byte, error) {
 		return nil, application.ErrInvalid
 	}
 	width, height := config.Width, config.Height
-	if width > 256 || height > 256 {
+	if width > maxSide || height > maxSide {
 		if width >= height {
-			height = height * 256 / width
-			width = 256
+			height = height * maxSide / width
+			width = maxSide
 		} else {
-			width = width * 256 / height
-			height = 256
+			width = width * maxSide / height
+			height = maxSide
 		}
 		if width < 1 {
 			width = 1

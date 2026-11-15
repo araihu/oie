@@ -280,6 +280,8 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-account-back{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--oie-muted);margin:0 0 24px;text-decoration:none}
 .oie-account-back:hover{color:var(--oie-text);text-decoration:none}
 .oie-account-detail-heading{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.oie-account-photo-fields{display:grid;gap:8px;min-width:0;margin:0 0 16px;border:0;padding:0;justify-items:start}
+.oie-account-photo-fields>div{min-width:0;width:100%}
 .oie-account-detail-heading>div{min-width:0}
 .oie-account-detail-heading h2{font-size:19px;line-height:1.35;font-weight:650;margin:0 0 4px;overflow-wrap:anywhere}
 .oie-account-detail-heading p{font-size:13px;line-height:1.5;color:var(--oie-muted);margin:0;overflow-wrap:anywhere}

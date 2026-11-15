@@ -87,14 +87,14 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	text := s.catalogs[locale(r)]
 	parse := r.ParseForm
-	if r.URL.Path == "/ui/rooms/manage" && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data;") {
+	if (r.URL.Path == "/ui/rooms/manage" || r.URL.Path == "/ui/accounts/avatar") && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data;") {
 		parse = func() error { return r.ParseMultipartForm(1 << 20) }
 	}
 	if err := parse(); err != nil {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
-	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/join" || r.URL.Path == "/ui/rooms/manage" {
+	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/join" || r.URL.Path == "/ui/rooms/manage" || r.URL.Path == "/ui/accounts/avatar" {
 		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 			text = localized
 		}
@@ -119,6 +119,9 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/ui/messages/star" {
 			message = text.StarUncertain
 		}
+		if r.URL.Path == "/ui/accounts/avatar" {
+			message = text.AccountAvatarFailed
+		}
 		if r.URL.Path == "/ui/previews/download" {
 			message = text.ImageDownloadFailed
 		}
@@ -136,6 +139,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/accounts/avatar":
+		status, result = s.updateAccountAvatar(ctx, r, text)
 	case "/ui/rooms/manage":
 		status, result = s.manageRoom(ctx, r, text)
 	case "/ui/rooms/open":
@@ -538,7 +543,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/avatar", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

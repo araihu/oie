@@ -15,12 +15,12 @@ function thumbnail(color){
 (async()=>{
  const engine=id(1),account=id(2),other=id(3),direct=id(4),room=id(5),revision=id(6),bad='f'.repeat(64);
  const images=[thumbnail([12,185,127]),thumbnail([210,80,110])],hashes=images.map(body=>createHash('sha256').update(body).digest('hex'));
- const streams=new Set(),state={seq:0,avatars:new Map(),fail:false,connection:'connected',messageCount:80};
+ const streams=new Set(),state={seq:0,avatars:new Map(),fail:false,connection:'connected',messageCount:80,photoStatus:204,uploads:[]};
  const accounts=[{id:account,address:'alice@fixture',label:'Alice'},{id:other,address:'alice@fixture',label:'Other Alice'}].map(a=>({...a,revisionId:revision,protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z',connectionState:'connected'}));
  const conversations=[{id:direct,kind:'direct',address:'bob@fixture',title:'Bob'},{id:room,kind:'room',address:'room@fixture',title:'Saved room'}].map(c=>({...c,accountId:account,revisionId:revision,lastMessage:'Retained text',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false}));
  const messagesFor=c=>Array.from({length:state.messageCount},(_,i)=>({id:id((c.id===room?1000:100)+i),revisionId:revision,accountId:account,conversationId:c.id,sender:{id:id(500+Math.floor(i/3)%2),displayName:c.kind==='room'?'room@fixture':'Bob'},originalText:'Retained message '+i,createdAt:new Date(Date.UTC(2026,10,8,12,i)).toISOString(),isOwn:false,sendState:'received'}));
  const emit=(type='profile.avatar_changed')=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: {}\n\n`)};
- const api=http.createServer((req,res)=>{
+ const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.4.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:accounts});
@@ -28,6 +28,18 @@ function thumbnail(color){
    if(u.pathname===`/api/v1/accounts/${a.id}`)return send(200,a);
    if(u.pathname===`/api/v1/accounts/${a.id}/connection`)return send(200,{accountId:a.id,state:state.connection,updatedAt:'2026-11-08T12:00:00Z'});
    if(u.pathname===`/api/v1/accounts/${a.id}/history`)return send(200,{accountId:a.id,state:'complete',retainedMessages:state.messageCount,conversations:2,updatedAt:'2026-11-08T12:00:00Z'});
+   if(req.method==='PUT'&&u.pathname===`/api/v1/accounts/${a.id}/avatar`){
+    let body='';
+    for await(const chunk of req)body+=chunk;
+    const hash=createHash('sha256').update(Buffer.from(JSON.parse(body).image,'base64')).digest('hex');
+    state.uploads.push({account:a.id,hash});
+    await new Promise(resolve=>setTimeout(resolve,700));
+    if(state.photoStatus!==204)return send(state.photoStatus,{status:state.photoStatus});
+    state.avatars.set(JSON.stringify([a.id,a.address]),hash);
+    emit();
+    res.writeHead(204).end();
+    return;
+   }
    if(u.pathname===`/api/v1/accounts/${a.id}/avatars`){
     if(state.fail)return send(503,{code:'unavailable',status:503});
     return send(200,{items:[...state.avatars].filter(([key])=>JSON.parse(key)[0]===a.id).map(([key,imageHash],i)=>({id:id(400+i),revisionId:revision,accountId:a.id,address:JSON.parse(key)[1],imageHash,updatedAt:'2026-11-08T12:00:00Z'}))});
@@ -114,6 +126,85 @@ function thumbnail(color){
   const password=page.locator('[data-connect-account] input[name=password]');await password.fill('unsent-form-value');await password.focus();set(account,'alice@fixture',hashes[1]);emit();
   await until(async()=>await page.locator(`.oie-account-detail ${own} img`).getAttribute('src')==='/ui/avatars/'+hashes[1],'account-detail photo');assert.equal(await password.inputValue(),'unsent-form-value');assert(await password.evaluate(el=>document.activeElement===el));
   findings.push('Account-detail photo updates preserve the focused connection form');
+  assert(await page.locator('#account-photo-image').isDisabled());
+  state.connection='connected';
+  for(const [width,lang] of [[1440,'en'],[1440,'pt-BR'],[390,'en'],[390,'pt-BR']]){
+   set(account,'alice@fixture',hashes[1]);
+   state.photoStatus=400;
+   await page.setViewportSize({width,height:900});
+   const params=new URLSearchParams({account,chat:direct,open:'accounts',managedAccount:account,lang,theme:width===390?'dark':'light'});
+   await page.goto(base+'/?'+params);
+   const form=page.locator('#account-photo-form'),file=form.locator('input[type=file]');
+   const save=form.getByRole('button',{name:lang==='pt-BR'?'Salvar foto':'Save photo'});
+   const upload={name:'avatar.png',mimeType:'image/png',buffer:images[0]};
+   const accountPhoto=page.locator(`.oie-account-detail ${own} img`);
+   const toast=page.locator('[data-toast-container]');
+   await save.waitFor({state:'visible'});
+   await until(async()=>await accountPhoto.getAttribute('src')==='/ui/avatars/'+hashes[1],'initial account photo');
+   await file.setInputFiles(upload);
+   const before=state.uploads.length;
+   await page.locator('[data-account-back]').click();
+   await page.locator(`[data-manage-account="${account}"]`).click();
+   assert.equal(await file.inputValue(),'','leaving the account detail discards the unsaved selection');
+   assert.equal(state.uploads.length,before);
+
+   await file.setInputFiles(upload);
+   await save.focus();
+   await page.waitForFunction(()=>document.querySelector('.oie-account-drawer').getBoundingClientRect().right<=innerWidth+1);
+   const startSampling=()=>page.evaluate(()=>{
+    const selectors=['#account-photo-form','#account-photo-image','#account-photo-form button','.oie-account-detail-heading','#message-timeline','#send-message-form'];
+    const geometry=()=>selectors.flatMap(selector=>{
+     const el=document.querySelector(selector);
+     if(!el)return [];
+     const {x,y,width,height}=el.getBoundingClientRect();
+     return [x,y,width,height,el.scrollTop];
+    });
+    const origin=geometry(),measure={running:true,max:0,frames:0};
+    const sample=()=>{
+     if(!measure.running)return;
+     geometry().forEach((point,i)=>{measure.max=Math.max(measure.max,Math.abs(point-origin[i]));});
+     measure.frames++;
+     requestAnimationFrame(sample);
+    };
+    window.photoGeometry=measure;
+    requestAnimationFrame(sample);
+   });
+   const stopSampling=async()=>{
+    const {max,frames}=await page.evaluate(()=>{window.photoGeometry.running=false;return window.photoGeometry;});
+    assert(frames>=5,'insufficient painted frames during the delayed upload');
+    assert(max<=1,`upload moved controls or conversation by ${max}px`);
+   };
+   await startSampling();
+   await page.keyboard.press('Enter');
+   await form.evaluate(el=>el.requestSubmit());
+   await until(()=>state.uploads.length===before+1,'one upload with repeated submit');
+   assert.equal(await accountPhoto.getAttribute('src'),'/ui/avatars/'+hashes[1]);
+   const error=toast.getByRole('alert').filter({hasText:lang==='pt-BR'?'Escolha um PNG, JPEG ou GIF válido de até 512 KB.':'Choose a valid PNG, JPEG, or GIF up to 512 KB.'});
+   await error.waitFor();
+   await stopSampling();
+   assert.equal(state.uploads.length,before+1);
+   assert(await save.evaluate(el=>document.activeElement===el));
+   assert.match(await file.inputValue(),/avatar\.png$/);
+   assert.equal(await accountPhoto.getAttribute('src'),'/ui/avatars/'+hashes[1]);
+
+   await error.getByRole('button',{name:lang==='pt-BR'?'Fechar':'Close',exact:true}).click();
+   await error.waitFor({state:'hidden'});
+   await save.focus();
+
+   state.photoStatus=204;
+   await startSampling();
+   await page.keyboard.press('Enter');
+   const confirmed=toast.getByText(lang==='pt-BR'?'Foto de perfil atualizada.':'Profile photo updated.');
+   await confirmed.waitFor();
+   await until(async()=>await accountPhoto.getAttribute('src')==='/ui/avatars/'+hashes[0],'new account photo');
+   await stopSampling();
+   assert.deepEqual(state.uploads.slice(before),[{account,hash:hashes[0]},{account,hash:hashes[0]}]);
+   assert.equal(state.avatars.get(JSON.stringify([other,'alice@fixture'])),hashes[1]);
+   assert.equal(await file.inputValue(),'');
+   assert(await save.evaluate(el=>document.activeElement===el));
+  }
+  findings.push('Profile photo upload, cancellation, delayed validation and retry preserve desktop and mobile geometry, keyboard focus and account scope in English and Brazilian Portuguese');
+  await page.setViewportSize({width:1440,height:900});
   state.connection='connected';await page.goto(`${base}/?account=${account}&chat=${room}&lang=pt-BR&theme=dark`);
   await until(async()=>await page.locator('#chat-header img').evaluate(img=>img.naturalWidth===8),'room photo');
   assert.equal(await page.locator('#chat-header img').getAttribute('src'),'/ui/avatars/'+hashes[1]);

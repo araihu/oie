@@ -271,6 +271,9 @@ func (v view) managedAccountID() string {
 	if strings.HasPrefix(v.FormTarget, "disconnect-") {
 		return strings.TrimPrefix(v.FormTarget, "disconnect-")
 	}
+	if id, ok := strings.CutPrefix(v.FormTarget, "account-avatar-"); ok {
+		return id
+	}
 	return v.ManagedAccount
 }
 func (v view) accountsHref(id string) string {
@@ -283,7 +286,7 @@ func (v view) initialDrawer() string {
 	if v.FormTarget == "join-room" || v.FormTarget == "create-room" {
 		return v.FormTarget
 	}
-	if v.FormTarget == "register" || strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") {
+	if v.FormTarget == "register" || strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") || strings.HasPrefix(v.FormTarget, "account-avatar-") {
 		return "accounts"
 	}
 	return ""
