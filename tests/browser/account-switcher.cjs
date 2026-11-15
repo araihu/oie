@@ -33,7 +33,8 @@ const {chromium}=require('playwright');
    const activePanel=page.getByRole('dialog',{name:label,exact:true});assert.equal(await activePanel.locator('[data-switch-account][aria-current=true]').getAttribute('data-switch-account'),id);
    const checkScreen=async screen=>{
     await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-    const drawer=page.getByRole('dialog',{name:locale==='en'?'Accounts':'Contas',exact:true});await drawer.waitFor({state:'visible'});await page.waitForFunction(()=>{const box=document.querySelector('.oie-account-drawer').getBoundingClientRect();return box.x>=-1&&box.right<=innerWidth+1});
+    const titles=locale==='en'?{list:'Accounts',detail:'Profile',add:'Accounts'}:{list:'Contas',detail:'Perfil',add:'Contas'};
+    const drawer=page.getByRole('dialog',{name:titles[screen],exact:true});await drawer.waitFor({state:'visible'});await page.waitForFunction(()=>{const box=document.querySelector('.oie-account-drawer').getBoundingClientRect();return box.x>=-1&&box.right<=innerWidth+1});
     const box=await drawer.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);
     await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
     const result=await page.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
