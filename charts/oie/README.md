@@ -1,11 +1,11 @@
 # Oiê Helm chart
 
-See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.2/docs/installation.md#run-on-kubernetes-with-helm)
+See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.3/docs/installation.md#run-on-kubernetes-with-helm)
 for installation and access via `kubectl port-forward`.
 
-Chart releases use their own version. Chart `0.2.2` defaults to the Oiê image
-`v0.0.1-rc.21`. Download the packaged chart and its checksum from
-[Helm chart 0.2.2](https://github.com/araihu/oie/releases/tag/helm-v0.2.2).
+Chart releases use their own version. Chart `0.2.3` defaults to the Oiê image
+`v0.0.1-rc.24`. Download the packaged chart and its checksum from
+[Helm chart 0.2.3](https://github.com/araihu/oie/releases/tag/helm-v0.2.3).
 
 | Setting | Default | Use |
 | --- | --- | --- |
@@ -89,8 +89,10 @@ See [HTTPRoute timeouts](https://gateway-api.sigs.k8s.io/reference/api-types/htt
 
 ## Diagnostics
 
-Configure an existing Secret with a random diagnostics key before enabling
-the hosted viewer. The viewer asks for that key. Operators can also retrieve
+Set `diagnostics.existingSecret` to a Secret in the release namespace with a
+random diagnostics access key. The chart reads the `key` entry by default. Set
+`diagnostics.secretKey` if the Secret uses a different entry. The hosted viewer
+asks for the access key. Operators can also retrieve
 records with `kubectl logs -n oie statefulset/oie`. The pod retains its
 bounded log files under `/data/diagnostics/` using the configured persistence.
 

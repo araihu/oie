@@ -37,11 +37,11 @@ published digest from the workflow summary to pin an exact image.
 
 The [Oiê chart](../charts/oie) runs the engine and browser interface together.
 Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. Install
-the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.2):
+the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.3):
 
 ```sh
 helm upgrade --install oie \
-  https://github.com/araihu/oie/releases/download/helm-v0.2.2/oie-0.2.2.tgz \
+  https://github.com/araihu/oie/releases/download/helm-v0.2.3/oie-0.2.3.tgz \
   --namespace oie --create-namespace --wait --timeout 10m
 kubectl --namespace oie port-forward service/oie 8080:80
 ```
@@ -53,7 +53,7 @@ have a writable claim in the namespace, set `persistence.existingClaim` to
 its name. Use one Oiê instance per claim.
 
 The chart version and the application image version follow separate release
-cycles. Chart `0.2.2` uses image `v0.0.1-rc.21` by default. To update, use
+cycles. Chart `0.2.3` uses image `v0.0.1-rc.24` by default. To update, use
 the URL for a newer chart archive or set `image.tag` to a published version.
 An update that changes the pod briefly
 interrupts access while Kubernetes replaces it. Uninstalling the release
@@ -66,6 +66,10 @@ Starting with chart `0.2.2`, you can set `httpRoute.timeouts.request` to
 `"0s"` to keep live chat events streaming through a Gateway that applies a
 request timeout by default. See the [chart configuration](../charts/oie/README.md)
 for timeout, image and storage settings.
+
+To enable the hosted [Diagnostics viewer](diagnostics.md), set
+`diagnostics.existingSecret` to a Secret in the release namespace that contains
+the access key. The chart reads the `key` entry by default.
 
 ## Desktop installation on macOS and Linux
 
