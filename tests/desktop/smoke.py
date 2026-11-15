@@ -224,8 +224,15 @@ class Native:
         raise AssertionError("timed out: %s (%s)" % (name, last))
 
     def navigate(self, query):
-        self.js("window.__nativeDocumentMarker='preserved'; htmx.ajax('GET', %s, {target:'#oie-app',swap:'outerHTML'});return true;" % json.dumps("/?" + query))
-        self.wait(lambda: self.js("return !!document.querySelector('#oie-app') && !document.querySelector('.htmx-request');"), "fragment settled")
+        self.wait(lambda: self.js("return !!window.OieNavigation?.go;"), "navigation ready")
+        route = json.dumps("/?" + query)
+        self.js("""window.__nativeDocumentMarker='preserved';
+            await window.OieNavigation.go(%s, {workspace:'oie-app'});
+            return true;""" % route)
+        self.wait(lambda: self.js("""const expected = new URL(%s, location.origin).searchParams;
+            const actual = new URLSearchParams(location.search);
+            return !!document.querySelector('#oie-app') && !document.querySelector('.htmx-request') &&
+                [...expected].every(([key,value]) => actual.get(key) === value);""" % route), "fragment and URL settled")
         require(self.js("return window.__nativeDocumentMarker==='preserved';"), "fragment navigation reloaded the document")
 
     def quit(self):
