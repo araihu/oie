@@ -41,7 +41,7 @@ Ship one Go executable supporting native engine, presentation/BFF, and optional 
 
 Each device/UI selects **one engine at a time**, supporting multiple accounts within that engine. The alpha UI does not simultaneously aggregate multiple independent engines. An engine's replicated history can still contain data obtained from other synced engines.
 
-Desktop **Settings → General → Engine** selects **Local** by
+In desktop **Settings → General**, open **Engine** to select **Local** by
 default or **Remote** with an HTTP(S) base address. Save the selection per
 desktop profile. Check the remote engine before changing the active selection.
 Local mode runs the embedded engine and resumes its SQLite/media profile.

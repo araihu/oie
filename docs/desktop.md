@@ -96,8 +96,8 @@ uses its own data directory.
 
 ### Select the engine
 
-Open **Settings → General → Engine**. **Local** is the default and runs the
-engine on this device. To use an existing engine, choose **Remote**, enter its
+In **Settings → General**, open **Engine**. **Local** is the default and
+runs the engine on this device. To use an existing engine, choose **Remote**, enter its
 HTTP(S) base address and select **Save**. Oiê checks the engine and opens its
 conversations if it responds. The selection persists for this desktop profile.
 If the remote address stops responding, open the same settings to update it

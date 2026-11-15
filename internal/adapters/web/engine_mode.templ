@@ -7,13 +7,12 @@ import (
 )
 
 templ engineModeSettings(v view) {
-	<section aria-labelledby="engine-mode-title">
-		<h2 id="engine-mode-title">{ v.Text.EngineMode }</h2>
+	@settingsSubpage("engine-settings", v.Text.EngineMode, v.Text.BackToSettings) {
 		<form id="engine-mode-form" class="oie-engine-mode" action="/ui/engine-mode" method="post" novalidate data-failed={ v.Text.EngineModeUnavailable }>
 			<input type="hidden" name="csrf" value={ v.CSRF }/>
 			<input type="hidden" name="selection" value={ v.EngineMode.selection }/>
 			<fieldset class="grid gap-3">
-				<div role="radiogroup" aria-labelledby="engine-mode-title">
+				<div role="radiogroup" aria-label={ v.Text.EngineMode }>
 					@radio.RadioBar() {
 						@radio.Radio(radio.Config{ID: "engine-mode-local", Name: "mode", Value: "local", Label: v.Text.EngineModeLocal, Checked: v.EngineMode.url == "", Segmented: true})
 						@radio.Radio(radio.Config{ID: "engine-mode-remote", Name: "mode", Value: "remote", Label: v.Text.EngineModeRemote, Checked: v.EngineMode.url != "", Segmented: true})
@@ -34,5 +33,5 @@ templ engineModeSettings(v view) {
 				</div>
 			</fieldset>
 		</form>
-	</section>
+	}
 }

@@ -266,6 +266,10 @@ def native(*args, **kwargs):
 def select_engine(app, mode, identity, address=""):
     app.wait(lambda: app.js("return !!window.OieRuntime?.generation;"), "settings runtime")
     app.js("window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}}));return true;")
+    app.wait(lambda: app.js("return !!document.querySelector('button[aria-controls=engine-settings-body]')?.offsetWidth;"), "engine settings entry")
+    require(app.js("return !document.querySelector('#engine-mode-form')?.offsetWidth;"),
+            "engine settings form was visible in General")
+    app.js("document.querySelector('button[aria-controls=engine-settings-body]').click();return true;")
     app.wait(lambda: app.js("return !!document.querySelector('#engine-mode-form')?.offsetWidth;"), "engine settings")
     app.js("""const form = document.querySelector('#engine-mode-form');
         form.querySelector('#engine-mode-' + %s).click();

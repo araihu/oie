@@ -559,7 +559,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-settings-entry{
  justify-content:space-between;min-height:44px;padding-inline:12px;color:var(--oie-text);font-weight:650
 }
-.oie-destructive-actions{padding:12px 20px}
+.oie-settings-subpage{padding:12px 20px}
 .oie-about{display:grid;gap:24px;padding:12px 24px 28px;color:var(--oie-text)}
 .oie-settings-back{justify-self:start;align-self:start;gap:6px;padding-inline:0;color:var(--oie-accent-text)}
 .oie-settings-back .oie-icon{width:16px;height:16px}
