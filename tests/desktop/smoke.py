@@ -425,7 +425,15 @@ def main():
                 app.wait(lambda: app.js("return !!document.querySelector('#register-account-form');"), "register form")
                 result = app.js("const f=document.querySelector('#register-account-form'),values=new URLSearchParams(new FormData(f));values.set('address','offline@example.test');values.set('label','Native offline fixture');const r=await fetch(f.action,{method:'POST',body:values,headers:{Accept:'application/json'}});return {status:r.status,body:await r.json()};")
                 require(result["status"] == 200 and result["body"]["ok"], "embedded account registration: " + str(result))
-                app.js("""window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'diagnostics'}}));return true;""")
+                app.navigate("")
+                app.wait(lambda: app.js("""return !!window.OieDesktop?.copyDiagnostics &&
+                    [...document.querySelectorAll('[data-navigation-settings]')].some(node => node.offsetWidth);"""),
+                    "embedded settings navigation")
+                app.js("""[...document.querySelectorAll('[data-navigation-settings]')].find(node => node.offsetWidth).click();
+                    return true;""")
+                app.wait(lambda: app.js("""return !!document.querySelector('button[aria-controls="diagnostics-body"]')?.offsetWidth;"""),
+                    "visible diagnostics entry")
+                app.js("""document.querySelector('button[aria-controls="diagnostics-body"]').click(); return true;""")
                 app.wait(lambda: app.js("""return !!window.OieDesktop?.copyDiagnostics &&
                     [...document.querySelectorAll('[data-diagnostics-event]')].some(node => node.textContent === 'ready');"""),
                     "embedded diagnostics")

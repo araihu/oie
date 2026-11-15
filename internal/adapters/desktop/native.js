@@ -56,7 +56,7 @@
       void save(url, anchor.download);
       return;
     }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+    if (url.origin === location.origin || (url.protocol !== 'https:' && url.protocol !== 'http:')) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     external(url.href);
