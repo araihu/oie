@@ -173,6 +173,7 @@ func Run(ctx context.Context, c Config) error {
 	service := &runtimeService{config: config, outer: ctx, cookies: cookies, labels: text}
 	saveFailed, _ := json.Marshal(text.SaveFailed)
 	initialJS := strings.Replace(nativeJS, "'__OIE_SAVE_FAILED__'", string(saveFailed), 1)
+	initialJS = strings.Replace(initialJS, "'__OIE_MAC_SOUND__'", strconv.FormatBool(runtime.GOOS == "darwin"), 1)
 	var window *application.WebviewWindow
 	var app *application.App
 	var windowMu sync.Mutex

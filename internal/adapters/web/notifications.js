@@ -135,6 +135,7 @@
   }
 
   async function unlockSound() {
+    if (desktop()?.playSound) return true;
     try {
       if (!Audio) return false;
       context ??= new Audio();
@@ -155,6 +156,8 @@
   }
 
   function playSound() {
+    const nativeSound = desktop()?.playSound;
+    if (nativeSound) return nativeSound();
     if (context?.state !== 'running' || !soundBuffer) return;
     const source = context.createBufferSource();
     source.buffer = soundBuffer;
@@ -263,7 +266,7 @@
   async function playMessageSound(engine, message, eligible) {
     const receivedAt = Date.now();
     const withinWindow = () => receivedAt < Number(read(lastSoundKey)) + soundInterval;
-    const ready = () => soundEnabled() && soundBuffer && context?.state === 'running';
+    const ready = () => soundEnabled() && (desktop()?.playSound || soundBuffer && context?.state === 'running');
     if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
     try {
       const conversation = await notificationContext(engine, message);
@@ -279,7 +282,7 @@
       const claimedAt = await claim(engine, message.id, receivedAt);
       if (claimedAt && ready() && eligible() && permitsSound()) {
         write(lastSoundKey, String(claimedAt));
-        playSound();
+        await playSound();
       }
     } catch {}
   }
@@ -289,13 +292,14 @@
     if (!root) return;
     const banners = root.querySelector('[data-notification-banners]');
     const sound = root.querySelector('[data-notification-sound]');
+    const canSound = Boolean(Audio || desktop()?.playSound);
     banners.checked = wantsBanner();
     banners.disabled = pending || !canBanner();
     sound.checked = soundEnabled();
-    sound.disabled = !Audio;
+    sound.disabled = !canSound;
     for (const scope of root.querySelectorAll('[data-notification-sound-scope]')) {
       scope.checked = soundScopeEnabled(scope.dataset.notificationSoundScope);
-      scope.disabled = !Audio;
+      scope.disabled = !canSound;
     }
     const rooms = root.querySelector('[data-notification-room-sound]');
     const roomMode = roomSound();
@@ -303,7 +307,7 @@
       rooms.value = roomMode;
       rooms.dispatchEvent(new Event('input', {bubbles: true}));
     }
-    root.querySelector('[data-notification-preview]').disabled = !Audio;
+    root.querySelector('[data-notification-preview]').disabled = !canSound;
     root.querySelector('[role="status"]').textContent =
       root.dataset[notice] || (!canBanner() ? root.dataset.unavailable :
         window.Notification?.permission === 'denied' && !desktop() ? root.dataset.denied : '');
@@ -374,14 +378,19 @@
     renderMute();
   }
 
+  async function previewSound() {
+    try {
+      if (!(await unlockSound())) throw Error('Notification sound unavailable');
+      await playSound();
+      notice = '';
+    } catch { notice = 'soundUnavailable'; }
+    renderSettings();
+  }
+
   document.addEventListener('change', change);
   document.addEventListener('click', event => {
     if (event.target.closest('[data-notification-preview]')) {
-      void unlockSound().then(ready => {
-        if (ready) playSound();
-        else notice = 'soundUnavailable';
-        renderSettings();
-      });
+      void previewSound();
     } else if (event.isTrusted && soundEnabled()) {
       void unlockSound();
     }

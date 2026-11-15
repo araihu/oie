@@ -7,8 +7,8 @@ account or reply to one of its own retained messages. Archived rooms and the
 conversation in focus start silent. The controls let the user turn direct sound
 off, choose mentions and replies, all messages or silence for rooms, and enable
 sound in archived rooms or the conversation in focus. Preview sound plays the
-woodblock and muted marimba cue on demand. WebView and browser autoplay policy
-may require an interaction with the app after opening it.
+woodblock and muted marimba cue on demand. Browser and Linux WebView autoplay
+policy may require an interaction with the app after opening it.
 
 Conversation details offer a mute on this device. Mutes use the engine and
 conversation IDs and apply to direct chats and rooms, including archived
@@ -31,7 +31,7 @@ engine and message. It also stores the last sound time in the same transaction.
 The first eligible message plays immediately once its context is resolved.
 Further arrivals within two seconds are skipped, even with multiple tabs,
 and no sound is scheduled for the end of the window. Independent browser
-profiles and desktop WebViews maintain their own window. Web Audio plays the
+profiles and desktop WebViews maintain their own window. Playback uses the
 bundled 300 ms mono PCM WAV.
 
 ## Platform delivery and checks
@@ -42,13 +42,16 @@ bundled 300 ms mono PCM WAV.
   are closed. The new window checks the notification's engine against the
   current engine before loading the conversation. The page-scoped Notifications
   API is a fallback where worker delivery is unavailable.
-- Wails sends silent native banners and uses the same Web Audio sound as the
-  browser. Closing the desktop window hides it while the app remains running.
+- Wails sends silent native banners. On macOS, AppKit plays the WAV both for
+  previews and for incoming messages, including with the window hidden. On
+  Linux, Web Audio plays the same WAV. Closing the desktop window hides it
+  while the app remains running.
   Linux needs a session notification daemon. macOS needs an authorized, valid
   app bundle. The Linux desktop smoke decodes the WAV in its actual WebView,
   sends a native banner through a private D-Bus notification daemon, and
   verifies that clicking restores the hidden window at the exact message.
-  macOS authorization and click behavior still need native coverage.
+  A macOS user verified on rc.20 that the banner restores the hidden window at
+  the exact message. The macOS audio change still needs a listening test.
 - The standalone manifest lets supported browsers install the app. The open
   PWA uses the same page and notification worker as a browser tab. On Linux,
   Chromium 151 installed Oiê through its UI and opened the exact message in the

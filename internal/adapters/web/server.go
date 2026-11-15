@@ -718,6 +718,9 @@ var notificationScript []byte
 //go:embed notification.wav
 var notificationSound []byte
 
+// NotificationSoundWAV returns the bundled sound for native desktop playback.
+func NotificationSoundWAV() []byte { return bytes.Clone(notificationSound) }
+
 //go:embed notification-worker.js
 var notificationWorkerScript []byte
 

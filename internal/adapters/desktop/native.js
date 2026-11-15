@@ -9,7 +9,10 @@
     ) : undefined,
     notifications: Object.freeze({
       request: () => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.RequestNotifications'),
-      send: (...args) => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.NotifyMessage', ...args)
+      send: (...args) => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.NotifyMessage', ...args),
+      playSound: '__OIE_MAC_SOUND__' ? () => runtime.Call.ByName(
+        'github.com/araihu/oie/internal/adapters/desktop.runtimeService.PlayNotificationSound'
+      ) : undefined
     }),
     saveFile: (address, name) => {
       const url = new URL(address, location.href);

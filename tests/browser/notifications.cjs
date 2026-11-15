@@ -329,11 +329,13 @@ async function run() {
     await expectSound(5, 'a verified reply to your own room message sounds');
     await quietWindow();
 
-    const pick = async label => {
+    const pick = async (label, value) => {
       await second.getByRole('combobox', {name: 'Som nas salas'}).click();
       await second.getByRole('option', {name: label, exact: true}).click();
+      await until(() => second.evaluate(value => localStorage.getItem('oie.notifications.room-sound') === value, value),
+        'room sound preference saved: ' + value);
     };
-    await pick('Todas as mensagens');
+    await pick('Todas as mensagens', 'all');
     push({conversationId: room});
     await expectSound(6, 'all-room option plays ordinary messages');
     await quietWindow();
@@ -344,7 +346,7 @@ async function run() {
     await expectSound(7, 'archived room sound can be enabled');
     await quietWindow();
 
-    await pick('Desativado');
+    await pick('Desativado', 'off');
     await second.locator('label:has(#notification-direct)').click();
     push({conversationId: room, mentionsYou: true});
     push();
@@ -360,7 +362,7 @@ async function run() {
     push();
     await expectSilent(8, 'master sound preference applies in both tabs');
     await second.locator('label:has(#notification-sound)').click();
-    await pick('Menções e respostas a você');
+    await pick('Menções e respostas a você', 'attention');
     await second.locator('label:has(#notification-archived)').click();
     await second.locator('label:has(#notification-focused)').click();
     await closeSettings(second);
@@ -458,8 +460,40 @@ async function run() {
     push({conversationId: room, mentionsYou: true});
     await expectSound(soundsBeforeRoomMute + 1, 'unmuted room plays eligible messages again');
 
+    const nativeProfile = await browser.newContext();
+    const nativePage = await nativeProfile.newPage();
+    nativePage.on('pageerror', error => errors.push(error.message));
+    await nativePage.addInitScript(() => {
+      window.AudioContext = window.webkitAudioContext = undefined;
+      window.nativeWindowHidden = true;
+      window.nativeSounds = 0;
+      window.nativeBanners = 0;
+      Object.defineProperty(document, 'hidden', {get: () => window.nativeWindowHidden});
+      window.OieDesktop = {notifications: {
+        playSound: async () => { window.nativeSounds++; },
+        send: async () => { window.nativeBanners++; }
+      }};
+    });
+    await nativePage.goto(base + '/?lang=pt-BR');
+    await until(() => streams.size === 3, 'native window live stream');
+    push();
+    await until(() => nativePage.evaluate(() => window.nativeSounds === 1), 'hidden native window plays before any interaction');
+    push();
+    await quietWindow();
+    assert.deepEqual(await nativePage.evaluate(() => [window.nativeSounds, window.nativeBanners]), [1, 0],
+      'native sound respects the rolling interval and works with banners off');
+    await nativePage.evaluate(() => { window.nativeWindowHidden = false; });
+    await settings(nativePage);
+    await nativePage.locator('label:has(#notification-sound)').click();
+    push();
+    await pause(350);
+    assert.equal(await nativePage.evaluate(() => window.nativeSounds), 1, 'native playback respects the sound preference');
+    await nativePage.locator('[data-notification-preview]').click();
+    await until(() => nativePage.evaluate(() => window.nativeSounds === 2), 'preview plays natively even with alerts muted');
+    await nativeProfile.close();
+
     assert.deepEqual(errors, []);
-    console.log('PASS: notification sound preferences, two-second window, mute, replay and banner clicks with and without an open page');
+    console.log('PASS: notification preferences, native sound without Web Audio, two-second window, mute, replay and banner clicks');
   } finally {
     await browser?.close();
     app.kill();
