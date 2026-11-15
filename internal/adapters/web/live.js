@@ -354,8 +354,14 @@ window.OieRuntime.register('live', life => {
       return;
     }
     if (['account-avatar','account-label'].includes(form.dataset.oieAction)) {
-      if (error && form.isConnected) errorToast(message);
-      else if (message && form.isConnected) announce(message, true);
+      const editor = form.closest('dialog');
+      const region = form.querySelector('[data-form-feedback]');
+      if (editor?.open && region) {
+        region.dataset.error = String(error);
+        region.textContent = message;
+      } else if (message && form.isConnected) {
+        if (error) errorToast(message); else announce(message, true);
+      }
       return;
     }
     if(error&&form.matches('[data-cancel-message]')){errorToast(message);return;}
@@ -366,6 +372,16 @@ window.OieRuntime.register('live', life => {
     if (error && !region) errorToast(message);
     else announce(message);
   }
+  life.on(document, 'close', event => {
+    if (!(event.target instanceof HTMLDialogElement)) return;
+    const form = event.target.querySelector('form[data-oie-action="account-label"],form[data-oie-action="account-avatar"]');
+    if (!form) return;
+    form.reset();
+    form.querySelector('input[type="file"]')?.dispatchEvent(new Event('change', {bubbles:true}));
+    const feedback = form.querySelector('[data-form-feedback]');
+    if (feedback) feedback.textContent = '';
+    scheduleRefresh();
+  }, {capture:true});
   function lockComposer(locked) {
     if (!input || !composer) return;
     input.readOnly = locked;
@@ -917,6 +933,8 @@ window.OieRuntime.register('live', life => {
           const photoFields=existing.querySelector('[data-account-photo-fields]');
           const nextPhotoFields=fresh.querySelector('[data-account-photo-fields]');
           if(photoFields&&nextPhotoFields)photoFields.disabled=nextPhotoFields.disabled;
+          const photoAction=existing.querySelector('[data-edit-account-photo]');
+          if (photoAction && nextPhotoFields) photoAction.disabled=nextPhotoFields.disabled;
           const oldError=existing.querySelector('[id^="connection-error-"]'),newError=fresh.querySelector('[id^="connection-error-"]');
           if(oldError&&newError&&oldError.innerHTML!==newError.innerHTML)mutateDOM(oldError,newError.innerHTML);
           const controls=existing.querySelector('[id^="connection-controls-"]'),nextControls=fresh.querySelector('[id^="connection-controls-"]');
@@ -1113,6 +1131,7 @@ window.OieRuntime.register('live', life => {
     const fields = new FormData(form);
     const photoInput = accountAvatar ? form.elements.namedItem('image') : null;
     const submittedPhoto = photoInput?.files[0];
+    const nameInput = accountLabel ? form.elements.namedItem('label') : null;
     const editorSave = accountEditor ? form.querySelector('button[type="submit"]') : null;
     let values = form.enctype === 'multipart/form-data' ? fields : new URLSearchParams(fields);
     const roomManagement = form.dataset.oieAction === 'room-management';
@@ -1169,10 +1188,12 @@ window.OieRuntime.register('live', life => {
         }
         document.dispatchEvent(new CustomEvent('oie:room-management-result', {detail: {form, result}}));
       }
+      const draftChanged = nameInput ? nameInput.value !== fields.get('label') :
+        Boolean(photoInput && photoInput.files[0] !== submittedPhoto);
       if (accountLabel && form.isConnected && result.account?.id === fields.get('accountId') &&
           canonicalID(result.account.revisionId) && typeof result.account.label === 'string') {
         syncAccountNameInput(form, result.account.label, result.account.revisionId,
-          !result.ok || form.elements.namedItem('label').value !== fields.get('label'));
+          !result.ok || draftChanged);
       }
       if (!result.ok) {
         if(result.code==='engine_changed')engineChanged(false);
@@ -1223,7 +1244,13 @@ window.OieRuntime.register('live', life => {
             photoInput.value = '';
             photoInput.dispatchEvent(new Event('change', {bubbles:true}));
           }
-          if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+          const editor = form.closest('dialog');
+          if (editor?.open && draftChanged) {
+            feedback(form, result.message);
+          } else {
+            if (editor?.open) window.dispatchEvent(new CustomEvent('modal:close',{detail:{id:editor.id}}));
+            if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+          }
         } else if (roomManagement) {
           feedback(form, '');
           if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));

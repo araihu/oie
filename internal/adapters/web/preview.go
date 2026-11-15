@@ -267,6 +267,18 @@ func (v view) accountScreen() string {
 	}
 	return "list"
 }
+func (v view) accountEditorHasError() bool {
+	if v.ErrorMessage == "" || v.Preview || v.Unavailable || v.accountScreen() != "detail" {
+		return false
+	}
+	account := v.account(v.managedAccountID())
+	if account.Address == "" {
+		return false
+	}
+	return v.FormTarget == "account-label-"+account.Id ||
+		v.FormTarget == "account-avatar-"+account.Id && account.Protocol == "xmpp" && connectionState(v, account.Id) == "connected"
+}
+
 func (v view) managedAccountID() string {
 	if strings.HasPrefix(v.FormTarget, "connect-") {
 		return strings.TrimPrefix(v.FormTarget, "connect-")

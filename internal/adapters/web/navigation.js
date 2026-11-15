@@ -396,6 +396,8 @@
   else panel?.classList.remove('oie-account-list-drawer','oie-account-detail-drawer','oie-capabilities-drawer');
   panel?.classList.add(...classes);
   if(panel)panel.dataset.oieAccountPanelClass=root.dataset.panelClass;
+  const title=panel?.querySelector(':scope > header > h2');
+  if(title&&root.dataset.panelTitle)title.textContent=root.dataset.panelTitle;
   const query=new URLSearchParams(location.search),body=document.getElementById('accounts-body');
   if(query.get('open')!=='accounts'){
    window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'accounts'}}));

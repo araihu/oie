@@ -127,6 +127,7 @@ function thumbnail(color){
   await until(async()=>await page.locator(`.oie-account-detail ${own} img`).getAttribute('src')==='/ui/avatars/'+hashes[1],'account-detail photo');assert.equal(await password.inputValue(),'unsent-form-value');assert(await password.evaluate(el=>document.activeElement===el));
   findings.push('Account-detail photo updates preserve the focused connection form');
   assert(await page.locator('#account-photo-image').isDisabled());
+  assert(await page.locator('[data-edit-account-photo]').isDisabled());
   state.connection='connected';
   for(const [width,lang] of [[1440,'en'],[1440,'pt-BR'],[390,'en'],[390,'pt-BR']]){
    set(account,'alice@fixture',hashes[1]);
@@ -134,28 +135,33 @@ function thumbnail(color){
    await page.setViewportSize({width,height:900});
    const params=new URLSearchParams({account,chat:direct,open:'accounts',managedAccount:account,lang,theme:width===390?'dark':'light'});
    await page.goto(base+'/?'+params);
+   const editor=page.locator('#account-photo-dialog');
+   const edit=page.getByRole('button',{name:lang==='pt-BR'?'Editar foto':'Edit photo',exact:true});
    const form=page.locator('#account-photo-form'),file=form.locator('input[type=file]');
    const save=form.getByRole('button',{name:lang==='pt-BR'?'Salvar foto':'Save photo'});
    const upload={name:'avatar.png',mimeType:'image/png',buffer:images[0]};
    const accountPhoto=page.locator(`.oie-account-detail ${own} img`);
    const toast=page.locator('[data-toast-container]');
+   assert(await editor.isHidden());
+   await edit.click();
    await save.waitFor({state:'visible'});
    await until(async()=>await accountPhoto.getAttribute('src')==='/ui/avatars/'+hashes[1],'initial account photo');
    await file.setInputFiles(upload);
    const before=state.uploads.length;
-   await page.locator('[data-account-back]').click();
-   await page.locator(`[data-manage-account="${account}"]`).click();
-   assert.equal(await file.inputValue(),'','leaving the account detail discards the unsaved selection');
+   await page.keyboard.press('Escape');
+   await editor.waitFor({state:'hidden'});
+   await edit.click();
+   assert.equal(await file.inputValue(),'','closing the editor discards the unsaved selection');
    assert.equal(state.uploads.length,before);
 
    await file.setInputFiles(upload);
    await save.focus();
    await page.waitForFunction(()=>document.querySelector('.oie-account-drawer').getBoundingClientRect().right<=innerWidth+1);
    const startSampling=()=>page.evaluate(()=>{
-    const selectors=['#account-photo-form','#account-photo-image','#account-photo-form button','.oie-account-detail-heading','#message-timeline','#send-message-form'];
+    const selectors=['.oie-account-detail-heading','#message-timeline','#send-message-form','#account-photo-form','#account-photo-image','#account-photo-form button'];
     const geometry=()=>selectors.flatMap(selector=>{
      const el=document.querySelector(selector);
-     if(!el)return [];
+     if(!el||el.closest('dialog:not([open])'))return [];
      const {x,y,width,height}=el.getBoundingClientRect();
      return [x,y,width,height,el.scrollTop];
     });
@@ -179,17 +185,13 @@ function thumbnail(color){
    await form.evaluate(el=>el.requestSubmit());
    await until(()=>state.uploads.length===before+1,'one upload with repeated submit');
    assert.equal(await accountPhoto.getAttribute('src'),'/ui/avatars/'+hashes[1]);
-   const error=toast.getByRole('alert').filter({hasText:lang==='pt-BR'?'Escolha um PNG, JPEG ou GIF válido de até 512 KB.':'Choose a valid PNG, JPEG, or GIF up to 512 KB.'});
+   const error=form.locator('[data-form-feedback][data-error=true]').filter({hasText:lang==='pt-BR'?'Escolha um PNG, JPEG ou GIF válido de até 512 KB.':'Choose a valid PNG, JPEG, or GIF up to 512 KB.'});
    await error.waitFor();
    await stopSampling();
    assert.equal(state.uploads.length,before+1);
    assert(await save.evaluate(el=>document.activeElement===el));
    assert.match(await file.inputValue(),/avatar\.png$/);
    assert.equal(await accountPhoto.getAttribute('src'),'/ui/avatars/'+hashes[1]);
-
-   await error.getByRole('button',{name:lang==='pt-BR'?'Fechar':'Close',exact:true}).click();
-   await error.waitFor({state:'hidden'});
-   await save.focus();
 
    state.photoStatus=204;
    await startSampling();
@@ -201,7 +203,8 @@ function thumbnail(color){
    assert.deepEqual(state.uploads.slice(before),[{account,hash:hashes[0]},{account,hash:hashes[0]}]);
    assert.equal(state.avatars.get(JSON.stringify([other,'alice@fixture'])),hashes[1]);
    assert.equal(await file.inputValue(),'');
-   assert(await save.evaluate(el=>document.activeElement===el));
+   await editor.waitFor({state:'hidden'});
+   assert(await edit.evaluate(el=>document.activeElement===el));
   }
   findings.push('Profile photo upload, cancellation, delayed validation and retry preserve desktop and mobile geometry, keyboard focus and account scope in English and Brazilian Portuguese');
   await page.setViewportSize({width:1440,height:900});

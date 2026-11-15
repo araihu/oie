@@ -326,6 +326,7 @@ type copy struct {
 	RoomChangeAvatar                                                                                                                                                                                         string
 	RoomRemoveAvatar                                                                                                                                                                                         string
 	RemoveAccount, RemoveAccountWarning, RemoveAccountFailed, RemovingAccount, AccountRemoved                                                                                                                string
+	AccountProfile, AccountProfileName, AccountAvatarEdit                                                                                                                                                    string
 	AccountRename, AccountRenameSave, AccountRenameSaved, AccountRenameFailed, AccountRenameInvalid, AccountRenameConflict                                                                                   string
 	AccountAvatarLabel, AccountAvatarSave, AccountAvatarUpdated, AccountAvatarFailed, AccountAvatarConnect                                                                                                   string
 	RoomAvatarFile                                                                                                                                                                                           string
