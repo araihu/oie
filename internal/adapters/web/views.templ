@@ -655,11 +655,13 @@ if problem:=v.connectionError(a.Id);problem!="" {
 </div>
 @accountConnectionControls(v,a.Id)
 @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-capabilities-link"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})){<span><strong>{v.Text.Capabilities}</strong><small>{v.Text.CapabilitiesIntro}</small></span>@glyph(heroicons.Icon16SolidChevronRight)}
-if !v.Unavailable && !v.Preview {
-@link.Link(v.removeAccountHref(a.Id),link.WithRootClass("oie-remove-account-link"),link.WithAttrs(templ.Attributes{"data-account-remove":""})){ {v.Text.RemoveAccount} }
-}
 </div>
-<footer class="oie-account-detail-footer">@disconnectAction(v,a.Id)</footer>
+<footer class="oie-account-detail-footer">
+<div data-account-disconnect-actions>@disconnectAction(v,a.Id)</div>
+if !v.Unavailable && !v.Preview {
+@link.Link(v.removeAccountHref(a.Id),link.WithAppearance(link.AppearanceButton),link.WithRootClass("oie-remove-account-link"),link.WithAttrs(templ.Attributes{"data-account-remove":""})){ {v.Text.RemoveAccount} }
+}
+</footer>
 </section>
 }
 templ accountPhotoForm(v view,a engineapi.Account){

@@ -105,7 +105,13 @@ function image(){
    await page.getByText('Fixture disconnect failed',{exact:true}).waitFor();
    assert(await disconnect.isEnabled());
    const transition=async(value,form)=>{state.connection=value;emit('account.connection_changed');await until(async()=>await detailStatus.getAttribute('data-connection-state')===value&&await connect.count()===form,'account detail '+value);assert.equal(await detailStatus.getAttribute('title'),labels[value]);assert.equal(await detailStatus.getAttribute('aria-label'),labels[value]);await placement(bob,detailStatus)};
-   await transition('not_connected',1);assert.equal(await detail.locator('[data-disconnect-account]').count(),0);assert(await footer.isHidden());
+   const remove = footer.locator('[data-account-remove]');
+   await remove.focus();
+   await remove.evaluate(node => window.focusedRemoveAccount = node);
+   await transition('not_connected',1);
+   assert.equal(await detail.locator('[data-disconnect-account]').count(),0);
+   assert(await remove.isVisible());
+   assert(await remove.evaluate(node => node === window.focusedRemoveAccount && node === document.activeElement));
    const endpoint=connect.locator('[name=endpoint]');assert(await endpoint.isHidden());await connect.getByRole('button',{name:config.locale==='en'?'Advanced connection settings':'Configurações avançadas',exact:true}).click();await endpoint.fill('127.0.0.1:5222');
    const password=connect.locator('[name=password]');await password.fill('Unsaved fixture password');await password.focus();await password.evaluate(node=>window.accountStatusInput=node);
    await page.evaluate(()=>{window.accountStatusRefreshed=false;document.addEventListener('oie:stars-refresh',()=>window.accountStatusRefreshed=true,{once:true})});emit('account.history_changed');await until(()=>page.evaluate(()=>window.accountStatusRefreshed),'same-state detail refresh');

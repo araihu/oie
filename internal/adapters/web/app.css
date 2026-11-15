@@ -446,9 +446,14 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-account-list-workspace #account-overview,.oie-account-detail-content{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .oie-account-list-workspace .oie-account-list{margin-bottom:0}
 .oie-account-list-footer,.oie-account-detail-footer{flex-shrink:0;border-top:1px solid var(--oie-border);background:var(--oie-panel);padding:14px 0 max(14px,env(safe-area-inset-bottom))}
-.oie-account-detail-footer:empty{display:none}
-.oie-account-detail-footer button{min-height:44px}
-.oie-remove-account-link{display:inline-flex;align-items:center;min-height:44px;margin-top:12px}
+.oie-account-detail-footer{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.oie-account-detail-footer:not(:has(a,button)),[data-account-disconnect-actions]:empty{display:none}
+.oie-account-detail-footer button,.oie-remove-account-link{min-height:44px}
+.oie-remove-account-link{
+ display:inline-flex;align-items:center;margin-inline-start:auto;
+ --color-primary:var(--color-danger-action);--color-on-primary:var(--color-on-danger-action);
+ --color-primary-dark:var(--color-danger-action-dark);--color-on-primary-dark:var(--color-on-danger-action-dark);
+}
 .oie-remove-submit-label{display:grid}
 .oie-remove-submit-label>span{grid-area:1/1}
 .oie-remove-submit-label>span:last-child,#remove-account-form[aria-busy=true] .oie-remove-submit-label>span:first-child{visibility:hidden}

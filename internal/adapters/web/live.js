@@ -893,11 +893,12 @@ window.OieRuntime.register('live', life => {
           // State transitions replace obsolete actions. Same-state refreshes keep
           // password/endpoint edits, accordion state and pending feedback intact.
           if(controls&&nextControls&&controls.dataset.connectionState!==nextControls.dataset.connectionState){
-            const footer=existing.querySelector('.oie-account-detail-footer'),nextFooter=fresh.querySelector('.oie-account-detail-footer');
-            const restoreFocus=controls.contains(document.activeElement)||footer?.contains(document.activeElement);
+            const disconnect=existing.querySelector('[data-account-disconnect-actions]');
+            const nextDisconnect=fresh.querySelector('[data-account-disconnect-actions]');
+            const restoreFocus=controls.contains(document.activeElement)||disconnect?.contains(document.activeElement);
             mutateDOM(controls,nextControls.innerHTML);controls.dataset.connectionState=nextControls.dataset.connectionState;
-            if(footer&&nextFooter)mutateDOM(footer,nextFooter.innerHTML);
-            if(restoreFocus)(controls.querySelector('button[type="submit"]')||footer?.querySelector('button[type="submit"]')||existing.closest('#accounts-body')?.querySelector('[data-account-back]'))?.focus({preventScroll:true});
+            if(disconnect&&nextDisconnect)mutateDOM(disconnect,nextDisconnect.innerHTML);
+            if(restoreFocus)(controls.querySelector('button[type="submit"]')||disconnect?.querySelector('button[type="submit"]')||existing.closest('#accounts-body')?.querySelector('[data-account-back]'))?.focus({preventScroll:true});
           }
         }
       }

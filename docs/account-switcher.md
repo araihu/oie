@@ -111,7 +111,7 @@ The account-list page keeps Add account at the bottom of the drawer. Its list sc
 
 ## Remove an account from Oiê
 
-The account detail offers a quiet **Remove account** link. A separate
+The account detail footer offers **Remove account** as a destructive action. A separate
 confirmation screen in the same drawer identifies the account by label and
 address, explains what is removed, and offers **Cancel** and **Remove account**.
 This composes the existing Goshtoso Drawer, Link, Form and Button in the app's
