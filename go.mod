@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/a-h/templ v0.3.1100
-	github.com/araihu/goshtoso v0.6.2
+	github.com/araihu/goshtoso v0.6.3-0.20261115030147-b9c2478b8f93
 	github.com/araihu/margo v0.0.36
 	github.com/blevesearch/bleve/v2 v2.6.1
 	github.com/getkin/kin-openapi v0.152.0

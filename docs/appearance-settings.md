@@ -15,7 +15,8 @@ added.
 
 `tests/browser/appearance-settings.cjs` is a portable, isolated BFF fixture in the
 Dagger browser stage. It checks 390 px and 1440 px in English and Brazilian
-Portuguese, icons, document preservation during swaps, drawer visibility,
+Portuguese, vertical centering and frame geometry during a delayed theme swap,
+document preservation, drawer visibility,
 consecutive keyboard changes, cookie persistence, system color changes,
 horizontal overflow and accessibility. The fixture passes against the current
 application binary. Full pipeline validation is recorded in [local CI](local-ci.md).

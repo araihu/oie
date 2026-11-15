@@ -27,10 +27,47 @@ const id='019a5df0-0000-7000-8000-000000000001';
    const dialog=page.getByRole('dialog',{name:locale==='en'?'Settings':'Configurações',exact:true});await dialog.waitFor({state:'visible'});
    const names=locale==='en'?['System','Light','Dark']:['Sistema','Claro','Escuro'];
    const group=dialog.getByRole('radiogroup');assert.equal(await group.getByRole('radio').count(),3);await group.getByRole('radio',{name:names[0],exact:true}).waitFor();
-   await page.evaluate(()=>window.appearanceDocumentToken='preserved');
+   await page.evaluate(()=>{
+    window.appearanceDocumentToken='preserved';
+    function measure(){
+     const section=document.querySelector('#appearance-settings');
+     const labels=[...section.querySelectorAll('label')];
+     const rects=[section, ...labels].flatMap(el=>{
+      const {x,y,width,height}=el.getBoundingClientRect();
+      return [x,y,width,height];
+     });
+     const center=el=>{const box=el.getBoundingClientRect();return box.y+box.height/2;};
+     const contentOffset=Math.max(...labels.flatMap(label=>{
+      const icon=label.querySelector('svg');
+      const text=icon.nextElementSibling;
+      return [icon,text].map(el=>Math.abs(center(el)-center(label)));
+     }));
+     return {rects,contentOffset};
+    }
+    const initial=measure();
+    const state=window.appearanceGeometry={frames:0,shift:0,offset:initial.contentOffset,frame:0};
+    function sample(){
+     const frame=measure();
+     state.frames++;
+     state.shift=Math.max(state.shift,...frame.rects.map((value,index)=>Math.abs(value-initial.rects[index])));
+     state.offset=Math.max(state.offset,frame.contentOffset);
+     state.frame=requestAnimationFrame(sample);
+    }
+    state.frame=requestAnimationFrame(sample);
+   });
+   await page.route('**/?*theme=dark*',async route=>{
+    await new Promise(resolve=>setTimeout(resolve,300));
+    await route.continue();
+   },{times:1});
    await group.getByRole('radio',{name:names[2],exact:true}).click({noWaitAfter:true});
    await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark');await dialog.waitFor({state:'visible'});
    await page.waitForFunction(()=>document.activeElement?.id==='appearance-dark');
+   const geometry=await page.evaluate(()=>{
+    const state=window.appearanceGeometry;
+    cancelAnimationFrame(state.frame);
+    return state;
+   });
+   assert(geometry.frames>=3&&geometry.shift<=1&&geometry.offset<=1,JSON.stringify(geometry));
    assert.equal(await group.locator('svg').count(),3);
    assert.equal(await page.evaluate(()=>window.appearanceDocumentToken),'preserved');assert(await group.getByRole('radio',{name:names[2],exact:true}).isChecked());
    assert.equal((await context.cookies()).find(c=>c.name==='oie_theme')?.value,'dark');
