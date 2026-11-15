@@ -7,16 +7,19 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/araihu/oie/internal/adapters/web"
 	"github.com/araihu/oie/internal/diagnostics"
 )
 
 type desktopTarget struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	ui     http.Handler
-	engine *Server
+	ctx       context.Context
+	cancel    context.CancelFunc
+	ui        http.Handler
+	engine    *Server
+	selection string
+	local     bool
 }
 
 // Desktop keeps the native presentation origin stable while changing engines.
@@ -38,22 +41,23 @@ type Desktop struct {
 func StartDesktop(ctx context.Context, dataDir, xmppCAFile, engineURL string, logger *diagnostics.Logger, save func(string) error) (*Desktop, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, diagnostics: logger}
-	target, err := d.prepare(ctx, engineURL, false)
+	selection := rand.Text()
+	target, err := d.prepare(ctx, engineURL, false, selection)
 	if err != nil && ctx.Err() == nil && logger != nil {
 		logger.Record(diagnostics.DesktopFailed, 0, 0)
-		target, err = d.recovery(engineURL)
+		target, err = d.recovery(engineURL, selection)
 	}
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	d.active.Store(target)
+	d.activate(target)
 	return d, nil
 }
 
-func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool) (_ *desktopTarget, err error) {
+func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool, selection string) (_ *desktopTarget, err error) {
 	targetCtx, cancel := context.WithCancel(d.ctx)
-	target := &desktopTarget{ctx: targetCtx, cancel: cancel}
+	target := &desktopTarget{ctx: targetCtx, cancel: cancel, selection: selection, local: engineURL == ""}
 	defer func() {
 		if err != nil {
 			target.stop()
@@ -98,15 +102,15 @@ func (d *Desktop) options(target *desktopTarget, engineURL string) []web.Option 
 	return []web.Option{
 		web.WithDiagnostics(d.diagnostics, "", web.DiagnosticsNative),
 		web.WithRemoteDiagnostics(engineURL),
-		web.WithEngineMode(rand.Text(), engineURL, func(ctx context.Context, url string) error {
+		web.WithEngineMode(target.selection, engineURL, func(ctx context.Context, url string) error {
 			return d.selectEngine(ctx, target, url)
 		}),
 	}
 }
 
-func (d *Desktop) recovery(engineURL string) (*desktopTarget, error) {
+func (d *Desktop) recovery(engineURL, selection string) (*desktopTarget, error) {
 	ctx, cancel := context.WithCancel(d.ctx)
-	target := &desktopTarget{ctx: ctx, cancel: cancel}
+	target := &desktopTarget{ctx: ctx, cancel: cancel, selection: selection, local: engineURL == ""}
 	options := append(d.options(target, engineURL), web.WithUnavailableEngine())
 	ui, err := web.New("http://127.0.0.1", options...)
 	if err != nil {
@@ -132,7 +136,7 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, eng
 		}
 		return nil
 	}
-	next, err := d.prepare(ctx, engineURL, true)
+	next, err := d.prepare(ctx, engineURL, true, rand.Text())
 	if err != nil {
 		d.diagnostics.Record(diagnostics.EngineSwitchError, 0, 0)
 		return err
@@ -146,7 +150,7 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, eng
 		d.diagnostics.Record(diagnostics.PreferencesFailed, 0, 0)
 		return errors.Join(web.ErrEngineModeSave, err)
 	}
-	d.active.Store(next)
+	d.activate(next)
 	previous.stop()
 	event := diagnostics.EngineRemote
 	if engineURL == "" {
@@ -154,6 +158,51 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, eng
 	}
 	d.diagnostics.Record(event, 0, 0)
 	return nil
+}
+
+// activate is called with mu held once the Desktop is serving requests.
+func (d *Desktop) activate(target *desktopTarget) {
+	d.active.Store(target)
+	if target.local {
+		go d.recoverLocal(target)
+	}
+}
+
+func (d *Desktop) recoverLocal(target *desktopTarget) {
+	if target.engine != nil {
+		select {
+		case <-target.ctx.Done():
+			return
+		case <-target.engine.stopped:
+		}
+	}
+	delay := time.Second
+	for target.ctx.Err() == nil {
+		d.mu.Lock()
+		if d.active.Load() != target || target.ctx.Err() != nil {
+			d.mu.Unlock()
+			return
+		}
+		if target.engine != nil && delay == time.Second {
+			d.diagnostics.Record(diagnostics.DesktopFailed, 0, 0)
+		}
+		next, err := d.prepare(target.ctx, "", false, target.selection)
+		if err == nil {
+			d.activate(next)
+			target.stop()
+			d.mu.Unlock()
+			return
+		}
+		d.mu.Unlock()
+		timer := time.NewTimer(delay)
+		select {
+		case <-target.ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		delay = min(delay*2, 30*time.Second)
+	}
 }
 
 func (target *desktopTarget) stop() {
