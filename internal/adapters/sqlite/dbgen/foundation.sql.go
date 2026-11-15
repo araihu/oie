@@ -64,12 +64,13 @@ func (q *Queries) InsertAccount(ctx context.Context, arg InsertAccountParams) er
 }
 
 const insertAccountRevision = `-- name: InsertAccountRevision :exec
-INSERT INTO revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,'[]',?,?)
+INSERT INTO revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?)
 `
 
 type InsertAccountRevisionParams struct {
 	ID        string
 	EntityID  string
+	Parents   string
 	Payload   string
 	CreatedAt string
 }
@@ -78,6 +79,7 @@ func (q *Queries) InsertAccountRevision(ctx context.Context, arg InsertAccountRe
 	_, err := q.db.ExecContext(ctx, insertAccountRevision,
 		arg.ID,
 		arg.EntityID,
+		arg.Parents,
 		arg.Payload,
 		arg.CreatedAt,
 	)
@@ -248,4 +250,19 @@ func (q *Queries) Snapshot(ctx context.Context) (SnapshotRow, error) {
 	var i SnapshotRow
 	err := row.Scan(&i.ID, &i.Sequence)
 	return i, err
+}
+
+const updateAccountLabel = `-- name: UpdateAccountLabel :exec
+UPDATE accounts SET revision_id=?,label=? WHERE id=?
+`
+
+type UpdateAccountLabelParams struct {
+	RevisionID string
+	Label      string
+	ID         string
+}
+
+func (q *Queries) UpdateAccountLabel(ctx context.Context, arg UpdateAccountLabelParams) error {
+	_, err := q.db.ExecContext(ctx, updateAccountLabel, arg.RevisionID, arg.Label, arg.ID)
+	return err
 }

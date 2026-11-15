@@ -326,6 +326,7 @@ type copy struct {
 	RoomChangeAvatar                                                                                                                                                                                         string
 	RoomRemoveAvatar                                                                                                                                                                                         string
 	RemoveAccount, RemoveAccountWarning, RemoveAccountFailed, RemovingAccount, AccountRemoved                                                                                                                string
+	AccountRename, AccountRenameSave, AccountRenameSaved, AccountRenameFailed, AccountRenameInvalid, AccountRenameConflict                                                                                   string
 	AccountAvatarLabel, AccountAvatarSave, AccountAvatarUpdated, AccountAvatarFailed, AccountAvatarConnect                                                                                                   string
 	RoomAvatarFile                                                                                                                                                                                           string
 	RoomAvatarHint                                                                                                                                                                                           string
@@ -1370,7 +1371,7 @@ func (v view) headerVersion() string {
 func (v view) accountVersion() string {
 	var out strings.Builder
 	for _, a := range v.Accounts {
-		out.WriteString(a.Id + ";")
+		out.WriteString(a.Id + ":" + a.RevisionId + ";")
 	}
 	return out.String()
 }

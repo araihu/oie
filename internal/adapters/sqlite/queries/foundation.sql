@@ -11,7 +11,9 @@ UPDATE operations SET resource_id=?,result=? WHERE id=?;
 -- name: InsertAccount :exec
 INSERT INTO accounts(id,revision_id,protocol,address,label,created_at) VALUES(?,?,?,?,?,?);
 -- name: InsertAccountRevision :exec
-INSERT INTO revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,'[]',?,?);
+INSERT INTO revisions(id,entity_id,parents,payload,created_at) VALUES(?,?,?,?,?);
+-- name: UpdateAccountLabel :exec
+UPDATE accounts SET revision_id=?,label=? WHERE id=?;
 -- name: GetAccount :one
 SELECT r.payload FROM revisions r WHERE r.id=(SELECT a.revision_id FROM accounts a WHERE a.id=?);
 -- name: ListAccounts :many

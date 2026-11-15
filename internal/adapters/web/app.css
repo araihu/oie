@@ -283,7 +283,7 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-account-photo-fields{display:grid;gap:8px;min-width:0;margin:0 0 16px;border:0;padding:0;justify-items:start}
 .oie-account-photo-fields>div{min-width:0;width:100%}
 .oie-account-detail-heading>div{min-width:0}
-.oie-account-detail-heading h2{font-size:19px;line-height:1.35;font-weight:650;margin:0 0 4px;overflow-wrap:anywhere}
+.oie-account-detail-heading h2{font-size:19px;line-height:1.35;font-weight:650;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .oie-account-detail-heading p{font-size:13px;line-height:1.5;color:var(--oie-muted);margin:0;overflow-wrap:anywhere}
 .oie-account-connection{padding:12px 14px;margin-bottom:24px;border-radius:9px;background:var(--oie-raised);font-size:13px;line-height:1.5}
 .oie-account-workspace form{display:flex;flex-direction:column;gap:18px}

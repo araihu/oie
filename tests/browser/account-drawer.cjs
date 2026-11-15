@@ -4,12 +4,34 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const engine=id(1),revision=id(2),state={count:3,seq:0,changed:false,writes:0},streams=new Set();
- const api=http.createServer((req,res)=>{
+ const names=new Map(), renames=[];
+ const accounts=()=>Array.from({length:state.count},(_,i)=>{
+  const accountId=id(100+i);
+  return {id:accountId,revisionId:revision,protocol:'xmpp',label:'Account '+String(i+1).padStart(2,'0')+(state.changed?' updated':''),address:'account'+i+'@fixture',createdAt:'2026-11-08T12:00:00Z',...names.get(accountId)};
+ });
+ const api=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');
   const send=(data,code=200)=>{res.statusCode=code;res.end(JSON.stringify(data))};
+  const rename=u.pathname.match(/^\/api\/v1\/accounts\/([^/]+)\/label$/);
+  if(req.method==='PUT'&&rename){
+   const account=accounts().find(item=>item.id===rename[1]);
+   let body='';
+   for await(const chunk of req)body+=chunk;
+   const input=JSON.parse(body);
+   renames.push({accountId:rename[1],...input});
+   await new Promise(resolve=>setTimeout(resolve,600));
+   if(!account)return send({status:404},404);
+   if(account.revisionId!==input.expectedRevisionId)return send({status:409},409);
+   const updated={...account,label:input.label.trim(),revisionId:id(800+renames.length)};
+   names.set(account.id,updated);
+   emit('account.updated');
+   return send(updated);
+  }
   if(req.method!=='GET'){state.writes++;return send({status:500},500)}
   if(u.pathname==='/api/v1/engine')return send({id:engine,role:'hosted',apiVersion:'0.8.0',eventCursor:engine+':'+state.seq});
-  if(u.pathname==='/api/v1/accounts')return send({items:Array.from({length:state.count},(_,i)=>({id:id(100+i),revisionId:revision,protocol:'xmpp',label:'Account '+String(i+1).padStart(2,'0')+(state.changed?' updated':''),address:'account'+i+'@fixture',createdAt:'2026-11-08T12:00:00Z'}))});
+  if(u.pathname==='/api/v1/accounts')return send({items:accounts()});
+  const account=accounts().find(item=>u.pathname==='/api/v1/accounts/'+item.id);
+  if(account)return send(account);
   if(u.pathname.endsWith('/connection'))return send({accountId:u.pathname.split('/')[4],state:'not_connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/history'))return send({accountId:u.pathname.split('/')[4],state:'not_started',retainedMessages:0,conversations:0});
   if(u.pathname==='/api/v1/conversations'||u.pathname.endsWith('/avatars'))return send({items:[]});
@@ -20,7 +42,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});let stderr='';child.stderr.on('data',s=>stderr+=s);
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],results=[];
  const until=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error(label+' '+stderr)};
- const emit=()=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: account.connection_changed\ndata: {}\n\n`)};
+ const emit=(event='account.connection_changed')=>{state.seq++;for(const s of streams)s.write(`id: ${engine}:${state.seq}\nevent: ${event}\ndata: {}\n\n`)};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   for(const width of [390,818,1440])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
@@ -54,7 +76,89 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(a11y.violations.map(v=>v.id),[]);
    results.push({width,mode,locale,accounts:35,axe:0});const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});if(width===818&&mode==='dark'&&locale==='pt-BR')await page.screenshot({path:path.join(artifacts,'account-drawer-overflow.png')});await page.close();
   }
+  state.count=3;
+  state.changed=false;
+  const accountId=id(100);
+  for(const width of [390,1440])for(const locale of ['en','pt-BR']){
+   names.clear();
+   const page=await browser.newPage({viewport:{width,height:885},locale,reducedMotion:'reduce'});
+   page.on('pageerror',error=>errors.push(error.message));
+   const pt=locale==='pt-BR';
+   const params=new URLSearchParams({open:'accounts',managedAccount:accountId,account:accountId,lang:locale});
+   await page.goto(base+'/?'+params);
+   const openEditor=()=>page.getByRole('button',{name:pt?'Editar nome':'Edit name',exact:true}).click();
+   const heading=page.locator('.oie-account-detail-heading h2');
+   const form=page.locator('#account-name-form');
+   const field=form.locator('input[name="label"]');
+   const save=form.getByRole('button',{name:pt?'Salvar nome':'Save name',exact:true});
+   const initialRequests=renames.length;
+   await openEditor();
+   await field.fill('Unsaved');
+   await page.locator('[data-account-back]').click();
+   await page.locator(`[data-manage-account="${accountId}"]`).click();
+   await openEditor();
+   assert.equal(await field.inputValue(),'Account 01');
+   assert.equal(renames.length,initialRequests);
+
+   const savedName='Nome novo '+ 'longo'.repeat(16);
+   await field.fill(savedName);
+   const currentRevision=id(300+width);
+   names.set(accountId,{label:'Outro nome',revisionId:currentRevision});
+   emit('account.updated');
+   await until(async()=>await heading.textContent()==='Outro nome','rename from another device appears');
+   assert.equal(await field.inputValue(),savedName);
+   const toast=page.locator('[data-toast-container]');
+   await save.focus();
+   await page.waitForFunction(()=>document.querySelector('.oie-account-drawer').getBoundingClientRect().right<=innerWidth+1);
+   const startGeometry=()=>page.evaluate(()=>{
+    const selectors=['#account-name-input','#account-name-form button','#account-detail-scroll'];
+    const geometry=()=>selectors.flatMap(selector=>{
+     const node=document.querySelector(selector),rect=node.getBoundingClientRect();
+     return [rect.x,rect.y,rect.width,rect.height,node.scrollTop];
+    });
+    const origin=geometry(),sample={running:true,frames:0,max:0};
+    const frame=()=>{
+     if(!sample.running)return;
+     geometry().forEach((value,index)=>sample.max=Math.max(sample.max,Math.abs(value-origin[index])));
+     sample.frames++;
+     requestAnimationFrame(frame);
+    };
+    window.accountNameGeometry=sample;
+    requestAnimationFrame(frame);
+   });
+   const stopGeometry=async()=>{
+    const geometry=await page.evaluate(()=>{
+     window.accountNameGeometry.running=false;
+     return window.accountNameGeometry;
+    });
+    assert(geometry.frames>=5&&geometry.max<=1,JSON.stringify(geometry));
+   };
+   await startGeometry();
+   await page.keyboard.press('Enter');
+   const refusal=toast.getByText(pt?'O nome mudou em outro lugar. Confira e salve novamente.':'The name changed elsewhere. Review it and save again.');
+   await refusal.waitFor();
+   await stopGeometry();
+   assert(await save.evaluate(button=>button===document.activeElement));
+   assert.equal(await field.inputValue(),savedName);
+   assert.equal(await heading.textContent(),'Outro nome');
+   assert.equal(renames.at(-1).expectedRevisionId,revision);
+
+   await startGeometry();
+   await page.keyboard.press('Enter');
+   await until(()=>renames.length===initialRequests+2,'rename retry reaches engine');
+   await field.fill('Rascunho novo');
+   await toast.getByText(pt?'Nome da conta atualizado.':'Account name saved.').waitFor();
+   await until(async()=>await heading.textContent()===savedName,'saved name appears in details');
+   await stopGeometry();
+   assert.equal(await field.inputValue(),'Rascunho novo');
+   assert.equal(renames.at(-1).expectedRevisionId,currentRevision);
+   assert.equal(renames.at(-1).accountId,accountId);
+   assert.equal(await page.locator('[data-account-switcher]').first().getAttribute('data-active-account-name'),savedName);
+   assert.equal(accounts()[1].label,'Account 02');
+   await page.close();
+  }
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);await fs.writeFile(path.join(__dirname,'artifacts','account-drawer-report.json'),JSON.stringify({results,mutations:state.writes,errors},null,2));
+  console.log('PASS: localized offline account rename preserves keyboard focus, delayed geometry and drafts with revision conflict and retry');
   console.log('PASS: drawer footer stays fixed with3 and35 accounts; independent scrolling, last-row clearance, live refresh, keyboard navigation and12 responsive/locale cases');
  }finally{await browser.close();child.kill('SIGTERM');for(const s of streams)s.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});

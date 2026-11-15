@@ -221,6 +221,18 @@ history, and pending sends from the selected Oiê engine. Other accounts and the
 remote XMPP account are unaffected. Adding the same XMPP address again creates
 a fresh Oiê account. See [account management](account-switcher.md#remove-an-account-from-oiê).
 
+Account details allow editing the name shown in Oiê regardless of connection
+state. Only the account's retained label changes. The XMPP address, published
+profile and connection stay as they were. Oiê records a new account revision
+and publishes an account event when the label changes.
+
+| Account name action | Expected result |
+| --- | --- |
+| Leave account details before saving | Discard the edit. |
+| Save an empty or oversized name | Preserve the edit and keep the current name. |
+| Save against an outdated account revision | Show the current name, preserve the draft and let the user review before saving again. |
+| Save a valid name or repeat an accepted value | Refresh the label in open views. Reuse the current revision for the same name. |
+
 The account details let a connected XMPP account change its profile photo. The form
 accepts one PNG, JPEG, or GIF up to 512 KiB and keeps the selected file available
 after a failed submission. The published image is a static PNG with a maximum

@@ -248,7 +248,7 @@ func (s *Store) Register(ctx context.Context, in application.Registration) (appl
 		}
 		return application.RegistrationResult{}, err
 	}
-	if err = q.InsertAccountRevision(ctx, dbgen.InsertAccountRevisionParams{ID: string(a.RevisionID), EntityID: string(a.ID), Payload: jsonText(a), CreatedAt: stamp(a.CreatedAt)}); err != nil {
+	if err = q.InsertAccountRevision(ctx, dbgen.InsertAccountRevisionParams{ID: string(a.RevisionID), EntityID: string(a.ID), Parents: "[]", Payload: jsonText(a), CreatedAt: stamp(a.CreatedAt)}); err != nil {
 		return application.RegistrationResult{}, err
 	}
 	if _, err = change(ctx, q, "account.registered", a, a.CreatedAt); err != nil {
@@ -258,6 +258,50 @@ func (s *Store) Register(ctx context.Context, in application.Registration) (appl
 		return application.RegistrationResult{}, err
 	}
 	return application.RegistrationResult{Account: a}, nil
+}
+func (s *Store) SetAccountLabel(ctx context.Context, in application.AccountLabelUpdate) (domain.Account, error) {
+	tx, q, err := begin(ctx, s)
+	if err != nil {
+		return domain.Account{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err = q.AcquireWriteLock(ctx); err != nil {
+		return domain.Account{}, err
+	}
+	payload, err := q.GetAccount(ctx, string(in.AccountID))
+	if err != nil {
+		return domain.Account{}, notFound(err)
+	}
+	var a domain.Account
+	if err = json.Unmarshal([]byte(payload), &a); err != nil {
+		return domain.Account{}, err
+	}
+	if a.Label == in.Label {
+		return a, nil
+	}
+	if a.RevisionID != in.ExpectedRevisionID {
+		return domain.Account{}, application.ErrStateConflict
+	}
+	parent := a.RevisionID
+	a.Label, a.RevisionID = in.Label, in.RevisionID
+	if err = q.InsertAccountRevision(ctx, dbgen.InsertAccountRevisionParams{
+		ID: string(a.RevisionID), EntityID: string(a.ID), Parents: jsonText([]domain.ID{parent}),
+		Payload: jsonText(a), CreatedAt: stamp(in.At),
+	}); err != nil {
+		return domain.Account{}, err
+	}
+	if err = q.UpdateAccountLabel(ctx, dbgen.UpdateAccountLabelParams{
+		ID: string(a.ID), RevisionID: string(a.RevisionID), Label: a.Label,
+	}); err != nil {
+		return domain.Account{}, err
+	}
+	if _, err = change(ctx, q, "account.updated", a, in.At); err != nil {
+		return domain.Account{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Account{}, err
+	}
+	return a, nil
 }
 func (s *Store) Account(ctx context.Context, id domain.ID) (domain.Account, error) {
 	data, err := s.read.GetAccount(ctx, string(id))
@@ -307,7 +351,7 @@ func (s *Store) Events(ctx context.Context, after int64, limit int) ([]applicati
 		switch row.Kind {
 		case "account.removed":
 			target = &e.RemovedAccountID
-		case "account.registered":
+		case "account.registered", "account.updated":
 			e.Account = &domain.Account{}
 			target = e.Account
 		case "message.preview_changed":

@@ -150,6 +150,51 @@ paths:
               schema: {type: string}
         '503':
           description: The live regions could not be rendered.
+  /ui/accounts/label:
+    post:
+      tags: [Accounts]
+      operationId: updateBrowserAccountLabel
+      summary: Save a new name for the selected account
+      description: Applies a name change from the account details form using the revision shown when editing began.
+      requestBody:
+        required: true
+        description: The selected account, expected revision, and new display name.
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              csrf: local-request-token
+              engineId: 019a5df0-0000-7000-8000-000000000001
+              accountId: 019a5df0-0000-7000-8000-000000000002
+              expectedRevisionId: 019a5df0-0000-7000-8000-000000000003
+              label: Personal
+            schema:
+              type: object
+              required: [csrf, engineId, accountId, expectedRevisionId, label]
+              properties:
+                csrf: {type: string, description: Token from the account details form., example: local-request-token}
+                engineId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                accountId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                expectedRevisionId: {$ref: './openapi.yaml#/components/schemas/ID'}
+                label: {type: string, description: New name shown in Oiê., example: Personal}
+      responses:
+        '200':
+          description: The current account name and revision.
+          content:
+            application/json:
+              schema: {type: object}
+              example: {ok: true, message: Account name saved.}
+        '303':
+          description: A successful native form submission redirects to account details.
+        '400':
+          description: The name or form is invalid.
+        '403':
+          description: The CSRF check failed.
+        '404':
+          description: The account is unavailable.
+        '409':
+          description: The account name changed since editing began or the engine changed.
+        '503':
+          description: The service could not confirm the name change.
   /ui/accounts/avatar:
     post:
       tags: [Accounts]

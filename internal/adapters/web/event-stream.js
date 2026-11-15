@@ -3,7 +3,7 @@
 
   const target = new EventTarget();
   const eventTypes = [
-    'message.preview_changed', 'profile.avatar_changed', 'account.registered', 'account.removed',
+    'message.preview_changed', 'profile.avatar_changed', 'account.registered', 'account.updated', 'account.removed',
     'account.connection_changed', 'account.history_changed', 'conversation.created',
     'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated',
     'conversation.room_session_changed', 'message.star_changed'

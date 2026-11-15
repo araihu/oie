@@ -34,6 +34,9 @@ actions:
     update:
       x-cli-ignore: true
   # accounts
+  - target: $.paths['/api/v1/accounts/{accountId}/label'].put
+    update:
+      x-cli-ignore: true
   - target: $.paths['/api/v1/accounts/{accountId}/avatar'].put
     update:
       x-cli-ignore: true

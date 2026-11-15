@@ -976,6 +976,34 @@ type UpdateBrowserAccountAvatarMultipartBody struct {
 	ReturnTo *string `json:"returnTo,omitempty"`
 }
 
+// UpdateBrowserAccountLabelFormdataBody defines parameters for UpdateBrowserAccountLabel.
+type UpdateBrowserAccountLabelFormdataBody struct {
+	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	AccountId externalRef0.ID `form:"accountId" json:"accountId"`
+
+	// Csrf Token from the account details form.
+	//
+	// Example: local-request-token
+	Csrf string `form:"csrf" json:"csrf"`
+
+	// EngineId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
+
+	// ExpectedRevisionId Canonical lowercase UUIDv7; IDs do not establish causal order.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	ExpectedRevisionId externalRef0.ID `form:"expectedRevisionId" json:"expectedRevisionId"`
+
+	// Label New name shown in Oiê.
+	//
+	// Example: Personal
+	Label string `form:"label" json:"label"`
+}
+
 // RemoveBrowserAccountFormdataBody defines parameters for RemoveBrowserAccount.
 type RemoveBrowserAccountFormdataBody struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
@@ -1314,6 +1342,9 @@ type GetBrowserSharedMediaParamsPreview string
 
 // UpdateBrowserAccountAvatarMultipartRequestBody defines body for UpdateBrowserAccountAvatar for multipart/form-data ContentType.
 type UpdateBrowserAccountAvatarMultipartRequestBody UpdateBrowserAccountAvatarMultipartBody
+
+// UpdateBrowserAccountLabelFormdataRequestBody defines body for UpdateBrowserAccountLabel for application/x-www-form-urlencoded ContentType.
+type UpdateBrowserAccountLabelFormdataRequestBody UpdateBrowserAccountLabelFormdataBody
 
 // RemoveBrowserAccountFormdataRequestBody defines body for RemoveBrowserAccount for application/x-www-form-urlencoded ContentType.
 type RemoveBrowserAccountFormdataRequestBody RemoveBrowserAccountFormdataBody

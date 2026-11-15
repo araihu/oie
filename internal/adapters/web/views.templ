@@ -240,7 +240,7 @@ templ profile(v view,id string) {
 }
 
 templ accountTrigger(v view){
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":""})){
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":"","data-active-account-name":v.activeAccountName()})){
 @profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS})
 <span class="oie-profile-identity"><strong>{v.activeAccountName()}</strong><small>{v.activeAccountAddress()}</small></span>
 @glyph(heroicons.Icon16SolidEllipsisHorizontal)
@@ -260,7 +260,7 @@ if v.AccountFilter=="" {
 for _,a:=range v.Accounts {
 @link.Link(v.href("account",a.Id,"chat",""),link.WithRootClass("oie-account-choice"),link.WithAttrs(templ.Attributes{"data-switch-account":a.Id,"aria-current":strconv.FormatBool(v.AccountFilter==a.Id)})){
 @accountAvatar(v,a,avatar.SizeXS)
-<span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small></span>
+<span class="oie-profile-identity"><strong data-account-name={a.Id}>{a.Label}</strong><small>{a.Address}</small></span>
 <span class="oie-account-indicators">
 if v.AccountFilter==a.Id {
 <span class="oie-account-selected" aria-label={v.Text.Active}>@glyph(heroicons.Icon16SolidCheckCircle)</span>
@@ -644,8 +644,9 @@ templ accountDetail(v view,a engineapi.Account){
 <div id="account-detail-scroll" class="oie-account-detail-content">
 <header class="oie-account-detail-heading">
 @accountAvatar(v,a,avatar.SizeLG)
-<div><h2>{a.Label}</h2><p>{a.Address}</p></div>
+<div><h2 data-account-name={a.Id} title={a.Label}>{a.Label}</h2><p>{a.Address}</p></div>
 </header>
+@accountNameEditor(v,a)
 @accountPhotoForm(v,a)
 <p class="oie-history-status">{v.historyCaption(a.Id)}</p>
 <div id={"connection-error-"+a.Id} role="status" aria-live="polite">
@@ -663,6 +664,28 @@ if !v.Unavailable && !v.Preview {
 }
 </footer>
 </section>
+}
+templ accountNameEditor(v view,a engineapi.Account){
+if !v.Preview && !v.Unavailable {
+@accordion.Accordion(accordion.AccordionConfig{ID:"account-name-editor",RootClass:"oie-account-advanced",Items:[]accordion.AccordionItem{{ID:"account-name",Title:v.Text.AccountRename,Content:accountNameForm(v,a),InitiallyExpanded:v.FormTarget=="account-label-"+a.Id}}})
+}
+}
+templ accountNameForm(v view,a engineapi.Account){
+@form.Form(form.Config{ID:"account-name-form",Action:"/ui/accounts/label",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"account-label"}}){
+<input type="hidden" name="csrf" value={v.CSRF}/>
+<input type="hidden" name="engineId" value={v.EngineID}/>
+<input type="hidden" name="accountId" value={a.Id}/>
+<input type="hidden" name="expectedRevisionId" value={a.RevisionId}/>
+<input type="hidden" name="returnTo" value={v.accountsHref(a.Id)}/>
+<input type="hidden" name="formTarget" value={ "account-label-"+a.Id }/>
+<input type="hidden" name="lang" value={v.Locale}/>
+@textinput.TextInput(textinput.Config{ID:"account-name-input",Name:"label",Label:v.Text.AccountLabel,Value:accountNameDraft(v,a),Required:true})
+@button.Button(button.WithType("submit")){ {v.Text.AccountRenameSave} }
+}
+}
+func accountNameDraft(v view,a engineapi.Account)string{
+ if v.FormTarget=="account-label-"+a.Id{return v.field("label")}
+ return a.Label
 }
 templ accountPhotoForm(v view,a engineapi.Account){
 if !v.Preview && !v.Unavailable && a.Protocol=="xmpp" {
@@ -682,7 +705,7 @@ if !v.Preview && !v.Unavailable && a.Protocol=="xmpp" {
 }
 }
 templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
-<div class="inline-flex shrink-0" data-account-status={a.Id} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
+<div class="inline-flex shrink-0" data-account-status={a.Id} data-account-avatar-name={a.Label} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
 @profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:size,Status:connectionAvatarStatus(v,a.Id)})
 </div>
 }
@@ -814,6 +837,7 @@ if v.accountScreen()=="capabilities" {
 <div id="live-account-capabilities">@capabilityContent(v)</div>
 }
 <div id="live-account-menu">@accountMenu(v)</div>
+<div id="live-account-trigger">@accountTrigger(v)</div>
 <div id="live-newchat-account">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
 </div>
 }

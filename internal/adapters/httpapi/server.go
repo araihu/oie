@@ -366,6 +366,14 @@ func (s *Server) RemoveAccount(ctx context.Context, r engineapi.RemoveAccountReq
 	return engineapi.RemoveAccount204Response{}, nil
 }
 
+func (s *Server) SetAccountLabel(ctx context.Context, r engineapi.SetAccountLabelRequestObject) (engineapi.SetAccountLabelResponseObject, error) {
+	a, err := s.engine.SetAccountLabel(ctx, domain.ID(r.AccountId), domain.ID(r.Body.ExpectedRevisionId), r.Body.Label)
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.SetAccountLabel200JSONResponse(s.currentAccount(ctx, a)), nil
+}
+
 func (s *Server) GetAccount(ctx context.Context, r engineapi.GetAccountRequestObject) (engineapi.GetAccountResponseObject, error) {
 	a, err := s.engine.Account(ctx, domain.ID(r.AccountId))
 	if err != nil {

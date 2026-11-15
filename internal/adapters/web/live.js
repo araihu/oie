@@ -10,6 +10,7 @@ window.OieRuntime.register('live', life => {
   const mock = body.dataset.mock === 'true';
   const events = window.OieEvents, inbox = window.OieInbox;
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
+  let accountRenameEpoch = 0;
   let pendingRequests = 0, refreshTimer, refreshing = false, refreshAgain = false;
   let sourceNavigation, refreshController;
   let stopped = false, storageDenied = false;
@@ -352,7 +353,7 @@ window.OieRuntime.register('live', life => {
       if(error)errorToast(message);
       return;
     }
-    if (form.dataset.oieAction === 'account-avatar') {
+    if (['account-avatar','account-label'].includes(form.dataset.oieAction)) {
       if (error && form.isConnected) errorToast(message);
       else if (message && form.isConnected) announce(message, true);
       return;
@@ -634,13 +635,31 @@ window.OieRuntime.register('live', life => {
   function refreshAccountStatuses(root, nextRoot) {
     for (const status of root.querySelectorAll('[data-account-status]')) {
       const next = nextRoot.querySelector(`[data-account-status="${CSS.escape(status.dataset.accountStatus)}"]`);
-      if (next && status.dataset.connectionState !== next.dataset.connectionState) {
+      if (next && (status.dataset.connectionState !== next.dataset.connectionState ||
+          status.dataset.accountAvatarName !== next.dataset.accountAvatarName)) {
+        status.dataset.accountAvatarName = next.dataset.accountAvatarName;
         status.dataset.connectionState = next.dataset.connectionState;
         status.title = next.title;
         status.setAttribute('aria-label',next.getAttribute('aria-label'));
         mutateDOM(status,next.innerHTML);
       }
     }
+  }
+  function refreshAccountNames(root, nextRoot) {
+    for (const element of root.querySelectorAll('[data-account-name]')) {
+      const next = nextRoot.querySelector(`[data-account-name="${CSS.escape(element.dataset.accountName)}"]`);
+      if (next && element.textContent !== next.textContent) {
+        element.textContent = next.textContent;
+        if (next.hasAttribute('title')) element.title = next.title;
+      }
+    }
+  }
+  function syncAccountNameInput(form, label, revision, preserveDraft) {
+    const field = form.elements.namedItem('label');
+    const draft = field.value;
+    field.defaultValue = label;
+    field.value = preserveDraft ? draft : label;
+    form.elements.namedItem('expectedRevisionId').value = revision;
   }
   function localizeTimes(root=document) {
     window.OieTime.localize(root);
@@ -792,6 +811,7 @@ window.OieRuntime.register('live', life => {
     if (stopped || mock) return;
     if (pendingRequests || refreshing || sourceNavigation) { refreshAgain = true; return; }
     refreshing = true;
+    const renameEpoch = accountRenameEpoch;
     const starGeneration=Number(body.dataset.starGeneration||0);
     const preferenceGeneration=Number(body.dataset.conversationPreferenceGeneration||0);
     const list = document.getElementById('conversation-list');
@@ -817,7 +837,7 @@ window.OieRuntime.register('live', life => {
       if (!response.ok) throw new Error('refresh unavailable');
       const page = new DOMParser().parseFromString(await response.text(), 'text/html');
       if(life.signal.aborted||controller.signal.aborted)return;
-      if(requestedSearch!==location.search){refreshAgain=true;return;}
+      if(requestedSearch!==location.search || renameEpoch!==accountRenameEpoch){refreshAgain=true;return;}
       const regions = page.querySelector('#oie-live-regions');
       if (!regions || regions.dataset.unavailable === 'true') { announce(text('liveRetry')); return; }
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
@@ -884,6 +904,16 @@ window.OieRuntime.register('live', life => {
         const existing = document.querySelector(`#account-blocks>section[data-account-id="${CSS.escape(fresh.dataset.accountId)}"]`);
         if (existing) {
           refreshAccountStatuses(existing,fresh);
+          refreshAccountNames(existing,fresh);
+          const nameForm = existing.querySelector('#account-name-form');
+          const nextNameForm = fresh.querySelector('#account-name-form');
+          if (nameForm && nextNameForm && nameForm.dataset.busy !== 'true') {
+            const name = nameForm.elements.namedItem('label');
+            const revision = nextNameForm.elements.namedItem('expectedRevisionId').value;
+            if (name.value === name.defaultValue && nameForm.elements.namedItem('expectedRevisionId').value !== revision) {
+              syncAccountNameInput(nameForm, nextNameForm.elements.namedItem('label').value, revision, false);
+            }
+          }
           const photoFields=existing.querySelector('[data-account-photo-fields]');
           const nextPhotoFields=fresh.querySelector('[data-account-photo-fields]');
           if(photoFields&&nextPhotoFields)photoFields.disabled=nextPhotoFields.disabled;
@@ -957,6 +987,14 @@ window.OieRuntime.register('live', life => {
           if (next) {badge.textContent = next.textContent;badge.hidden = next.hidden;badge.setAttribute('aria-label',next.getAttribute('aria-label'));}
         }
         refreshAccountStatuses(menu,nextMenu);
+        refreshAccountNames(menu,nextMenu);
+      }
+      const nextTrigger = page.querySelector('#live-account-trigger [data-account-switcher]');
+      if (nextTrigger) for (const trigger of document.querySelectorAll('[data-account-switcher]')) {
+        if (trigger.dataset.activeAccountName !== nextTrigger.dataset.activeAccountName) {
+          trigger.dataset.activeAccountName = nextTrigger.dataset.activeAccountName;
+          mutateDOM(trigger, nextTrigger.innerHTML);
+        }
       }
       if(composer&&regions.dataset.conversationId===body.dataset.conversationId){composer.dataset.latestEditMessage=regions.dataset.editMessage||'';for(const action of document.querySelectorAll('[id^="edit-message-"]'))action.hidden=action.id!=='edit-message-'+composer.dataset.latestEditMessage;renderEdit();}
       document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));document.dispatchEvent(new CustomEvent('oie:reaction-snapshots',{detail:{page,startedAt:reactionStartedAt}}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
@@ -1030,6 +1068,8 @@ window.OieRuntime.register('live', life => {
     const sending = form.dataset.oieAction === 'send';
     const accountAvatar = form.dataset.oieAction === 'account-avatar';
     const removingAccount = form.dataset.oieAction === 'remove-account';
+    const accountLabel = form.dataset.oieAction === 'account-label';
+    const accountEditor = accountAvatar || accountLabel;
     const scheduleDrawer = form.dataset.oieAction === 'schedule-row' && form.closest('[data-conversation-schedules]');
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
@@ -1073,7 +1113,7 @@ window.OieRuntime.register('live', life => {
     const fields = new FormData(form);
     const photoInput = accountAvatar ? form.elements.namedItem('image') : null;
     const submittedPhoto = photoInput?.files[0];
-    const photoSave = accountAvatar ? form.querySelector('button[type="submit"]') : null;
+    const editorSave = accountEditor ? form.querySelector('button[type="submit"]') : null;
     let values = form.enctype === 'multipart/form-data' ? fields : new URLSearchParams(fields);
     const roomManagement = form.dataset.oieAction === 'room-management';
     const managementKey = roomManagement ? values.get('operationKey') : '';
@@ -1106,7 +1146,8 @@ window.OieRuntime.register('live', life => {
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true');
     const removeButton = removingAccount ? form.querySelector('button[type=submit]') : null;
     const cancelRemove = removingAccount ? form.querySelector('[data-remove-cancel]') : null;
-    if (accountAvatar) photoSave?.setAttribute('aria-disabled','true');
+    if (accountLabel) accountRenameEpoch++;
+    if (accountEditor) editorSave?.setAttribute('aria-disabled','true');
     else if (removeButton) {
       removeButton.setAttribute('aria-disabled','true');
       if (cancelRemove) cancelRemove.inert = true;
@@ -1127,6 +1168,11 @@ window.OieRuntime.register('live', life => {
           form.elements.operationKey.value = roomOperationKey();
         }
         document.dispatchEvent(new CustomEvent('oie:room-management-result', {detail: {form, result}}));
+      }
+      if (accountLabel && form.isConnected && result.account?.id === fields.get('accountId') &&
+          canonicalID(result.account.revisionId) && typeof result.account.label === 'string') {
+        syncAccountNameInput(form, result.account.label, result.account.revisionId,
+          !result.ok || form.elements.namedItem('label').value !== fields.get('label'));
       }
       if (!result.ok) {
         if(result.code==='engine_changed')engineChanged(false);
@@ -1172,7 +1218,7 @@ window.OieRuntime.register('live', life => {
           keepRoomOperation(null);
           if(roomCommand==='leave')document.dispatchEvent(new CustomEvent('oie:room-reaction-visibility-withdrawn'));
         }
-        if (accountAvatar && form.isConnected) {
+        if (accountEditor && form.isConnected) {
           if (photoInput && photoInput.files[0] === submittedPhoto) {
             photoInput.value = '';
             photoInput.dispatchEvent(new Event('change', {bubbles:true}));
@@ -1213,7 +1259,7 @@ window.OieRuntime.register('live', life => {
       clearTimeout(timeout);
       if(!life.signal.aborted||form.isConnected){
         form.dataset.busy='false';form.removeAttribute('aria-busy');
-        if (accountAvatar) photoSave?.removeAttribute('aria-disabled');
+        if (accountEditor) editorSave?.removeAttribute('aria-disabled');
         else if (removeButton) {
           removeButton.removeAttribute('aria-disabled');
           if (cancelRemove) cancelRemove.inert = false;

@@ -1331,7 +1331,7 @@ paths:
       - Accounts
       operationId: getAccount
       summary: Read an account
-      description: Returns registered metadata and its initial current revision.
+      description: Returns the retained account and its current revision.
       responses:
         '200':
           description: Registered account
@@ -1363,6 +1363,46 @@ paths:
           description: The account is absent from this engine.
         '400':
           $ref: '#/components/responses/Invalid'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}/label:
+    parameters:
+    - $ref: '#/components/parameters/AccountID'
+    put:
+      operationId: setAccountLabel
+      tags: [Accounts]
+      summary: Change the account name shown in Oiê
+      description: Updates the retained name independently of account connectivity. A retry with the current label
+        succeeds without creating a revision. A different label requires the current account revision.
+      requestBody:
+        required: true
+        description: The account label and the revision reviewed before editing.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAccountLabel'
+            example: {label: Personal, expectedRevisionId: '019a5df0-0000-7000-8000-000000000002'}
+      responses:
+        '200':
+          description: The account with its current name and revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                id: 019a5df0-0000-7000-8000-000000000001
+                revisionId: 019a5df0-0000-7000-8000-000000000003
+                protocol: xmpp
+                address: alice@localhost
+                label: Personal
+                connectionState: not_connected
+                createdAt: '2026-11-07T12:00:00Z'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/accounts/{accountId}/avatar:
@@ -4015,6 +4055,7 @@ components:
           enum:
           - account.registered
           - account.removed
+          - account.updated
           - account.connection_changed
           - account.history_changed
           - profile.avatar_changed
@@ -4661,6 +4702,18 @@ components:
       example:
         items:
         - *id002
+    SetAccountLabel:
+      type: object
+      description: A replacement label and the account revision it was based on.
+      additionalProperties: false
+      required: [label, expectedRevisionId]
+      properties:
+        label:
+          type: string
+          description: The display name in Oiê, up to 120 characters after trimming leading and trailing whitespace.
+          example: Personal
+        expectedRevisionId:
+          $ref: '#/components/schemas/ID'
     SetAccountAvatar:
       description: A local image to publish as the connected account’s profile photo.
       type: object

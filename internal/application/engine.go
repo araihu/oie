@@ -29,6 +29,14 @@ type RegisterInput struct {
 	Label    string
 }
 
+type AccountLabelUpdate struct {
+	AccountID, ExpectedRevisionID, RevisionID domain.ID
+	Label                                     string
+	At                                        time.Time
+}
+
+const maxAccountLabelLength = 120
+
 type Operation struct {
 	ID         domain.ID
 	ResourceID domain.ID
@@ -75,6 +83,7 @@ type Repository interface {
 	Ping(context.Context) error
 	Snapshot(context.Context) (domain.ID, int64, error)
 	Register(context.Context, Registration) (RegistrationResult, error)
+	SetAccountLabel(context.Context, AccountLabelUpdate) (domain.Account, error)
 	Account(context.Context, domain.ID) (domain.Account, error)
 	Accounts(context.Context, domain.ID, int) ([]domain.Account, error)
 	Operation(context.Context, domain.ID) (Operation, error)
@@ -137,7 +146,7 @@ func (e *Engine) Register(ctx context.Context, key domain.ID, input RegisterInpu
 		}
 	}
 	input.Label = strings.TrimSpace(input.Label)
-	if input.Protocol != "xmpp" || !validText(input.Address, 1023) || !validText(input.Label, 120) {
+	if input.Protocol != "xmpp" || !validText(input.Address, 1023) || !validText(input.Label, maxAccountLabelLength) {
 		return RegistrationResult{}, ErrInvalid
 	}
 	data, err := json.Marshal(input)
@@ -165,6 +174,25 @@ func (e *Engine) Register(ctx context.Context, key domain.ID, input RegisterInpu
 func validText(s string, max int) bool {
 	return utf8.ValidString(s) && utf8.RuneCountInString(s) > 0 &&
 		utf8.RuneCountInString(s) <= max && !strings.ContainsAny(s, "\x00\r\n")
+}
+
+func (e *Engine) SetAccountLabel(ctx context.Context, id, expected domain.ID, label string) (domain.Account, error) {
+	label = strings.TrimSpace(label)
+	if !validID(id) || !validID(expected) || !validText(label, maxAccountLabelLength) {
+		return domain.Account{}, ErrInvalid
+	}
+	revision, err := e.newID()
+	if err != nil {
+		return domain.Account{}, err
+	}
+	account, err := e.repo.SetAccountLabel(ctx, AccountLabelUpdate{
+		AccountID: id, ExpectedRevisionID: expected, RevisionID: revision,
+		Label: label, At: e.now().UTC(),
+	})
+	if err == nil && account.RevisionID == revision {
+		e.notifyEvents()
+	}
+	return account, err
 }
 
 func (e *Engine) Account(ctx context.Context, id domain.ID) (domain.Account, error) {

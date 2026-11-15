@@ -245,6 +245,7 @@ type Querier interface {
 	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	StartMessageSearchIndex(ctx context.Context, arg StartMessageSearchIndexParams) error
+	UpdateAccountLabel(ctx context.Context, arg UpdateAccountLabelParams) error
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateConversationPreferences(ctx context.Context, arg UpdateConversationPreferencesParams) (int64, error)
