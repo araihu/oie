@@ -1,0 +1,63 @@
+name: Release Oiê Helm chart
+
+on:
+  push:
+    tags: ['helm-v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: helm-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'araihu/oie' && !github.event.deleted && !github.event.forced
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.2.4
+      - name: Verify the chart version and published application image
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          metadata=$(helm show chart charts/oie)
+          chart_version=$(awk '$1 == "version:" { print $2 }' <<< "$metadata")
+          app_version=$(awk '$1 == "appVersion:" { gsub(/"/, "", $2); print $2 }' <<< "$metadata")
+          if [[ -z "$chart_version" || "$TAG" != "helm-v$chart_version" ]]; then
+            printf 'Tag %s must match the chart version (%s).\n' "$TAG" "$chart_version" >&2
+            exit 1
+          fi
+          helm lint --strict charts/oie
+          manifest=$(helm template oie charts/oie --show-only templates/statefulset.yaml)
+          image=$(awk -F '"' '$1 ~ /^[[:space:]]+image: $/ { print $2 }' <<< "$manifest")
+          if [[ -z "$app_version" || "$image" != "ghcr.io/araihu/oie:$app_version" ]]; then
+            printf 'The default chart image must be ghcr.io/araihu/oie:%s.\n' "$app_version" >&2
+            exit 1
+          fi
+          docker buildx imagetools inspect --raw "$image" |
+            jq -e '[.manifests[] | select(.platform.os == "linux") | .platform.architecture] | sort == ["amd64", "arm64"]'
+      - name: Package and publish the versioned chart
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#helm-v}
+          stage=$(mktemp -d)
+          cp -R charts/oie "$stage/oie"
+          cp LICENSE "$stage/oie/LICENSE"
+          helm package "$stage/oie" --destination "$stage"
+          cd "$stage"
+          package="oie-$version.tgz"
+          sha256sum "$package" > SHA256SUMS
+          printf 'Helm chart %s for Oiê. See the [chart configuration and installation guide](https://github.com/%s/tree/%s/charts/oie).\n' \
+            "$version" "$GITHUB_REPOSITORY" "$TAG" > notes.md
+          gh release create "$TAG" "$package" SHA256SUMS --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --latest=false --title "Oiê Helm chart $version" --notes-file notes.md

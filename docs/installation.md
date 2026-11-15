@@ -34,11 +34,13 @@ published digest from the workflow summary to pin an exact image.
 ## Run on Kubernetes with Helm
 
 The [Oiê chart](../charts/oie) runs the engine and browser interface together.
-Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. From a
-checkout containing the chart, run:
+Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. Install
+the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.0):
 
 ```sh
-helm upgrade --install oie ./charts/oie --namespace oie --create-namespace --wait --timeout 10m
+helm upgrade --install oie \
+  https://github.com/araihu/oie/releases/download/helm-v0.2.0/oie-0.2.0.tgz \
+  --namespace oie --create-namespace --wait --timeout 10m
 kubectl --namespace oie port-forward service/oie 8080:80
 ```
 
@@ -48,8 +50,10 @@ in a 10 GiB claim using the cluster's default StorageClass. If you already
 have a writable claim in the namespace, set `persistence.existingClaim` to
 its name. Use one Oiê instance per claim.
 
-To update, run the same Helm command with the new chart or set `image.tag`
-to the published version you want. An update that changes the pod briefly
+The chart version and the application image version follow separate release
+cycles. Chart `0.2.0` uses image `v0.0.1-rc.18` by default. To update, use
+the URL for a newer chart archive or set `image.tag` to a published version.
+An update that changes the pod briefly
 interrupts access while Kubernetes replaces it. Uninstalling the release
 retains its claim. Keep the claim and namespace to reuse the data.
 
