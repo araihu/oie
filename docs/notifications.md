@@ -45,14 +45,16 @@ bundled 300 ms mono PCM WAV.
 - Wails sends silent native banners and uses the same Web Audio sound as the
   browser. Closing the desktop window hides it while the app remains running.
   Linux needs a session notification daemon. macOS needs an authorized, valid
-  app bundle. Chromium tests observe the banner call and sound playback, and the
-  Linux desktop smoke decodes the WAV in its actual WebView. Native banner
-  delivery, click-to-open from a hidden window, and macOS authorization still
-  need end-to-end coverage with the respective notification centers.
+  app bundle. The Linux desktop smoke decodes the WAV in its actual WebView,
+  sends a native banner through a private D-Bus notification daemon, and
+  verifies that clicking restores the hidden window at the exact message.
+  macOS authorization and click behavior still need native coverage.
 - The standalone manifest lets supported browsers install the app. The open
-  PWA uses the same page and notification worker as a browser tab. Install and
-  verify permissions, actual notification delivery, click navigation, and
-  coordination with a tab on desktop, Android, and iOS. On iOS and iPadOS, test
+  PWA uses the same page and notification worker as a browser tab. On Linux,
+  Chromium 151 installed Oiê through its UI and opened the exact message in the
+  standalone window for a D-Bus notification click, both with the window open
+  and after closing it. Permissions, delivery, navigation, and coordination
+  with a tab still need coverage on Android and iOS. On iOS and iPadOS, test
   on an HTTPS site added to the Home Screen with authorization initiated inside
   the installed app. Do not assume a backgrounded mobile page keeps receiving
   the live stream. Web Push remains the delivery path for a suspended or

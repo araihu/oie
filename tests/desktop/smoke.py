@@ -111,6 +111,8 @@ class Fixture(BaseHTTPRequestHandler):
                                    "kind": "video", "state": "not_requested", "url": "https://files.example.test/video.mp4", "updatedAt": NOW})
         if path == "/api/v1/conversations/" + CHAT + "/messages":
             return self.reply(200, {"items": list(reversed(self.messages))})
+        if path == f"/api/v1/conversations/{CHAT}/messages/{MESSAGE}/context":
+            return self.reply(200, {"targetId": MESSAGE, "items": [self.messages[0]], "hasOlder": False, "hasNewer": False})
         if path == "/api/v1/messages/" + MESSAGE:
             return self.reply(200, self.messages[0])
         if path.endswith("/previews") or path.endswith("/stars") or path.endswith("/reactions") or path.endswith("/contacts"):
@@ -285,6 +287,37 @@ def select_engine(app, mode, identity, address=""):
         return true;""" % (json.dumps(mode), json.dumps(address)))
     app.wait(lambda: app.js("return document.querySelector('#oie-app')?.dataset.engineId;") == identity,
              "switched to " + mode + " engine")
+
+
+def linux_notification_click(app):
+    require(os.environ.get("OIE_DESKTOP_PRIVATE_DISPLAY") == "1", "notification smoke requires the private desktop test session")
+    interface = "org.freedesktop.Notifications"
+
+    def call(method):
+        return subprocess.run(["gdbus", "call", "--session", "--dest", interface,
+                               "--object-path", "/org/freedesktop/Notifications", "--method", method],
+                              capture_output=True, text=True, timeout=5)
+
+    with (ARTIFACTS / "notification-daemon.log").open("w") as log:
+        daemon = subprocess.Popen([sys.executable, str(Path(__file__).with_name("notification_daemon.py"))],
+                                  stdout=log, stderr=subprocess.STDOUT)
+        try:
+            app.wait(lambda: daemon.poll() is None and call(interface + ".GetCapabilities").returncode == 0,
+                     "private notification daemon")
+            require(app.js("return await window.OieDesktop.notifications.request();"), "native notification permission")
+            target = [ENGINE, ACCOUNT, CHAT, MESSAGE, "Oiê notification smoke", "Bob fixture"]
+            app.tool("window_control", {"window": "oie-main", "action": "close"})
+            app.wait(lambda: not app.tool("app_info")["windows"][0]["visible"], "window hidden before notification")
+            app.js("await window.OieDesktop.notifications.send(...%s);return true;" % json.dumps(target))
+            require(not app.tool("app_info")["windows"][0]["visible"], "delivery revealed the window before the click")
+            click = call("org.oie.NotificationProbe.Click")
+            require(click.returncode == 0 and click.stdout.strip() == "(true,)", "native banner click: " + click.stdout + click.stderr)
+            app.wait(lambda: app.tool("app_info")["windows"][0]["visible"], "notification click restores hidden Wails window")
+            app.wait(lambda: app.js("return document.querySelector('#oie-app')?.dataset.focusMessage;") == MESSAGE,
+                     "notification click opens the exact message")
+        finally:
+            daemon.terminate()
+            daemon.wait(timeout=5)
 
 
 def linux_dialog_diagnostics(stage, app, target):
@@ -491,6 +524,9 @@ def main():
                 app.wait(lambda: app.tool("app_info")["windows"][0]["visible"], "second invocation reopens window")
                 require(app.js("return document.querySelector('#message-composer').value;") == draft, "hide/reopen lost draft")
                 findings.append("close hides the window and second invocation reopens the original instance without losing its draft")
+                if sys.platform == "linux":
+                    linux_notification_click(app)
+                    findings.append("native D-Bus notification click restores the hidden Wails window and opens the exact message")
                 app.quit()
             with native(profile, "remote-restart", engine) as app:
                 require(app.js("return document.documentElement.lang;") == "pt-BR", "language cookie did not survive restart")
