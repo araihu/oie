@@ -1,0 +1,27 @@
+image:
+  repository: ghcr.io/araihu/oie
+  # Defaults to the chart's appVersion. A digest takes precedence over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+persistence:
+  enabled: true
+  # Reuse a PersistentVolumeClaim in the release namespace.
+  existingClaim: ""
+  # null selects the cluster default. "" selects storage without a class.
+  storageClass: null
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# Oiê has no built-in login. Use an authenticated proxy for remote access.
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecretName: ""
+  annotations: {}
+
+resources: {}

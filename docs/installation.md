@@ -31,6 +31,33 @@ Releases. The image carries its source URL and checksum in `/licenses/SOURCE.txt
 canonical application version by SemVer, including prereleases. Use the
 published digest from the workflow summary to pin an exact image.
 
+## Run on Kubernetes with Helm
+
+The [Oiê chart](../charts/oie) runs the engine and browser interface together.
+Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. From a
+checkout containing the chart, run:
+
+```sh
+helm upgrade --install oie ./charts/oie --namespace oie --create-namespace --wait --timeout 10m
+kubectl --namespace oie port-forward service/oie 8080:80
+```
+
+Open [Oiê in your browser](http://127.0.0.1:8080) and connect an existing XMPP
+account. The chart starts one pod and stores accounts, SQLite history and media
+in a 10 GiB claim using the cluster's default StorageClass. If you already
+have a writable claim in the namespace, set `persistence.existingClaim` to
+its name. Use one Oiê instance per claim.
+
+To update, run the same Helm command with the new chart or set `image.tag`
+to the published version you want. An update that changes the pod briefly
+interrupts access while Kubernetes replaces it. Uninstalling the release
+retains its claim. Keep the claim and namespace to reuse the data.
+
+Oiê has no built-in login. The chart defaults to an internal Service. For
+remote access, protect both the browser interface and API with an authenticated
+HTTPS proxy. See the [chart configuration](../charts/oie/README.md) for Ingress,
+TLS, image and storage settings.
+
 ## Desktop installation on macOS and Linux
 
 Oiê's desktop package includes the Go engine, SQLite store and web interface in

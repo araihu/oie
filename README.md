@@ -88,7 +88,8 @@ rooms. See [reaction API and persistence scope](docs/message-reactions.md) and
 
 ## Run
 
-To run the browser version with Docker, see [Run with Docker](docs/installation.md#run-with-docker).
+To run the browser version, see [Run with Docker](docs/installation.md#run-with-docker)
+or [Run on Kubernetes with Helm](docs/installation.md#run-on-kubernetes-with-helm).
 
 Requirements: Go 1.27.4+, Make, and Docker Compose v2 for the development server.
 Browser checks additionally use Node 24+.
