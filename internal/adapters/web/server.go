@@ -67,6 +67,7 @@ var localeFiles embed.FS
 
 type Server struct {
 	devBuildID    string
+	hostedSignIn  bool
 	engineEditors []engineapi.RequestEditorFn
 	client        *engineapi.ClientWithResponses
 	archiveClient *engineapi.ClientWithResponses
@@ -153,6 +154,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	HostedSignIn   bool
 	EngineMode     *engineMode
 	StarredContent starredContent
 	PreviewScope   string
@@ -235,6 +237,7 @@ type view struct {
 }
 
 type copy struct {
+	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                           string
 	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting string
 	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                      string
 
@@ -985,6 +988,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.EngineMode = s.engineMode
+	v.HostedSignIn = s.hostedSignIn
 	v.configureWorkspace(r)
 	v.Values["address"] = r.URL.Query().Get("newChatAddress")
 	v.Values["inviteRoom"] = roomFormAddress(r.URL.Query().Get("room"))
@@ -1496,7 +1500,7 @@ func savePreference(w http.ResponseWriter, r *http.Request, key, value string) {
 	if r.URL.Query().Has(key) {
 		http.SetCookie(w, &http.Cookie{
 			Name: "oie_" + key, Value: value, Path: "/", MaxAge: 365 * 24 * 60 * 60,
-			HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
+			HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
 		})
 	}
 }

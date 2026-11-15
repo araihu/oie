@@ -27,12 +27,39 @@ uses its own storage class, access mode and capacity.
 
 ## Remote access
 
-Oiê has no built-in login. Before enabling Ingress or HTTPRoute, configure
-your controller or an upstream proxy to require authentication for all paths
-and serve HTTPS.
-Keep the public host in proxied requests and allow server-sent events to stream
-without buffering. Workloads that can reach the Service directly can access
-the instance, so restrict that path in shared clusters.
+Use an image that supports hosted authentication and a TLS-terminating Ingress
+or Gateway. Configure the OIDC client callback as
+`https://oie.example.com/auth/callback` and create a Secret in the release
+namespace with a key named `client-secret`.
+
+```yaml
+hosted:
+  enabled: true
+  publicURL: https://oie.example.com
+  trustedTLSProxies: 10.42.0.19/32 # Replace with the gateway's actual private source CIDRs.
+  oidc:
+    issuer: https://id.example.com
+    subject: "OWNER_SUBJECT"
+    clientID: oie
+    clientSecretName: oie-oidc
+```
+
+The proxy must preserve the public host, overwrite `X-Forwarded-Proto` with
+`https` for HTTPS traffic, and stream server-sent events without buffering.
+Restrict access to the backend HTTP Service to the trusted proxy network.
+The hosted chart uses TCP probes because the engine API requires a key.
+
+The init container sets the owner on the first start. For key management and
+recovery, run the [host commands](../../docs/hosted-auth.md) in the running
+pod as the service user. For example:
+
+```sh
+kubectl -n oie exec statefulset/oie -c oie -- /oie auth key-list --data-dir /data
+```
+
+For an older image protected by an existing external authentication proxy,
+set `externalAuthentication: true` and protect all browser and API routes
+at the proxy. Restrict pod and Service access in shared clusters.
 
 ### Ingress
 
@@ -45,8 +72,7 @@ authentication. The Ingress routes the entire host at `/`.
 ### Gateway API
 
 Use a cluster with the Gateway API CRDs serving `gateway.networking.k8s.io/v1`,
-a controller, and an existing Gateway. Configure HTTPS and authentication at
-the Gateway or upstream proxy. Save these values as `gateway-values.yaml`
+a controller, and an existing Gateway. Configure the HTTPS listener on the Gateway and the hosted settings above. Save these values as `gateway-values.yaml`
 and adjust the Gateway reference, listener and hostname for your cluster.
 
 ```yaml

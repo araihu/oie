@@ -15,10 +15,11 @@ import (
 
 // Config selects one local data directory and optionally a hosted engine.
 type Config struct {
-	DataDir    string
-	EngineURL  string
-	XMPPCAFile string
-	Language   string
+	DataDir         string
+	EngineURL       string
+	EngineTokenFile string
+	XMPPCAFile      string
+	Language        string
 }
 
 // DefaultDataDir is independent of the working directory and the installed binary.

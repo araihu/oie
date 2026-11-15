@@ -80,7 +80,7 @@ func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.Servi
 	if err != nil {
 		return err
 	}
-	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, engineURL, func(url string) error {
+	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, engineURL, s.config.EngineTokenFile, func(url string) error {
 		return writePrivateJSON(engineModePath(s.config.DataDir), url)
 	})
 	if err != nil {

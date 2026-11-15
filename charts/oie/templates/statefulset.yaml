@@ -28,11 +28,42 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.hosted.enabled }}
+      initContainers:
+        - name: configure-owner
+          image: {{ include "oie.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - auth
+            - init
+            - --data-dir=/data
+            - {{ printf "--issuer=%s" (required "Set hosted.oidc.issuer." .Values.hosted.oidc.issuer) | quote }}
+            - {{ printf "--subject=%s" (required "Set hosted.oidc.subject." .Values.hosted.oidc.subject) | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      {{- end }}
       containers:
         - name: oie
           image: {{ include "oie.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.hosted.enabled }}
+          args:
+            - --role=hosted
+            - --listen=0.0.0.0:8080
+            - --data-dir=/data
+            - {{ printf "--public-url=%s" (required "Set hosted.publicURL." .Values.hosted.publicURL) | quote }}
+            - {{ printf "--trusted-tls-proxies=%s" (required "Set hosted.trustedTLSProxies." .Values.hosted.trustedTLSProxies) | quote }}
+            - {{ printf "--oidc-client-id=%s" (required "Set hosted.oidc.clientID." .Values.hosted.oidc.clientID) | quote }}
+            - --oidc-client-secret-file=/run/secrets/oidc/client-secret
+          {{- else }}
           args: ["--listen", "0.0.0.0:8080", "--data-dir", "/data"]
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -42,22 +73,37 @@ spec:
             capabilities:
               drop: ["ALL"]
           startupProbe:
+            {{- if .Values.hosted.enabled }}
+            tcpSocket:
+              port: http
+            {{- else }}
             httpGet:
               path: /api/v1/health
               port: http
+            {{- end }}
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 60
           readinessProbe:
+            {{- if .Values.hosted.enabled }}
+            tcpSocket:
+              port: http
+            {{- else }}
             httpGet:
               path: /api/v1/health
               port: http
+            {{- end }}
             periodSeconds: 5
             timeoutSeconds: 3
           livenessProbe:
+            {{- if .Values.hosted.enabled }}
+            tcpSocket:
+              port: http
+            {{- else }}
             httpGet:
               path: /api/v1/health
               port: http
+            {{- end }}
             periodSeconds: 10
             timeoutSeconds: 3
           {{- with .Values.resources }}
@@ -69,6 +115,11 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.hosted.enabled }}
+            - name: oidc
+              mountPath: /run/secrets/oidc
+              readOnly: true
+            {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -79,3 +130,12 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.hosted.enabled }}
+        - name: oidc
+          secret:
+            secretName: {{ required "Set hosted.oidc.clientSecretName." .Values.hosted.oidc.clientSecretName | quote }}
+            defaultMode: 0440
+            items:
+              - key: client-secret
+                path: client-secret
+        {{- end }}

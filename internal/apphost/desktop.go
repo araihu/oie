@@ -5,9 +5,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web"
 )
 
@@ -21,21 +25,27 @@ type desktopTarget struct {
 // Desktop keeps the native presentation origin stable while changing engines.
 // Its engine listener exists only while the local engine is running.
 type Desktop struct {
-	ctx        context.Context
-	cancel     context.CancelFunc
-	dataDir    string
-	xmppCAFile string
-	save       func(string) error
-	mu         sync.Mutex
-	active     atomic.Pointer[desktopTarget]
-	lastLocal  *Server
+	ctx          context.Context
+	cancel       context.CancelFunc
+	dataDir      string
+	xmppCAFile   string
+	keyEditor    engineapi.RequestEditorFn
+	keyEngineURL string
+	save         func(string) error
+	mu           sync.Mutex
+	active       atomic.Pointer[desktopTarget]
+	lastLocal    *Server
 }
 
 // StartDesktop uses an empty engine URL for local mode. The caller owns the
 // per-profile preference and supplies the persistence function.
-func StartDesktop(ctx context.Context, dataDir, xmppCAFile, engineURL string, save func(string) error) (*Desktop, error) {
+func StartDesktop(ctx context.Context, dataDir, xmppCAFile, engineURL, engineKeyFile string, save func(string) error) (*Desktop, error) {
+	editor, err := desktopKeyEditor(engineURL, engineKeyFile)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(ctx)
-	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save}
+	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, keyEditor: editor, keyEngineURL: strings.TrimSuffix(engineURL, "/")}
 	target, err := d.prepare(ctx, engineURL, false)
 	if err != nil {
 		cancel()
@@ -43,6 +53,39 @@ func StartDesktop(ctx context.Context, dataDir, xmppCAFile, engineURL string, sa
 	}
 	d.active.Store(target)
 	return d, nil
+}
+
+func desktopKeyEditor(address, filename string) (engineapi.RequestEditorFn, error) {
+	if filename == "" {
+		return nil, nil
+	}
+	origin, err := url.Parse(address)
+	if err != nil || origin.Scheme != "https" || origin.Hostname() == "" || origin.User != nil ||
+		(origin.Path != "" && origin.Path != "/") || origin.RawPath != "" || origin.ForceQuery ||
+		origin.RawQuery != "" || strings.Contains(address, "#") {
+		return nil, errors.New("the remote engine token file requires a hosted HTTPS origin")
+	}
+	info, err := os.Stat(filename)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > 4096 {
+		return nil, errors.New("engine token file must be a private regular file (0600)")
+	}
+	body, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	token := strings.TrimSpace(string(body))
+	if token == "" || strings.ContainsAny(token, " \t\r\n\x00") {
+		return nil, errors.New("engine token file must contain one API key")
+	}
+	return func(_ context.Context, request *http.Request) error {
+		if request.URL.Scheme == "https" && strings.EqualFold(request.URL.Host, origin.Host) {
+			request.Header.Set("Authorization", "Bearer "+token)
+		}
+		return nil
+	}, nil
 }
 
 func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool) (_ *desktopTarget, err error) {
@@ -73,6 +116,8 @@ func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool) (_ 
 		d.lastLocal = target.engine
 		baseURL = target.engine.URL()
 		options = append(options, web.WithEngineRequestEditor(target.engine.editEngineRequest))
+	} else if d.keyEditor != nil && strings.EqualFold(strings.TrimSuffix(engineURL, "/"), d.keyEngineURL) {
+		options = append(options, web.WithEngineRequestEditor(d.keyEditor))
 	}
 	options = append(options, web.WithEngineMode(rand.Text(), engineURL, func(ctx context.Context, url string) error {
 		return d.selectEngine(ctx, target, url)

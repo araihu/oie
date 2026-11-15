@@ -1,0 +1,29 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/link"
+)
+
+templ signIn(lang, label, message string) {
+	<!doctype html>
+	<html lang={ lang }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ label } · Oiê</title>
+			@head.Dependencies(head.WithStylesheetOnly())
+		</head>
+		<body class="min-h-screen bg-background text-foreground grid place-items-center p-6">
+			<main class="grid justify-items-start gap-5">
+				<h1 class="text-3xl font-semibold">Oiê</h1>
+				if message != "" {
+					<p role="alert">{ message }</p>
+				}
+				@link.Link("/auth/login", link.WithAppearance(link.AppearanceButton)) {
+					{ label }
+				}
+			</main>
+		</body>
+	</html>
+}

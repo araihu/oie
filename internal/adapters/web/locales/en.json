@@ -1,4 +1,8 @@
 {
+  "SignInLabel": "Sign in",
+  "SignInRejected": "Could not sign in. Try again.",
+  "SignInUnavailable": "Sign-in is temporarily unavailable.",
+  "SignOutLabel": "Sign out",
   "Forward": "Forward",
   "ForwardTitle": "Forward message",
   "ForwardChooseRooms": "Choose destination rooms",

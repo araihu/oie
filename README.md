@@ -101,16 +101,16 @@ bin/oie --data-dir ./data
 
 Open [the local interface](http://127.0.0.1:8080).
 
-The same executable can run a hosted engine or a BFF using another engine:
+For internet access, use [hosted mode with OIDC and API keys](docs/hosted-auth.md).
+For a private development BFF, start a local engine and point the BFF to it.
 
 ```sh
-bin/oie --role hosted --listen 127.0.0.1:8080 --data-dir ./data
+bin/oie --role local --listen 127.0.0.1:8080 --data-dir ./data
 # In another terminal:
 bin/oie --role bff --listen 127.0.0.1:8081 --engine-url http://127.0.0.1:8080
 ```
 
-The default role is local. The BFF calls the generated HTTP client and does not
-open the engine database. A sync-service role is not implemented yet.
+The BFF calls the generated HTTP client. A sync-service role remains planned.
 
 ## API and generated development CLI
 

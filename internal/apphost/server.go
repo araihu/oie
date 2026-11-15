@@ -34,6 +34,7 @@ type Config struct {
 	DevReload                                    bool
 	PrivateAPI                                   bool
 	DataOnly                                     bool
+	Hosted                                       HostedConfig
 	engineOnly                                   bool
 }
 
@@ -44,6 +45,7 @@ type Server struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	server       *http.Server
+	private      *http.Server
 	presentation http.Handler
 	done         chan error
 	stopped      chan struct{}
@@ -69,6 +71,13 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	if err = validate(cfg); err != nil {
 		return nil, err
 	}
+	var hosted *hostedServer
+	if cfg.Role == "hosted" {
+		hosted, err = configureHosted(cfg)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithCancel(parent)
 	listener, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -77,12 +86,16 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	}
 	var store *sqlite.Store
 	var engine *engineHost
+	var privateListener net.Listener
 	defer func() {
 		if err == nil {
 			return
 		}
 		cancel()
 		_ = listener.Close()
+		if privateListener != nil {
+			_ = privateListener.Close()
+		}
 		if engine != nil {
 			engine.instance.close()
 		}
@@ -91,7 +104,7 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		}
 	}()
 	host := &Server{url: listenerURL(listener), ctx: ctx, cancel: cancel, done: make(chan error, 1), stopped: make(chan struct{})}
-	if cfg.PrivateAPI {
+	if cfg.PrivateAPI || (hosted != nil && !cfg.DataOnly) {
 		host.capability = rand.Text()
 	}
 	apiMux := http.NewServeMux()
@@ -119,29 +132,69 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 			_, _ = w.Write(api.OpenAPI)
 		})
 		engineURL = host.url
-		if cfg.PrivateAPI {
+		if hosted != nil && !cfg.DataOnly {
+			privateListener, err = net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				return nil, err
+			}
+			engineURL = listenerURL(privateListener)
+		}
+		if host.capability != "" {
 			options = append(options, web.WithEngineRequestEditor(host.editEngineRequest))
 		}
 	}
 	host.presentation = host.track(http.NotFoundHandler())
+	var browser http.Handler
 	if !cfg.DataOnly && !cfg.engineOnly {
+		if hosted != nil {
+			options = append(options, web.WithHostedSignIn())
+		}
 		ui, err := web.New(engineURL, options...)
 		if err != nil {
 			return nil, err
 		}
-		presentation := presentationHandler(ui)
-		host.presentation = host.track(presentation)
-		apiMux.Handle("/", presentation)
+		if hosted != nil {
+			browser = hosted.auth.Browser(ui, ui.SignIn)
+		} else {
+			presentation := presentationHandler(ui)
+			host.presentation = host.track(presentation)
+			apiMux.Handle("/", presentation)
+		}
 	}
 	networkHandler := http.Handler(apiMux)
-	if cfg.PrivateAPI {
+	if hosted != nil {
+		networkHandler = hosted.handler(apiMux, browser)
+		if privateListener != nil {
+			host.private = host.httpServer(host.guard(apiMux))
+		}
+	} else if cfg.PrivateAPI {
 		networkHandler = host.guard(networkHandler)
 	}
-	host.server = &http.Server{Handler: host.track(networkHandler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
-	served := make(chan error, 1)
-	go func() { served <- host.server.Serve(listener) }()
+	host.server = host.httpServer(networkHandler)
+	if hosted != nil {
+		host.url = hosted.origin.String()
+		host.server.TLSConfig = hosted.tls
+	}
+	served := make(chan error, 2)
+	if host.private != nil {
+		go func() { served <- host.private.Serve(privateListener) }()
+	}
+	go func() {
+		if hosted != nil && hosted.tls != nil {
+			served <- host.server.ServeTLS(listener, "", "")
+		} else {
+			served <- host.server.Serve(listener)
+		}
+	}()
 	go host.supervise(served, engine)
 	return host, nil
+}
+
+func (s *Server) httpServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler: s.track(handler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return s.ctx },
+	}
 }
 
 func presentationHandler(ui http.Handler) http.Handler {
@@ -176,6 +229,12 @@ func validate(cfg Config) error {
 	}
 	if cfg.Role != "local" && cfg.Role != "hosted" && cfg.Role != "bff" {
 		return errors.New("role must be local, hosted, or bff; sync service is not implemented yet")
+	}
+	if cfg.Role == "hosted" && cfg.PrivateAPI {
+		return errors.New("hosted mode uses its own authenticated API")
+	}
+	if cfg.Role != "hosted" && cfg.Hosted != (HostedConfig{}) {
+		return errors.New("hosted TLS and OIDC options require --role hosted")
 	}
 	if cfg.DevReload && cfg.Role != "bff" {
 		return errors.New("dev-reload is only supported by the bff role")
@@ -271,10 +330,13 @@ func (s *Server) supervise(served <-chan error, engine *engineHost) {
 	}
 	s.beginClose()
 	shutdownCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	shutdownErr := s.server.Shutdown(shutdownCtx)
+	shutdownErr := shutdownHTTP(shutdownCtx, s.server)
+	if s.private != nil {
+		shutdownErr = errors.Join(shutdownErr, shutdownHTTP(shutdownCtx, s.private))
+	}
 	stop()
 	if shutdownErr != nil {
-		result = errors.Join(result, fmt.Errorf("shutdown: %w", shutdownErr), s.server.Close())
+		result = errors.Join(result, fmt.Errorf("shutdown: %w", shutdownErr))
 	}
 	s.requests.Wait()
 	if engine != nil {
@@ -287,6 +349,13 @@ func (s *Server) supervise(served <-chan error, engine *engineHost) {
 	s.done <- result
 	close(s.done)
 	close(s.stopped)
+}
+
+func shutdownHTTP(ctx context.Context, server *http.Server) error {
+	if err := server.Shutdown(ctx); err != nil {
+		return errors.Join(err, server.Close())
+	}
+	return nil
 }
 
 // URL is the owned HTTP listener's URL. In PrivateAPI mode it is an internal

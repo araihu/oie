@@ -14,8 +14,9 @@ docker run -d --name oie \
 ```
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
-account. Keep the port on localhost or use an authenticated proxy for remote
-access, since Oiê has no built-in login. Video playback depends on the
+account. This release's container command is for loopback access. See
+[hosting with OIDC and API keys](hosted-auth.md) for the development version's
+internet-facing configuration. Video playback depends on the
 client browser’s supported formats.
 
 To update, pull the image and recreate the container with the same `oie-data`
@@ -57,9 +58,9 @@ An update that changes the pod briefly
 interrupts access while Kubernetes replaces it. Uninstalling the release
 retains its claim. Keep the claim and namespace to reuse the data.
 
-Oiê has no built-in login. The chart defaults to an internal Service. For
-remote access, protect both the browser interface and API with an authenticated
-HTTPS proxy. The chart supports [Ingress or Gateway API](../charts/oie/README.md#remote-access).
+The published chart and image above rely on an authenticated HTTPS proxy for
+remote access. The development chart supports Oiê's own OIDC and API-key checks
+with a compatible image. See [Ingress and Gateway API configuration](../charts/oie/README.md#remote-access).
 Starting with chart `0.2.2`, you can set `httpRoute.timeouts.request` to
 `"0s"` to keep live chat events streaming through a Gateway that applies a
 request timeout by default. See the [chart configuration](../charts/oie/README.md)

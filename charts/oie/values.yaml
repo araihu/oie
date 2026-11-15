@@ -16,7 +16,19 @@ persistence:
   accessMode: ReadWriteOnce
   size: 10Gi
 
-# Oiê has no built-in login. Use an authenticated proxy for remote access.
+# Requires an image with hosted authentication support.
+hosted:
+  enabled: false
+  publicURL: ""
+  trustedTLSProxies: ""
+  oidc:
+    issuer: ""
+    subject: ""
+    clientID: ""
+    clientSecretName: ""
+
+# Existing installations can explicitly use an external authenticated proxy.
+externalAuthentication: false
 ingress:
   enabled: false
   className: ""

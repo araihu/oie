@@ -18,6 +18,7 @@ func main() {
 	var config desktop.Config
 	flag.StringVar(&config.DataDir, "data-dir", "", "database and media directory (defaults to the user's application data directory)")
 	flag.StringVar(&config.EngineURL, "engine-url", "", "optional hosted engine URL")
+	flag.StringVar(&config.EngineTokenFile, "engine-token-file", "", "private file containing the hosted engine API key")
 	flag.StringVar(&config.XMPPCAFile, "xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS")
 	flag.StringVar(&config.Language, "lang", "auto", "desktop menu language: auto, en, or pt-BR")
 	flag.Parse()
