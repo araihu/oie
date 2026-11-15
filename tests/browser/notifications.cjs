@@ -18,9 +18,34 @@ async function until(test, label) {
   throw Error('Timed out: ' + label);
 }
 
+// Headless Chromium has no notification center to supply click activation.
+// Exercise the real worker and its window discovery, then follow the URL
+// recorded by the openWindow probe in a real browser page.
+async function clickWorkerBanner(worker, data) {
+  return worker.evaluate(async data => {
+    const focus = WindowClient.prototype.focus;
+    const openWindow = clients.openWindow;
+    let destination, closed = false, focused = false, done;
+    WindowClient.prototype.focus = async function () { focused = true; return this; };
+    clients.openWindow = async url => { destination = url; };
+    try {
+      const event = new Event('notificationclick');
+      event.notification = {data, close() { closed = true; }};
+      event.waitUntil = promise => { done = promise; };
+      self.dispatchEvent(event);
+      await done;
+      return {closed, focused, destination};
+    } finally {
+      WindowClient.prototype.focus = focus;
+      clients.openWindow = openWindow;
+    }
+  }, data);
+}
+
 async function run() {
   const streams = new Set();
   const events = [];
+  const messages = new Map();
   let seq = 0;
   const chats = [[chat, 'direct', false], [other, 'direct', false], [room, 'room', false], [archivedRoom, 'room', true]]
     .map(([id, kind, archived], index) => ({
@@ -39,7 +64,10 @@ async function run() {
       sender: {id: id(9), displayName: 'Bob'}, originalText: 'Private body', createdAt: now,
       isOwn: false, sendState: 'received', ...overrides};
     const entry = repeat ?? `id: ${engine}:${++seq}\nevent: ${type}\ndata: ${JSON.stringify({message})}\n\n`;
-    if (!repeat) events.push(entry);
+    if (!repeat) {
+      events.push(entry);
+      messages.set(message.id, message);
+    }
     for (const stream of streams) stream.write(entry);
     return {message, entry};
   }
@@ -58,6 +86,11 @@ async function run() {
     const originalID = route.split('/').at(-1);
     if (route.startsWith('/api/v1/messages/') && retained.has(originalID)) {
       return send({id: originalID, accountId: account, revisionId: revision, originalText: 'Hello', ...retained.get(originalID)});
+    }
+    const context = /^\/api\/v1\/conversations\/([^/]+)\/messages\/([^/]+)\/context$/.exec(route);
+    if (context) {
+      const message = messages.get(context[2]);
+      if (message?.conversationId === context[1]) return send({targetId: message.id, items: [message], hasOlder: false, hasNewer: false});
     }
     const selected = chats.find(c => route === '/api/v1/conversations/' + c.id);
     if (selected) return send(selected);
@@ -93,6 +126,9 @@ async function run() {
       window.playedSounds = [];
       window.prompts = 0;
       window.answerPermission = () => {};
+      ServiceWorkerRegistration.prototype.showNotification = async function () {
+        throw Error('Notification worker unavailable');
+      };
       window.testFocus = false;
       Object.defineProperty(document, 'hasFocus', {value: () => window.testFocus});
       window.Notification = class {
@@ -352,7 +388,7 @@ async function run() {
       };
       window.Notification = class {
         static permission = 'granted';
-        constructor() { throw new TypeError('Use a service worker'); }
+        constructor() { throw new Error('Expected a persistent notification'); }
       };
     });
     await mobilePage.goto(base + '/?lang=pt-BR');
@@ -365,6 +401,29 @@ async function run() {
     assert.equal(workerBanner.options.silent, true);
     assert.deepEqual(workerBanner.options.data, {engine, account, conversation: other, message: next.id});
     await until(async () => (await total('alerts')) === previousAlerts + 2, 'independent browser profiles');
+    const [worker] = mobile.serviceWorkers();
+    const target = '#message-timeline [data-message-id="' + next.id + '"]';
+    await mobilePage.evaluate(() => { window.notificationClickPreservedPage = true; });
+    assert.deepEqual(await clickWorkerBanner(worker, workerBanner.options.data), {closed: true, focused: true, destination: undefined});
+    await mobilePage.waitForURL(url => url.searchParams.get('message') === next.id);
+    await mobilePage.locator(target).waitFor();
+    assert.equal(await mobilePage.evaluate(() => window.notificationClickPreservedPage), true);
+    await mobilePage.close();
+    assert.deepEqual(await clickWorkerBanner(worker, {...workerBanner.options.data, message: '/outside'}),
+      {closed: true, focused: false, destination: undefined});
+    const coldClick = await clickWorkerBanner(worker, workerBanner.options.data);
+    assert.equal(coldClick.closed, true);
+    assert.equal(coldClick.focused, false);
+    const reopened = await mobile.newPage();
+    const destination = new URL(coldClick.destination, base);
+    assert.equal(destination.origin, base);
+    assert.equal(destination.searchParams.get('notificationEngine'), engine);
+    await reopened.goto(destination.href);
+    await reopened.locator(target).waitFor();
+    assert.equal(await reopened.locator('#oie-app').getAttribute('data-focus-message'), next.id);
+    destination.searchParams.set('notificationEngine', id(999));
+    assert.equal((await reopened.goto(destination.href)).status(), 404);
+    assert.equal(await reopened.locator(target).count(), 0);
     await mobile.close();
 
     await first.goto(base + '/?lang=en&chat=' + room + '&open=details');
@@ -382,7 +441,7 @@ async function run() {
     await expectSound(soundsBeforeRoomMute + 1, 'unmuted room plays eligible messages again');
 
     assert.deepEqual(errors, []);
-    console.log('PASS: notification sound defaults, room replies, archives, per-device preferences, two-second window, mute, replay and worker fallback');
+    console.log('PASS: notification sound preferences, two-second window, mute, replay and banner clicks with and without an open page');
   } finally {
     await browser?.close();
     app.kill();

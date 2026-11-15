@@ -36,11 +36,12 @@ bundled 300 ms mono PCM WAV.
 
 ## Platform delivery and checks
 
-- Browser tabs use the Notifications API for banners. Browsers that require a
-  service worker use `showNotification` while a page receives events. The
-  worker can focus an existing page and take it to the message. Opening the
-  destination from a persistent banner when all pages are closed still needs a
-  worker navigation fallback.
+- Browsers prefer persistent banners through the notification service worker
+  while an Oiê page receives events. A click focuses an existing app page and
+  takes it to the message, or opens a new window at the message when all pages
+  are closed. The new window checks the notification's engine against the
+  current engine before loading the conversation. The page-scoped Notifications
+  API is a fallback where worker delivery is unavailable.
 - Wails sends silent native banners and uses the same Web Audio sound as the
   browser. Closing the desktop window hides it while the app remains running.
   Linux needs a session notification daemon. macOS needs an authorized, valid

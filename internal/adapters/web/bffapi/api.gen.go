@@ -898,6 +898,9 @@ type RenderWorkspaceParams struct {
 	// ChatSearchRevision Historical result revision to restore for the focused message in the conversation search.
 	ChatSearchRevision *externalRef0.ID `form:"chatSearchRevision,omitempty" json:"chatSearchRevision,omitempty"`
 
+	// NotificationEngine Originating engine for a message opened from a persistent notification. A different engine returns 404 before loading the conversation.
+	NotificationEngine *externalRef0.ID `form:"notificationEngine,omitempty" json:"notificationEngine,omitempty"`
+
 	// HXRequest Set to true to request an HTML fragment.
 	HXRequest *RenderWorkspaceParamsHXRequest `json:"HX-Request,omitempty"`
 

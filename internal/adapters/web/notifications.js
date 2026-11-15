@@ -166,7 +166,7 @@
   function open(engine, account, conversation, message) {
     if (app()?.dataset.engineId !== engine || window.OieEvents.replaced ||
         ![account, conversation, message].every(uuid)) return;
-    const path = '/?' + new URLSearchParams({account, chat: conversation, message});
+    const path = '/?' + new URLSearchParams({account, chat: conversation, message, notificationEngine: engine});
     window.focus();
     if (window.OieNavigation) window.OieNavigation.go(path);
     else location.assign(path);
@@ -200,19 +200,22 @@
       return;
     }
     const options = {body, tag: engine + ':' + message.id, silent: true, lang: document.documentElement.lang};
-    try {
-      const banner = new Notification(title, options);
-      banner.onclick = () => {
-        banner.close();
-        open(engine, message.accountId, message.conversationId, message.id);
-      };
-    } catch {
-      if (!navigator.serviceWorker) return;
-      const registration = await notificationWorker();
-      await registration.showNotification(title, {...options, data: {
-        engine, account: message.accountId, conversation: message.conversationId, message: message.id
-      }});
+    if (navigator.serviceWorker) {
+      try {
+        const registration = await notificationWorker();
+        await registration.showNotification(title, {...options, data: {
+          engine, account: message.accountId, conversation: message.conversationId, message: message.id
+        }});
+        return;
+      } catch {
+        // A page notification can still work when the worker is unavailable.
+      }
     }
+    const banner = new Notification(title, options);
+    banner.onclick = () => {
+      banner.close();
+      open(engine, message.accountId, message.conversationId, message.id);
+    };
   }
 
   function canBanner() {

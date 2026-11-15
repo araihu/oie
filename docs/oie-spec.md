@@ -753,6 +753,8 @@ Show contact presence and manual per-account Available, Away, and Do Not Disturb
 
 Alpha supports browser notifications while the app is open and permission/platform behavior allows. Web Push and closed-app notification delivery are backlogged.
 
+Selecting an already delivered persistent browser notification opens the message even after the app window was closed. The destination is scoped to the engine that emitted the notification.
+
 Suppress banners for the conversation visible in the active, focused window. Sound is silent there by default, with a device preference to enable it. Other conversations follow conversation mute, per-device override, account DND, notification permission, and device sound preferences.
 
 Archived conversations remain archived on new arrivals and their unread counts update. Archived rooms are silent by default. The device sound setting can enable sound in archived rooms under the selected room policy. Archiving preserves the room membership and history.

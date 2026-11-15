@@ -45,6 +45,10 @@ paths:
         in: query
         description: Historical result revision to restore for the focused message in the conversation search.
         schema: {$ref: './openapi.yaml#/components/schemas/ID'}
+      - name: notificationEngine
+        in: query
+        description: Originating engine for a message opened from a persistent notification. A different engine returns 404 before loading the conversation.
+        schema: {$ref: './openapi.yaml#/components/schemas/ID'}
       - name: HX-Request
         in: header
         description: Set to true to request an HTML fragment.
@@ -72,7 +76,7 @@ paths:
             text/html:
               schema: {type: string}
         '404':
-          description: The requested page or conversation is unavailable.
+          description: The requested page or conversation is unavailable, or the notification belongs to another engine.
         '503':
           description: The requested presentation data is unavailable.
   /ui/engine-mode:

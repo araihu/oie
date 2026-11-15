@@ -1003,7 +1003,8 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	editorOnly := fragment == "schedule-editor" && v.ChatID != ""
 	infoOnly := (fragment == "info" || r.URL.Path == "/ui/info") && v.ChatID != ""
 	paneOnly := (fragment == "conversation" || fragment == "timeline" || fragment == "source-pane") && v.ChatID != "" || editorOnly || infoOnly
-	if sourceFragmentRequest(r, v) && s.loadSourceNavigation(ctx, r, v, paneOnly) {
+	notificationEngine := r.URL.Query().Get("notificationEngine")
+	if notificationEngine == "" && sourceFragmentRequest(r, v) && s.loadSourceNavigation(ctx, r, v, paneOnly) {
 		return
 	}
 	accountsOnly := fragment == "accounts"
@@ -1022,6 +1023,11 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.EngineID = engine.JSON200.Id
+	if notificationEngine != "" && notificationEngine != v.EngineID {
+		v.NotFound = true
+		v.ChatOpen = true
+		return
+	}
 	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
