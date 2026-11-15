@@ -2,9 +2,42 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/modal"
 	"github.com/araihu/goshtoso/components/textinput"
 )
+
+templ destructiveActionsEntry(v view) {
+	@button.Button(
+		button.WithType("button"),
+		button.WithAppearance(button.AppearancePlain),
+		button.WithRootClass("oie-settings-entry"),
+		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": "destructive-actions-body"}),
+		button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'settings'}); $nextTick(() => $dispatch('drawer:open', {id: 'destructive-actions'}))"}),
+	) {
+		<span>{ v.Text.DestructiveActions }</span>
+		@glyph(heroicons.Icon16SolidChevronRight)
+	}
+}
+
+templ destructiveActions(v view) {
+	@drawer.Drawer(drawer.Config{ID: "destructive-actions", Title: v.Text.DestructiveActions}) {
+		<div class="oie-settings-section oie-destructive-actions">
+			@button.Button(
+				button.WithType("button"),
+				button.WithAppearance(button.AppearancePlain),
+				button.WithRootClass("oie-settings-back"),
+				button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'destructive-actions'}); $nextTick(() => $dispatch('drawer:open', {id: 'settings'}))"}),
+			) {
+				@glyph(heroicons.Icon16SolidChevronLeft)
+				<span>{ v.Text.BackToSettings }</span>
+			}
+			@resetDataEntry(v)
+		</div>
+	}
+	@resetDataDialog(v)
+}
 
 templ resetDataEntry(v view) {
 	@button.Button(

@@ -43,7 +43,7 @@ templ generalSettings(v view) {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}
 		if v.CanResetData {
-			@resetDataEntry(v)
+			@destructiveActionsEntry(v)
 		}
 	</div>
 }

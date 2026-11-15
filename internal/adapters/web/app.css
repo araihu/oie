@@ -556,12 +556,13 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-reset-submit-label>span:last-child,
 #reset-data-form[aria-busy=true] .oie-reset-submit-label>span:first-child{visibility:hidden}
 #reset-data-form[aria-busy=true] .oie-reset-submit-label>span:last-child{visibility:visible}
-.oie-about-entry{
+.oie-settings-entry{
  justify-content:space-between;min-height:44px;padding-inline:12px;color:var(--oie-text);font-weight:650
 }
+.oie-destructive-actions{padding:12px 20px}
 .oie-about{display:grid;gap:24px;padding:12px 24px 28px;color:var(--oie-text)}
-.oie-about-back{justify-self:start;gap:6px;padding-inline:0;color:var(--oie-accent-text)}
-.oie-about-back .oie-icon{width:16px;height:16px}
+.oie-settings-back{justify-self:start;align-self:start;gap:6px;padding-inline:0;color:var(--oie-accent-text)}
+.oie-settings-back .oie-icon{width:16px;height:16px}
 .oie-about-brand{display:flex;justify-content:center;padding-block:10px}
 .oie-about-brand .oie-brand-logo{height:52px;max-width:none}
 .oie-about h3{margin:0 0 8px;font-size:14px;font-weight:650}

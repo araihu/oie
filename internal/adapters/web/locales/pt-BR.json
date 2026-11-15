@@ -41,6 +41,7 @@
   "AttachmentLimit": "Você pode anexar até 16 arquivos de 20 MiB cada.",
   "AttachmentTooLarge": "Um anexo excede o limite de envio do provedor. Remova-o ou escolha um arquivo menor.",
   "RemoveAttachment": "Remover anexo",
+  "DestructiveActions": "Ações destrutivas",
   "DeleteAllData": "Apagar todos os dados",
   "DeleteDataWarning": "Isso apaga permanentemente as contas, mensagens, arquivos e configurações salvos nesta instalação do Oiê. As cópias nos servidores de conversa permanecem lá.",
   "DeleteHostedDataWarning": "Isso apaga permanentemente as contas, mensagens e arquivos deste servidor Oiê para todos os dispositivos conectados. Também limpa suas configurações neste dispositivo. As cópias nos servidores de conversa permanecem lá.",

@@ -71,7 +71,7 @@ func aboutEntry(v view) templ.Component {
 		templ_7745c5c3_Err = button.Button(
 			button.WithType("button"),
 			button.WithAppearance(button.AppearancePlain),
-			button.WithRootClass("oie-about-entry"),
+			button.WithRootClass("oie-settings-entry"),
 			button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog"}),
 			button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'settings'}); $nextTick(() => $dispatch('drawer:open', {id: 'about'}))"}),
 		).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
@@ -153,7 +153,7 @@ func about(v view) templ.Component {
 			templ_7745c5c3_Err = button.Button(
 				button.WithType("button"),
 				button.WithAppearance(button.AppearancePlain),
-				button.WithRootClass("oie-about-back"),
+				button.WithRootClass("oie-settings-back"),
 				button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'about'}); $nextTick(() => $dispatch('drawer:open', {id: 'settings'}))"}),
 			).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {

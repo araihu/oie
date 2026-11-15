@@ -41,6 +41,7 @@
   "AttachmentLimit": "You can attach up to 16 files of 20 MiB each.",
   "AttachmentTooLarge": "An attachment exceeds the provider’s upload limit. Remove it or choose a smaller file.",
   "RemoveAttachment": "Remove attachment",
+  "DestructiveActions": "Destructive actions",
   "DeleteAllData": "Delete all data",
   "DeleteDataWarning": "This permanently removes the accounts, messages, files, and settings saved in this Oiê installation. Copies on chat servers stay there.",
   "DeleteHostedDataWarning": "This permanently removes the accounts, messages, and files saved in this Oiê server for every connected device. It also clears your settings on this device. Copies on chat servers stay there.",

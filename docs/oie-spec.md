@@ -880,9 +880,9 @@ calendar groupings across the app without changing the underlying instants.
 
 ### 11.6 Delete all Oiê data
 
-**AGREED:** Settings offers an installation-wide reset on engines that support
-it. The reset button uses the filled red danger style. The user must type the
-exact word `delete` to confirm. Delete the engine's accounts and credentials,
+Settings → General → Destructive actions offers an installation-wide reset on
+engines that support it. The reset button uses the filled red danger style.
+The user must type the exact word `delete` to confirm. Delete the engine's accounts and credentials,
 retained history and indexes, queued operations, and managed media. Start an
 empty engine with a new identity so requests from the old installation cannot
 repeat the reset. Clear Oiê's settings, drafts and preview cache in the browser

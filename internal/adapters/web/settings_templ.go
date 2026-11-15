@@ -159,7 +159,7 @@ func generalSettings(v view) templ.Component {
 			}
 		}
 		if v.CanResetData {
-			templ_7745c5c3_Err = resetDataEntry(v).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = destructiveActionsEntry(v).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

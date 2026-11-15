@@ -30,7 +30,22 @@ async function openSettings(page, url, fixture) {
   assert(placement.scrolled && placement.shift <= 1 && placement.gap <= 1, JSON.stringify(placement));
   await page.setViewportSize(fixture.viewport);
 
-  const action = page.getByRole('button', { name: fixture.action, exact: true }).first();
+  const entry = settings.getByRole('button', { name: fixture.destructiveActions, exact: true });
+  const actions = page.getByRole('dialog', { name: fixture.destructiveActions, exact: true });
+  assert.equal(await settings.getByRole('button', { name: fixture.action, exact: true }).count(), 0);
+  await entry.press('Enter');
+  await actions.waitFor();
+  await settings.waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#reset-data').isVisible(), false);
+  await actions.getByRole('button', { name: fixture.back, exact: true }).click();
+  await settings.waitFor();
+  await actions.waitFor({ state: 'hidden' });
+  assert.equal(await settings.getByRole('tab', { name: fixture.general, exact: true }).getAttribute('aria-selected'), 'true');
+  await entry.click();
+  await actions.waitFor();
+  await settings.waitFor({ state: 'hidden' });
+
+  const action = actions.getByRole('button', { name: fixture.action, exact: true });
   const [red, green, blue, alpha] = await action.evaluate(node => {
     const canvas = document.createElement('canvas');
     const paint = canvas.getContext('2d');
@@ -40,7 +55,7 @@ async function openSettings(page, url, fixture) {
   });
   assert(alpha === 255 && red > green + 30 && red > blue + 30, 'reset action uses a filled red background');
   await action.click();
-  return page.getByRole('dialog', { name: fixture.action });
+  return { actions, dialog: page.getByRole('dialog', { name: fixture.action, exact: true }) };
 }
 
 async function testReset(browser, url, fixture) {
@@ -64,7 +79,7 @@ async function testReset(browser, url, fixture) {
       });
     }
     const page = await context.newPage();
-    const dialog = await openSettings(page, url, fixture);
+    const { actions, dialog } = await openSettings(page, url, fixture);
     const input = dialog.getByRole('textbox', { name: fixture.confirmation });
     const submit = dialog.locator('button[type="submit"]');
     await dialog.waitFor();
@@ -77,7 +92,8 @@ async function testReset(browser, url, fixture) {
     await dialog.waitFor({ state: 'hidden' });
     assert.equal((await (await fetch(url + '/api/v1/accounts')).json()).items.length, 1);
 
-    const entry = page.getByRole('button', { name: fixture.action, exact: true }).first();
+    assert(await actions.isVisible(), 'cancelling the confirmation keeps destructive actions open');
+    const entry = actions.getByRole('button', { name: fixture.action, exact: true });
     await entry.click();
     assert.equal(await input.inputValue(), '');
     await page.route('**/ui/engine/reset', route => route.fulfill({ status: 503 }), { times: 1 });
@@ -115,7 +131,7 @@ async function testReset(browser, url, fixture) {
     }, { times: 1 });
 
     await page.evaluate(() => {
-      const selectors = ['#workspace', '#reset-data', '#reset-data-confirmation', '#reset-data-form button[type="submit"]'];
+      const selectors = ['#workspace', '#destructive-actions-body', '#reset-data', '#reset-data-confirmation', '#reset-data-form button[type="submit"]'];
       const measure = () => selectors.flatMap(selector => {
         const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
         return [x, y, width, height];
@@ -193,20 +209,22 @@ async function testReset(browser, url, fixture) {
     const url = await address;
     await testReset(browser, url, {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
-      settings: 'Settings', about: 'About', theme: 'light',
+      settings: 'Settings', general: 'General', about: 'About', theme: 'light',
+      destructiveActions: 'Destructive actions', back: 'Back to settings',
       engineHeading: 'Engine', engineLabel: 'Hosted engine',
       confirmation: 'Type delete to confirm', failure: 'Could not delete all data.',
       pending: 'Deleting…', success: 'All Oiê data was deleted. Add an account to start again.', addAccount: 'Add account',
     });
     await testReset(browser, url, {
       locale: 'pt-BR', viewport: { width: 390, height: 844 }, action: 'Apagar todos os dados',
-      settings: 'Configurações', about: 'Sobre', theme: 'dark',
+      settings: 'Configurações', general: 'Geral', about: 'Sobre', theme: 'dark',
+      destructiveActions: 'Ações destrutivas', back: 'Voltar às configurações',
       engineHeading: 'Motor', engineLabel: 'Motor hospedado',
       confirmation: 'Digite delete para confirmar', failure: 'Não foi possível apagar todos os dados.',
       pending: 'Apagando…', success: 'Todos os dados do Oiê foram apagados. Adicione uma conta para recomeçar.',
       addAccount: 'Adicionar conta', blockCompletionStorage: true,
     });
-    console.log('PASS: typed reset confirmation, cancellation, refusal, stable pending dialog and empty installation');
+    console.log('PASS: nested destructive actions, typed reset confirmation, cancellation, refusal, stable pending dialog and empty installation');
   } finally {
     await browser.close();
     if (child.exitCode === null) {

@@ -77,6 +77,12 @@
     if (node && event.target === confirmation(node)) submitButton(node).disabled = event.target.value !== 'delete';
   });
 
+  window.addEventListener('drawer:close-request', event => {
+    if (event.detail?.id === 'destructive-actions' && document.getElementById(dialogID)?.open) {
+      event.preventDefault();
+    }
+  }, {capture: true});
+
   document.addEventListener('cancel', event => {
     if (event.target.id !== dialogID || form()?.getAttribute('aria-busy') !== 'true') return;
     event.preventDefault();

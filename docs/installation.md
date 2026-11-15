@@ -534,7 +534,8 @@ under `private/migration-backups/` in the profile first. The filename starts wit
 Allow disk space for a second copy of the database. If Oiê cannot save the
 backup, startup stops before applying the migration. The copies contain the
 database, and the media files stay in the profile. Backups are retained across
-updates and are deleted when you use **Delete all data**.
+updates and are deleted when you use **Delete all data** under **Settings →
+General → Destructive actions**.
 
 If the desktop window does not open after an update, start Oiê from a
 terminal to see the error. For the default macOS app, run

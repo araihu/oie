@@ -11,7 +11,7 @@ templ aboutEntry(v view) {
 	@button.Button(
 		button.WithType("button"),
 		button.WithAppearance(button.AppearancePlain),
-		button.WithRootClass("oie-about-entry"),
+		button.WithRootClass("oie-settings-entry"),
 		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog"}),
 		button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'settings'}); $nextTick(() => $dispatch('drawer:open', {id: 'about'}))"}),
 	) {
@@ -26,7 +26,7 @@ templ about(v view) {
 			@button.Button(
 				button.WithType("button"),
 				button.WithAppearance(button.AppearancePlain),
-				button.WithRootClass("oie-about-back"),
+				button.WithRootClass("oie-settings-back"),
 				button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:close', {id: 'about'}); $nextTick(() => $dispatch('drawer:open', {id: 'settings'}))"}),
 			) {
 				@glyph(heroicons.Icon16SolidChevronLeft)
