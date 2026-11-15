@@ -24,4 +24,11 @@ ingress:
   tlsSecretName: ""
   annotations: {}
 
+# Attach to an existing Gateway. Set parentRefs and hostnames when enabled.
+httpRoute:
+  enabled: false
+  parentRefs: []
+  hostnames: []
+  annotations: {}
+
 resources: {}
