@@ -732,3 +732,8 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-info-participant{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;min-height:44px;padding:4px 6px;font-size:.875rem;overflow-wrap:anywhere}
 #chat-info-content:has(>.oie-info-participants-loading){position:relative}
 .oie-info-participants-loading{position:absolute;inset:0;z-index:2;background:var(--oie-panel);padding-top:72px;pointer-events:none}
+
+.oie-notification-settings{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-block:20px}
+.oie-notification-settings h2{font-size:14px;font-weight:650;margin:0}
+.oie-notification-settings button{justify-self:start}
+.oie-notification-settings [role=status]{min-height:2lh;margin:0}

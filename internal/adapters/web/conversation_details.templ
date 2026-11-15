@@ -65,6 +65,10 @@ if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
 }
 </nav>
 if !v.Preview && v.requestKind()=="" {
+@toggle.Toggle(toggle.Config{
+	ID:"notification-mute",Label:v.Text.NotificationMute,Disabled:true,RootClass:"oie-device-toggle",
+	InputAttrs:templ.Attributes{"data-notification-mute":v.Selected.Id,"data-mute-engine":v.EngineID,"data-unsaved":v.Text.DevicePreferenceUnavailable},
+})
 @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
 }
 if v.RoomArchive != nil {

@@ -732,5 +732,14 @@
   "EditCheckStatus": "Check edit status",
   "EditRetry": "Retry this edit",
   "EditStorageUnavailable": "This edit could not be saved on this device.",
-  "CapabilitySendCorrectionsNote": "Only the latest own engine-origin sent plain text can be edited, in a known current session. Replies and structured mentions are not editable yet. The engine rechecks eligibility and the selected content revision."
+  "CapabilitySendCorrectionsNote": "Only the latest own engine-origin sent plain text can be edited, in a known current session. Replies and structured mentions are not editable yet. The engine rechecks eligibility and the selected content revision.",
+  "NotificationSettings": "Notifications",
+  "NotificationBanners": "Message notifications",
+  "NotificationSound": "Notification sound",
+  "NotificationPreview": "Preview sound",
+  "NotificationDenied": "Allow notifications in your browser or system settings.",
+  "NotificationUnavailable": "Notifications are unavailable here.",
+  "NotificationSoundUnavailable": "Audio playback is unavailable here.",
+  "NotificationNewMessage": "New message · Oiê",
+  "NotificationMute": "Mute notifications on this device"
 }

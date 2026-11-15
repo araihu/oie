@@ -763,6 +763,13 @@ Separate devices notify independently even if another device is active. Activity
 
 **RECOMMENDED R12:** notify on new incoming messages rather than replaying historical backfill, and treat old stream replays as recovery, not a fresh notification batch. Request browser permission through an intentional user action. Time-limited mute choices are proposed in section 14.
 
+**IMPLEMENTED:** message banners and the notification sound are independent, off
+by default, and configured under This device. Conversation details offer a mute
+for this browser profile or desktop WebView. The device mute applies to direct
+chats and rooms, including archived chats. Account DND and synchronized mutes
+remain part of the agreed scope. See [message notifications](notifications.md)
+for eligibility, replay handling and platform behavior.
+
 ## 11. Presentation, PWA, and internationalization
 
 ### 11.1 WhatsApp-like presentation

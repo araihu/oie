@@ -218,6 +218,11 @@ func TestLiveCancelConflictAndPasswordNeverEcho(t *testing.T) {
 func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 	seen := make(chan string, 1)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/engine" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": testEngine, "eventCursor": testEngine + ":1"})
+			return
+		}
 		seen <- r.Header.Get("Last-Event-ID")
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = io.WriteString(w, ": upstream\n\n")
@@ -246,7 +251,7 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 		t.Fatalf("reconnect cursor lost: %s", got)
 	}
 	data, err := io.ReadAll(response.Body)
-	if err != nil || !strings.Contains(string(data), "message.created") {
+	if err != nil || !strings.HasPrefix(string(data), ": connected\n\nevent: oie.live\ndata: \""+testEngine+":1\"\n\n") || !strings.Contains(string(data), "message.created") {
 		t.Fatalf("stream ended at normal timeout: %s %v", data, err)
 	}
 }

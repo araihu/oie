@@ -137,9 +137,21 @@ templ deviceSettings(v view) {
 		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
 	</div>
 	if !v.Preview && v.EngineID != "" {
+		@notificationSettings(v)
 		<section class="oie-settings-section oie-device-retention" aria-labelledby="device-retention-title">
 			<h2 id="device-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
 			@retentionRegion(v,"",retentionView{Loading:true})
 		</section>
 	}
+}
+
+
+templ notificationSettings(v view) {
+	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={v.Text.NotificationDenied} data-unavailable={v.Text.NotificationUnavailable} data-sound-unavailable={v.Text.NotificationSoundUnavailable} data-message-title={v.Text.NotificationNewMessage}>
+		<h2 id="notification-settings-title">{v.Text.NotificationSettings}</h2>
+		@toggle.Toggle(toggle.Config{ID:"notification-banners",Label:v.Text.NotificationBanners,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-banners":"","aria-describedby":"notification-status"}})
+		@toggle.Toggle(toggle.Config{ID:"notification-sound",Label:v.Text.NotificationSound,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound":"","aria-describedby":"notification-status"}})
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-notification-preview":"","disabled":true})) { {v.Text.NotificationPreview} }
+		<p id="notification-status" role="status"></p>
+	</section>
 }

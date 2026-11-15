@@ -17,13 +17,19 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	if cursor == "" {
 		cursor = r.URL.Query().Get("cursor")
 	}
+	// A reconnect still feeds replayed events to the UI, but only events
+	// after this snapshot can alert. The marker has no SSE ID of its own.
+	snapshot, snapshotErr := s.client.GetEngineWithResponse(r.Context())
+	liveCursor := ""
+	if snapshotErr == nil && snapshot.JSON200 != nil {
+		liveCursor = snapshot.JSON200.EventCursor
+	}
 	if cursor == "" {
-		snapshot, err := s.client.GetEngineWithResponse(r.Context())
-		if err != nil || snapshot.JSON200 == nil {
+		if liveCursor == "" {
 			w.WriteHeader(503)
 			return
 		}
-		cursor = snapshot.JSON200.EventCursor
+		cursor = liveCursor
 	}
 	response, err := s.streamClient.StreamEvents(r.Context(), &engineapi.StreamEventsParams{LastEventID: &cursor})
 	if err != nil {
@@ -53,7 +59,8 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	control := http.NewResponseController(w)
 	_ = control.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if _, err = fmt.Fprint(w, ": connected\n\n"); err != nil {
+	data, _ := json.Marshal(liveCursor)
+	if _, err = fmt.Fprintf(w, ": connected\n\nevent: oie.live\ndata: %s\n\n", data); err != nil {
 		return
 	}
 	if control.Flush() != nil {

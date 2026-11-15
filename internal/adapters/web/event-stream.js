@@ -11,8 +11,8 @@
   const inboxEvents = new Set(['account.registered', 'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated']);
   let source, engine = '', cursor = '', connected = false, replaced = false;
 
-  function emit(type, event) {
-    target.dispatchEvent(new CustomEvent(type, {detail: event}));
+  function emit(type, detail) {
+    target.dispatchEvent(new CustomEvent(type, {detail}));
   }
 
   function stop() {
@@ -24,7 +24,9 @@
   function connect() {
     const connection = new EventSource('/ui/events?cursor=' + encodeURIComponent(cursor));
     source = connection;
+    let liveAfter = null;
     connection.onopen = () => {
+      liveAfter = null;
       connected = true;
       emit('open');
     };
@@ -34,11 +36,27 @@
       if (connection.readyState === EventSource.CLOSED) stop();
       emit('error');
     };
+    function sequence(id) {
+      const prefix = engine + ':';
+      if (typeof id !== 'string' || !id.startsWith(prefix)) return null;
+      const value = id.slice(prefix.length);
+      return /^\d+$/.test(value) ? BigInt(value) : null;
+    }
+    connection.addEventListener('oie.live', event => {
+      try { liveAfter = sequence(JSON.parse(event.data)); }
+      catch { liveAfter = null; }
+    });
     for (const type of eventTypes) {
       connection.addEventListener(type, event => {
         if (event.lastEventId) cursor = event.lastEventId;
         if (inboxEvents.has(type)) window.OieInbox.invalidate();
         emit(type, event);
+        if (type === 'message.created' && liveAfter !== null) {
+          const current = sequence(event.lastEventId);
+          if (current !== null && current > liveAfter) {
+            emit('message.live', {engine, event});
+          }
+        }
       });
     }
     connection.addEventListener('oie.reset', event => {

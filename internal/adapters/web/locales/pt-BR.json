@@ -732,5 +732,14 @@
   "EditCheckStatus": "Verificar estado da edição",
   "EditRetry": "Tentar esta edição novamente",
   "EditStorageUnavailable": "Não foi possível salvar a edição neste dispositivo.",
-  "CapabilitySendCorrectionsNote": "Somente o último texto simples próprio enviado por este motor pode ser editado, em uma sessão atual conhecida. Respostas e menções estruturadas ainda não podem ser editadas. O motor verifica novamente a elegibilidade e a revisão escolhida."
+  "CapabilitySendCorrectionsNote": "Somente o último texto simples próprio enviado por este motor pode ser editado, em uma sessão atual conhecida. Respostas e menções estruturadas ainda não podem ser editadas. O motor verifica novamente a elegibilidade e a revisão escolhida.",
+  "NotificationSettings": "Notificações",
+  "NotificationBanners": "Notificações de mensagens",
+  "NotificationSound": "Som de notificação",
+  "NotificationPreview": "Ouvir som",
+  "NotificationDenied": "Permita notificações nas configurações do navegador ou do sistema.",
+  "NotificationUnavailable": "As notificações estão indisponíveis aqui.",
+  "NotificationSoundUnavailable": "A reprodução de som está indisponível aqui.",
+  "NotificationNewMessage": "Nova mensagem · Oiê",
+  "NotificationMute": "Silenciar notificações neste dispositivo"
 }

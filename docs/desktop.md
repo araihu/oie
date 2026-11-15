@@ -129,6 +129,11 @@ reopen and another invocation for the same profile show the existing window.
 Quit from the menu or `Cmd/Ctrl+Q` stops the engine and closes SQLite. A second
 invocation for the same canonical data directory does not start another engine.
 
+[Message notifications](notifications.md) use Wails to deliver banners through
+the system notification center. Linux needs a session notification daemon.
+On macOS, the notification API requires the bundled app. The browser and desktop
+share the bundled notification sound and the conversation focus and mute rules.
+
 Linux WebKit storage resides inside the profile's `webview` directory. Wails'
 public macOS API currently uses the default WKWebsiteDataStore. Engine IDs scope
 Oiê's drafts/cache, but separate custom profiles on macOS do not yet have fully

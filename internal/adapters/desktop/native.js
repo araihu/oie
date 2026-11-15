@@ -7,6 +7,10 @@
       'github.com/araihu/oie/internal/adapters/desktop.runtimeService.AttachFiles',
       engineID, conversationID, csrf, remaining, imagesOnly
     ) : undefined,
+    notifications: Object.freeze({
+      request: () => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.RequestNotifications'),
+      send: (...args) => runtime.Call.ByName('github.com/araihu/oie/internal/adapters/desktop.runtimeService.NotifyMessage', ...args)
+    }),
     saveFile: (address, name) => {
       const url = new URL(address, location.href);
       if (url.origin !== location.origin) return Promise.reject(new Error('invalid_download'));
@@ -16,6 +20,7 @@
       );
     }
   });
+  window.dispatchEvent(new Event('oie:desktop-ready'));
   const save = (url, name) => window.OieDesktop.saveFile(url.href, name)
     .catch(() => window.dispatchEvent(new CustomEvent('notify', {
       detail: {kind: 'toast', tone: 'danger', message: saveFailed}

@@ -38,6 +38,7 @@ type runtimeService struct {
 	cookies  *nativeCookies
 	labels   labels
 	dialogMu sync.Mutex
+	alerts   desktopNotifications
 }
 
 // An explicit launch argument overrides the saved desktop preference.
@@ -96,6 +97,7 @@ func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.Servi
 	return nil
 }
 func (s *runtimeService) ServiceShutdown() error {
+	s.alerts.close()
 	if server := s.server.Load(); server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -199,6 +201,13 @@ func Run(ctx context.Context, c Config) error {
 	windowMu.Lock()
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{Name: "oie-main", Title: "Oiê", Width: 1200, Height: 820, MinWidth: 360, MinHeight: 500, URL: "/", JS: initialJS, ZoomControlEnabled: true, UseApplicationMenu: true})
 	windowMu.Unlock()
+	service.alerts.open = func(ids []string) {
+		args, err := json.Marshal(ids)
+		if err == nil {
+			reopen()
+			window.ExecJS("window.OieNotifications?.open(..." + string(args) + ")")
+		}
+	}
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		if app.Context().Err() == nil {
 			window.Hide()

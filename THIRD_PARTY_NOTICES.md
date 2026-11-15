@@ -90,6 +90,15 @@ including the Goshtoso v0.6.2 icons from Assets v0.2.6. See
 `internal/adapters/web/brand/NOTICE-ARAIHU.txt` for the upstream grant and
 trademark terms. The Noto attribution and upstream license are retained.
 
+## Notification sound
+
+`internal/adapters/web/notification.wav` uses two edited samples performed by
+Andrew Thierauf from the University of Iowa Electronic Music Studios collection.
+The source recordings are the [`8.5wb.pp` woodblock](https://theremin.music.uiowa.edu/MIShandpercussion.html)
+and [`Marimba.deadstroke.pp.C6B6.aif`](https://theremin.music.uiowa.edu/Mismarimba.html).
+The university makes the recordings available for use in any project without
+restrictions. See the [collection's terms](https://theremin.music.uiowa.edu/mis.html).
+
 ## OCI image certificates
 
 The server image ships the CA bundle from Debian's `ca-certificates`

@@ -53,7 +53,9 @@ proxies the canonical structured SSE using a separate generated raw client with
 no total timeout. It forwards Last-Event-ID on reconnect; upstream headers,
 downstream writes and cancellation are bounded. A foreign/reset cursor triggers
 a fresh snapshot/reset notice. A changed engine identity blocks further writes
-until the user reloads and reviews it.
+until the user reloads and reviews it. The BFF also emits a live cursor when the
+connection starts so notifications can skip replayed messages while the inbox
+and timeline still consume them. See [message notifications](notifications.md).
 
 A small browser coordinator coalesces events and fetches BFF-owned HTML from
 `/ui/refresh`. It does not poll/replace whole documents or the composer. A bounded
@@ -87,7 +89,7 @@ is styled.
 
 This is direct text integration, not completion of the full alpha. Media stays
 disabled; rooms, history backfill/older-page UI, rich Markdown, read/recipient
-receipts, typing, message editing/schedules, notifications, PWA/offline caches,
+receipts, typing, message editing/schedules, PWA/offline caches,
 full sync, and cross-tab draft conflict resolution remain separate work. The UI
 shows received/queued/dispatching/submitted/unknown/failed/cancelled evidence as
 provided. Submitted means written to the XMPP connection; it does not assert

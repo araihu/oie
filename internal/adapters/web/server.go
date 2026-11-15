@@ -634,6 +634,10 @@ type copy struct {
 	DevicePreferences, AutoImageDownloads, AutoImageDownloadsHelp, DevicePreferenceUnavailable                                                                           string
 	About, BackToSettings, License, Attributions, LogoAttribution, EmojiData                                                                                             string
 	ValidationFailed, Edit, Done                                                                                                                                         string
+
+	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview string
+	NotificationDenied, NotificationUnavailable, NotificationSoundUnavailable         string
+	NotificationNewMessage, NotificationMute                                          string
 }
 
 func loadCatalogs() (map[string]copy, error) {
@@ -704,6 +708,15 @@ var videosStylesheet []byte
 
 //go:embed live.js
 var liveScript []byte
+
+//go:embed notifications.js
+var notificationScript []byte
+
+//go:embed notification.wav
+var notificationSound []byte
+
+//go:embed notification-worker.js
+var notificationWorkerScript []byte
 
 //go:embed event-stream.js
 var eventStreamScript []byte
@@ -833,6 +846,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
 		"/ui/inbox-cache.js":       {"text/javascript", inboxCacheScript},
 		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+
+		"/ui/notifications.js":       {"text/javascript", notificationScript},
+		"/ui/notification-worker.js": {"text/javascript", notificationWorkerScript},
+		"/ui/notification.wav":       {"audio/wav", notificationSound},
+
 		"/ui/room-management.js": {"text/javascript", roomManagementScript},
 		"/ui/room-entry.js":      {"text/javascript", roomEntryScript},
 		appicons.SpriteURL:       {"image/svg+xml", appIconSprite},

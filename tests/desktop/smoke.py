@@ -439,6 +439,13 @@ def main():
                 events = app.js("return await new Promise(resolve=>{const e=new EventSource('/ui/events'),timer=setTimeout(()=>{e.close();resolve(false)},6000);e.addEventListener('desktop.smoke',()=>{clearTimeout(timer);e.close();resolve(true)})});", 9000)
                 require(events and Fixture.range_reads > 0 and Fixture.stream_reads > 0, "native EventSource/Range fixture not reached")
                 findings.append("HTMX keeps the document; native EventSource, byte ranges, original download bytes and disposition pass")
+                sound = app.js("""const response=await fetch('/ui/notification.wav');const context=new AudioContext();
+                    try { const clip=await context.decodeAudioData(await response.arrayBuffer());
+                          return {type:response.headers.get('Content-Type'),seconds:clip.duration,channels:clip.numberOfChannels}; }
+                    finally { await context.close(); }""")
+                require(sound["type"] == "audio/wav" and abs(sound["seconds"] - 0.3) < 0.045 and sound["channels"] == 1,
+                        "native WebView notification sound: " + str(sound))
+                findings.append("native WebView decodes the bundled notification sound")
                 if sys.platform == "linux":
                     linux_save_dialog(app, root / "saved-native-fixture.txt")
                     linux_save_dialog(app, root / "cancelled-native-fixture.txt", cancel=True)

@@ -29,6 +29,7 @@
       // survives navigation and runs before a new tab can reopen this database.
       window.indexedDB?.deleteDatabase('oie.pdf-previews.v1');
       window.indexedDB?.deleteDatabase('oie.video-previews.v1');
+      window.indexedDB?.deleteDatabase('oie-notifications');
     } catch {}
     let destination = '/';
     if (confirmed) {
