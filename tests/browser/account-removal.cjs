@@ -68,12 +68,25 @@ const {chromium} = require('playwright');
       const cancel = form.getByRole('link');
       let posts = 0;
       page.on('request', request => { if (request.url().endsWith('/ui/accounts/remove')) posts++; });
+      const waitForDangerBackground = selector => page.waitForFunction(selector => {
+        const control = document.querySelector(selector);
+        if (!control) return false;
+        const theme = document.documentElement.classList.contains('dark') ? '-dark' : '';
+        // A link can still be transitioning when a drawer fragment first renders.
+        const sample = document.createElement('span');
+        sample.hidden = true;
+        sample.style.backgroundColor = `var(--color-danger-action${theme})`;
+        control.append(sample);
+        const expected = getComputedStyle(sample).backgroundColor;
+        sample.remove();
+        return expected !== 'rgba(0, 0, 0, 0)' && getComputedStyle(control).backgroundColor === expected;
+      }, selector);
       const open = async () => {
         await link.focus();
-        const danger = await link.evaluate(node => getComputedStyle(node).backgroundColor);
+        await waitForDangerBackground('.oie-account-detail-footer [data-account-remove]');
         await page.keyboard.press('Enter');
         await title.waitFor();
-        assert.equal(danger, await confirm.evaluate(node => getComputedStyle(node).backgroundColor));
+        await waitForDangerBackground('#remove-account-form button[type=submit]');
         await page.waitForFunction(() => document.activeElement?.matches('[data-account-remove-title]'));
         assert.equal(await title.textContent(), locale === 'en' ? 'Remove account' : 'Remover conta');
         assert((await page.locator('.oie-account-intro').textContent()).includes(address));
