@@ -656,6 +656,7 @@ type copy struct {
 	DiagnosticsLoading, DiagnosticsEmpty, DiagnosticsUnavailable, DiagnosticsEnterKey      string
 	DiagnosticsKey, DiagnosticsTruncated, DiagnosticsCopyFailed, DiagnosticsDownloadFailed string
 	DiagnosticsSource, DiagnosticsDevice, DiagnosticsServer, DiagnosticsUnlock             string
+	DiagnosticsDebug, DiagnosticsInfo, DiagnosticsWarning, DiagnosticsError                string
 
 	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview                string
 	NotificationTone, NotificationToneChoose, NotificationToneReset                                  string

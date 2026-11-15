@@ -791,5 +791,9 @@
   "DiagnosticsSource": "Log source",
   "DiagnosticsDevice": "This device",
   "DiagnosticsServer": "Server",
-  "DiagnosticsUnlock": "Unlock"
+  "DiagnosticsUnlock": "Unlock",
+  "DiagnosticsDebug": "Debug",
+  "DiagnosticsInfo": "Info",
+  "DiagnosticsWarning": "Warning",
+  "DiagnosticsError": "Error"
 }

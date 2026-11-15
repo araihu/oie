@@ -427,11 +427,15 @@ def main():
                 require(result["status"] == 200 and result["body"]["ok"], "embedded account registration: " + str(result))
                 app.js("""window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'diagnostics'}}));return true;""")
                 app.wait(lambda: app.js("""return !!window.OieDesktop?.copyDiagnostics &&
-                    document.querySelector('[data-diagnostics-records]')?.textContent.includes('"event":"ready"');"""),
+                    [...document.querySelectorAll('[data-diagnostics-event]')].some(node => node.textContent === 'ready');"""),
                     "embedded diagnostics")
-                snapshot = app.js("return document.querySelector('[data-diagnostics-records]').textContent;")
-                require("offline@example.test" not in snapshot and "Native offline fixture" not in snapshot,
-                        "diagnostics contained account data")
+                snapshot = app.js("""const res = await fetch('/ui/diagnostics/log?hours=24', {headers: {'X-Oie-Diagnostics': '1'}});
+                    if (!res.ok) throw new Error('Unable to read diagnostics');
+                    return await res.text();""")
+                rendered = app.js("return document.querySelector('[data-diagnostics-records]').textContent;")
+                for surface in [snapshot, rendered]:
+                    require("offline@example.test" not in surface and "Native offline fixture" not in surface,
+                            "diagnostics contained account data")
                 app.js("document.querySelector('#diagnostics-copy').click();return true;")
                 app.wait(lambda: app.js("""const runtime=await import('/wails/runtime.js');return await runtime.Clipboard.Text();""") == snapshot,
                          "diagnostics native clipboard")

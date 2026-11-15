@@ -14,6 +14,10 @@ export function open() {
   const refresh = find('refresh'), exportControls = find('export');
   const copy = exportControls.querySelector('#diagnostics-copy');
   const download = exportControls.querySelector('#diagnostics-download');
+  const rowTemplate = find('row');
+  const levels = new Map(Array.from(panel.querySelectorAll('[data-diagnostics-level]'),
+    template => [template.dataset.diagnosticsLevel, template]));
+  const details = new WeakMap();
   let request, key = '', snapshot = '';
   active = { panel, close: () => {
     controls.abort();
@@ -24,8 +28,21 @@ export function open() {
   } };
 
   function display(text) {
+    const rows = document.createDocumentFragment();
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      const entry = JSON.parse(line);
+      const row = rowTemplate.content.firstElementChild.cloneNode(true);
+      row.querySelector('[data-diagnostics-event]').textContent = entry.event;
+      row.querySelector('[data-diagnostics-component]').textContent = entry.component;
+      row.querySelector('time').dateTime = entry.time;
+      row.querySelector('[data-diagnostics-severity]').append(levels.get(entry.level).content.cloneNode(true));
+      details.set(row, entry);
+      rows.append(row);
+    }
+    if (text) window.OieTime.localize(rows);
     snapshot = text;
-    records.textContent = text;
+    records.replaceChildren(rows);
     records.scrollTop = 0;
     exportControls.disabled = !text;
   }
@@ -66,6 +83,14 @@ export function open() {
   }
 
   const on = (node, name, fn) => node?.addEventListener(name, fn, { signal: controls.signal });
+  records.addEventListener('toggle', ({ target }) => {
+    const entry = details.get(target);
+    if (!target.open || !entry) return;
+    const raw = target.querySelector('pre');
+    raw.textContent = JSON.stringify(entry, null, 2);
+    raw.hidden = false;
+    details.delete(target);
+  }, { capture: true, signal: controls.signal });
   on(refresh, 'click', load);
   on(hours, 'change', load);
   on(source, 'change', () => {

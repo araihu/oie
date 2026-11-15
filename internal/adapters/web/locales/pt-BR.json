@@ -791,5 +791,9 @@
   "DiagnosticsSource": "Origem do registro",
   "DiagnosticsDevice": "Este dispositivo",
   "DiagnosticsServer": "Servidor",
-  "DiagnosticsUnlock": "Acessar"
+  "DiagnosticsUnlock": "Acessar",
+  "DiagnosticsDebug": "Depuração",
+  "DiagnosticsInfo": "Info",
+  "DiagnosticsWarning": "Aviso",
+  "DiagnosticsError": "Erro"
 }

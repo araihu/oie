@@ -1,6 +1,7 @@
 package web
 
 import (
+	"github.com/araihu/goshtoso/components/badge"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
@@ -55,7 +56,8 @@ templ diagnosticsSettings(v view) {
 			</div>
 			<p role="status" class="oie-diagnostics-status" data-diagnostics-status></p>
 			<div class="oie-diagnostics-content">
-				<pre data-diagnostics-records tabindex="0" aria-label={ v.Text.Diagnostics }></pre>
+				<div class="oie-diagnostics-records" data-diagnostics-records role="region" tabindex="0" aria-label={ v.Text.Diagnostics }></div>
+				@diagnosticsRecordTemplates(v)
 				<form class="oie-diagnostics-access" method="post" data-diagnostics-access hidden>
 					@textinput.TextInput(textinput.Config{
 						ID: "diagnostics-key", Label: v.Text.DiagnosticsKey, Type: textinput.TypePassword,
@@ -69,4 +71,33 @@ templ diagnosticsSettings(v view) {
 			</div>
 		</section>
 	}
+}
+
+templ diagnosticsRecordTemplates(v view) {
+	<template data-diagnostics-row>
+		<details class="oie-diagnostics-entry">
+			<summary>
+				<span class="oie-diagnostics-chevron">@glyph(heroicons.Icon16SolidChevronRight)</span>
+				<span class="oie-diagnostics-entry-text">
+					<code data-diagnostics-event></code>
+					<span class="oie-diagnostics-entry-meta">
+						<time data-diagnostics-date></time>
+						<span data-diagnostics-component></span>
+					</span>
+				</span>
+				<span data-diagnostics-severity></span>
+			</summary>
+			<pre hidden></pre>
+		</details>
+	</template>
+	@diagnosticsLevel("debug", v.Text.DiagnosticsDebug, badge.ToneSecondary)
+	@diagnosticsLevel("info", v.Text.DiagnosticsInfo, badge.ToneInfo)
+	@diagnosticsLevel("warn", v.Text.DiagnosticsWarning, badge.ToneWarning)
+	@diagnosticsLevel("error", v.Text.DiagnosticsError, badge.ToneDanger)
+}
+
+templ diagnosticsLevel(level, label string, tone badge.Tone) {
+	<template data-diagnostics-level={ level }>
+		@badge.Badge(badge.Config{Label: label, Tone: tone, Appearance: badge.AppearanceSoft, Size: badge.SizeMD})
+	</template>
 }

@@ -68,10 +68,12 @@ async function run(browser, mode) {
     const settings = page.getByRole('dialog', { name: pt ? 'Configurações' : 'Settings', exact: true });
     await settings.waitFor();
     assert.equal(requests, 0, 'opening Settings must not read the diagnostics file');
+    const readSnapshot = page.waitForResponse(response => response.url().includes(logPath) && response.ok());
     const started = Date.now();
     await settings.getByRole('button', { name: pt ? 'Diagnóstico' : 'Diagnostics', exact: true }).click();
     const viewer = page.getByRole('dialog', { name: pt ? 'Diagnóstico' : 'Diagnostics', exact: true });
     const records = viewer.locator('[data-diagnostics-records]');
+    const readyEntry = records.getByText('ready', { exact: true });
     const menuLabel = pt ? 'Mais opções' : 'More options';
     const actions = viewer.getByRole('group', { name: menuLabel, exact: true });
     const copy = actions.getByRole('button', { name: pt ? 'Copiar' : 'Copy', exact: true });
@@ -93,12 +95,32 @@ async function run(browser, mode) {
       await input.fill(key);
       await input.press('Enter');
     }
-    await page.waitForFunction(() => document.querySelector('[data-diagnostics-records]').textContent.includes('"event":"ready"'));
+    await readyEntry.waitFor();
     const firstReady = Date.now() - started;
-    const snapshot = await records.textContent();
+    const loadTiming = await page.evaluate(path => {
+      const read = performance.getEntriesByType('resource').find(entry => new URL(entry.name).pathname === path && entry.responseStatus === 200);
+      return read && { transfer: Math.round(read.duration), afterResponse: Math.round(performance.now() - read.responseEnd) };
+    }, logPath);
+    const snapshot = await (await readSnapshot).text();
+    const rendered = await records.textContent();
     assert(!snapshot.includes(key));
     assert(!snapshot.includes('browser-private'));
+    assert(!rendered.includes(key));
+    assert(!rendered.includes('browser-private'));
     assert.equal(snapshot.split('\n').filter(line => line.includes('upstream_http_error')).length, 300);
+    const warning = records.locator('details').filter({ hasText: 'upstream_http_error' }).first();
+    assert.equal(await records.getByText('upstream_http_error', { exact: true }).count(), 300);
+    assert.equal(await warning.getByText(pt ? 'Aviso' : 'Warning', { exact: true }).count(), 1);
+    assert(await warning.locator('time').textContent());
+    const fields = warning.locator('pre');
+    assert.equal(await fields.textContent(), '');
+    await warning.locator('summary').press('Enter');
+    await fields.waitFor();
+    const firstWarning = snapshot.trim().split('\n').map(line => JSON.parse(line))
+      .find(entry => entry.event === 'upstream_http_error');
+    assert.deepEqual(JSON.parse(await fields.textContent()), firstWarning);
+    await warning.locator('summary').press('Enter');
+    await fields.waitFor({ state: 'hidden' });
     assert(await records.evaluate(node => node.scrollHeight > node.clientHeight));
     assert(snapshot.length <= 256000);
     assert(snapshot.endsWith('\n'));
@@ -122,7 +144,7 @@ async function run(browser, mode) {
     });
 
     if (pt) {
-      console.log(`local first open to usable log ${firstReady} ms, ${Buffer.byteLength(snapshot)} bytes`);
+      console.log(`local first open to usable log ${firstReady} ms, ${Buffer.byteLength(snapshot)} bytes, ${JSON.stringify(loadTiming)}`);
       const firstRect = await records.boundingBox();
       const copyRect = await copy.boundingBox();
       const range = viewer.getByRole('combobox', { name: 'Período', exact: true });
@@ -172,7 +194,7 @@ async function run(browser, mode) {
       assert(await more.isDisabled());
       await page.unroute('**' + logPath + '?*', intercept);
       await refresh.click();
-      await page.waitForFunction(() => document.querySelector('[data-diagnostics-records]').textContent.includes('"event":"ready"'));
+      await readyEntry.waitFor();
       assert.equal(await viewer.locator('[data-diagnostics-hours]').inputValue(), '168');
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     }
