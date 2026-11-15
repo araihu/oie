@@ -237,9 +237,10 @@ and publishes an account event when the label changes.
 | Save a valid name or repeat an accepted value | Refresh the label in open views. Reuse the current revision for the same name. |
 
 The account details let a connected XMPP account change its profile photo. The form
-accepts one PNG, JPEG, or GIF up to 512 KiB and keeps the selected file available
-after a failed submission. The published image is a static PNG with a maximum
-edge of 64 pixels. Servers must support XMPP User Avatar
+accepts one PNG, JPEG, or GIF up to 512 KiB. It previews the selected image in
+the editor before sending it and keeps that selection after a failed submission.
+The published image is a static PNG with a maximum edge of 64 pixels. Servers
+must support XMPP User Avatar
 ([XEP-0084](https://xmpp.org/extensions/xep-0084.html)) publication. The backend
 publishes the data before the metadata and updates the local photo only after
 confirmation. If metadata publication is refused after a server evicts the old

@@ -372,6 +372,27 @@ window.OieRuntime.register('live', life => {
     if (error && !region) errorToast(message);
     else announce(message);
   }
+  life.on(document, 'change', async event => {
+    const input = event.target;
+    if (input.id !== 'account-photo-image') return;
+    const preview = input.form.querySelector('[data-account-photo-preview]');
+    preview.hidden = true;
+    preview.removeAttribute('src');
+    const file = input.files[0];
+    if (!file?.size || file.size > Number(preview.dataset.maxBytes) ||
+        (file.type && !input.accept.split(',').includes(file.type))) return;
+
+    const source = URL.createObjectURL(file);
+    preview.src = source;
+    try {
+      await preview.decode();
+      if (preview.getAttribute('src') === source) preview.hidden = false;
+    } catch {
+      // Leave the current photo visible when the selected file cannot be decoded.
+    } finally {
+      URL.revokeObjectURL(source);
+    }
+  });
   life.on(document, 'close', event => {
     if (!(event.target instanceof HTMLDialogElement)) return;
     const form = event.target.querySelector('form[data-oie-action="account-label"],form[data-oie-action="account-avatar"]');

@@ -535,6 +535,7 @@
   "AccountProfile": "Profile",
   "AccountProfileName": "Name",
   "AccountAvatarEdit": "Edit photo",
+  "AccountAvatarPreview": "Photo preview",
   "AccountRename": "Edit name",
   "AccountRenameSave": "Save name",
   "AccountRenameSaved": "Account name saved.",

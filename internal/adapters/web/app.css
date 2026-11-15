@@ -298,6 +298,10 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-account-editor-feedback{min-height:3em}
 .oie-account-photo-fields{display:grid;gap:14px;min-width:0;border:0;padding:0;margin:0}
 .oie-account-photo-fields>div{min-width:0;width:100%}
+.oie-account-photo-fields>.oie-account-photo-preview{display:grid;justify-self:center;place-items:center;inline-size:96px;block-size:96px}
+.oie-account-photo-preview>*{grid-area:1/1}
+.oie-account-photo-preview>img{border-radius:50%;object-fit:cover}
+.oie-account-photo-preview:has(>img:not([hidden]))>[data-avatar-account]{visibility:hidden}
 .oie-account-connection{padding:12px 14px;margin-bottom:24px;border-radius:9px;background:var(--oie-raised);font-size:13px;line-height:1.5}
 .oie-account-workspace form{display:flex;flex-direction:column;gap:18px}
 .oie-account-advanced{font-size:13px;margin:0}

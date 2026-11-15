@@ -124,7 +124,7 @@ function thumbnail(color){
   set(account,'bob@fixture',hashes[1]);emit();await until(async()=>await page.locator(peer).evaluate(img=>img.naturalWidth===8&&getComputedStyle(img).display!=='none'),'photo recovery');
   state.connection='not_connected';await page.keyboard.press('Escape');await page.locator('[data-account-switcher]:visible').click();await page.locator('[data-open-accounts]:visible').click();await page.locator(`[data-manage-account="${account}"]`).click();
   const password=page.locator('[data-connect-account] input[name=password]');await password.fill('unsent-form-value');await password.focus();set(account,'alice@fixture',hashes[1]);emit();
-  await until(async()=>await page.locator(`.oie-account-detail ${own} img`).getAttribute('src')==='/ui/avatars/'+hashes[1],'account-detail photo');assert.equal(await password.inputValue(),'unsent-form-value');assert(await password.evaluate(el=>document.activeElement===el));
+  await until(async()=>await page.locator(`.oie-account-detail-heading ${own} img`).getAttribute('src')==='/ui/avatars/'+hashes[1],'account-detail photo');assert.equal(await password.inputValue(),'unsent-form-value');assert(await password.evaluate(el=>document.activeElement===el));
   findings.push('Account-detail photo updates preserve the focused connection form');
   assert(await page.locator('#account-photo-image').isDisabled());
   assert(await page.locator('[data-edit-account-photo]').isDisabled());
@@ -140,25 +140,35 @@ function thumbnail(color){
    const form=page.locator('#account-photo-form'),file=form.locator('input[type=file]');
    const save=form.getByRole('button',{name:lang==='pt-BR'?'Salvar foto':'Save photo'});
    const upload={name:'avatar.png',mimeType:'image/png',buffer:images[0]};
-   const accountPhoto=page.locator(`.oie-account-detail ${own} img`);
+   const accountPhoto=page.locator(`.oie-account-detail-heading ${own} img`);
+   const preview=form.locator('[data-account-photo-preview]');
    const toast=page.locator('[data-toast-container]');
    assert(await editor.isHidden());
    await edit.click();
    await save.waitFor({state:'visible'});
    await until(async()=>await accountPhoto.getAttribute('src')==='/ui/avatars/'+hashes[1],'initial account photo');
-   await file.setInputFiles(upload);
+   assert(await preview.isHidden());
    const before=state.uploads.length;
+   await file.setInputFiles(upload);
+   await preview.waitFor({state:'visible'});
+   assert.equal(await preview.evaluate(img=>img.naturalWidth),8);
+   assert.match(await preview.getAttribute('src'),/^blob:/);
+   assert.equal(await accountPhoto.getAttribute('src'),'/ui/avatars/'+hashes[1]);
+   assert.equal(state.uploads.length,before,'preview does not submit the photo');
    await page.keyboard.press('Escape');
    await editor.waitFor({state:'hidden'});
    await edit.click();
    assert.equal(await file.inputValue(),'','closing the editor discards the unsaved selection');
+   assert(await preview.isHidden());
+   assert.equal(await preview.getAttribute('src'),null);
    assert.equal(state.uploads.length,before);
 
    await file.setInputFiles(upload);
+   await preview.waitFor({state:'visible'});
    await save.focus();
    await page.waitForFunction(()=>document.querySelector('.oie-account-drawer').getBoundingClientRect().right<=innerWidth+1);
    const startSampling=()=>page.evaluate(()=>{
-    const selectors=['.oie-account-detail-heading','#message-timeline','#send-message-form','#account-photo-form','#account-photo-image','#account-photo-form button'];
+    const selectors=['.oie-account-detail-heading','#message-timeline','#send-message-form','#account-photo-form','.oie-account-photo-preview','#account-photo-image','#account-photo-form button'];
     const geometry=()=>selectors.flatMap(selector=>{
      const el=document.querySelector(selector);
      if(!el||el.closest('dialog:not([open])'))return [];
@@ -191,6 +201,7 @@ function thumbnail(color){
    assert.equal(state.uploads.length,before+1);
    assert(await save.evaluate(el=>document.activeElement===el));
    assert.match(await file.inputValue(),/avatar\.png$/);
+   assert(await preview.isVisible(),'the selected photo stays visible after a failed save');
    assert.equal(await accountPhoto.getAttribute('src'),'/ui/avatars/'+hashes[1]);
 
    state.photoStatus=204;

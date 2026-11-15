@@ -747,6 +747,10 @@ templ accountPhotoForm(v view,a engineapi.Account){
 <input type="hidden" name="formTarget" value={ "account-avatar-"+a.Id }/>
 <input type="hidden" name="lang" value={v.Locale}/>
 <fieldset class="oie-account-photo-fields" data-account-photo-fields disabled?={connectionState(v,a.Id)!="connected"}>
+<div class="oie-account-photo-preview">
+ @profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeXL})
+ <img data-account-photo-preview data-max-bytes={strconv.Itoa(maxAvatarUpload)} alt={v.Text.AccountAvatarPreview} width="96" height="96" hidden/>
+</div>
 @fileinput.FileInput(fileinput.Config{ID:"account-photo-image",Name:"image",Label:v.Text.AccountAvatarLabel,Appearance:fileinput.AppearanceUpload,Accept:"image/png,image/jpeg,image/gif",HelperText:v.Text.RoomAvatarHint,Required:true})
 @button.Button(button.WithType("submit")){ {v.Text.AccountAvatarSave} }
 </fieldset>
