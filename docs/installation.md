@@ -1,5 +1,7 @@
 # Install Oiê
 
+[Open and share diagnostic logs](diagnostics.md) for desktop, Docker, or Helm.
+
 ## Run with Docker
 
 The [GHCR package](https://github.com/araihu/oie/pkgs/container/oie) runs the

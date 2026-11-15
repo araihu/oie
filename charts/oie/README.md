@@ -19,6 +19,8 @@ Chart releases use their own version. Chart `0.2.2` defaults to the Oiê image
 | `persistence.storageClass` | Cluster default | Set a class name or use `""` for a volume without a storage class. |
 | `persistence.accessMode` | `ReadWriteOnce` | Use `ReadWriteOncePod` if your cluster and CSI driver support it. |
 | `persistence.size` | `10Gi` | Set the capacity requested for a new claim. Expansion depends on the StorageClass. |
+| `diagnostics.existingSecret` | Empty | Enable the in-app Diagnostics viewer with an existing Secret in the release namespace. |
+| `diagnostics.secretKey` | `key` | Name of the Secret entry containing the diagnostics access key. |
 | `resources` | `{}` | Set CPU and memory requests or limits for the pod. |
 
 The pod runs as UID and GID `65532`. The storage driver or volume
@@ -84,6 +86,13 @@ of an individual request from the Gateway to Oiê. Use Gateway API duration
 strings such as `"30s"`, Gateway API CRDs from v1.2.0 or later, and a
 controller that supports the fields you set.
 See [HTTPRoute timeouts](https://gateway-api.sigs.k8s.io/reference/api-types/httproute/#timeouts-optional).
+
+## Diagnostics
+
+Configure an existing Secret with a random diagnostics key before enabling
+the hosted viewer. The viewer asks for that key. Operators can also retrieve
+records with `kubectl logs -n oie statefulset/oie`. The pod retains its
+bounded log files under `/data/diagnostics/` using the configured persistence.
 
 ## Publishing a chart version
 

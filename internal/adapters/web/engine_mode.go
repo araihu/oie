@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -31,6 +30,18 @@ func WithEngineMode(selection, url string, save func(context.Context, string) er
 	return func(s *Server) {
 		s.engineMode = &engineMode{selection: selection, url: url, save: save}
 	}
+}
+
+// WithUnavailableEngine leaves the presentation reachable when an embedded
+// engine could not start. It avoids sending any requests to a placeholder URL.
+func WithUnavailableEngine() Option {
+	return func(s *Server) { s.engineUnavailable = true }
+}
+
+type unavailableEngineTransport struct{}
+
+func (unavailableEngineTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errEngineUnavailable
 }
 
 func validEngineURL(address string) bool {
@@ -88,8 +99,8 @@ func (s *Server) setEngineMode(w http.ResponseWriter, r *http.Request) {
 	}
 	var address string
 	switch bffapi.SetDesktopEngineModeFormdataBodyMode(r.PostForm.Get("mode")) {
-	case bffapi.Local:
-	case bffapi.Remote:
+	case bffapi.SetDesktopEngineModeFormdataBodyModeLocal:
+	case bffapi.SetDesktopEngineModeFormdataBodyModeRemote:
 		address = strings.TrimSpace(r.PostForm.Get("url"))
 		if len(address) > 2048 || !validEngineURL(address) {
 			http.Error(w, text.EngineModeInvalid, http.StatusBadRequest)
@@ -107,7 +118,6 @@ func (s *Server) setEngineMode(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, ErrEngineModeChanged):
 		http.Error(w, text.EngineModeChanged, http.StatusConflict)
 	case errors.Is(err, ErrEngineModeSave):
-		slog.Error("save desktop engine mode", "error", err)
 		http.Error(w, text.EngineModeSaveFailed, http.StatusInternalServerError)
 	case err != nil:
 		http.Error(w, text.EngineModeUnavailable, http.StatusServiceUnavailable)

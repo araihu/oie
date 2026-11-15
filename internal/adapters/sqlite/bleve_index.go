@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/search"
 	"github.com/blevesearch/bleve/v2"
 )
@@ -73,7 +73,7 @@ func (i *messageIndex) run(ctx context.Context) {
 			return
 		}
 		if err != nil {
-			slog.Warn("experimental message index unavailable", "error", err)
+			i.store.diagnostics.Record(diagnostics.IndexUnavailable, 0, 0)
 		}
 		waitSearchWorker(ctx, time.Second)
 	}

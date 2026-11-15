@@ -3,11 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"math"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/blevesearch/bleve/v2/search/query"
 )
 
@@ -40,7 +40,7 @@ func (i *messageIndex) selectRows(ctx context.Context, _ *sql.Tx, q *dbgen.Queri
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		slog.Warn("experimental message index verification failed; using SQL", "error", err)
+		i.store.diagnostics.Record(diagnostics.IndexUnavailable, 0, 0)
 		return searchChronological(ctx, q, p)
 	}
 	rows := make([]dbgen.SearchMessagesRow, len(verified))

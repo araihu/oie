@@ -204,18 +204,72 @@ func (e RemoveBrowserAccountFormdataBodyConfirmation) Valid() bool {
 	}
 }
 
+// Defines values for ReadDiagnosticsLogParamsHours.
+const (
+	ReadDiagnosticsLogParamsHoursN1   ReadDiagnosticsLogParamsHours = 1
+	ReadDiagnosticsLogParamsHoursN168 ReadDiagnosticsLogParamsHours = 168
+	ReadDiagnosticsLogParamsHoursN24  ReadDiagnosticsLogParamsHours = 24
+)
+
+// Valid indicates whether the value is a known member of the ReadDiagnosticsLogParamsHours enum.
+func (e ReadDiagnosticsLogParamsHours) Valid() bool {
+	switch e {
+	case ReadDiagnosticsLogParamsHoursN1:
+		return true
+	case ReadDiagnosticsLogParamsHoursN168:
+		return true
+	case ReadDiagnosticsLogParamsHoursN24:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReadDiagnosticsLogParamsSource.
+const (
+	ReadDiagnosticsLogParamsSourceLocal  ReadDiagnosticsLogParamsSource = "local"
+	ReadDiagnosticsLogParamsSourceServer ReadDiagnosticsLogParamsSource = "server"
+)
+
+// Valid indicates whether the value is a known member of the ReadDiagnosticsLogParamsSource enum.
+func (e ReadDiagnosticsLogParamsSource) Valid() bool {
+	switch e {
+	case ReadDiagnosticsLogParamsSourceLocal:
+		return true
+	case ReadDiagnosticsLogParamsSourceServer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReadDiagnosticsLogParamsXOieDiagnostics.
+const (
+	ReadDiagnosticsLogParamsXOieDiagnosticsN1 ReadDiagnosticsLogParamsXOieDiagnostics = "1"
+)
+
+// Valid indicates whether the value is a known member of the ReadDiagnosticsLogParamsXOieDiagnostics enum.
+func (e ReadDiagnosticsLogParamsXOieDiagnostics) Valid() bool {
+	switch e {
+	case ReadDiagnosticsLogParamsXOieDiagnosticsN1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SetDesktopEngineModeFormdataBodyMode.
 const (
-	Local  SetDesktopEngineModeFormdataBodyMode = "local"
-	Remote SetDesktopEngineModeFormdataBodyMode = "remote"
+	SetDesktopEngineModeFormdataBodyModeLocal  SetDesktopEngineModeFormdataBodyMode = "local"
+	SetDesktopEngineModeFormdataBodyModeRemote SetDesktopEngineModeFormdataBodyMode = "remote"
 )
 
 // Valid indicates whether the value is a known member of the SetDesktopEngineModeFormdataBodyMode enum.
 func (e SetDesktopEngineModeFormdataBodyMode) Valid() bool {
 	switch e {
-	case Local:
+	case SetDesktopEngineModeFormdataBodyModeLocal:
 		return true
-	case Remote:
+	case SetDesktopEngineModeFormdataBodyModeRemote:
 		return true
 	default:
 		return false
@@ -1058,6 +1112,27 @@ type GetBrowserVideoThumbnailParams struct {
 	// XOieEngineID Selected engine identity.
 	XOieEngineID *openapi_types.UUID `json:"X-Oie-Engine-ID,omitempty"`
 }
+
+// ReadDiagnosticsLogParams defines parameters for ReadDiagnosticsLog.
+type ReadDiagnosticsLogParams struct {
+	// Hours Time window ending when the snapshot is read.
+	Hours *ReadDiagnosticsLogParamsHours `form:"hours,omitempty" json:"hours,omitempty"`
+
+	// Source Server selects the configured hosted source in the desktop app.
+	Source *ReadDiagnosticsLogParamsSource `form:"source,omitempty" json:"source,omitempty"`
+
+	// XOieDiagnostics Explicit diagnostics request marker.
+	XOieDiagnostics ReadDiagnosticsLogParamsXOieDiagnostics `json:"X-Oie-Diagnostics"`
+}
+
+// ReadDiagnosticsLogParamsHours defines parameters for ReadDiagnosticsLog.
+type ReadDiagnosticsLogParamsHours int
+
+// ReadDiagnosticsLogParamsSource defines parameters for ReadDiagnosticsLog.
+type ReadDiagnosticsLogParamsSource string
+
+// ReadDiagnosticsLogParamsXOieDiagnostics defines parameters for ReadDiagnosticsLog.
+type ReadDiagnosticsLogParamsXOieDiagnostics string
 
 // SetDesktopEngineModeFormdataBody defines parameters for SetDesktopEngineMode.
 type SetDesktopEngineModeFormdataBody struct {

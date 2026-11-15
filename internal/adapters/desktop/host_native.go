@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/apphost"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -31,14 +32,15 @@ var icon []byte
 var nativeJS string
 
 type runtimeService struct {
-	config   Config
-	outer    context.Context
-	server   atomic.Pointer[apphost.Desktop]
-	app      *application.App
-	cookies  *nativeCookies
-	labels   labels
-	dialogMu sync.Mutex
-	alerts   desktopNotifications
+	config      Config
+	outer       context.Context
+	server      atomic.Pointer[apphost.Desktop]
+	app         *application.App
+	cookies     *nativeCookies
+	labels      labels
+	dialogMu    sync.Mutex
+	alerts      desktopNotifications
+	diagnostics *diagnostics.Logger
 }
 
 // An explicit launch argument overrides the saved desktop preference.
@@ -80,13 +82,14 @@ func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.Servi
 	if err != nil {
 		return err
 	}
-	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, engineURL, func(url string) error {
+	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, engineURL, s.diagnostics, func(url string) error {
 		return writePrivateJSON(engineModePath(s.config.DataDir), url)
 	})
 	if err != nil {
 		return err
 	}
 	s.server.Store(server)
+	s.diagnostics.Record(diagnostics.Ready, 0, 0)
 	go func() {
 		select {
 		case <-s.outer.Done():
@@ -138,11 +141,25 @@ func (s *runtimeService) serve(w http.ResponseWriter, r *http.Request) {
 
 // Run keeps one embedded runtime alive when its window is hidden. Explicit Quit
 // stops the runtime through the Wails service lifecycle before process teardown.
-func Run(ctx context.Context, c Config) error {
+func Run(ctx context.Context, c Config) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	config, err := normalizeConfig(c)
+	dir := ""
+	if config.DataDir != "" {
+		dir = diagnosticsDir(config.DataDir)
+	}
+	logger := diagnostics.New(dir, os.Stderr, diagnostics.Desktop, diagnostics.IsDebug())
+	diagnostics.UseStandardLogger(logger)
+	logger.Record(diagnostics.Starting, 0, 0)
+	defer func() {
+		if err != nil {
+			logger.Record(diagnostics.DesktopFailed, 0, 0)
+		} else {
+			logger.Record(diagnostics.Stopped, 0, 0)
+		}
+	}()
 	if err != nil {
 		return err
 	}
@@ -170,7 +187,8 @@ func Run(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	service := &runtimeService{config: config, outer: ctx, cookies: cookies, labels: text}
+	cookies.diagnostics = logger
+	service := &runtimeService{config: config, outer: ctx, cookies: cookies, labels: text, diagnostics: logger}
 	saveFailed, _ := json.Marshal(text.SaveFailed)
 	initialJS := strings.Replace(nativeJS, "'__OIE_SAVE_FAILED__'", string(saveFailed), 1)
 	initialJS = strings.Replace(initialJS, "'__OIE_MAC_SOUND__'", strconv.FormatBool(runtime.GOOS == "darwin"), 1)
@@ -190,7 +208,7 @@ func Run(ctx context.Context, c Config) error {
 	appID := desktopAppID()
 	initialJS = strings.Replace(initialJS, "'__OIE_FLATPAK__'", strconv.FormatBool(appID == flatpakAppID), 1)
 	app = application.New(application.Options{
-		Name: "Oiê", Icon: icon, LogLevel: slog.LevelWarn,
+		Name: "Oiê", Icon: icon, LogLevel: slog.LevelWarn, Logger: slog.New(slog.DiscardHandler),
 		DisableDefaultSignalHandler: true,
 		Mac:                         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
 		Linux:                       application.LinuxOptions{DisableQuitOnLastWindowClosed: true, ApplicationID: appID, ProgramName: appID},

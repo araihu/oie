@@ -344,7 +344,7 @@ def linux_dialog_diagnostics(stage, app, target):
     prefix.with_suffix(".json").write_text(json.dumps(state, indent=2) + "\n")
 
 
-def linux_save_dialog(app, target, cancel=False, draft=False):
+def linux_save_dialog(app, target, cancel=False, draft=False, diagnostics=None):
     """Drive GTK in this test's private Xvfb. Never sends input on a host display."""
     if sys.platform != "linux":
         return
@@ -353,6 +353,8 @@ def linux_save_dialog(app, target, cancel=False, draft=False):
     previous_reads = Fixture.content_reads
     if cancel:
         app.js("window.__nativeSaveResult='pending';window.OieDesktop.saveFile(%s,'native-fixture.txt').then(value=>window.__nativeSaveResult=value).catch(error=>window.__nativeSaveResult=String(error));return true;" % json.dumps(source))
+    elif diagnostics is not None:
+        app.js("document.querySelector('[data-diagnostics-download]').click();return true;")
     elif draft:
         app.js("document.querySelector('[data-file-download]:not([hidden])').click();return true;")
     else:
@@ -395,7 +397,8 @@ def linux_save_dialog(app, target, cancel=False, draft=False):
     except BaseException:
         linux_dialog_diagnostics("failed", app, target)
         raise
-    require(target.read_bytes() == (STAGED_BYTES if draft else b"0123456789"), "native chooser saved different bytes")
+    expected = diagnostics.encode() if diagnostics is not None else (STAGED_BYTES if draft else b"0123456789")
+    require(target.read_bytes() == expected, "native chooser saved different bytes")
     app.wait(lambda: not dialog_window(), "native GTK chooser closed")
 
 
@@ -418,6 +421,21 @@ def main():
                 app.wait(lambda: app.js("return !!document.querySelector('#register-account-form');"), "register form")
                 result = app.js("const f=document.querySelector('#register-account-form'),values=new URLSearchParams(new FormData(f));values.set('address','offline@example.test');values.set('label','Native offline fixture');const r=await fetch(f.action,{method:'POST',body:values,headers:{Accept:'application/json'}});return {status:r.status,body:await r.json()};")
                 require(result["status"] == 200 and result["body"]["ok"], "embedded account registration: " + str(result))
+                app.js("""window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'diagnostics'}}));return true;""")
+                app.wait(lambda: app.js("""return !!window.OieDesktop?.copyDiagnostics &&
+                    document.querySelector('[data-diagnostics-records]')?.textContent.includes('"event":"ready"');"""),
+                    "embedded diagnostics")
+                snapshot = app.js("return document.querySelector('[data-diagnostics-records]').textContent;")
+                require("offline@example.test" not in snapshot and "Native offline fixture" not in snapshot,
+                        "diagnostics contained account data")
+                app.js("document.querySelector('[data-diagnostics-copy]').click();return true;")
+                app.wait(lambda: app.js("""const runtime=await import('/wails/runtime.js');return await runtime.Clipboard.Text();""") == snapshot,
+                         "diagnostics native clipboard")
+                if sys.platform == "linux":
+                    linux_save_dialog(app, root / "oie-diagnostics.jsonl", diagnostics=snapshot)
+                    findings.append("native diagnostics Save chooser exports the exact viewed snapshot")
+                app.js("""window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'diagnostics'}}));return true;""")
+                findings.append("embedded diagnostics viewer and native clipboard exclude account data")
                 app.tool("window_control", {"window": "oie-main", "action": "close"})
                 app.wait(lambda: not app.tool("app_info")["windows"][0]["visible"], "embedded window hides")
                 require(app.js("const r=await fetch('/');return (await r.text()).includes('Native offline fixture');"), "hidden embedded engine stopped serving")

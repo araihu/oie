@@ -30,11 +30,17 @@ templ settings(v view) {
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
 		<footer class="oie-settings-footer">
+			if v.Diagnostics {
+				@settingsSubpageEntry("diagnostics", v.Text.Diagnostics)
+			}
 			@settingsSubpageEntry("about", v.Text.About)
 		</footer>
 	}
 	if v.EngineMode != nil {
 		@engineModeSettings(v)
+	}
+	if v.Diagnostics {
+		@diagnosticsSettings(v)
 	}
 }
 

@@ -17,6 +17,12 @@
         'github.com/araihu/oie/internal/adapters/desktop.runtimeService.PlayNotificationSound', wav
       ) : undefined
     }),
+    copyDiagnostics: snapshot => runtime.Call.ByName(
+      'github.com/araihu/oie/internal/adapters/desktop.runtimeService.CopyDiagnostics', snapshot
+    ),
+    saveDiagnostics: snapshot => runtime.Call.ByName(
+      'github.com/araihu/oie/internal/adapters/desktop.runtimeService.SaveDiagnostics', snapshot
+    ),
     saveFile: (address, name) => {
       const url = new URL(address, location.href);
       if (url.origin !== location.origin) return Promise.reject(new Error('invalid_download'));

@@ -24,7 +24,7 @@ func TestDesktopEngineSelection(t *testing.T) {
 	var saved atomic.Value
 	saved.Store("")
 	var saveFailure atomic.Bool
-	desktop, err := StartDesktop(t.Context(), dir, "", "", func(address string) error {
+	desktop, err := StartDesktop(t.Context(), dir, "", "", nil, func(address string) error {
 		if saveFailure.Load() {
 			return errors.New("test save failure")
 		}
@@ -133,7 +133,7 @@ func TestDesktopEngineSelection(t *testing.T) {
 func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 	dir := t.TempDir()
 	remote := testServer(t, Config{Role: "hosted", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})
-	desktop, err := StartDesktop(t.Context(), dir, "", remote.URL(), func(string) error { return nil })
+	desktop, err := StartDesktop(t.Context(), dir, "", remote.URL(), nil, func(string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}

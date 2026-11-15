@@ -19,6 +19,7 @@ import (
 	"github.com/araihu/oie/api"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/araihu/oie/internal/adapters/web"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/google/uuid"
 )
@@ -34,6 +35,8 @@ type Config struct {
 	DevReload                                    bool
 	PrivateAPI                                   bool
 	DataOnly                                     bool
+	Diagnostics                                  *diagnostics.Logger
+	DiagnosticsKey                               string
 	engineOnly                                   bool
 }
 
@@ -66,13 +69,16 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		return nil, err
 	}
 	cfg = defaults(cfg)
+	cfg.Diagnostics.Record(diagnostics.Starting, 0, 0)
 	if err = validate(cfg); err != nil {
+		cfg.Diagnostics.Record(diagnostics.ConfigFailed, 0, 0)
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
 	listener, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		cancel()
+		cfg.Diagnostics.Record(diagnostics.ListenFailed, 0, 0)
 		return nil, err
 	}
 	var store *sqlite.Store
@@ -97,6 +103,18 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	apiMux := http.NewServeMux()
 	engineURL := cfg.EngineURL
 	var options []web.Option
+	if cfg.Diagnostics != nil {
+		addr := listener.Addr().(*net.TCPAddr)
+		access := web.DiagnosticsKeyRequired
+		if cfg.Role == "local" && addr.IP.IsLoopback() {
+			access = web.DiagnosticsLoopback
+		}
+		if cfg.DataOnly {
+			apiMux.Handle(web.DiagnosticsPath, web.DiagnosticsHandler(cfg.Diagnostics, cfg.DiagnosticsKey, access))
+		} else {
+			options = append(options, web.WithDiagnostics(cfg.Diagnostics, cfg.DiagnosticsKey, access))
+		}
+	}
 	if cfg.DevReload {
 		options = append(options, web.WithDevReload())
 	}
@@ -105,12 +123,14 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		if idErr != nil {
 			return nil, idErr
 		}
-		store, err = sqlite.Open(ctx, cfg.DataDir, candidateID, sqlite.WithMessageSearchIndex())
+		store, err = sqlite.Open(ctx, cfg.DataDir, candidateID, sqlite.WithMessageSearchIndex(), sqlite.WithDiagnostics(cfg.Diagnostics))
 		if err != nil {
+			cfg.Diagnostics.Record(diagnostics.StorageFailed, 0, 0)
 			return nil, err
 		}
 		engine, err = newEngineHost(ctx, cfg, store)
 		if err != nil {
+			cfg.Diagnostics.Record(diagnostics.EngineFailed, 0, 0)
 			return nil, err
 		}
 		apiMux.Handle("/api/v1/", engine)
@@ -127,6 +147,7 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	if !cfg.DataOnly && !cfg.engineOnly {
 		ui, err := web.New(engineURL, options...)
 		if err != nil {
+			cfg.Diagnostics.Record(diagnostics.ConfigFailed, 0, 0)
 			return nil, err
 		}
 		presentation := presentationHandler(ui)
@@ -137,10 +158,11 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	if cfg.PrivateAPI {
 		networkHandler = host.guard(networkHandler)
 	}
-	host.server = &http.Server{Handler: host.track(networkHandler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	host.server = &http.Server{ErrorLog: cfg.Diagnostics.StandardLogger(), Handler: host.track(networkHandler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	served := make(chan error, 1)
 	go func() { served <- host.server.Serve(listener) }()
-	go host.supervise(served, engine)
+	cfg.Diagnostics.Record(diagnostics.Ready, 0, 0)
+	go host.supervise(served, engine, cfg.Diagnostics)
 	return host, nil
 }
 
@@ -250,7 +272,7 @@ func (s *Server) beginClose() {
 	s.cancel()
 }
 
-func (s *Server) supervise(served <-chan error, engine *engineHost) {
+func (s *Server) supervise(served <-chan error, engine *engineHost, diag *diagnostics.Logger) {
 	var result error
 	var failures <-chan error
 	if engine != nil {
@@ -263,6 +285,7 @@ func (s *Server) supervise(served <-chan error, engine *engineHost) {
 		}
 	case result = <-failures:
 		if result != nil && !errors.Is(result, context.Canceled) {
+			diag.Record(diagnostics.WorkerFailed, 0, 0)
 			result = fmt.Errorf("engine worker: %w", result)
 		} else {
 			result = nil
@@ -282,6 +305,11 @@ func (s *Server) supervise(served <-chan error, engine *engineHost) {
 			engine.instance.close()
 		}
 		result = errors.Join(result, engine.store.Close())
+	}
+	if result != nil {
+		diag.Record(diagnostics.ShutdownFailed, 0, 0)
+	} else {
+		diag.Record(diagnostics.Stopped, 0, 0)
 	}
 	s.err = result
 	s.done <- result
