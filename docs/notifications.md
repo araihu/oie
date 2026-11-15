@@ -61,6 +61,22 @@ bundled 300 ms mono PCM WAV.
   closed page. Its system notification sound will need a separate design
   decision, since the browser Notifications API cannot select Oiê's WAV.
 
+### Testing on another device
+
+On the test host, run `make build` and `node tests/browser/notifications.cjs
+--manual`. The script starts a loopback BFF and a fake engine with disposable
+conversations. Use the printed web URL behind an HTTPS reverse proxy for a
+mobile device. On a Mac, launch the test build of the app bundle with the
+printed `--engine-url` and a temporary `--data-dir` on the same host.
+
+Open **Conversation 0**, enable message banners, and grant permission when
+prompted. On mobile, do this in the installed app. Enter a label in the test
+terminal to send a message to **Conversation 1**. Click the banner while Oiê
+is open and check that the label appears in the destination conversation.
+Return to **Conversation 0**, send a different label, and leave its banner in
+the notification center. Hide the desktop window or close the PWA window,
+then click the existing banner and verify that it opens the second message.
+
 Account Do Not Disturb and shared conversation mutes await the corresponding
 account and sync features. Web Push and alerts while Oiê is fully closed are
 backlogged.

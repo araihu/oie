@@ -3,7 +3,7 @@ const http = require('node:http');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {once} = require('node:events');
-const {chromium} = require('playwright');
+const {createInterface} = require('node:readline');
 
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const [engine, account, chat, other, revision, room, archivedRoom, own, someoneElse, foreign] = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11].map(id);
@@ -113,13 +113,31 @@ async function run() {
   const port = reserve.address().port;
   await new Promise(resolve => reserve.close(resolve));
   const base = 'http://127.0.0.1:' + port;
+  const engineURL = 'http://127.0.0.1:' + api.address().port;
   const app = spawn(process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie'),
-    ['--role', 'bff', '--listen', '127.0.0.1:' + port, '--engine-url', 'http://127.0.0.1:' + api.address().port],
+    ['--role', 'bff', '--listen', '127.0.0.1:' + port, '--engine-url', engineURL],
     {stdio: ['ignore', 'ignore', 'inherit']});
   let browser;
   try {
-    browser = await chromium.launch({headless: true});
     await until(async () => { try { return (await fetch(base)).ok; } catch { return false; } }, 'BFF');
+    if (process.argv.includes('--manual')) {
+      console.log(`Web UI: ${base}\nWails --engine-url: ${engineURL}`);
+      console.log('Enter sends a message to Conversation 1. Type a label before Enter to use it as the message text.');
+      const input = createInterface({input: process.stdin, output: process.stdout});
+      input.on('SIGINT', () => input.close());
+      for await (const line of input) {
+        if (!streams.size) {
+          console.log('Open Oiê and wait for it to connect before sending a test message.');
+          continue;
+        }
+        const {message} = push({originalText: line.trim() || 'Notification test ' + (seq + 1)});
+        console.log(`${message.originalText} (${message.id})`);
+      }
+      return;
+    }
+
+    const {chromium} = require('playwright');
+    browser = await chromium.launch({headless: true});
     const profile = await browser.newContext({viewport: {width: 1440, height: 900}});
     await profile.addInitScript(() => {
       window.alerts = [];
