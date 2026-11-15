@@ -10,6 +10,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"net"
 	"os"
 	"path/filepath"
@@ -38,6 +39,7 @@ type configuration struct {
 type entry struct {
 	account             domain.Account
 	config              configuration
+	workerStopped       bool
 	cancel              context.CancelFunc
 	mu                  sync.RWMutex
 	sendMu              sync.Mutex
@@ -237,8 +239,13 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 	m.workers.Add(1)
 	go func() {
 		defer m.workers.Done()
+		defer func() {
+			e.mu.Lock()
+			e.workerStopped = true
+			e.mu.Unlock()
+		}()
 		if !cfg.Enabled {
-			_ = m.publish(ctx, e, "not_connected", "")
+			_ = m.publish(ctx, e, "not_connected", "", false)
 			return
 		}
 		m.run(ctx, e)
@@ -257,11 +264,12 @@ func (m *Manager) Configure(ctx context.Context, a domain.Account, in applicatio
 	}
 	if old := m.entries[a.ID]; old != nil && old.config == cfg {
 		old.mu.RLock()
-		state := old.state
+		state, stopped := old.state, old.workerStopped
 		old.mu.RUnlock()
-		return state, nil
-	}
-	if err := m.save(ctx, cfg); err != nil {
+		if !stopped {
+			return state, nil
+		}
+	} else if err := m.save(ctx, cfg); err != nil {
 		return domain.Connection{}, err
 	}
 	e := m.replace(a, cfg)
@@ -321,7 +329,7 @@ func (m *Manager) Connection(_ context.Context, a domain.Account) (domain.Connec
 	defer e.mu.RUnlock()
 	return e.state, nil
 }
-func (m *Manager) publish(ctx context.Context, e *entry, state, code string) error {
+func (m *Manager) publish(ctx context.Context, e *entry, state, code string, stopped bool) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	current := m.entries[e.account.ID] == e
@@ -333,6 +341,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 	}
 	e.mu.Lock()
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
+	e.workerStopped = stopped
 	e.historyMu.Lock()
 	e.occupantScopes = nil
 	e.semianonymousRooms = nil
@@ -362,7 +371,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 	delay := time.Second
 	attempt := 0
 	for ctx.Err() == nil {
-		if err := m.publish(ctx, e, "connecting", ""); err != nil {
+		if err := m.publish(ctx, e, "connecting", "", false); err != nil {
 			return
 		}
 		attempt++
@@ -396,7 +405,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				_ = raw.Close()
 				return
 			}
-			if err = m.publish(ctx, e, "connected", ""); err == nil {
+			if err = m.publish(ctx, e, "connected", "", false); err == nil {
 				m.workers.Add(4)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
@@ -415,14 +424,18 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				}
 				m.diagnostics.Record(diagnostics.XMPPConnected, time.Since(started), attempt)
 				attempt = 0
-				delay = time.Second
+				connectedAt := time.Now()
+				m.workers.Add(1)
+				go func() { defer m.workers.Done(); watchConnection(historyCtx, session, raw) }()
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
-					return m.handle(ctx, e, tokens, start)
+					return m.handle(historyCtx, e, tokens, start)
 				}))
+				if time.Since(connectedAt) >= connectionIdle {
+					delay = time.Second
+				}
 			}
 			historyCancel()
 			_ = raw.Close()
-			m.resetRoomSessions(ctx, e, session)
 			e.mu.Lock()
 			e.session = nil
 			e.raw = nil
@@ -430,6 +443,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.correctionSources = nil
 			e.correctionLatest = nil
 			e.mu.Unlock()
+			m.resetRoomSessions(ctx, e, session)
 		}
 		if ctx.Err() != nil {
 			return
@@ -440,13 +454,13 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 		} else {
 			m.diagnostics.Record(connectionDiagnostic(code, err), time.Since(started), attempt)
 		}
-		if m.publish(ctx, e, "error", code) != nil {
+		if m.publish(ctx, e, "error", code, permanent) != nil {
 			return
 		}
 		if permanent {
 			return
 		}
-		timer := time.NewTimer(delay)
+		timer := time.NewTimer(delay - rand.N(delay/4))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -473,7 +487,7 @@ func connectionError(err error) (string, bool) {
 	var auth authenticationError
 	if errors.As(err, &auth) {
 		var network net.Error
-		if !errors.As(auth.error, &network) && !errors.Is(auth.error, io.EOF) && !errors.Is(auth.error, context.DeadlineExceeded) {
+		if !temporarySASLFailure(auth.error) && !errors.As(auth.error, &network) && !errors.Is(auth.error, io.EOF) && !errors.Is(auth.error, io.ErrUnexpectedEOF) && !errors.Is(auth.error, context.DeadlineExceeded) {
 			return "authentication_failed", true
 		}
 	}
@@ -498,7 +512,20 @@ func connectionDiagnostic(code string, err error) diagnostics.Event {
 	}
 }
 
-func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn, error) {
+func temporarySASLFailure(err error) bool {
+	var failure xmlstream.Marshaler
+	if !errors.As(err, &failure) {
+		return false
+	}
+	// Mellium exposes the wire form of its internal SASL error through TokenReader.
+	var payload struct {
+		XMLName   xml.Name  `xml:"urn:ietf:params:xml:ns:xmpp-sasl failure"`
+		Temporary *struct{} `xml:"urn:ietf:params:xml:ns:xmpp-sasl temporary-auth-failure"`
+	}
+	return xml.NewTokenDecoder(failure.TokenReader()).Decode(&payload) == nil && payload.Temporary != nil
+}
+
+func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, *activityConn, error) {
 	j, err := jid.Parse(e.account.Address)
 	if err != nil {
 		return nil, nil, err
@@ -509,15 +536,16 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn,
 	}
 	attempt, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	var raw net.Conn
+	var conn net.Conn
 	if e.config.Endpoint != "" {
-		raw, err = (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext(attempt, "tcp", e.config.Endpoint)
+		conn, err = (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext(attempt, "tcp", e.config.Endpoint)
 	} else {
-		raw, err = dial.Client(attempt, "tcp", j)
+		conn, err = dial.Client(attempt, "tcp", j)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
+	raw := &activityConn{Conn: conn, lastRead: time.Now()}
 	stop := context.AfterFunc(attempt, func() { _ = raw.Close() })
 	defer stop()
 	_ = raw.SetDeadline(time.Now().Add(10 * time.Second))

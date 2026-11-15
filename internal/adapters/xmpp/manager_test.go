@@ -98,3 +98,52 @@ func TestCredentialsAreNotSentWithoutTLS(t *testing.T) {
 		t.Fatal("credentials attempted without TLS")
 	}
 }
+
+// The condition is determined from the SASL element, independently of the
+// server's human-readable error text.
+type saslFailureXML string
+
+func (saslFailureXML) Error() string { return "provider message" }
+func (s saslFailureXML) TokenReader() xml.TokenReader {
+	return xml.NewDecoder(strings.NewReader(string(s)))
+}
+
+func TestAuthenticationFailureClassification(t *testing.T) {
+	for _, tc := range []struct {
+		condition, code string
+		stopped         bool
+	}{
+		{"temporary-auth-failure", "connection_failed", false},
+		{"not-authorized", "authentication_failed", true},
+	} {
+		t.Run(tc.condition, func(t *testing.T) {
+			failure := saslFailureXML(`<failure xmlns="urn:ietf:params:xml:ns:xmpp-sasl"><` + tc.condition + `/><text>Temporary service problem</text></failure>`)
+			code, stopped := connectionError(authenticationError{failure})
+			if code != tc.code || stopped != tc.stopped {
+				t.Fatalf("failure classified as %s, stopped = %v", code, stopped)
+			}
+		})
+	}
+}
+
+func TestConfigureRestartsOnlyStoppedConnection(t *testing.T) {
+	m := New(t.TempDir(), nil)
+	if err := m.Start(t.Context(), &hostStub{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+	account := domain.Account{ID: "019a5df0-0000-7000-8000-000000000001", Address: "alice@localhost", Protocol: "xmpp"}
+	in := application.ConnectionInput{Password: "fixture", Endpoint: "127.0.0.1:1"}
+	stopped := &entry{config: configuration{AccountID: account.ID, Password: in.Password, Endpoint: in.Endpoint, Enabled: true}, workerStopped: true}
+	m.entries[account.ID] = stopped
+	if _, err := m.Configure(t.Context(), account, in); err != nil {
+		t.Fatal(err)
+	}
+	running := m.entries[account.ID]
+	if running == stopped {
+		t.Fatal("unchanged settings did not restart the stopped worker")
+	}
+	if _, err := m.Configure(t.Context(), account, in); err != nil || m.entries[account.ID] != running {
+		t.Fatalf("unchanged settings replaced the running retry loop: %v", err)
+	}
+}
