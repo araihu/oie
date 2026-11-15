@@ -59,5 +59,6 @@ jobs:
           sha256sum "$package" > SHA256SUMS
           printf 'Helm chart %s for Oiê. See the [chart configuration and installation guide](https://github.com/%s/tree/%s/charts/oie).\n' \
             "$version" "$GITHUB_REPOSITORY" "$TAG" > notes.md
+          # Keep chart-only releases out of the application's Latest channel.
           gh release create "$TAG" "$package" SHA256SUMS --repo "$GITHUB_REPOSITORY" \
-            --verify-tag --latest=false --title "Oiê Helm chart $version" --notes-file notes.md
+            --verify-tag --prerelease --latest=false --title "Oiê Helm chart $version" --notes-file notes.md
