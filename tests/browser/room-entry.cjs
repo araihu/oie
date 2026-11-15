@@ -313,8 +313,12 @@ async function waitFor(predicate) {
       const originalTopic = await topic.inputValue();
       const name = management.getByRole('textbox',{name:'Nome da sala',exact:true});
       const originalName = await name.inputValue();
-      const [saveBox, topicBox] = await Promise.all([saveDetails.boundingBox(), topic.boundingBox()]);
-      assert(Math.abs(saveBox.x + saveBox.width - topicBox.x - topicBox.width) <= 1);
+      const saveButton = await saveDetails.elementHandle();
+      const rightEdgeOffset = await topic.evaluate((input, button) => {
+        return button.getBoundingClientRect().right - input.getBoundingClientRect().right;
+      }, saveButton);
+      await saveButton.dispose();
+      assert(Math.abs(rightEdgeOffset) <= 1, `Save and topic right edges differ by ${rightEdgeOffset}px`);
       await name.fill(originalName + ' ');
       assert.equal(await saveDetails.isDisabled(), true);
       await name.fill('Outro nome');
