@@ -584,3 +584,97 @@ func TestIsolatedRoomArchiveUsesScheduledReleaseAsTimeBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRoomRetentionReopensOnlyNewlyEligibleArchive(t *testing.T) {
+	now := time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC)
+	oldCutoff := now.AddDate(0, 0, -90)
+	newCutoff := now.AddDate(0, 0, -180)
+	previous := 90
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		if index != 0 || iq.field("start") != newCutoff.Format(time.RFC3339Nano) || iq.field("end") != oldCutoff.Format(time.RFC3339Nano) {
+			t.Errorf("unexpected retention request %d: %s to %s", index, iq.field("start"), iq.field("end"))
+		}
+		return iq.page(true, testArchiveMessage{"older-but-eligible", now.AddDate(0, 0, -100)})
+	})
+	progress := domain.RoomArchiveProgress{
+		WindowStart: now.Add(-48 * time.Hour), WindowEnd: now,
+		Boundary: now.AddDate(0, 0, -80), OlderCoveredThrough: oldCutoff,
+		InitialComplete: true, RecentComplete: true, OlderComplete: true, RetentionDays: &previous,
+	}
+	if !progress.ApplyRetention(180, now) || progress.OlderComplete || !progress.InitialComplete {
+		t.Fatalf("reopened wrong recovery state: %+v", progress)
+	}
+	ctx := context.WithValue(t.Context(), archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: 180, now: now})
+	if err := m.extendRoomArchive(ctx, host, e, e.session, host.room, &progress); err != nil {
+		t.Fatal(err)
+	}
+	if !progress.OlderComplete || !progress.OlderCoveredThrough.Equal(newCutoff) || len(host.messages) != 1 {
+		t.Fatalf("incorrect retained coverage: %+v", progress)
+	}
+}
+
+func TestRoomRetentionClampsSearchAndSkipsEmptyContext(t *testing.T) {
+	now := time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC)
+	cutoff := now.AddDate(0, 0, -30)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		if index != 0 || iq.field("start") != cutoff.Format(time.RFC3339Nano) || iq.field("{urn:xmpp:fulltext:0}fulltext") != "tea" {
+			t.Errorf("search did not enforce retention: %+v", iq)
+		}
+		return iq.page(true, testArchiveMessage{"at-cutoff", cutoff})
+	})
+	ctx := context.WithValue(t.Context(), archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: 30, now: now})
+	empty, err := m.readArchivePage(ctx, e, e.session, host.room.Address, archivePageRequest{Backward: true, End: cutoff.Add(-time.Second)})
+	if err != nil || !empty.Complete {
+		t.Fatalf("empty range: %+v %v", empty, err)
+	}
+	page, err := m.readArchivePage(ctx, e, e.session, host.room.Address, archivePageRequest{Backward: true, Search: "tea"})
+	if err != nil || !page.Complete || len(page.Query.Messages) != 1 {
+		t.Fatalf("inclusive search boundary: %+v %v", page, err)
+	}
+}
+
+type boundedArchiveHost struct {
+	*testArchiveHost
+	days int
+}
+
+func (h *boundedArchiveHost) ArchiveRetentionRevision(context.Context, domain.ID) (int64, error) {
+	return 0, nil
+}
+func (h *boundedArchiveHost) RetentionDays(context.Context, domain.ID, string, string) (int, error) {
+	return h.days, nil
+}
+func (h *boundedArchiveHost) DirectRetentionPeers(context.Context, domain.ID) ([]application.RetentionPeer, error) {
+	return nil, nil
+}
+
+func TestRoomRetentionDropsExpiredDeferredReactionWindow(t *testing.T) {
+	now := time.Now().UTC()
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		return iq.page(true, testArchiveMessage{id: "eligible", at: now.Add(-time.Hour)})
+	})
+	room := host.room.Address
+	e.archiveCapabilities = map[string]roomArchiveCapability{room: {mam: true}}
+	e.semianonymousRooms = map[string]bool{room: true}
+	e.occupantScopes = map[string]bool{room: true}
+	slot := e.rooms[room]
+	slot.session, slot.snapshot.State, slot.ownOccupantID = e.session, "joined", "self"
+	days := 30
+	host.archive.Mode = "gradual"
+	host.archive.RoomArchiveProgress = domain.RoomArchiveProgress{
+		WindowEnd: now.Add(-2 * time.Hour), WindowStart: now.Add(-48 * time.Hour), CaughtUpThrough: now.Add(-2 * time.Hour),
+		OlderComplete: true, InitialComplete: true, RecentComplete: true, Availability: "supported", TextSearch: "unsupported",
+		DeferredReactions: domain.DeferredRoomReactions{Start: now.AddDate(0, 0, -20), End: now.AddDate(0, 0, -19)},
+		RetentionDays:     &days,
+	}
+	wrapped := &boundedArchiveHost{testArchiveHost: host, days: 7}
+	m.host = wrapped
+	for range 3 {
+		if _, err := m.roomArchiveTurn(t.Context(), t.Context(), wrapped, e, e.session, host.room, domain.RoomArchiveRequest{}, archiveAutomatic, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !host.archive.DeferredReactions.Start.IsZero() || len(host.messages) == 0 {
+		t.Fatalf("expired reaction window stays pending and newly eligible text remains missing: %v (%d messages)", host.archive.DeferredReactions, len(host.messages))
+	}
+}

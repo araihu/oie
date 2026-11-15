@@ -35,6 +35,15 @@ func (s *Store) SetRoomArchiveMode(ctx context.Context, id domain.ID, mode strin
 }
 
 func (s *Store) StoreRoomArchiveProgress(ctx context.Context, id domain.ID, progress domain.RoomArchiveProgress) error {
+	if revision, guarded := application.ArchiveRetentionRevisionFrom(ctx); guarded {
+		n, err := s.queries.PutGuardedRoomArchiveProgress(ctx, dbgen.PutGuardedRoomArchiveProgressParams{
+			ConversationID: string(id), Progress: jsonText(progress), RetentionRevision: revision,
+		})
+		if err == nil && n == 0 {
+			return application.ErrStateConflict
+		}
+		return err
+	}
 	return s.queries.PutRoomArchiveProgress(ctx, dbgen.PutRoomArchiveProgressParams{ConversationID: string(id), Progress: jsonText(progress)})
 }
 

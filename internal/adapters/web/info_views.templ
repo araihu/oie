@@ -1,19 +1,18 @@
 package web
 
 import (
- "github.com/araihu/goshtoso/components/icon"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/textinput"
 )
 
-templ infoEntry(v view,kind,label string,symbol icon.Symbol){
+templ infoEntry(v view,kind,label string,symbol templ.Component){
 {{ screen:="shared" }}
-if kind=="stars" || kind=="participants" {
+if kind=="stars" || kind=="participants" || kind=="retention" {
 {{screen=kind}}
 }
 @link.Link(v.infoHref(screen,kind,"infoQuery",""),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){
-@glyph(symbol)<span>{label}</span>@glyph(heroicons.Icon16SolidChevronRight)
+@symbol<span>{label}</span>@glyph(heroicons.Icon16SolidChevronRight)
 }
 }
 templ infoBack(v view){

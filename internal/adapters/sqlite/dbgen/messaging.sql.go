@@ -58,7 +58,7 @@ func (q *Queries) FindConversation(ctx context.Context, arg FindConversationPara
 }
 
 const findProviderMessage = `-- name: FindProviderMessage :one
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=? AND provider_id<>''
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms, submitted_at_ms FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=? AND provider_id<>''
 `
 
 type FindProviderMessageParams struct {
@@ -88,6 +88,7 @@ func (q *Queries) FindProviderMessage(ctx context.Context, arg FindProviderMessa
 		&i.Payload,
 		&i.CreatedAtMs,
 		&i.TimelineAtMs,
+		&i.SubmittedAtMs,
 	)
 	return i, err
 }
@@ -126,7 +127,7 @@ func (q *Queries) GetConversationOpenedAt(ctx context.Context, entityID string) 
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms FROM messages WHERE id=?
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms, submitted_at_ms FROM messages WHERE id=?
 `
 
 func (q *Queries) GetMessage(ctx context.Context, id string) (Message, error) {
@@ -143,12 +144,13 @@ func (q *Queries) GetMessage(ctx context.Context, id string) (Message, error) {
 		&i.Payload,
 		&i.CreatedAtMs,
 		&i.TimelineAtMs,
+		&i.SubmittedAtMs,
 	)
 	return i, err
 }
 
 const getTimelineMessage = `-- name: GetTimelineMessage :one
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m WHERE m.id=?
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages AS m WHERE m.id=?
 AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 `
@@ -167,12 +169,13 @@ func (q *Queries) GetTimelineMessage(ctx context.Context, id string) (Message, e
 		&i.Payload,
 		&i.CreatedAtMs,
 		&i.TimelineAtMs,
+		&i.SubmittedAtMs,
 	)
 	return i, err
 }
 
 const getVisibleMessage = `-- name: GetVisibleMessage :one
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m WHERE m.id=?
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages AS m WHERE m.id=?
 AND EXISTS (SELECT 1 FROM conversations visible WHERE visible.id=m.conversation_id AND json_extract(visible.payload,'$.Request') IS NULL)
 `
 
@@ -190,6 +193,7 @@ func (q *Queries) GetVisibleMessage(ctx context.Context, id string) (Message, er
 		&i.Payload,
 		&i.CreatedAtMs,
 		&i.TimelineAtMs,
+		&i.SubmittedAtMs,
 	)
 	return i, err
 }
@@ -314,7 +318,7 @@ func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) erro
 }
 
 const interruptedMessages = `-- name: InterruptedMessages :many
-SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms FROM messages WHERE state='dispatching'
+SELECT id, revision_id, account_id, conversation_id, provider_id, is_own, state, payload, created_at_ms, timeline_at_ms, submitted_at_ms FROM messages WHERE state='dispatching'
 `
 
 func (q *Queries) InterruptedMessages(ctx context.Context) ([]Message, error) {
@@ -337,6 +341,7 @@ func (q *Queries) InterruptedMessages(ctx context.Context) ([]Message, error) {
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -445,7 +450,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m WHERE m.conversation_id=?1
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages AS m WHERE m.conversation_id=?1
 AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id) AND (
@@ -480,6 +485,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -495,7 +501,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const listMessagesAfter = `-- name: ListMessagesAfter :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages AS m
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages AS m
 JOIN messages AS anchor ON anchor.id=?1 AND anchor.conversation_id=?2
 WHERE m.conversation_id=?2
 AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(COALESCE(anchor.timeline_at_ms,anchor.created_at_ms),anchor.id)
@@ -531,6 +537,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -546,7 +553,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 }
 
 const pendingMessages = `-- name: PendingMessages :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM outbox o JOIN messages m ON o.message_id=m.id WHERE o.state='queued' AND o.next_attempt_at<=? ORDER BY o.next_attempt_at,m.id LIMIT 100
 `
 
 func (q *Queries) PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error) {
@@ -569,6 +576,7 @@ func (q *Queries) PendingMessages(ctx context.Context, nextAttemptAt string) ([]
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}

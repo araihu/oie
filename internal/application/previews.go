@@ -573,8 +573,12 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	done := make(chan error, 4)
+	done := make(chan error, 5)
 	workers := 2
+	if repo, ok := e.repo.(retentionRepository); ok {
+		workers++
+		go func() { done <- e.runRetention(ctx, repo) }()
+	}
 	if _, ok := e.repo.(RoomIntentRepository); ok {
 		if _, ok := e.protocols.(RoomProtocol); ok {
 			workers++

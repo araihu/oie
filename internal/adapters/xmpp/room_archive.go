@@ -109,9 +109,26 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	if err := sessionCtx.Err(); err != nil {
 		return domain.RoomArchiveResult{}, err
 	}
+	sessionCtx, err = m.beginArchiveRetention(sessionCtx, c.AccountID)
+	if err != nil {
+		return domain.RoomArchiveResult{}, err
+	}
 	a, err := host.RoomArchive(sessionCtx, c.ID)
 	if err != nil {
 		return domain.RoomArchiveResult{}, err
+	}
+	if retention, ok := m.host.(application.RetentionHost); ok {
+		days, err := retention.RetentionDays(sessionCtx, c.AccountID, c.Address, "room")
+		if err != nil {
+			return domain.RoomArchiveResult{}, err
+		}
+		now := time.Now().UTC()
+		sessionCtx = context.WithValue(sessionCtx, archiveRetentionKey{}, archiveRetention{account: c.AccountID, days: days, now: now})
+		if a.ApplyRetention(days, now) {
+			if err := host.StoreRoomArchiveProgress(sessionCtx, c.ID, a.RoomArchiveProgress); err != nil {
+				return domain.RoomArchiveResult{}, err
+			}
+		}
 	}
 	result := domain.RoomArchiveResult{Archive: a, Outcome: "complete"}
 	var reactionReplay *roomSlot
@@ -265,11 +282,16 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 			return false, errArchive
 		}
 	}
-	if err != nil || page.Query.OwnReactionActor == "" {
+	if err != nil {
 		return false, err
 	}
-	if err := m.ingestRoomReactionPage(ctx, page); err != nil {
-		return false, err
+	if !page.ExcludedByRetention {
+		if page.Query.OwnReactionActor == "" {
+			return false, nil
+		}
+		if err := m.ingestRoomReactionPage(ctx, page); err != nil {
+			return false, err
+		}
 	}
 	if page.Complete {
 		*r = domain.DeferredRoomReactions{}
@@ -279,7 +301,7 @@ func (m *Manager) recoverDeferredRoomReactions(ctx context.Context, host applica
 	if err := host.StoreRoomArchiveProgress(ctx, c.ID, *p); err != nil {
 		return false, err
 	}
-	if page.Complete {
+	if page.Complete && !page.ExcludedByRetention {
 		markRoomReactionReplay(e, s, c.Address, slot, page.Query.OwnReactionActor)
 	}
 	return true, nil
@@ -325,6 +347,9 @@ func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomAr
 	if page.Complete {
 		if p.RecentComplete {
 			p.OlderComplete, p.InitialComplete = true, true
+			if retention, ok := ctx.Value(archiveRetentionKey{}).(archiveRetention); ok {
+				p.OlderCoveredThrough = domain.RetentionCutoff(retention.now, retention.days)
+			}
 		} else {
 			p.RecentComplete = true
 			p.Boundary = p.WindowStart

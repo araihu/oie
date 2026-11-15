@@ -41,7 +41,7 @@ func (m *Manager) recoverAccountArchives(ctx context.Context, host application.H
 			outcomes <- archiveRecovery{partial: true, discoveryFailed: err != nil}
 			return
 		}
-		err = m.recoverArchive(ctx, host, e, s, e.account.Address)
+		err = m.recoverDirectArchives(ctx, host, e, s)
 		outcomes <- archiveRecovery{supported: true, partial: err != nil, err: err}
 	}()
 	results := make([]archiveRecovery, 0, cap(outcomes))
@@ -68,10 +68,19 @@ func (m *Manager) recoverRoomGroup(ctx context.Context, host application.RoomArc
 					status.partial, status.err = true, err
 					continue
 				}
-				if initial && a.InitialComplete {
+				retentionChanged := false
+				if retention, ok := m.host.(application.RetentionHost); ok {
+					days, err := retention.RetentionDays(ctx, room.AccountID, room.Address, "room")
+					if err != nil {
+						status.partial, status.err = true, err
+						continue
+					}
+					retentionChanged = a.RetentionDays == nil || *a.RetentionDays != days
+				}
+				if initial && a.InitialComplete && !retentionChanged {
 					continue
 				}
-				if !initial && a.InitialComplete && (a.Mode == "on_demand" || a.OlderComplete) && !a.CaughtUpThrough.Before(cutoff) && pendingRoomReactionReplay(e, s, room.Address, !a.DeferredReactions.Start.IsZero()) == nil && !currentRoomConfiguration(e, room.Address).pending {
+				if !initial && !retentionChanged && a.InitialComplete && (a.Mode == "on_demand" || a.OlderComplete) && !a.CaughtUpThrough.Before(cutoff) && pendingRoomReactionReplay(e, s, room.Address, !a.DeferredReactions.Start.IsZero()) == nil && !currentRoomConfiguration(e, room.Address).pending {
 					status.supported = status.supported || a.Availability == "supported"
 					continue
 				}

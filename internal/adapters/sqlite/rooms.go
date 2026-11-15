@@ -233,6 +233,9 @@ func (s *Store) ReplayMessageMutation(ctx context.Context, id domain.ID, kind, f
 	if row.Kind != kind || row.Fingerprint != fingerprint {
 		return nil, application.ErrIdempotencyConflict
 	}
+	if row.Result == "null" {
+		return nil, application.ErrNotFound
+	}
 	var result domain.Message
 	if err = json.Unmarshal([]byte(row.Result), &result); err != nil {
 		return nil, err

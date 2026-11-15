@@ -545,6 +545,9 @@ Dismissing the card leaves the draft text intact.
 | Rooms | **180 days** by default. Choose a finite period or **Unlimited**. | Inherit the global room policy, set a finite period, or choose **Unlimited**. |
 | Direct conversations | **Unlimited** by default. Choose a finite period independently of the room policy. | Inherit the global direct-conversation policy, set a finite period, or choose **Unlimited**. |
 
+Place the global policies in **Settings → This device**. Open an override in the
+same **Conversation details** drawer for both rooms and direct conversations.
+
 When choosing **Unlimited** for rooms, explain that messages will no longer
 expire by age, local storage can grow, and Oiê can recover all history that the
 XMPP server still makes available and authorizes. The global setting applies to

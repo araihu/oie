@@ -41,6 +41,7 @@ type Message struct {
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string
+	WireBodySHA256                            string               `json:",omitempty"`
 	AttachmentWireText                        string               `json:",omitempty"`
 	DispatchStarted                           bool                 `json:",omitempty"`
 	ScheduledAt                               *time.Time           `json:",omitempty"`
@@ -60,6 +61,7 @@ type Message struct {
 	ProviderID                                string
 	ArchiveScope, ArchiveID                   string
 	Historical                                bool
+	ReceivedAt                                time.Time          `json:"-"`
 	OutboundReply                             *OutboundReply     `json:",omitempty"`
 	References                                []MessageReference `json:"-"`
 	ReplyReference                            *ReplyReference    `json:"-"`

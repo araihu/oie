@@ -48,18 +48,19 @@ type RegistrationResult struct {
 }
 
 type Event struct {
-	Sequence     int64
-	Account      *domain.Account
-	Conversation *domain.Conversation
-	Message      *domain.Message
-	Connection   *domain.Connection
-	History      *domain.HistoryStatus
-	RoomSession  *domain.RoomSession
-	Avatar       *domain.Avatar
-	Preview      *domain.MessagePreview
-	Star         *domain.MessageStar
-	Type         string
-	OccurredAt   time.Time
+	Sequence      int64
+	Account       *domain.Account
+	Conversation  *domain.Conversation
+	Message       *domain.Message
+	Connection    *domain.Connection
+	History       *domain.HistoryStatus
+	HistoryPruned *domain.HistoryPruned
+	RoomSession   *domain.RoomSession
+	Avatar        *domain.Avatar
+	Preview       *domain.MessagePreview
+	Star          *domain.MessageStar
+	Type          string
+	OccurredAt    time.Time
 }
 
 type Snapshot struct {
@@ -95,6 +96,7 @@ type Engine struct {
 	work              chan struct{}
 	attachmentWork    chan struct{}
 	roomWork          chan struct{}
+	retentionWork     chan struct{}
 	eventMu           sync.Mutex
 	eventWake         chan struct{}
 }
@@ -105,7 +107,7 @@ func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine
 	}
 	return &Engine{
 		repo: repo, role: role, newID: ids, now: now,
-		work: make(chan struct{}, 1), attachmentWork: make(chan struct{}, 1), roomWork: make(chan struct{}, 1),
+		work: make(chan struct{}, 1), attachmentWork: make(chan struct{}, 1), roomWork: make(chan struct{}, 1), retentionWork: make(chan struct{}, 1),
 		previewWork: make(chan struct{}, 1), draftPreviewSlots: make(chan struct{}, 2), eventWake: make(chan struct{}),
 	}, nil
 }

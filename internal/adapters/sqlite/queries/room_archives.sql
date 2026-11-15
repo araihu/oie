@@ -19,3 +19,11 @@ AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 SELECT * FROM conversations WHERE account_id=? AND json_extract(payload,'$.Kind')='room'
 AND json_extract(payload,'$.Request') IS NULL
 ORDER BY activity_sequence DESC,id;
+
+-- name: PutGuardedRoomArchiveProgress :execrows
+INSERT INTO room_archives(conversation_id,progress)
+SELECT sqlc.arg(conversation_id),sqlc.arg(progress)
+WHERE (SELECT g.archive_revision+COALESCE(a.revision,0)
+ FROM conversations c CROSS JOIN global_retention g LEFT JOIN account_archive_retention a ON a.account_id=c.account_id
+ WHERE c.id=sqlc.arg(conversation_id) AND g.singleton=1)=sqlc.arg(retention_revision)
+ON CONFLICT(conversation_id) DO UPDATE SET progress=excluded.progress;

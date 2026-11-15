@@ -105,8 +105,8 @@ WITH candidate_ids AS (
  JOIN message_revisions r ON r.id=f.source_revision_id
  JOIN message_revisions source ON source.rowid=(SELECT min(r.rowid) FROM message_revisions r WHERE r.entity_id=f.message_id)
  WHERE CAST(sqlc.arg(include_history) AS INTEGER)=1 AND source.id<>roots.matched_revision_id
- AND f.source_hash=oie_source_hash(json_extract(r.payload,'$.OriginalText'))
- AND f.source_hash=oie_source_hash(json_extract(source.payload,'$.OriginalText'))
+ AND f.source_hash=COALESCE(json_extract(r.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(r.payload,'$.OriginalText')))
+ AND f.source_hash=COALESCE(json_extract(source.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(source.payload,'$.OriginalText')))
  GROUP BY roots.id,source.id
 ), matched AS (
  SELECT *,CAST(oie_search_match(body,CAST(sqlc.arg(search) AS TEXT)) AS INTEGER) AS text_match FROM variants

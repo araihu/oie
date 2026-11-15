@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"github.com/araihu/oie/internal/domain"
 )
@@ -20,4 +21,23 @@ func (e *Engine) AcceptedSendMessage(ctx context.Context, operationID domain.ID)
 		return domain.Message{}, ErrProtocolUnavailable
 	}
 	return repo.AcceptedSendMessage(ctx, operationID)
+}
+
+// VerifyExpiredSend checks only a durable receipt. A missing or mismatched
+// operation never queues a new message.
+func (e *Engine) VerifyExpiredSend(ctx context.Context, key, conversation domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview) error {
+	if !validID(key) || !validID(conversation) {
+		return ErrInvalid
+	}
+	fingerprint, _, err := sendIntentFingerprint(conversation, in, at, review)
+	if err != nil {
+		return err
+	}
+	repo, ok := e.repo.(interface {
+		VerifyExpiredSend(context.Context, domain.ID, string) error
+	})
+	if !ok {
+		return ErrProtocolUnavailable
+	}
+	return repo.VerifyExpiredSend(ctx, key, fingerprint)
 }

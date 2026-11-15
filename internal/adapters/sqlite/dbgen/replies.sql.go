@@ -169,7 +169,7 @@ func (q *Queries) InsertMessageReply(ctx context.Context, arg InsertMessageReply
 }
 
 const messagesAfterTarget = `-- name: MessagesAfterTarget :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?1
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages m WHERE m.conversation_id=?1
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=?2
@@ -210,6 +210,7 @@ func (q *Queries) MessagesAfterTarget(ctx context.Context, arg MessagesAfterTarg
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}
@@ -225,7 +226,7 @@ func (q *Queries) MessagesAfterTarget(ctx context.Context, arg MessagesAfterTarg
 }
 
 const messagesAtOrBeforeTarget = `-- name: MessagesAtOrBeforeTarget :many
-SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms FROM messages m WHERE m.conversation_id=?1
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages m WHERE m.conversation_id=?1
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
 AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=?2
@@ -266,6 +267,7 @@ func (q *Queries) MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOr
 			&i.Payload,
 			&i.CreatedAtMs,
 			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
 		); err != nil {
 			return nil, err
 		}

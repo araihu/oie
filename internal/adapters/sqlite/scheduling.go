@@ -78,6 +78,9 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 		return application.MessageResult{}, err
 	}
 	if receipt != nil {
+		if receipt.Result == "null" {
+			return application.MessageResult{}, application.ErrNotFound
+		}
 		var m domain.Message
 		err = json.Unmarshal([]byte(receipt.Result), &m)
 		if err == nil {

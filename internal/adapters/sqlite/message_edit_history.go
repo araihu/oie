@@ -77,7 +77,14 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 			return page, err
 		}
 		content.Sender.PersonalAddress = ""
-		item := domain.MessageEditHistoryItem{RevisionID: domain.ID(source.RevisionID), SourceMessageID: domain.ID(source.SourceID), CreatedAt: at.UTC(), OriginalText: content.OriginalText, Sender: content.Sender, ParentRevisionIDs: []domain.ID{}}
+		if err := hydrateReply(ctx, q, &content); err != nil {
+			return page, err
+		}
+		text := content.OriginalText
+		if content.Reply != nil && content.Reply.OriginalExpired {
+			text = content.Reply.BodyText
+		}
+		item := domain.MessageEditHistoryItem{RevisionID: domain.ID(source.RevisionID), SourceMessageID: domain.ID(source.SourceID), CreatedAt: at.UTC(), OriginalText: text, Sender: content.Sender, ParentRevisionIDs: []domain.ID{}}
 		nodes[item.SourceMessageID] = &historyNode{item: item, source: content}
 	}
 	original := nodes[canonical]
@@ -188,12 +195,12 @@ type historyNode struct {
 }
 
 func historyProofValid(proof dbgen.ListMessageHistoryProofsRow, source domain.Message) bool {
-	if proof.ProofPayload == nil || !correctionValid(&domain.MessageCorrection{Scope: proof.Scope, Author: proof.Author, ID: proof.RemoteID, TargetID: proof.TargetID}) || bodyHash(source.OriginalText) != proof.SourceHash {
+	if proof.ProofPayload == nil || !correctionValid(&domain.MessageCorrection{Scope: proof.Scope, Author: proof.Author, ID: proof.RemoteID, TargetID: proof.TargetID}) || source.SourceBodyHash() != proof.SourceHash {
 		return false
 	}
 	var observed domain.Message
 	if json.Unmarshal([]byte(*proof.ProofPayload), &observed) != nil {
 		return false
 	}
-	return observed.ID == source.ID && observed.AccountID == source.AccountID && observed.ConversationID == source.ConversationID && observed.RevisionID == domain.ID(proof.SourceRevisionID) && bodyHash(observed.OriginalText) == proof.SourceHash
+	return observed.ID == source.ID && observed.AccountID == source.AccountID && observed.ConversationID == source.ConversationID && observed.RevisionID == domain.ID(proof.SourceRevisionID) && observed.SourceBodyHash() == proof.SourceHash
 }

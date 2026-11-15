@@ -1217,7 +1217,7 @@ components:
         accepted:
           example: true
           type: boolean
-          description: A matching persisted operation and message exist.
+          description: A matching persisted send receipt exists. Its message can have expired.
         message:
           example: Message saved by the engine.
           type: string
@@ -1226,11 +1226,11 @@ components:
           example: 019a5df0-0000-7000-8000-000000000004
           type: string
           format: uuid
-          description: Canonical accepted message to replace the local bubble.
+          description: Canonical accepted message ID, including when the message has expired.
         state:
           example: queued
           type: string
-          description: Engine transport evidence, independent of acceptance.
+          description: Engine transport evidence, independent of acceptance. Expired indicates the message has been removed.
         nextKey:
           example: 019a5df0-0000-7000-8000-000000000007
           type: string

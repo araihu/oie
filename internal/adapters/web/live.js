@@ -766,7 +766,9 @@ window.OieRuntime.register('live', life => {
     if(!result.accepted||!canonicalID(result.messageId)||!canonicalID(result.nextKey))return false;
     const key=journal?.key;if(!journal?.pending)return false;
     const scheduled=journal.scheduledAt||editingSchedule;
-    if(!scheduled)acceptPendingSend(result.messageId);
+    if(result.state==='expired'&&pendingBubble){
+      window.Alpine?.destroyTree(pendingBubble);pendingBubble.remove();pendingBubble=null;
+    }else if(!scheduled&&result.state!=='expired')acceptPendingSend(result.messageId);
     clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);renderReply();
     if(scheduled&&result.message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',message:result.message}}));
     if(editingSchedule&&result.redirect)finishScheduleEdit(result.redirect,result.nextKey);
@@ -1221,6 +1223,16 @@ window.OieRuntime.register('live', life => {
   if (!mock) {
     const handlers = {
       'message.updated': messageUpdated,
+      'conversation.history_pruned': event => {
+        try {
+          const history = JSON.parse(event.data).historyPruned;
+          if (Array.isArray(history?.messageIds)) {
+            if (history.conversationId === body.dataset.conversationId) window.OieTimeline?.expire?.(history.messageIds);
+            document.dispatchEvent(new CustomEvent('oie:history-pruned',{detail:history}));
+          }
+        } catch {}
+        scheduleRefresh();
+      },
       'profile.avatar_changed': event => {
         try {
           const avatar = JSON.parse(event.data).avatar;

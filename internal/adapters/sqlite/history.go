@@ -52,6 +52,15 @@ func (s *Store) HistoryCheckpoint(ctx context.Context, id domain.ID, scope strin
 	return v, err
 }
 func (s *Store) CommitHistoryCheckpoint(ctx context.Context, id domain.ID, scope, after string) error {
+	if revision, guarded := application.ArchiveRetentionRevisionFrom(ctx); guarded {
+		n, err := s.queries.PutGuardedArchiveCheckpoint(ctx, dbgen.PutGuardedArchiveCheckpointParams{
+			AccountID: string(id), Scope: scope, AfterID: after, RetentionRevision: revision,
+		})
+		if err == nil && n == 0 {
+			return application.ErrStateConflict
+		}
+		return err
+	}
 	return s.queries.PutArchiveCheckpoint(ctx, dbgen.PutArchiveCheckpointParams{AccountID: string(id), Scope: scope, AfterID: after})
 }
 func (s *Store) RestoreConversation(ctx context.Context, c domain.Conversation) error {

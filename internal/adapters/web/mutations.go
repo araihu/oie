@@ -332,6 +332,26 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 			return acceptedResult(text, *receipt)
 		}
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	case "expired":
+		owner, err := s.client.GetConversationWithResponse(ctx, conversation)
+		if err != nil || owner.JSON200 == nil {
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
+		if owner.JSON200.Id != conversation || owner.JSON200.AccountId != account {
+			return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+		}
+		verify := true
+		params.XOieVerifyExpiredSend = &verify
+		response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
+		if err == nil {
+			if response.StatusCode() == http.StatusNoContent {
+				return 200, mutationResult{OK: true, Accepted: true, Message: text.MessageAccepted, MessageID: receipt.Id, State: "expired", NextKey: newOperationKey()}
+			}
+			if response.StatusCode() == http.StatusConflict {
+				return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
+			}
+		}
+		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	case "legacy":
 		if r.URL.Path == "/ui/messages/reconcile" {
 			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}

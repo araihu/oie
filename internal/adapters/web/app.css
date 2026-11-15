@@ -172,6 +172,17 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 #settings-language:has([data-value="pt-BR"][aria-selected="true"]) [data-combobox-trigger-label-outer]::before{content:"🇧🇷" / "";margin-inline-end:.5em}
 .oie-settings-section h2{margin:8px 0 0;font-weight:650;font-size:14px}
 .oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
+.oie-device-retention{border-top:1px solid var(--oie-border);margin-top:20px;padding-top:10px}
+.oie-device-retention h2{display:flex;align-items:center;gap:8px}
+.oie-device-retention h2 .oie-icon{width:16px;height:16px}
+.oie-info-retention{padding:16px 12px 24px}
+.oie-info-retention h2{font-size:19px;font-weight:650;line-height:1.3;margin:0 0 17px;outline-color:var(--oie-accent-text);outline-offset:4px;width:fit-content}
+:is(.oie-retention-form,.oie-retention-fields){display:grid;gap:16px;min-inline-size:0}
+.oie-retention-help,.oie-retention-load{display:grid;gap:10px}
+.oie-retention :is(.oie-retention-help,.oie-retention-load,.oie-retention-actions) p{font-size:13px;line-height:1.6;color:var(--oie-muted)}
+.oie-retention-load button{justify-self:start}
+.oie-retention-actions button[aria-disabled=true]{opacity:.65;cursor:wait}
+.oie-retention-actions{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px}
 .oie-settings-links{display:flex;gap:15px;flex-wrap:wrap}.oie-settings-note{border-top:1px solid var(--oie-border);padding-top:16px}
 .oie-accounts{list-style:none;margin:0;padding:0}.oie-accounts li{padding:16px 0;border-bottom:1px solid var(--oie-border)}.oie-accounts span{font-size:11px;color:var(--oie-muted)}
 .oie-details{display:flex;flex-direction:column;gap:20px;padding:12px}.oie-details h2{font-size:20px;font-weight:650}.oie-details h3{font-size:13px;font-weight:650}.oie-details p,.oie-details li{font-size:13px;color:var(--oie-muted)}.oie-details ul{display:flex;flex-direction:column;gap:12px}

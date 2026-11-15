@@ -107,6 +107,35 @@ func (q *Queries) PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckp
 	return err
 }
 
+const putGuardedArchiveCheckpoint = `-- name: PutGuardedArchiveCheckpoint :execrows
+INSERT INTO archive_checkpoints(account_id,scope,after_id)
+SELECT ?1,?2,?3
+WHERE (SELECT g.archive_revision+COALESCE(a.revision,0)
+ FROM global_retention g LEFT JOIN account_archive_retention a ON a.account_id=?1
+ WHERE g.singleton=1)=?4
+ON CONFLICT(account_id,scope) DO UPDATE SET after_id=excluded.after_id
+`
+
+type PutGuardedArchiveCheckpointParams struct {
+	AccountID         string
+	Scope             string
+	AfterID           string
+	RetentionRevision int64
+}
+
+func (q *Queries) PutGuardedArchiveCheckpoint(ctx context.Context, arg PutGuardedArchiveCheckpointParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, putGuardedArchiveCheckpoint,
+		arg.AccountID,
+		arg.Scope,
+		arg.AfterID,
+		arg.RetentionRevision,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const putHistoryStatus = `-- name: PutHistoryStatus :exec
 INSERT INTO history_status(account_id,payload) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET payload=excluded.payload
 `
