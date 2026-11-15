@@ -25,6 +25,7 @@ require (
 )
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.14.5 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
