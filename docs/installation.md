@@ -10,7 +10,7 @@ volume to retain accounts, SQLite history, and media across container updates.
 docker run -d --name oie \
   --publish 127.0.0.1:8080:8080 \
   --volume oie-data:/data \
-  ghcr.io/araihu/oie:v0.0.1-rc.18
+  ghcr.io/araihu/oie:v0.0.1-rc.19
 ```
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
@@ -26,7 +26,7 @@ CI builds and tests both architectures on pull requests and pushes to
 `main`. When both container tests pass on `main`, CI publishes
 `sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
-`v0.0.1-rc.18` publish a versioned image after the corresponding source is available on GitHub
+`v0.0.1-rc.19` publish a versioned image after the corresponding source is available on GitHub
 Releases. The image carries its source URL and checksum in `/licenses/SOURCE.txt`. `:latest` follows the highest
 canonical application version by SemVer, including prereleases. Use the
 published digest from the workflow summary to pin an exact image.
@@ -69,11 +69,11 @@ one application. In **Settings → General → Engine**, keep **Local** to run
 the engine on this device or choose **Remote** to use a hosted engine.
 Add an existing XMPP account after launching.
 
-The current release candidate is **v0.0.1-rc.18**. See the
-[release notes](releases/v0.0.1-rc.18.md) for changes since rc.17.
+The current release candidate is **v0.0.1-rc.19**. See the
+[release notes](releases/v0.0.1-rc.19.md) for changes since rc.18.
 
 Download packages and the installer from
-[v0.0.1-rc.18 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.18).
+[v0.0.1-rc.19 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.19).
 Source installation from the same immutable tag remains available.
 
 ## Install a release package
@@ -96,8 +96,8 @@ Save the release installer, then run it as your current user:
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output oie-install.sh \
-  https://github.com/araihu/oie/releases/download/v0.0.1-rc.18/install.sh &&
-sh ./oie-install.sh --version v0.0.1-rc.18
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.19/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.19
 ```
 
 You can inspect `oie-install.sh` before running the second command. Do not use
@@ -117,7 +117,7 @@ prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
 For example:
 
 ```sh
-sh ./oie-install.sh --version v0.0.1-rc.18 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --version v0.0.1-rc.19 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
@@ -125,14 +125,14 @@ The release assets are:
 
 | Asset | Contents |
 | --- | --- |
-| `oie_v0.0.1-rc.18_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
-| `oie_v0.0.1-rc.18_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
-| `oie_v0.0.1-rc.18_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
+| `oie_v0.0.1-rc.19_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.19_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.19_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
 | `install.sh` | Per-user installer for both targets |
 | `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
 | `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
 
-Both archives are built from the immutable `v0.0.1-rc.18` tag. The receipt
+Both archives are built from the immutable `v0.0.1-rc.19` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
 
