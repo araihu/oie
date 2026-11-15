@@ -175,7 +175,7 @@ templ sourceRouteFragment(v view) {
 }
 
 templ routeContent(v view) {
-<div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)}>
+<div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)} data-engine-unavailable?={v.Unavailable}>
 if !v.CompactSource {
 <div data-route-shared-copy>
 @liveCopy(v)

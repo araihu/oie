@@ -225,7 +225,7 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 		}
 		seen <- r.Header.Get("Last-Event-ID")
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = io.WriteString(w, ": upstream\n\n")
+		_, _ = io.WriteString(w, ": upstream\n\n: heartbeat\n\n")
 		w.(http.Flusher).Flush()
 		select {
 		case <-r.Context().Done():
@@ -251,7 +251,8 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 		t.Fatalf("reconnect cursor lost: %s", got)
 	}
 	data, err := io.ReadAll(response.Body)
-	if err != nil || !strings.HasPrefix(string(data), ": connected\n\nevent: oie.live\ndata: \""+testEngine+":1\"\n\n") || !strings.Contains(string(data), "message.created") {
+	if err != nil || !strings.HasPrefix(string(data), ": connected\n\nevent: oie.live\ndata: \""+testEngine+":1\"\n\n") ||
+		!strings.Contains(string(data), "event: oie.heartbeat\ndata: {}\n\nid: "+testEngine+":2\n") || !strings.Contains(string(data), "message.created") {
 		t.Fatalf("stream ended at normal timeout: %s %v", data, err)
 	}
 }

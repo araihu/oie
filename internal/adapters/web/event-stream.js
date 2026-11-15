@@ -9,33 +9,56 @@
     'conversation.room_session_changed', 'message.star_changed'
   ];
   const inboxEvents = new Set(['account.registered', 'account.removed', 'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated']);
-  let source, engine = '', cursor = '', connected = false, replaced = false;
+  const idleTimeout = 40000;
+  let source, retry, watchdog, lastActivity = 0, delay = 500;
+  let engine = '', cursor = '', connected = false, replaced = false, suspended = false;
 
   function emit(type, detail) {
     target.dispatchEvent(new CustomEvent(type, {detail}));
   }
 
   function stop() {
+    clearTimeout(retry);
+    clearTimeout(watchdog);
+    retry = undefined;
     source?.close();
     source = undefined;
     connected = false;
   }
 
+  function reconnect(connection) {
+    if (source !== connection) return;
+    stop();
+    window.OieInbox.invalidate();
+    emit('error');
+    if (suspended || replaced) return;
+    retry = setTimeout(() => { retry = undefined; connect(); }, delay * (0.75 + Math.random() * 0.25));
+    delay = Math.min(15000, delay * 2);
+  }
+
   function connect() {
+    if (source || retry !== undefined || suspended || replaced) return;
     const connection = new EventSource('/ui/events?cursor=' + encodeURIComponent(cursor));
     source = connection;
     let liveAfter = null;
+    function activity() {
+      lastActivity = Date.now();
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => reconnect(connection), idleTimeout);
+    }
+    activity();
     connection.onopen = () => {
-      liveAfter = null;
+      if (source !== connection) return;
       connected = true;
+      activity();
       emit('open');
     };
-    connection.onerror = () => {
-      connected = false;
-      window.OieInbox.invalidate();
-      if (connection.readyState === EventSource.CLOSED) stop();
-      emit('error');
-    };
+    connection.onerror = () => reconnect(connection);
+    connection.addEventListener('oie.heartbeat', () => {
+      if (source !== connection) return;
+      delay = 500;
+      activity();
+    });
     function sequence(id) {
       const prefix = engine + ':';
       if (typeof id !== 'string' || !id.startsWith(prefix)) return null;
@@ -43,11 +66,15 @@
       return /^\d+$/.test(value) ? BigInt(value) : null;
     }
     connection.addEventListener('oie.live', event => {
+      if (source !== connection) return;
+      activity();
       try { liveAfter = sequence(JSON.parse(event.data)); }
       catch { liveAfter = null; }
     });
     for (const type of eventTypes) {
       connection.addEventListener(type, event => {
+        if (source !== connection) return;
+        activity();
         if (event.lastEventId) cursor = event.lastEventId;
         if (inboxEvents.has(type)) window.OieInbox.invalidate();
         emit(type, event);
@@ -60,8 +87,10 @@
       });
     }
     connection.addEventListener('oie.reset', event => {
+      if (source !== connection) return;
       try {
         const reset = JSON.parse(event.data);
+        if (typeof reset.engineId !== 'string' || typeof reset.cursor !== 'string') throw new Error('invalid reset');
         if (reset.engineId !== engine) {
           markReplaced();
           emit('engine-changed');
@@ -71,7 +100,7 @@
         window.OieInbox.invalidate();
         cursor = reset.cursor;
         connect();
-      } catch { emit('error'); }
+      } catch { reconnect(connection); }
     });
   }
 
@@ -83,8 +112,9 @@
       engine = id;
       cursor = snapshotCursor;
       replaced = false;
+      delay = 500;
     }
-    if (!source && !replaced) connect();
+    connect();
   }
 
   function latest(snapshotCursor) {
@@ -101,12 +131,20 @@
     window.OieInbox.clear();
   }
 
-  window.addEventListener('pagehide', stop);
-  window.addEventListener('pageshow', event => {
-    if (!event.persisted || !engine || replaced) return;
-    window.OieInbox.invalidate();
+  function wake() {
+    if (!engine || replaced || suspended) return;
+    if (source && Date.now() - lastActivity < idleTimeout) return;
+    stop();
     connect();
+  }
+
+  window.addEventListener('pagehide', () => { suspended = true; stop(); });
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    suspended = false;
+    window.OieInbox.invalidate();
+    wake();
   });
 
-  window.OieEvents = {target, sync, stop, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
+  window.OieEvents = {target, sync, wake, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
 })();

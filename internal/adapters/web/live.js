@@ -8,6 +8,7 @@ window.OieRuntime.register('live', life => {
   const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet || !message; } };
   const errorToast = message => { if (message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message}})); };
   const mock = body.dataset.mock === 'true';
+  const recoveringView = document.getElementById('oie-route')?.hasAttribute('data-engine-unavailable');
   const events = window.OieEvents, inbox = window.OieInbox;
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let accountRenameEpoch = 0;
@@ -880,6 +881,10 @@ window.OieRuntime.register('live', life => {
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
         engineChanged(); return;
       }
+      if (recoveringView && regions.dataset.engineId) {
+        await window.OieNavigation.go(location.href,{history:true,workspace:'oie-app',noInboxReuse:true});
+        return;
+      }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
       if(pinned())showJump(true);
@@ -1435,7 +1440,13 @@ window.OieRuntime.register('live', life => {
     scheduleRefresh();retryPending();
   }
   life.interval(() => { if (!document.hidden) recoverLive(); },15000);
-  life.on(window,'online', () => {inbox.invalidate();recoverLive();});
+  function wakeLive(){
+    if(mock||stopped)return;
+    inbox.invalidate();events.wake();recoverLive();
+  }
+  life.on(window,'online',wakeLive);
+  life.on(document,'visibilitychange',()=>{if(!document.hidden)wakeLive();});
+  if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
     const show = () => {

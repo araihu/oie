@@ -66,7 +66,7 @@ async function run() {
   const streams = new Set();
   const events = [];
   const messages = new Map();
-  let seq = 0;
+  let seq = 0, engineAvailable = true, eventsAvailable = true;
   const chats = [[chat, 'direct', false], [other, 'direct', false], [room, 'room', false], [archivedRoom, 'room', true]]
     .map(([id, kind, archived], index) => ({
       id, revisionId: revision, accountId: account, kind, archived, address: 'chat' + index + '@example',
@@ -98,6 +98,7 @@ async function run() {
       res.writeHead(status, {'Content-Type': 'application/json'}).end(JSON.stringify(value));
     };
     const route = url.pathname;
+    if (!engineAvailable || route === '/api/v1/events' && !eventsAvailable) return send({status: 503}, 503);
     if (route === '/api/v1/engine') return send({id: engine, role: 'hosted', apiVersion: '0.31.0', eventCursor: engine + ':' + seq});
     if (route === '/api/v1/accounts') return send({items: [profile]});
     if (route === '/api/v1/accounts/' + account) return send(profile);
@@ -193,6 +194,26 @@ async function run() {
         return startSound.apply(this, args);
       };
     });
+    for (const [width, lang] of [[1440, 'en'], [390, 'pt-BR']]) {
+      engineAvailable = false;
+      const cold = await profile.newPage();
+      await cold.setViewportSize({width, height: 900});
+      const address = base + '/?lang=' + lang + '&chat=' + chat;
+      const response = await cold.goto(address);
+      assert.equal(response.status(), 503);
+      await cold.locator('body[data-oie-live-ready]').waitFor();
+      assert.equal(await cold.locator('#oie-route[data-engine-unavailable]').count(), 1);
+      assert.equal(await cold.locator('#message-composer').count(), 0);
+      await cold.evaluate(() => { window.initialDocument = true; });
+      engineAvailable = true;
+      await cold.evaluate(() => window.dispatchEvent(new Event('online')));
+      await cold.locator('#message-composer').waitFor({state: 'visible'});
+      await cold.waitForFunction(() => window.OieEvents.connected);
+      assert.equal(await cold.evaluate(() => window.initialDocument), true);
+      assert.equal(cold.url(), address);
+      await cold.close();
+      await until(() => streams.size === 0, 'cold-start stream closed');
+    }
     const first = await profile.newPage();
     const second = await profile.newPage();
     // The first tab uses Chromium's playback path. Use offline decoding and a
@@ -305,11 +326,44 @@ async function run() {
     assert.equal(await total('alerts'), 1, 'same-origin claim and repeated ID');
     assert.equal(await total('playedSounds'), 2);
 
-    // Reconnect from the last cursor and recover a new, previously unseen ID.
+    // Return an HTTP error on reconnect, then replay from the last received ID.
+    eventsAvailable = false;
+    const failedStream = first.waitForResponse(response => new URL(response.url()).pathname === '/ui/events' && response.status() === 503);
+    const composer = first.locator('#message-composer');
+    await first.bringToFront();
+    await composer.fill('Draft during reconnect');
+    const beforeReconnect = await first.evaluate(() => {
+      const sample = () => ['#message-composer', '#message-timeline'].map(selector => {
+        const {x, y, width, height} = document.querySelector(selector).getBoundingClientRect();
+        return [x, y, width, height];
+      });
+      window.reconnectFrames = [];
+      window.reconnectSampling = true;
+      const nextFrame = () => {
+        if (!window.reconnectSampling) return;
+        window.reconnectFrames.push(sample());
+        requestAnimationFrame(nextFrame);
+      };
+      requestAnimationFrame(nextFrame);
+      return sample();
+    });
     for (const stream of streams) stream.end();
+    await failedStream;
     await until(() => streams.size === 0, 'disconnected streams');
     push();
-    await until(() => streams.size === 2, 'reconnect');
+    eventsAvailable = true;
+    await until(() => streams.size === 2, 'reconnect after HTTP 503');
+    assert.equal(await composer.inputValue(), 'Draft during reconnect');
+    assert.equal(await composer.evaluate(node => document.activeElement === node), true);
+    const recoveryFrames = await first.evaluate(() => {
+      window.reconnectSampling = false;
+      return window.reconnectFrames;
+    });
+    assert(recoveryFrames.length >= 3);
+    for (const frame of recoveryFrames) frame.forEach((row, i) => row.forEach((value, j) => {
+      assert(Math.abs(value - beforeReconnect[i][j]) <= 1, 'chat geometry changed during reconnection');
+    }));
+    await composer.fill('');
     await pause(500);
     assert.equal(await total('alerts'), 1, 'replay stayed silent');
     assert.equal(await total('playedSounds'), 2);
