@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/araihu/oie/internal/diagnostics"
 )
 
 // Native WebKit scheme handlers stream HTTP responses, but do not retain HTTP
@@ -22,9 +23,10 @@ import (
 // Only the two device preferences are written to disk. The CSRF token rotates
 // whenever the desktop process starts.
 type nativeCookies struct {
-	mu     sync.Mutex
-	path   string
-	values map[string]string
+	mu          sync.Mutex
+	path        string
+	values      map[string]string
+	diagnostics *diagnostics.Logger
 }
 
 func newNativeCookies(dataDir string) (*nativeCookies, error) {
@@ -202,7 +204,7 @@ func (w *nativeCookieWriter) WriteHeader(status int) {
 	}
 	w.wrote = true
 	if err := w.store.capture(w.Header()); err != nil {
-		slog.Error("save desktop preferences", "error", err)
+		w.store.diagnostics.Record(diagnostics.PreferencesFailed, 0, 0)
 		w.failed = true
 		w.Header().Del("Content-Length")
 		w.ResponseWriter.WriteHeader(http.StatusInternalServerError)

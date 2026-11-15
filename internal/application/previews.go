@@ -551,6 +551,9 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 	p.RefreshRequested = false
 	if fetchErr != nil {
 		p.LastErrorCode = previewFailureCode(fetchErr)
+		if e.diagnostics != nil {
+			e.diagnostics.ReportMediaFailure()
+		}
 		if original {
 			p.DownloadState = "failed"
 		} else {

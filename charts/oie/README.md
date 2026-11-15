@@ -1,11 +1,11 @@
 # Oiê Helm chart
 
-See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.2/docs/installation.md#run-on-kubernetes-with-helm)
+See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.3/docs/installation.md#run-on-kubernetes-with-helm)
 for installation and access via `kubectl port-forward`.
 
-Chart releases use their own version. Chart `0.2.2` defaults to the Oiê image
-`v0.0.1-rc.21`. Download the packaged chart and its checksum from
-[Helm chart 0.2.2](https://github.com/araihu/oie/releases/tag/helm-v0.2.2).
+Chart releases use their own version. Chart `0.2.3` defaults to the Oiê image
+`v0.0.1-rc.24`. Download the packaged chart and its checksum from
+[Helm chart 0.2.3](https://github.com/araihu/oie/releases/tag/helm-v0.2.3).
 
 | Setting | Default | Use |
 | --- | --- | --- |
@@ -19,6 +19,8 @@ Chart releases use their own version. Chart `0.2.2` defaults to the Oiê image
 | `persistence.storageClass` | Cluster default | Set a class name or use `""` for a volume without a storage class. |
 | `persistence.accessMode` | `ReadWriteOnce` | Use `ReadWriteOncePod` if your cluster and CSI driver support it. |
 | `persistence.size` | `10Gi` | Set the capacity requested for a new claim. Expansion depends on the StorageClass. |
+| `diagnostics.existingSecret` | Empty | Use an existing Secret for Diagnostics with a legacy image behind an authenticated proxy. |
+| `diagnostics.secretKey` | `key` | Name of the Secret entry containing the diagnostics access key. |
 | `resources` | `{}` | Set CPU and memory requests or limits for the pod. |
 
 The pod runs as UID and GID `65532`. The storage driver or volume
@@ -110,6 +112,17 @@ of an individual request from the Gateway to Oiê. Use Gateway API duration
 strings such as `"30s"`, Gateway API CRDs from v1.2.0 or later, and a
 controller that supports the fields you set.
 See [HTTPRoute timeouts](https://gateway-api.sigs.k8s.io/reference/api-types/httproute/#timeouts-optional).
+
+## Diagnostics
+
+With `hosted.enabled`, the authenticated owner can open **Settings →
+Diagnostics**. API clients can use an Oiê API key to read the same snapshot.
+For an older image behind an external authenticated proxy, set
+`diagnostics.existingSecret` to a Secret with the legacy access key. The
+entry defaults to `key` and can be changed with `diagnostics.secretKey`.
+
+Operators can also use `kubectl logs -n oie statefulset/oie`. The pod retains
+bounded log files under `/data/diagnostics/` using the configured persistence.
 
 ## Publishing a chart version
 

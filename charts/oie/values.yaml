@@ -7,6 +7,11 @@ image:
 
 imagePullSecrets: []
 
+diagnostics:
+  # Name of a Secret in the release namespace holding the owner access key.
+  existingSecret: ""
+  secretKey: key
+
 persistence:
   enabled: true
   # Reuse a PersistentVolumeClaim in the release namespace.

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/diagnostichttp"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
@@ -285,6 +286,7 @@ func prefersProblemDocumentation(header http.Header) bool {
 }
 
 func writeProblemDocument(w http.ResponseWriter, r *http.Request, problem engineapi.Problem) {
+	diagnostichttp.HTTPProblem(r, problem.Status)
 	if _, documented := problemTitles[string(problem.Code)]; documented {
 		documentation := problemDocumentationURL + "#" + string(problem.Code)
 		w.Header().Add("Link", "<"+documentation+`>; rel="help"`)

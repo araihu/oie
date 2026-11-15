@@ -65,3 +65,35 @@ window.OieRuntime.register('actions', life => {
     window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
   });
 })();
+
+window.OieRuntime.register('diagnostics', life => {
+  let opening, viewer;
+  const close = () => {
+    opening = undefined;
+    viewer?.close();
+  };
+  life.on(window, 'drawer:open', async event => {
+    if (event.detail?.id !== 'diagnostics') return;
+    const panel = document.querySelector('[data-diagnostics]');
+    if (!panel) return;
+    const pending = opening = {};
+    const status = panel.querySelector('[data-diagnostics-status]');
+    status.textContent = panel.dataset.loading;
+    try {
+      viewer = await import('/ui/diagnostics.js');
+      if (opening === pending && panel.isConnected) viewer.open();
+    } catch {
+      if (opening === pending) status.textContent = panel.dataset.unavailable;
+    }
+  });
+  for (const name of ['drawer:close', 'drawer:close-request']) {
+    life.on(window, name, event => {
+      if (event.detail?.id !== 'diagnostics') return;
+      const pending = opening;
+      queueMicrotask(() => {
+        if (!event.defaultPrevented && opening === pending) close();
+      });
+    });
+  }
+  life.cleanup(close);
+});

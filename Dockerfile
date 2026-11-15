@@ -15,10 +15,11 @@ COPY packaging/licenses/ packaging/licenses/
 ARG TARGETOS
 ARG TARGETARCH
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
-RUN go build -mod=readonly -tags=server -trimpath -buildvcs=false -ldflags="-s -w" -o /out/oie ./cmd/oie
-
 ARG OIE_RELEASE_VERSION
 ARG OIE_RELEASE_REVISION
+RUN go build -mod=readonly -tags=server -trimpath -buildvcs=false \
+  -ldflags "-s -w -X github.com/araihu/oie/internal/diagnostics.buildVersion=${OIE_RELEASE_VERSION:-$OIE_RELEASE_REVISION}" \
+  -o /out/oie ./cmd/oie
 ARG OIE_SOURCE_URL
 ARG OIE_SOURCE_SHA256
 RUN set -eu; \

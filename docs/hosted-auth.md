@@ -47,6 +47,8 @@ Local and development BFF roles are for trusted access. Use `--role hosted`
 for a public installation. The hosted browser holds a seven-day session and has
 a **Sign out** action in Settings. API clients use bearer keys. All engine API
 routes require a key, including health, events, and the served API contract.
+[Diagnostics](diagnostics.md#access-server-diagnostics) uses the same owner
+session or API key.
 `--data-only` serves the authenticated API without the browser interface.
 
 ## Create and revoke API keys

@@ -92,7 +92,16 @@ type Repository interface {
 
 type NewID func() (domain.ID, error)
 
+// EngineDiagnostics observes operational outcomes without receiving user data
+// or arbitrary errors. It is installed by the application host before Run.
+type EngineDiagnostics interface {
+	ReportSendOutcome(state string, elapsed time.Duration)
+	ReportMediaFailure()
+	ReportRetentionFailure()
+}
+
 type Engine struct {
+	diagnostics       EngineDiagnostics
 	repo              Repository
 	role              string
 	newID             NewID
@@ -124,6 +133,8 @@ func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine
 		previewWork: make(chan struct{}, 1), draftPreviewSlots: make(chan struct{}, 2), eventWake: make(chan struct{}),
 	}, nil
 }
+
+func (e *Engine) SetDiagnostics(observer EngineDiagnostics) { e.diagnostics = observer }
 
 func (e *Engine) Ping(ctx context.Context) error { return e.repo.Ping(ctx) }
 

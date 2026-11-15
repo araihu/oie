@@ -1,9 +1,9 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const { chromium } = require('playwright');
+const { startOie } = require('./fixtures/oie-server.cjs');
 
 const id = number => '019a5df0-0000-7000-8000-' + String(number).padStart(12, '0');
 const engine = id(1);
@@ -81,22 +81,12 @@ const messages = [source, message(12, 'Message with a rejected destination')];
   });
   api.listen(0, '127.0.0.1');
   await once(api, 'listening');
-  const child = spawn(process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie'), [
-    '--role', 'bff', '--listen', '127.0.0.1:0', '--engine-url', 'http://127.0.0.1:' + api.address().port,
-  ]);
-  const address = new Promise((resolve, reject) => {
-    let log = '';
-    child.stderr.on('data', chunk => {
-      log += chunk;
-      const match = log.match(/address=(http:\/\/127\.0\.0\.1:\d+)/);
-      if (match) resolve(match[1]);
-    });
-    child.once('error', reject);
-    child.once('exit', code => reject(new Error(`BFF exited (${code}): ${log}`)));
-  });
-  const browser = await chromium.launch();
+  let server, browser;
   try {
-    const base = await address;
+    const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
+    server = await startOie(binary, ['--role', 'bff', '--engine-url', 'http://127.0.0.1:' + api.address().port], '/ui/app.css');
+    const base = server.url;
+    browser = await chromium.launch();
     for (const fixture of [
       {
         lang: 'en', width: 1440, forward: 'Forward', retry: 'Try again', success: 'Messages queued for forwarding.',
@@ -146,10 +136,7 @@ const messages = [source, message(12, 'Message with a rejected destination')];
           if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.press('Enter');
           await action.press('Enter');
           await dialog.locator('[data-forward-form]').waitFor();
-          await dialog.locator('[data-forward-search]').evaluate(input => {
-            if (document.activeElement === input) return;
-            return new Promise(resolve => input.addEventListener('focus', resolve, { once: true }));
-          });
+          await page.waitForFunction(() => document.activeElement?.matches('#forward-message-dialog [data-forward-search]'));
         };
         const close = async () => {
           await dialog.evaluate(element => {
@@ -325,12 +312,8 @@ const messages = [source, message(12, 'Message with a rejected destination')];
     }
     console.log('PASS: interrupted forwarding and legacy receipts retry original keys, skip accepted rooms and keep deselected rooms unchecked in English and Portuguese');
   } finally {
-    await browser.close();
-    if (child.exitCode === null) {
-      const exited = once(child, 'exit');
-      child.kill();
-      await exited;
-    }
+    await browser?.close();
+    await server?.stop();
     for (const stream of streams) stream.end();
     api.closeAllConnections();
     await new Promise(resolve => api.close(resolve));

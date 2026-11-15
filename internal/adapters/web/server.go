@@ -18,6 +18,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/cachehttp"
+	"github.com/araihu/oie/internal/adapters/diagnostichttp"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web/appicons"
 
@@ -66,14 +67,16 @@ var presentationTimeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	devBuildID    string
-	hostedSignIn  bool
-	engineEditors []engineapi.RequestEditorFn
-	client        *engineapi.ClientWithResponses
-	archiveClient *engineapi.ClientWithResponses
-	streamClient  *engineapi.Client
-	catalogs      map[string]copy
-	engineMode    *engineMode
+	hostedSignIn      bool
+	devBuildID        string
+	engineEditors     []engineapi.RequestEditorFn
+	client            *engineapi.ClientWithResponses
+	archiveClient     *engineapi.ClientWithResponses
+	streamClient      *engineapi.Client
+	catalogs          map[string]copy
+	engineMode        *engineMode
+	diagnostics       *diagnosticsView
+	engineUnavailable bool
 }
 
 func New(engineURL string, options ...Option) (*Server, error) {
@@ -91,6 +94,15 @@ func New(engineURL string, options ...Option) (*Server, error) {
 		}
 	}
 	optionsFor := func(client *http.Client) []engineapi.ClientOption {
+		if server.engineUnavailable {
+			client.Transport = unavailableEngineTransport{}
+		} else if server.diagnostics != nil {
+			transport := client.Transport
+			if transport == nil {
+				transport = http.DefaultTransport
+			}
+			client.Transport = diagnostichttp.Transport(server.diagnostics.log, transport)
+		}
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 		options := []engineapi.ClientOption{engineapi.WithHTTPClient(client)}
 		for _, editor := range server.engineEditors {
@@ -192,6 +204,7 @@ type view struct {
 	RoomSession                                                                                   *engineapi.RoomSession
 	MessagingCapabilities                                                                         *engineapi.Capabilities
 	InfoView, InfoType, InfoCursor, InfoQuery, InfoFocus                                          string
+	Diagnostics, RemoteDiagnostics                                                                bool
 	SettingsTab                                                                                   string
 	InfoParticipants                                                                              *engineapi.RoomParticipants
 	InfoShared                                                                                    *engineapi.SharedContentPage
@@ -641,6 +654,13 @@ type copy struct {
 	About, BackToSettings, License, Attributions, LogoAttribution, EmojiData                                                                                             string
 	ValidationFailed, Edit, Done                                                                                                                                         string
 
+	Diagnostics, DiagnosticsRange, DiagnosticsHour, DiagnosticsDay, DiagnosticsWeek        string
+	DiagnosticsRefresh, DiagnosticsCopy, DiagnosticsDownload, DiagnosticsCopied            string
+	DiagnosticsLoading, DiagnosticsEmpty, DiagnosticsUnavailable, DiagnosticsEnterKey      string
+	DiagnosticsKey, DiagnosticsTruncated, DiagnosticsCopyFailed, DiagnosticsDownloadFailed string
+	DiagnosticsSource, DiagnosticsDevice, DiagnosticsServer, DiagnosticsUnlock             string
+	DiagnosticsDebug, DiagnosticsInfo, DiagnosticsWarning, DiagnosticsError                string
+
 	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview                string
 	NotificationTone, NotificationToneChoose, NotificationToneReset                                  string
 	NotificationToneUnsaved, NotificationToneInvalid, NotificationToneLarge, NotificationToneTrimmed string
@@ -742,6 +762,10 @@ var inboxCacheScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == DiagnosticsPath {
+		s.diagnostics.ServeHTTP(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/engine-mode" {
 		s.setEngineMode(w, r)
 		return
@@ -876,7 +900,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/timeline.js":        {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/video-frames.js": {"text/javascript", videoFramesScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
-		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/diagnostics.js": {"text/javascript", diagnosticsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -989,6 +1013,8 @@ func (s *Server) baseView(r *http.Request) view {
 	v.Text = s.catalogs[v.Locale]
 	v.EngineMode = s.engineMode
 	v.HostedSignIn = s.hostedSignIn
+	v.Diagnostics = s.diagnostics != nil
+	v.RemoteDiagnostics = v.Diagnostics && s.diagnostics.remote != nil
 	v.configureWorkspace(r)
 	v.Values["address"] = r.URL.Query().Get("newChatAddress")
 	v.Values["inviteRoom"] = roomFormAddress(r.URL.Query().Get("room"))

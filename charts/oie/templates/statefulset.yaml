@@ -64,6 +64,14 @@ spec:
           {{- else }}
           args: ["--listen", "0.0.0.0:8080", "--data-dir", "/data"]
           {{- end }}
+          {{- if and (not .Values.hosted.enabled) .Values.diagnostics.existingSecret }}
+          env:
+            - name: OIE_DIAGNOSTICS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.diagnostics.existingSecret | quote }}
+                  key: {{ .Values.diagnostics.secretKey | quote }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080

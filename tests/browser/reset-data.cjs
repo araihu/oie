@@ -1,10 +1,7 @@
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
-const { once } = require('node:events');
-const { mkdtemp, rm } = require('node:fs/promises');
-const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const { startOie } = require('./fixtures/oie-server.cjs');
 
 const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
 
@@ -192,21 +189,11 @@ async function testReset(browser, url, fixture) {
 }
 
 (async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'oie-reset-browser-'));
-  const child = spawn(binary, ['--role', 'hosted', '--listen', '127.0.0.1:0', '--data-dir', dir]);
-  const browser = await chromium.launch();
+  const server = await startOie(binary, ['--role', 'hosted'], '/api/v1/health');
+  const { url } = server;
+  let browser;
   try {
-    let log = '';
-    const address = new Promise((resolve, reject) => {
-      child.stderr.on('data', chunk => {
-        log += chunk;
-        const match = log.match(/address=(http:\/\/127\.0\.0\.1:\d+)/);
-        if (match) resolve(match[1]);
-      });
-      child.once('error', reject);
-      child.once('exit', code => reject(new Error(`engine exited (${code}): ${log}`)));
-    });
-    const url = await address;
+    browser = await chromium.launch();
     await testReset(browser, url, {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
       settings: 'Settings', general: 'General', about: 'About', theme: 'light',
@@ -226,13 +213,8 @@ async function testReset(browser, url, fixture) {
     });
     console.log('PASS: nested destructive actions, typed reset confirmation, cancellation, refusal, stable pending dialog and empty installation');
   } finally {
-    await browser.close();
-    if (child.exitCode === null) {
-      const exited = once(child, 'exit');
-      child.kill();
-      await exited;
-    }
-    await rm(dir, { recursive: true, force: true });
+    await browser?.close();
+    await server.stop();
   }
 })().catch(error => {
   console.error(error);

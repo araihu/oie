@@ -46,7 +46,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await search.fill('');await search.press('Escape');
    await until(async()=>await trigger.getAttribute('aria-expanded')==='false'&&await trigger.evaluate(node=>node===document.activeElement),'Escape closes only the picker and returns focus');
    await trigger.press('ArrowDown');
-   const beforeSame=fragments;await page.getByRole('option',{name:name[initial],exact:true}).focus();await page.keyboard.press('Enter');await page.waitForTimeout(180);assert.equal(fragments,beforeSame,'same-value choice must not navigate');assert.equal((await context.cookies()).find(cookie=>cookie.name==='oie_lang'),undefined);
+   const beforeSame=fragments;await page.getByRole('option',{name:name[initial],exact:true}).click();await page.waitForTimeout(180);assert.equal(fragments,beforeSame,'same-value choice must not navigate');assert.equal((await context.cookies()).find(cookie=>cookie.name==='oie_lang'),undefined);
    await page.evaluate(()=>window.languageDocumentToken=Math.random());const token=await page.evaluate(()=>window.languageDocumentToken),next=initial==='en'?'pt-BR':'en',beforeChange=fragments;
    let release,requestStarted;
    const held=new Promise(resolve=>{requestStarted=resolve;}),response=new Promise(resolve=>{release=resolve;});

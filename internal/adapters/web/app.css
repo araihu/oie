@@ -771,3 +771,86 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-notification-tone [data-notification-preview]{inline-size:44px;block-size:44px;padding:0;justify-content:center}
 .oie-notification-settings p{margin:0}
 .oie-notification-settings [role=status]{min-height:2lh}
+
+.oie-diagnostics {
+  display: grid;
+  gap: .75rem;
+  min-width: 0;
+}
+.oie-diagnostics-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+.oie-diagnostics-status {
+  margin: 0;
+  min-height: 1.5em;
+}
+.oie-diagnostics-content {
+  position: relative;
+  min-width: 0;
+}
+.oie-diagnostics-records {
+  height: clamp(12rem, 45vh, 26rem);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--oie-border);
+  border-radius: .5rem;
+}
+.oie-diagnostics-entry + .oie-diagnostics-entry {
+  border-block-start: 1px solid var(--oie-border);
+}
+.oie-diagnostics-entry > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .625rem;
+  cursor: pointer;
+  list-style: none;
+}
+.oie-diagnostics-entry > summary::-webkit-details-marker {
+  display: none;
+}
+.oie-diagnostics-entry > summary:hover,
+.oie-diagnostics-entry[open] > summary {
+  background: var(--oie-raised);
+}
+.oie-diagnostics-entry > summary:focus-visible {
+  outline: 2px solid var(--oie-accent);
+  outline-offset: -2px;
+}
+.oie-diagnostics-chevron {
+  color: var(--oie-muted);
+}
+.oie-diagnostics-entry[open] .oie-diagnostics-chevron {
+  transform: rotate(90deg);
+}
+.oie-diagnostics-entry-text {
+  display: grid;
+  gap: .125rem;
+  font-size: .8125rem;
+  overflow-wrap: anywhere;
+}
+.oie-diagnostics-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .125rem .5rem;
+  color: var(--oie-muted);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+.oie-diagnostics-entry > pre {
+  margin: 0;
+  padding: .625rem .75rem;
+  font-size: .75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.oie-diagnostics-access:not([hidden]) {
+  position: absolute;
+  inset: 1rem;
+  display: grid;
+  align-content: start;
+  gap: .75rem;
+}

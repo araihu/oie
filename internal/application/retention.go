@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"log/slog"
 	"strconv"
 	"time"
 
@@ -139,7 +138,9 @@ func (e *Engine) runRetention(ctx context.Context, repo retentionRepository) err
 			e.notifyEvents()
 		}
 		if err != nil && ctx.Err() == nil {
-			slog.Error("expire message history", "error", err)
+			if e.diagnostics != nil {
+				e.diagnostics.ReportRetentionFailure()
+			}
 		}
 		select {
 		case <-ctx.Done():

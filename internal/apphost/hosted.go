@@ -12,6 +12,7 @@ import (
 
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/oie/internal/adapters/hostauth"
+	"github.com/araihu/oie/internal/adapters/web"
 )
 
 // HostedConfig is the externally visible HTTPS origin and its transport.
@@ -95,12 +96,22 @@ func privateProxyPrefix(prefix netip.Prefix) bool {
 	return false
 }
 
-func (s *hostedServer) handler(api, browser http.Handler) http.Handler {
+func (s *hostedServer) handler(api, browser, diagnostics http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", preventCaching(s.auth.API(api)))
 	if browser != nil {
 		mux.Handle("GET /assets/", assets.Handler())
 		mux.Handle("/", preventCaching(browser))
+	}
+	if diagnostics != nil {
+		authorized := s.auth.API(diagnostics)
+		mux.Handle(web.DiagnosticsPath, preventCaching(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if browser != nil && len(r.Header.Values("Authorization")) == 0 {
+				browser.ServeHTTP(w, r)
+				return
+			}
+			authorized.ServeHTTP(w, r)
+		})))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

@@ -830,6 +830,7 @@ func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, spl
 	}
 	outgoing := outgoingMessage(claimed, c)
 	outgoing.RoomIntentRevisionID = roomRevision
+	attemptStarted := time.Now()
 	outcome := Failed
 	if err = e.attachOutgoingFiles(&outgoing, claimed); err == nil {
 		outcome = e.protocols.Send(sendCtx, a, outgoing)
@@ -841,6 +842,9 @@ func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, spl
 	case Submitted, Unknown, Failed:
 	default:
 		stateName = Unknown
+	}
+	if e.diagnostics != nil {
+		e.diagnostics.ReportSendOutcome(stateName, time.Since(attemptStarted))
 	}
 	rev, err = e.newID()
 	if err != nil {

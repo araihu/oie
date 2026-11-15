@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.6.0
+  version: 0.7.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -21,6 +21,49 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/diagnostics/log:
+    get:
+      tags: [Settings]
+      operationId: readDiagnosticsLog
+      summary: Read a bounded snapshot of the diagnostic log
+      description: Returns the latest 500 matching records in chronological order. Hosted and non-loopback access requires the configured diagnostics access key. Responses are never cached.
+      security:
+      - diagnosticsAccessKey: []
+      - {}
+      parameters:
+      - name: hours
+        in: query
+        description: Time window ending when the snapshot is read.
+        schema: {type: integer, enum: [1, 24, 168], default: 24}
+      - name: source
+        in: query
+        description: Server selects the configured hosted source in the desktop app.
+        schema: {type: string, enum: [local, server], default: local}
+      - name: X-Oie-Diagnostics
+        in: header
+        required: true
+        description: Explicit diagnostics request marker.
+        schema: {type: string, enum: ['1']}
+      responses:
+        '200':
+          description: Newline-delimited diagnostic records. An empty snapshot has an empty body.
+          headers:
+            X-Oie-Diagnostics-Truncated:
+              description: Set to 1 when older matching records were omitted.
+              schema: {type: string, enum: ['1']}
+          content:
+            application/x-ndjson:
+              schema: {type: string, format: binary}
+        '400':
+          description: Invalid time window.
+        '403':
+          description: Diagnostics access was denied.
+        '404':
+          description: The selected diagnostics source is unavailable in this instance.
+        '405':
+          description: The diagnostic snapshot supports GET only.
+        '503':
+          description: Diagnostic records could not be read.
   /:
     get:
       tags: [Conversations]
@@ -1103,6 +1146,12 @@ paths:
         '503':
           description: Rendering capacity is occupied
 components:
+  securitySchemes:
+    diagnosticsAccessKey:
+      description: Owner-configured key for access to hosted diagnostics.
+      type: apiKey
+      in: header
+      name: X-Oie-Diagnostics-Key
   schemas:
     NotificationContext:
       description: Current conversation and reply ownership used to decide whether an incoming message can play a sound.

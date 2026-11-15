@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/jid"
@@ -447,7 +448,14 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 		}
 		m.wakeAvatars(e)
 	}
+	started := time.Now()
 	outcomes := m.recoverAccountArchives(ctx, host, e, s)
+	for _, outcome := range outcomes {
+		if outcome.partial && ctx.Err() == nil {
+			m.diagnostics.Record(diagnostics.HistoryIncomplete, time.Since(started), 0)
+			break
+		}
+	}
 	anySupported := false
 	for _, outcome := range outcomes {
 		anySupported = anySupported || outcome.supported

@@ -13,6 +13,7 @@ import (
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
 	"github.com/gofrs/flock"
 	sqlitedriver "modernc.org/sqlite"
@@ -29,6 +30,7 @@ type Store struct {
 	closeErr           error
 	messageIndex       *messageIndex
 	searchIndexEnabled bool
+	diagnostics        *diagnostics.Logger
 }
 
 // Option configures a SQLite store before opening its data directory.
@@ -37,6 +39,10 @@ type Option func(*Store)
 // WithMessageSearchIndex starts background maintenance of the derived Bleve index.
 func WithMessageSearchIndex() Option {
 	return func(s *Store) { s.searchIndexEnabled = true }
+}
+
+func WithDiagnostics(logger *diagnostics.Logger) Option {
+	return func(s *Store) { s.diagnostics = logger }
 }
 
 func Open(ctx context.Context, dir string, initialID domain.ID, options ...Option) (_ *Store, err error) {

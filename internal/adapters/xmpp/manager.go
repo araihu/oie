@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/sasl"
 	"mellium.im/xmlstream"
@@ -78,6 +79,7 @@ type entry struct {
 	profiles            map[string]*profileSlot
 }
 type Manager struct {
+	diagnostics     *diagnostics.Logger
 	dir             string
 	roots           *x509.CertPool
 	mu              sync.RWMutex
@@ -94,6 +96,8 @@ type Manager struct {
 func New(dir string, roots *x509.CertPool) *Manager {
 	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), avatarGate: make(chan struct{}, 1)}
 }
+func (m *Manager) SetDiagnostics(logger *diagnostics.Logger) { m.diagnostics = logger }
+
 func (m *Manager) NormalizeAddress(protocol, address string) (string, error) {
 	if protocol != "xmpp" {
 		return "", application.ErrInvalid
@@ -356,12 +360,16 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string) err
 }
 func (m *Manager) run(ctx context.Context, e *entry) {
 	delay := time.Second
+	attempt := 0
 	for ctx.Err() == nil {
 		if err := m.publish(ctx, e, "connecting", ""); err != nil {
 			return
 		}
+		attempt++
+		started := time.Now()
 		session, raw, err := m.connect(ctx, e)
-		if err == nil {
+		connected := err == nil
+		if connected {
 			e.mu.Lock()
 			historyCtx, historyCancel := context.WithCancel(ctx)
 			e.session = session
@@ -405,6 +413,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 					m.workers.Add(1)
 					go func() { defer m.workers.Done(); m.checkDirectRequests(historyCtx, host, e, session, requestsWake) }()
 				}
+				m.diagnostics.Record(diagnostics.XMPPConnected, time.Since(started), attempt)
+				attempt = 0
 				delay = time.Second
 				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 					return m.handle(ctx, e, tokens, start)
@@ -425,6 +435,11 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			return
 		}
 		code, permanent := connectionError(err)
+		if connected {
+			m.diagnostics.Record(diagnostics.XMPPDisconnected, 0, 0)
+		} else {
+			m.diagnostics.Record(connectionDiagnostic(code, err), time.Since(started), attempt)
+		}
 		if m.publish(ctx, e, "error", code) != nil {
 			return
 		}
@@ -464,6 +479,25 @@ func connectionError(err error) (string, bool) {
 	}
 	return "connection_failed", false
 }
+func connectionDiagnostic(code string, err error) diagnostics.Event {
+	switch code {
+	case "tls_failed":
+		return diagnostics.XMPPTLSFailed
+	case "authentication_failed":
+		return diagnostics.XMPPAuthFailed
+	}
+	var dns *net.DNSError
+	var network net.Error
+	switch {
+	case errors.As(err, &dns):
+		return diagnostics.XMPPDNSFailed
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &network) && network.Timeout():
+		return diagnostics.XMPPTimeout
+	default:
+		return diagnostics.XMPPConnectFailed
+	}
+}
+
 func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn, error) {
 	j, err := jid.Parse(e.account.Address)
 	if err != nil {

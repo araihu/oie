@@ -52,6 +52,7 @@
   const clock = {hour: '2-digit', minute: '2-digit'};
   const dateAndTime = {dateStyle: 'medium', timeStyle: 'short'};
   const editTime = {year: 'numeric', month: 'short', day: 'numeric', ...clock, second: '2-digit'};
+  const preciseDates = '[data-history-date],[data-diagnostics-date]';
   const fullDates = '[data-viewer-date],[data-capability-date],[data-details-date],[data-shared-source-date]';
   const calendarDate = {dateStyle: 'medium'};
   const agendaDay = {dateStyle: 'full'};
@@ -61,7 +62,7 @@
     for (const node of root.querySelectorAll('time[datetime]:not([data-day])')) {
       const date = new Date(node.dateTime);
       if (Number.isNaN(date.getTime())) continue;
-      const options = node.hasAttribute('data-history-date') ? editTime : node.matches(fullDates) ? dateAndTime :
+      const options = node.matches(preciseDates) ? editTime : node.matches(fullDates) ? dateAndTime :
         node.hasAttribute('data-scheduled-day') ? agendaDay : clock;
       const todayLabel = node.dataset.messageSearchTime;
       const label = todayLabel

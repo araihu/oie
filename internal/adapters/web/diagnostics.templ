@@ -1,0 +1,103 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/badge"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
+	selectfield "github.com/araihu/goshtoso/components/select"
+	"github.com/araihu/goshtoso/components/splitbutton"
+	"github.com/araihu/goshtoso/components/textinput"
+)
+
+templ diagnosticsSettings(v view) {
+	@settingsSubpage("diagnostics", v.Text.Diagnostics, v.Text.BackToSettings) {
+		<section class="oie-diagnostics" data-diagnostics data-loading={ v.Text.DiagnosticsLoading } data-empty={ v.Text.DiagnosticsEmpty } data-unavailable={ v.Text.DiagnosticsUnavailable } data-enter-key={ v.Text.DiagnosticsEnterKey } data-truncated={ v.Text.DiagnosticsTruncated } data-copied={ v.Text.DiagnosticsCopied } data-copy-failed={ v.Text.DiagnosticsCopyFailed } data-download-failed={ v.Text.DiagnosticsDownloadFailed }>
+			<div class="oie-diagnostics-filters">
+				if v.RemoteDiagnostics {
+					@selectfield.Select(selectfield.Config{
+						ID: "diagnostics-source", Label: v.Text.DiagnosticsSource,
+						InputAttrs: templ.Attributes{"data-diagnostics-source": ""},
+						Options: []selectfield.Option{
+							{Value: "local", Label: v.Text.DiagnosticsDevice, Selected: true},
+							{Value: "server", Label: v.Text.DiagnosticsServer},
+						},
+					})
+				}
+				@selectfield.Select(selectfield.Config{
+					ID: "diagnostics-range", Label: v.Text.DiagnosticsRange,
+					InputAttrs: templ.Attributes{"data-diagnostics-hours": ""},
+					Options: []selectfield.Option{
+						{Value: "1", Label: v.Text.DiagnosticsHour},
+						{Value: "24", Label: v.Text.DiagnosticsDay, Selected: true},
+						{Value: "168", Label: v.Text.DiagnosticsWeek},
+					},
+				})
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				@button.Button(button.WithType("button"), button.WithTone(button.ToneAlternate), button.WithAttrs(templ.Attributes{"data-diagnostics-refresh": ""})) {
+					@glyph(heroicons.Icon16SolidArrowPath)
+					<span>{ v.Text.DiagnosticsRefresh }</span>
+				}
+				<fieldset class="min-w-0" data-diagnostics-export disabled>
+					@splitbutton.SplitButton(splitbutton.Config{
+						ID: "diagnostics-export",
+						Primary: splitbutton.Action{
+							ID: "diagnostics-copy", Label: v.Text.DiagnosticsCopy,
+							Icon: glyph(heroicons.Icon16SolidDocumentDuplicate),
+						},
+						MenuLabel: v.Text.More, MenuAlign: dropdown.AlignEnd,
+						Sections: []dropdown.Section{{Items: []dropdown.Item{{
+							ID: "diagnostics-download", Label: v.Text.DiagnosticsDownload,
+							Icon: glyph(heroicons.Icon16SolidArrowDownTray), OnClick: "closeAndFocus()",
+						}}}},
+					})
+				</fieldset>
+			</div>
+			<p role="status" class="oie-diagnostics-status" data-diagnostics-status></p>
+			<div class="oie-diagnostics-content">
+				<div class="oie-diagnostics-records" data-diagnostics-records role="region" tabindex="0" aria-label={ v.Text.Diagnostics }></div>
+				@diagnosticsRecordTemplates(v)
+				<form class="oie-diagnostics-access" method="post" data-diagnostics-access hidden>
+					@textinput.TextInput(textinput.Config{
+						ID: "diagnostics-key", Label: v.Text.DiagnosticsKey, Type: textinput.TypePassword,
+						MaxLength: 512, Autocomplete: "off",
+					})
+					@button.Button(button.WithType("submit")) {
+						@glyph(heroicons.Icon16SolidLockClosed)
+						<span>{ v.Text.DiagnosticsUnlock }</span>
+					}
+				</form>
+			</div>
+		</section>
+	}
+}
+
+templ diagnosticsRecordTemplates(v view) {
+	<template data-diagnostics-row>
+		<details class="oie-diagnostics-entry">
+			<summary>
+				<span class="oie-diagnostics-chevron">@glyph(heroicons.Icon16SolidChevronRight)</span>
+				<span class="oie-diagnostics-entry-text">
+					<code data-diagnostics-event></code>
+					<span class="oie-diagnostics-entry-meta">
+						<time data-diagnostics-date></time>
+						<span data-diagnostics-component></span>
+					</span>
+				</span>
+				<span data-diagnostics-severity></span>
+			</summary>
+			<pre hidden></pre>
+		</details>
+	</template>
+	@diagnosticsLevel("debug", v.Text.DiagnosticsDebug, badge.ToneSecondary)
+	@diagnosticsLevel("info", v.Text.DiagnosticsInfo, badge.ToneInfo)
+	@diagnosticsLevel("warn", v.Text.DiagnosticsWarning, badge.ToneWarning)
+	@diagnosticsLevel("error", v.Text.DiagnosticsError, badge.ToneDanger)
+}
+
+templ diagnosticsLevel(level, label string, tone badge.Tone) {
+	<template data-diagnostics-level={ level }>
+		@badge.Badge(badge.Config{Label: label, Tone: tone, Appearance: badge.AppearanceSoft, Size: badge.SizeMD})
+	</template>
+}

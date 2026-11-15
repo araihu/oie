@@ -3,11 +3,13 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
 )
 
@@ -357,5 +359,34 @@ func TestOutboxScansPastDisconnectedAccounts(t *testing.T) {
 				t.Fatalf("offline account was unexpectedly claimed: %+v %v", m, err)
 			}
 		})
+	}
+}
+
+func TestUncertainSendDiagnosticsExcludeAuthoredContent(t *testing.T) {
+	_, engine, chat := outboxFixture(t)
+	dir := filepath.Join(t.TempDir(), "diagnostics")
+	logger := diagnostics.New(dir, nil, diagnostics.Local, true)
+	engine.SetDiagnostics(logger)
+	protocol := &interruptedUploadProtocol{marker: make(chan error, 1)}
+	engine.SetProtocols(protocol)
+	ctx := t.Context()
+	const message = "uncertain-send-content-sentinel https://private.example/document.pdf?secret=private-query"
+	defer startOutboundWorker(t, engine)()
+	accepted, err := engine.SendMessage(ctx, migrationID(), chat.ID, message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitOutbound(t, func() bool {
+		row, err := engine.Message(ctx, accepted.Message.ID)
+		return err == nil && row.SendState == application.Unknown
+	})
+	snapshot, _, err := logger.Snapshot(24)
+	if err != nil || !strings.Contains(string(snapshot), "send_outcome_unknown") {
+		t.Fatal("uncertain send was not diagnosable", err)
+	}
+	for _, private := range []string{"uncertain-send-content-sentinel", "private.example", "document.pdf", "private-query", string(chat.ID), string(accepted.Message.ID)} {
+		if strings.Contains(string(snapshot), private) {
+			t.Fatal("uncertain send logged private fixture data")
+		}
 	}
 }

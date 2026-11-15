@@ -145,6 +145,7 @@ else
   copy_file "$source_dir/internal/adapters/desktop/assets/icon.png" "$payload/share/icons/hicolor/512x512/apps/org.araihu.oie.png"
 fi
 
+link_flags="$link_flags -X github.com/araihu/oie/internal/diagnostics.buildVersion=$version"
 printf '%s\n' "Building $version ($revision) for $target_os/$target_arch" >&2
 (cd "$source_dir" && go build -mod=readonly -tags production -trimpath -buildvcs="$build_vcs" -ldflags "$link_flags" -o "$executable" ./cmd/oie-desktop)
 chmod 0755 "$executable"

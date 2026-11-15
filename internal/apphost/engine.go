@@ -3,19 +3,20 @@ package apphost
 import (
 	"context"
 	"crypto/x509"
-	"log/slog"
 	"net/http"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/avatarfiles"
+	"github.com/araihu/oie/internal/adapters/diagnostichttp"
 	"github.com/araihu/oie/internal/adapters/httpapi"
 	"github.com/araihu/oie/internal/adapters/mediafiles"
 	"github.com/araihu/oie/internal/adapters/previewfetch"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	xmpadapter "github.com/araihu/oie/internal/adapters/xmpp"
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
 )
 
@@ -69,6 +70,7 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	if err != nil {
 		return nil, err
 	}
+	engine.SetDiagnostics(h.cfg.Diagnostics)
 	snapshot, err := engine.Snapshot(ctx)
 	if err != nil {
 		return nil, err
@@ -80,6 +82,7 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(dir, "media", "images")))
 	engine.SetMediaReader(fetcher)
 	instance.protocols = xmpadapter.New(filepath.Join(dir, "private", "connections"), h.roots)
+	instance.protocols.SetDiagnostics(h.cfg.Diagnostics)
 	engine.SetProtocols(instance.protocols)
 	if err = instance.protocols.Start(ctx, engine); err != nil {
 		return nil, err
@@ -99,6 +102,7 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 }
 
 func (h *engineHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r = diagnostichttp.WithLogger(r, h.cfg.Diagnostics)
 	h.mu.Lock()
 	instance := h.instance
 	if instance == nil {
@@ -140,12 +144,12 @@ func (h *engineHost) reset(expected domain.ID) error {
 
 	current.close()
 	if err := h.store.Reset(context.WithoutCancel(h.ctx), id); err != nil {
-		slog.Error("delete engine data", "error", err)
+		h.cfg.Diagnostics.Record(diagnostics.ResetFailed, 0, 0)
 		return err
 	}
 	next, err := h.start()
 	if err != nil {
-		slog.Error("start empty engine", "error", err)
+		h.cfg.Diagnostics.Record(diagnostics.EngineFailed, 0, 0)
 		return err
 	}
 	h.mu.Lock()
