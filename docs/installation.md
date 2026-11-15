@@ -60,7 +60,10 @@ retains its claim. Keep the claim and namespace to reuse the data.
 Oiê has no built-in login. The chart defaults to an internal Service. For
 remote access, protect both the browser interface and API with an authenticated
 HTTPS proxy. The chart supports [Ingress or Gateway API](../charts/oie/README.md#remote-access).
-See the [chart configuration](../charts/oie/README.md) for image and storage settings.
+Starting with chart `0.2.2`, you can set `httpRoute.timeouts.request` to
+`"0s"` to keep live chat events streaming through a Gateway that applies a
+request timeout by default. See the [chart configuration](../charts/oie/README.md)
+for timeout, image and storage settings.
 
 ## Desktop installation on macOS and Linux
 

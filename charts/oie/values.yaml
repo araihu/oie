@@ -30,5 +30,7 @@ httpRoute:
   parentRefs: []
   hostnames: []
   annotations: {}
+  # Optional Gateway API rule durations (request and backendRequest).
+  timeouts: {}
 
 resources: {}
