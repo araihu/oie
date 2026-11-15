@@ -9,10 +9,10 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.16**. Desktop downloads include
+The current release candidate is **v0.0.1-rc.17**. Desktop downloads include
 corresponding source archives and updated third-party license notices.
-See the [release notes](docs/releases/v0.0.1-rc.16.md) and
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.16).
+See the [release notes](docs/releases/v0.0.1-rc.17.md) and
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.17).
 
 - [Desktop installation on macOS and Linux](docs/installation.md#desktop-installation-on-macos-and-linux)
 - [Live browser setup and development accounts](docs/live-preview.md)
@@ -48,8 +48,10 @@ PWA/offline queues and backup/restore remain later work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 
-The Wails desktop command embeds this same engine and interface. Closing its
-window keeps the engine running; explicit Quit stops it. See the
+The Wails desktop command runs the engine on this device by default. To use a
+hosted engine, open **Settings → General → Engine** and choose **Remote**.
+In Local mode, closing the window keeps the engine running and Quit stops it.
+See the
 [installation instructions](docs/installation.md) for the release installer,
 runtime dependencies and source installation through Go. The installer checks
 archive checksums and preserves app data during manual updates.
