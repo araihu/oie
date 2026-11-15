@@ -941,3 +941,17 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 @media (pointer:coarse) {
   #oie-app :is(button,a,input,textarea,[role=button]) {touch-action:manipulation}
 }
+
+@media (pointer:coarse) and (orientation:landscape) and (max-height:450px) {
+  :root[data-oie-keyboard] .oie-account-drawer > header {
+    min-height:44px;
+    padding-block:0;
+  }
+  :root[data-oie-keyboard] .oie-account-detail-drawer #accounts-body {
+    display:block;
+    overflow-y:auto;
+  }
+  :root[data-oie-keyboard] .oie-account-detail-content {overflow:visible}
+  :root[data-oie-keyboard] .oie-account-workspace:has(#register-account-form),
+  :root[data-oie-keyboard] #register-account-form {padding-bottom:0}
+}

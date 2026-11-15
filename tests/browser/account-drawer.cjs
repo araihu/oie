@@ -84,6 +84,35 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const field=addDrawer.locator('#register-address');
   await close.waitFor();
   assert.equal(await field.evaluate(el=>getComputedStyle(el).fontSize),'16px');
+  await field.focus();
+  const keyboardGeometry=await phone.evaluate(async()=>{
+   const viewport=window.visualViewport;
+   const innerHeightDescriptor=Object.getOwnPropertyDescriptor(window,'innerHeight');
+   const nextPaint=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   try {
+    // iOS can report equal viewport heights after panning the layout to a focused field.
+    Object.defineProperty(window,'innerHeight',{configurable:true,value:416});
+    Object.defineProperties(viewport,{
+     height:{configurable:true,value:416},
+     offsetTop:{configurable:true,value:428},
+    });
+    viewport.dispatchEvent(new Event('resize'));
+    await nextPaint();
+    const shell=document.querySelector('.oie-shell');
+    const {top,bottom}=shell.getBoundingClientRect();
+    return {top,bottom,fixed:getComputedStyle(shell).position==='fixed'};
+   } finally {
+    if(innerHeightDescriptor)Object.defineProperty(window,'innerHeight',innerHeightDescriptor);
+    else delete window.innerHeight;
+    delete viewport.height;
+    delete viewport.offsetTop;
+    document.activeElement.blur();
+    viewport.dispatchEvent(new Event('resize'));
+    await nextPaint();
+   }
+  });
+  assert.deepEqual(keyboardGeometry,{top:428,bottom:844,fixed:true});
+  assert.equal(await phone.locator('html').getAttribute('data-oie-keyboard'),null);
   await phone.evaluate(()=>{
    document.documentElement.style.setProperty('--oie-safe-top','47px');
    document.documentElement.style.setProperty('--oie-safe-right','14px');
@@ -101,6 +130,22 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }),'zoomed drawer close stays in the visual viewport');
   await close.tap();
   await addDrawer.waitFor({state:'hidden'});
+  await phone.setViewportSize({width:874,height:402});
+  await phone.goto(base+'/?open=accounts&accountPage=add&lang=pt-BR');
+  await field.focus();
+  await phone.evaluate(()=>{
+   const viewport=window.visualViewport;
+   Object.defineProperty(viewport,'height',{configurable:true,value:110});
+   viewport.dispatchEvent(new Event('resize'));
+  });
+  await phone.waitForFunction(()=>document.documentElement.hasAttribute('data-oie-keyboard'));
+  assert(await addDrawer.evaluate(panel=>{
+   const body=panel.querySelector('#accounts-body');
+   const save=panel.querySelector('#register-account-form button[type=submit]');
+   body.scrollTop=body.scrollHeight;
+   const visible=body.getBoundingClientRect(),button=save.getBoundingClientRect();
+   return button.top>=visible.top&&button.bottom<=visible.bottom;
+  }),'the entire register action scrolls above the landscape keyboard');
   await phoneContext.close();
   state.count=3;
   state.changed=false;

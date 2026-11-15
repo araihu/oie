@@ -15,7 +15,8 @@
     const {offsetLeft, offsetTop, width, height, scale} = viewport;
     const layoutWidth = root.clientWidth;
     const unzoomedTouch = touch.matches && Math.abs(scale - 1) < 0.01;
-    const keyboard = unzoomedTouch && window.innerHeight - height > 80 &&
+    // An installed iOS web app can report a smaller innerHeight as it pans to a field.
+    const keyboard = unzoomedTouch && window.innerHeight + offsetTop - height > 80 &&
       (document.activeElement?.matches(editable) || root.hasAttribute('data-oie-keyboard'));
 
     root.toggleAttribute('data-oie-keyboard', keyboard);
