@@ -42,15 +42,18 @@ const id='019a5df0-0000-7000-8000-000000000001';
       const text=icon.nextElementSibling;
       return [icon,text].map(el=>Math.abs(center(el)-center(label)));
      }));
-     return {rects,contentOffset};
+     const title=section.querySelector('h2').getBoundingClientRect();
+     const bar=section.querySelector('[role=radiogroup]').getBoundingClientRect();
+     return {rects,contentOffset,gap:bar.top-title.bottom};
     }
     const initial=measure();
-    const state=window.appearanceGeometry={frames:0,shift:0,offset:initial.contentOffset,frame:0};
+    const state=window.appearanceGeometry={frames:0,shift:0,offset:initial.contentOffset,gap:initial.gap,frame:0};
     function sample(){
      const frame=measure();
      state.frames++;
      state.shift=Math.max(state.shift,...frame.rects.map((value,index)=>Math.abs(value-initial.rects[index])));
      state.offset=Math.max(state.offset,frame.contentOffset);
+     state.gap=Math.min(state.gap,frame.gap);
      state.frame=requestAnimationFrame(sample);
     }
     state.frame=requestAnimationFrame(sample);
@@ -67,7 +70,7 @@ const id='019a5df0-0000-7000-8000-000000000001';
     cancelAnimationFrame(state.frame);
     return state;
    });
-   assert(geometry.frames>=3&&geometry.shift<=1&&geometry.offset<=1,JSON.stringify(geometry));
+   assert(geometry.frames>=3&&geometry.shift<=1&&geometry.offset<=1&&geometry.gap>=6,JSON.stringify(geometry));
    assert.equal(await group.locator('svg').count(),3);
    assert.equal(await page.evaluate(()=>window.appearanceDocumentToken),'preserved');assert(await group.getByRole('radio',{name:names[2],exact:true}).isChecked());
    assert.equal((await context.cookies()).find(c=>c.name==='oie_theme')?.value,'dark');
