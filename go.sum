@@ -11,8 +11,8 @@ github.com/alecthomas/repr v0.5.2 h1:SU73FTI9D1P5UNtvseffFSGmdNci/O6RsqzeXJtP0Qs
 github.com/alecthomas/repr v0.5.2/go.mod h1:Fr0507jx4eOXV7AlPV6AVZLYrLIuIeSOWtW57eE/O/4=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
-github.com/araihu/goshtoso v0.6.3-0.20261115030147-b9c2478b8f93 h1:srXtOyOwk82ULUdWAas97V6m954ldWAFkd1dwU8igwQ=
-github.com/araihu/goshtoso v0.6.3-0.20261115030147-b9c2478b8f93/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
+github.com/araihu/goshtoso v0.6.3 h1:Cwm9lgkNPnR5GIb/RF1PfVvr4UqF7cJiJlJjDiKNbK8=
+github.com/araihu/goshtoso v0.6.3/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/margo v0.0.36 h1:VV+plQdiHGRXY83v3/hwt2OfR4v00fpiwuYfmg7LIP0=
 github.com/araihu/margo v0.0.36/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
 github.com/bits-and-blooms/bitset v1.24.2 h1:M7/NzVbsytmtfHbumG+K2bremQPMJuqv1JD3vOaFxp0=
