@@ -17,6 +17,7 @@ import (
 
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/oie/api"
+	"github.com/araihu/oie/internal/adapters/browserpush"
 	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/araihu/oie/internal/adapters/web"
 	"github.com/araihu/oie/internal/diagnostics"
@@ -40,6 +41,7 @@ type Config struct {
 	Diagnostics                                  *diagnostics.Logger
 	DiagnosticsKey                               string
 	engineOnly                                   bool
+	browserPush                                  *browserpush.Service
 }
 
 // Server owns one engine, optional protocol sessions, the BFF, and their shared
@@ -85,6 +87,9 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 			cfg.Diagnostics.Record(diagnostics.ConfigFailed, 0, 0)
 			return nil, err
 		}
+	}
+	if hosted != nil && !cfg.DataOnly {
+		cfg.browserPush = browserpush.New(hosted.auth, hosted.origin.String())
 	}
 	ctx, cancel := context.WithCancel(parent)
 	listener, err := net.Listen("tcp", cfg.Listen)
@@ -184,7 +189,7 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	var browser http.Handler
 	if !cfg.DataOnly && !cfg.engineOnly {
 		if hosted != nil {
-			options = append(options, web.WithHostedSignIn(hosted.auth))
+			options = append(options, web.WithHostedSignIn(hosted.auth), web.WithBrowserPush(hosted.auth, cfg.browserPush))
 		}
 		ui, err := web.New(engineURL, options...)
 		if err != nil {

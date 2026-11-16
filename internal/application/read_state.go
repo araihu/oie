@@ -24,7 +24,19 @@ type ReadResult struct {
 }
 type ReadRepository interface {
 	ConversationReadState(context.Context, domain.ID) (domain.ReadState, error)
+	HasMessageRead(context.Context, domain.ID) (bool, error)
 	MarkMessagesRead(context.Context, ReadMutation) (ReadResult, error)
+}
+
+func (e *Engine) HasMessageRead(ctx context.Context, id domain.ID) (bool, error) {
+	if !validID(id) {
+		return false, ErrInvalid
+	}
+	r, ok := e.repo.(ReadRepository)
+	if !ok {
+		return false, ErrProtocolUnavailable
+	}
+	return r.HasMessageRead(ctx, id)
 }
 
 func (e *Engine) ConversationReadState(ctx context.Context, id domain.ID) (domain.ReadState, error) {

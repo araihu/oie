@@ -777,6 +777,77 @@ paths:
         '404': {description: Conversation unavailable.}
         '409': {description: Engine or account changed.}
         '503': {description: Engine unavailable.}
+  /ui/notification-push:
+    get:
+      operationId: getBrowserPush
+      tags: [Conversations]
+      summary: Read notification subscription status for this browser session
+      responses:
+        '200':
+          description: Public signing key and subscription status
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BrowserPushStatus'}
+              example: {publicKey: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU, enabled: false, engineId: 019a5df0-0000-7000-8000-000000000001}
+        '401': {description: Sign-in required.}
+        '404': {description: Background notifications unavailable.}
+        '503': {description: Notification settings unavailable.}
+    put:
+      operationId: putBrowserPush
+      tags: [Conversations]
+      summary: Subscribe this browser or update its notification preferences
+      security: [{csrfToken: []}]
+      parameters:
+      - {in: header, name: If-Match, description: Version of an existing subscription being updated., schema: {type: string}, example: '"abc123"'}
+      requestBody:
+        description: Browser subscription and its device settings.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BrowserPushSubscription'}
+            example: {endpoint: 'https://web.push.apple.com/example', keys: {auth: AAAAAAAAAAAAAAAAAAAAAA, p256dh: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU}, engineId: 019a5df0-0000-7000-8000-000000000001, lang: pt-BR, mutedConversations: [], sound: true, directSound: true, roomSound: attention, archivedSound: false}
+      responses:
+        '204': {description: Subscription saved.}
+        '400': {description: Invalid subscription.}
+        '401': {description: Sign-in required.}
+        '403': {description: CSRF rejected.}
+        '404': {description: Background notifications unavailable.}
+        '409': {description: Engine or subscription changed.}
+        '503': {description: Notification settings unavailable.}
+    delete:
+      operationId: deleteBrowserPush
+      tags: [Conversations]
+      summary: Remove this browser session's notification subscription
+      security: [{csrfToken: []}]
+      parameters:
+      - {in: header, name: If-Match, description: Version of an existing subscription being reconciled., schema: {type: string}, example: '"abc123"'}
+      responses:
+        '204': {description: Subscription removed.}
+        '401': {description: Sign-in required.}
+        '403': {description: CSRF rejected.}
+        '404': {description: Background notifications unavailable.}
+        '409': {description: Subscription changed.}
+        '503': {description: Notification settings unavailable.}
+  /ui/notification-push/foreground:
+    post:
+      operationId: claimForegroundNotification
+      tags: [Conversations]
+      summary: Claim notification handling for a visible Oiê page
+      security: [{csrfToken: []}]
+      requestBody:
+        description: Identity of the message received in the foreground.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BrowserPushForeground'}
+            example: {engineId: 019a5df0-0000-7000-8000-000000000001, messageId: 019a5df0-0000-7000-8000-000000000005}
+      responses:
+        '204': {description: The visible page can handle the alert.}
+        '400': {description: Invalid message or engine identity.}
+        '401': {description: Sign-in required.}
+        '403': {description: CSRF rejected.}
+        '404': {description: Background notifications unavailable.}
+        '409': {description: Web Push already claimed delivery.}
   /ui/message-reactions:
     get:
       operationId: getBrowserMessageReactions
@@ -1294,12 +1365,65 @@ paths:
           description: Rendering capacity is occupied
 components:
   securitySchemes:
+    csrfToken:
+      description: CSRF token from the rendered workspace.
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
     diagnosticsAccessKey:
       description: Owner-configured key for access to hosted diagnostics.
       type: apiKey
       in: header
       name: X-Oie-Diagnostics-Key
   schemas:
+    BrowserPushStatus:
+      type: object
+      description: Availability and current subscription for the signed-in device.
+      example: {publicKey: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU, enabled: false, engineId: 019a5df0-0000-7000-8000-000000000001}
+      required: [publicKey, enabled, engineId]
+      properties:
+        publicKey: {type: string, description: Base64url-encoded public application server key., example: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU}
+        enabled: {type: boolean, description: Whether the session has a subscription for this engine., example: true}
+        lang: {type: string, description: Existing subscription language., example: pt-BR}
+        subscriptionTag: {type: string, description: Version of the enabled subscription., example: '1d23e4.1794835243000000000'}
+        expired: {type: boolean, description: The push provider no longer accepts delivery to the subscribed endpoint., example: false}
+        engineId: {type: string, format: uuid, description: Current engine identity., example: 019a5df0-0000-7000-8000-000000000001}
+    BrowserPushSubscription:
+      type: object
+      description: Browser-supplied destination and delivery settings selected on this device.
+      example: {endpoint: 'https://web.push.apple.com/example', keys: {auth: AAAAAAAAAAAAAAAAAAAAAA, p256dh: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU}, engineId: 019a5df0-0000-7000-8000-000000000001, lang: pt-BR, mutedConversations: [], sound: true, directSound: true, roomSound: attention, archivedSound: false}
+      required: [endpoint, keys, engineId, lang, mutedConversations, sound, directSound, roomSound, archivedSound]
+      properties:
+        endpoint: {type: string, format: uri, maxLength: 2048, description: Browser push service endpoint., example: 'https://web.push.apple.com/example'}
+        keys:
+          type: object
+          required: [auth, p256dh]
+          example: {auth: AAAAAAAAAAAAAAAAAAAAAA, p256dh: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU}
+          properties:
+            auth: {type: string, description: Base64url-encoded subscription authentication secret., example: AAAAAAAAAAAAAAAAAAAAAA}
+            p256dh: {type: string, description: Base64url-encoded browser public key., example: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU}
+        engineId: {type: string, format: uuid, description: Selected engine identity.}
+        lang: {type: string, enum: [en, pt-BR], description: Notification language.}
+        sound: {type: boolean, description: Whether the device allows notification sound.}
+        directSound: {type: boolean, description: Whether direct messages can play a sound.}
+        roomSound: {type: string, enum: [attention, all, off], description: Which room messages can play a sound.}
+        archivedSound: {type: boolean, description: Whether archived rooms can play a sound.}
+        mutedConversations:
+          type: array
+          maxItems: 1024
+          description: Conversations silenced on this device.
+          items: {type: string, format: uuid}
+    BrowserPushForeground:
+      type: object
+      description: Reserve or complete foreground notification handling for one message.
+      example: {engineId: 019a5df0-0000-7000-8000-000000000001, messageId: 019a5df0-0000-7000-8000-000000000005}
+      required: [engineId, messageId]
+      properties:
+        engineId: {type: string, format: uuid, description: Source engine identity., example: 019a5df0-0000-7000-8000-000000000001}
+        messageId: {type: string, format: uuid, description: Incoming message already visible to this device., example: 019a5df0-0000-7000-8000-000000000005}
+        phase: {type: string, enum: [reserve, display, shown, suppress], description: Current step in foreground handling., example: reserve}
+        accountId: {type: string, format: uuid, description: Account owning the source conversation.}
+        conversationId: {type: string, format: uuid, description: Conversation containing the message.}
     NotificationContext:
       description: Current conversation and reply ownership used to decide whether an incoming message can play a sound.
       type: object

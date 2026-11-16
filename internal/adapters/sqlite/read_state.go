@@ -25,6 +25,12 @@ func readState(ctx context.Context, q *dbgen.Queries, c domain.Conversation) (do
 	state.UpdatedAt, err = time.Parse(time.RFC3339Nano, head.UpdatedAt)
 	return state, err
 }
+
+// HasMessageRead looks up the read state of a canonical message and its aliases.
+func (s *Store) HasMessageRead(ctx context.Context, id domain.ID) (bool, error) {
+	return s.read.HasMessageRead(ctx, string(id))
+}
+
 func (s *Store) ConversationReadState(ctx context.Context, id domain.ID) (domain.ReadState, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {

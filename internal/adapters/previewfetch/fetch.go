@@ -43,6 +43,24 @@ type Fetcher struct {
 func New() *Fetcher {
 	return newFetcher(net.DefaultResolver, (&net.Dialer{Timeout: 5 * time.Second}).DialContext)
 }
+
+// PublicHTTPSClient reuses the preview fetcher's public-address dial policy
+// without following redirects. The caller validates the destination host.
+func PublicHTTPSClient() *http.Client {
+	f := &Fetcher{resolver: net.DefaultResolver, dial: (&net.Dialer{Timeout: 5 * time.Second}).DialContext}
+	return &http.Client{
+		Timeout: 8 * time.Second,
+		Transport: &http.Transport{
+			DialContext:            f.dialPublic,
+			TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12},
+			MaxResponseHeaderBytes: 16 << 10,
+			MaxIdleConns:           4,
+			IdleConnTimeout:        time.Minute,
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
 func newFetcher(r resolver, dial func(context.Context, string, string) (net.Conn, error)) *Fetcher {
 	f := &Fetcher{resolver: r, dial: dial}
 	transport := &http.Transport{Proxy: nil, DialContext: f.dialPublic, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 5 * time.Second, MaxResponseHeaderBytes: 32 << 10, MaxConnsPerHost: 1, MaxIdleConns: 2, IdleConnTimeout: time.Minute}

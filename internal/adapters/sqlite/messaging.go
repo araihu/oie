@@ -193,7 +193,11 @@ func insertMessage(ctx context.Context, q *dbgen.Queries, m domain.Message) erro
 	if correctionValid(m.Correction) && m.Correction.TargetID != "" {
 		kind = "message.updated"
 	}
-	_, err := emitCanonicalMessageEvent(ctx, q, kind, m, m.CreatedAt)
+	eventAt := m.CreatedAt
+	if kind == "message.created" && m.SendState == "received" && !m.Historical && !m.ReceivedAt.IsZero() {
+		eventAt = m.ReceivedAt
+	}
+	_, err := emitCanonicalMessageEvent(ctx, q, kind, m, eventAt)
 	return err
 }
 func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message, revision domain.ID, at time.Time) error {

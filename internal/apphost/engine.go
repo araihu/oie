@@ -39,6 +39,7 @@ type engineInstance struct {
 	handler   http.Handler
 	protocols *xmpadapter.Manager
 	done      chan struct{}
+	pushDone  chan struct{}
 	requests  sync.WaitGroup
 }
 
@@ -99,6 +100,13 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	instance.handler, err = httpapi.NewResettable(engine, h.reset)
 	if err != nil {
 		return nil, err
+	}
+	if h.cfg.browserPush != nil {
+		instance.pushDone = make(chan struct{})
+		go func() {
+			defer close(instance.pushDone)
+			h.cfg.browserPush.Run(ctx, engine, snapshot)
+		}()
 	}
 	go func() {
 		defer close(instance.done)
@@ -185,5 +193,8 @@ func (e *engineInstance) close() {
 	e.cancel()
 	e.requests.Wait()
 	<-e.done
+	if e.pushDone != nil {
+		<-e.pushDone
+	}
 	e.protocols.Close()
 }
