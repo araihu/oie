@@ -86,7 +86,8 @@ type singleAttachment struct {
 func (p singleAttachment) Read(data []byte) (int, error) {
 	n, err := p.part.Read(data)
 	if errors.Is(err, io.EOF) {
-		if _, more := p.form.NextPart(); !errors.Is(more, io.EOF) {
+		// NextPart wraps EOF when the closing boundary is truncated.
+		if _, more := p.form.NextPart(); more != io.EOF {
 			return n, errors.Join(application.ErrInvalid, more)
 		}
 	} else if err != nil {

@@ -106,6 +106,24 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
     assert.equal(await feedback.textContent(), await form.getAttribute('data-saved'));
     assert.equal(writes, 2, 'reverting to the saved period clears validation without writing');
 
+    const releaseFailure = Promise.withResolvers();
+    await page.route(formPath, async route => {
+      await releaseFailure.promise;
+      await route.fulfill({status: 503});
+    }, {times: 1});
+    const failedWrite = page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/ui/settings/retention?'));
+    await room.fill('120');
+    await direct.focus();
+    await failedWrite;
+    await room.fill('0');
+    await direct.focus();
+    releaseFailure.resolve();
+    await page.waitForFunction(() => !document.querySelector('[data-retention-retry]').hasAttribute('aria-disabled'));
+    assert.equal(await room.inputValue(), '0');
+    assert.equal(await feedback.textContent(), await form.getAttribute('data-invalid'));
+    assert.equal(await retry.isVisible(), false, 'a failed response cannot restore the superseded period');
+    assert.equal((await policy(server.api)).roomDays, 90);
+
     await page.route(formPath, route => route.fulfill({status: 503}), {times: 1});
     await room.fill('120');
     await direct.focus();

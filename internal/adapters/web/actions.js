@@ -294,10 +294,14 @@ window.OieRuntime.register('engine-retention', life => {
     if (life.signal.aborted || !form.isConnected) return;
 
     state.busy = false;
-    state.failed = error !== '';
-    if (state.failed) state.queued = new Map([...changes, ...state.queued]);
+    if (error) {
+      for (const [key, days] of changes) {
+        if (state.observed[key] === days && !state.queued.has(key)) state.queued.set(key, days);
+      }
+    }
+    state.failed = error !== '' && state.queued.size > 0;
     if (saved) acceptSnapshot(form, state, saved);
-    finish(form, error, state.failed);
+    finish(form, state.failed ? error : '', state.failed);
     if (!state.failed) void save(form, state);
   }
 
@@ -327,6 +331,10 @@ window.OieRuntime.register('engine-retention', life => {
       }
       state.queued.delete(key);
       delete state.observed[key];
+      if (state.failed && state.queued.size === 0) {
+        state.failed = false;
+        finish(form, '');
+      }
       return;
     }
     input.removeAttribute('aria-invalid');

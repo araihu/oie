@@ -263,8 +263,12 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-send-retry{border:0;background:transparent;color:inherit}
 .oie-send-retry:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px;border-radius:3px}
 .oie-chat-pane{position:relative}
-.oie-jump-latest{display:block;pointer-events:auto;margin:0 20px 8px auto;border:1px solid var(--oie-border);border-radius:18px;padding:8px 14px;background:var(--oie-panel);color:var(--oie-text);font-size:12px;box-shadow:0 2px 8px #0002}
-.oie-jump-latest[hidden]{display:none}
+.oie-jump-latest{position:relative;display:grid;place-items:center;pointer-events:auto;inline-size:44px;block-size:44px;margin-block-end:8px;margin-inline: auto 20px;border:1px solid var(--oie-border);border-radius:50%;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 2px 8px #0002}
+.oie-jump-latest:is(:hover,:focus-visible){background:var(--oie-raised)}
+.oie-jump-latest:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
+.oie-jump-latest .oie-icon{inline-size:20px;block-size:20px}
+.oie-jump-latest-badge{position:absolute;inset-block-end:-4px;inset-inline-end:-4px;display:grid;place-items:center;inline-size:24px;block-size:24px;border:1px solid var(--oie-panel);border-radius:50%;background:var(--oie-accent);color:var(--oie-on-accent);font-size:10px;font-weight:700;line-height:1}
+.oie-jump-latest[hidden],.oie-jump-latest-badge[hidden]{display:none}
 .oie-storage-warning{padding:8px 18px;color:var(--oie-text);font-size:11px}
 @media(max-width:720px){.oie-account-filter{padding-bottom:6px}.oie-jump-latest{margin-inline-end:12px}}
 
@@ -347,7 +351,7 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-message-content{display:flex;align-items:flex-end;gap:8px}
 .oie-message-content>.oie-bubble{min-width:0;flex:1}
 /* Preview content lives in public Card slots; all image URLs are local. */
-.oie-message-previews{max-width:340px;display:grid;gap:8px;margin-top:6px}
+.oie-message-previews{max-width:340px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:6px}
 .oie-message-previews:empty{display:none}
 
 .oie-message-own .oie-message-previews{margin-left:auto}

@@ -239,7 +239,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
    const mobile=width===390;
    app=await open({}, {width,touch:mobile,locale:mobile?'pt-BR':'en'});({page,context}=app);
    await until(async()=>await timeline(page).getAttribute('data-timeline-busy')==='false','latest timeline settled before live messages');
-   const newMessages=page.getByRole('button',{name:mobile?'Novas mensagens · ir para as últimas':'New messages · jump to latest',exact:true});
+   const newMessages=page.getByRole('button',{name:mobile?'Ir para as mais recentes':'Jump to latest',exact:true});
+   const unreadBadge=newMessages.locator('[data-jump-latest-badge]');
    const composer=page.locator('#message-composer');
    await composer.fill(draft);
    const fromBottom=distance=>timeline(page).evaluate((root,distance)=>{
@@ -327,6 +328,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     };
     await page.route('**/ui/timeline?*',holdPage);
     if(!moveWhileLoading)await sampleLiveFrames();
+    const unreadCount=moveWhileLoading?104:1;
+    conversations[0].unreadCount=unreadCount;
     const incoming=queueIncoming(moveWhileLoading?9700000:9600000,'Incoming while reading history');
     try{
      await until(()=>held,'incoming page is pending');
@@ -337,6 +340,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
       await sampleLiveFrames();
      }
      await newMessages.waitFor();
+     await unreadBadge.waitFor();
+     assert.equal(await unreadBadge.textContent(),unreadCount>99?'+99':String(unreadCount));
+     assert.equal(await newMessages.getAttribute('aria-description'),(mobile?'Não lidas':'Unread')+': '+unreadCount);
+     assert.equal(await newMessages.locator('use[href$="#hi-16-solid-arrow-down"]').count(),1);
+     const size=await newMessages.boundingBox();
+     assert.equal(size.width,size.height);
+     if(!moveWhileLoading){
+      conversations[0].unreadCount=0;
+      emit('conversation.updated');
+      await unreadBadge.waitFor({state:'hidden'});
+      assert.equal(await newMessages.getAttribute('aria-description'),null);
+      assert(await newMessages.isVisible());
+     }
      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     }finally{releasePage()}
     await waitForTail(incoming);
@@ -350,6 +366,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     await until(atBottom,'new messages shortcut reaches the bottom');
     await newMessages.waitFor({state:'hidden'});
     assert(await timeline(page).evaluate(root=>document.activeElement===root),'keyboard jump leaves focus at the timeline');
+    conversations[0].unreadCount=0;
    }
    const bounds=await timeline(page).boundingBox();
    await composer.evaluate(input=>input.focus({preventScroll:true}));
