@@ -87,7 +87,7 @@ templ accountContactList(v view, account string) {
 				}
 			</ul>
 			if v.Contacts.NextCursor != nil {
-				@link.Link(v.contactsHref(account,*v.Contacts.NextCursor)) { {v.Text.Next} }
+				@link.Link(v.contactsHref(account,*v.Contacts.NextCursor)) { {v.Text.ContactNext} }
 			}
 		}
 	</section>

@@ -258,6 +258,7 @@
   "ContactEmpty": "Nenhum contato salvo",
   "ContactConnect": "Conecte esta conta para gerenciar contatos.",
   "ContactChangeFailed": "Não foi possível atualizar o contato. Tente novamente.",
+  "ContactNext": "Mais contatos",
   "ContactRefreshFailed": "Não foi possível atualizar a lista de contatos.",
   "ContactChangeSaved": "Contato atualizado.",
   "ManageAccounts": "Gerenciar contas",

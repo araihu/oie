@@ -526,9 +526,9 @@ func accountContactList(v view, account string) templ.Component {
 					}
 					ctx = templ.InitializeContext(ctx)
 					var templ_7745c5c3_Var27 string
-					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Next)
+					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ContactNext)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/contacts.templ`, Line: 90, Col: 77}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/contacts.templ`, Line: 90, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 					if templ_7745c5c3_Err != nil {

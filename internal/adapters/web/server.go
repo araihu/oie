@@ -634,7 +634,7 @@ type copy struct {
 	NotFoundBody, Chats, Favorites, Archived, ArchivedBackToChats, SharedMedia                      string
 	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly string
 
-	ContactsTitle, ContactAdd, ContactRemove, ContactRequestsTitle, ContactAccept, ContactDecline, ContactEmpty, ContactConnect, ContactChangeFailed, ContactChangeSaved, ContactRefreshFailed, SendTyping, TypingNotice string
+	ContactsTitle, ContactAdd, ContactRemove, ContactRequestsTitle, ContactAccept, ContactDecline, ContactEmpty, ContactConnect, ContactChangeFailed, ContactChangeSaved, ContactRefreshFailed, ContactNext, SendTyping, TypingNotice string
 
 	SwitchAccount, ManageAccounts                                                                                                                                        string
 	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                   string
