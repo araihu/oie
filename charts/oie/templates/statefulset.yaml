@@ -55,12 +55,14 @@ spec:
         - name: oie
           image: {{ include "oie.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.hosted.enabled }}
           args:
+            {{- if .Values.hosted.enabled }}
             - --role=hosted
+            {{- end }}
             - --listen=0.0.0.0:8080
             - --probe-listen=0.0.0.0:8081
             - --data-dir=/data
+          {{- if .Values.hosted.enabled }}
           env:
             - name: OIE_PUBLIC_URL
               value: {{ required "Set hosted.publicURL." .Values.hosted.publicURL | toString | replace "$" "$$" | quote }}
@@ -70,9 +72,7 @@ spec:
               value: {{ required "Set hosted.oidc.clientID." .Values.hosted.oidc.clientID | toString | replace "$" "$$" | quote }}
             - name: OIE_OIDC_CLIENT_SECRET_FILE
               value: /run/secrets/oidc/client-secret
-          {{- else }}
-          args: ["--listen", "0.0.0.0:8080", "--data-dir", "/data"]
-          {{- if .Values.diagnostics.existingSecret }}
+          {{- else if .Values.diagnostics.existingSecret }}
           env:
             - name: OIE_DIAGNOSTICS_KEY
               valueFrom:
@@ -80,54 +80,33 @@ spec:
                   name: {{ .Values.diagnostics.existingSecret | quote }}
                   key: {{ .Values.diagnostics.secretKey | quote }}
           {{- end }}
-          {{- end }}
           ports:
             - name: http
               containerPort: 8080
-            {{- if .Values.hosted.enabled }}
             - name: probes
               containerPort: 8081
-            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           startupProbe:
-            {{- if .Values.hosted.enabled }}
             httpGet:
               path: /readyz
               port: probes
-            {{- else }}
-            httpGet:
-              path: /api/v1/health
-              port: http
-            {{- end }}
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 60
           readinessProbe:
-            {{- if .Values.hosted.enabled }}
             httpGet:
               path: /readyz
               port: probes
-            {{- else }}
-            httpGet:
-              path: /api/v1/health
-              port: http
-            {{- end }}
             periodSeconds: 5
             timeoutSeconds: 3
           livenessProbe:
-            {{- if .Values.hosted.enabled }}
             httpGet:
               path: /livez
               port: probes
-            {{- else }}
-            httpGet:
-              path: /api/v1/health
-              port: http
-            {{- end }}
             periodSeconds: 10
             timeoutSeconds: 3
           {{- with .Values.resources }}
