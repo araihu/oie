@@ -96,7 +96,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const assertEditIndicator=async(p,kind,label)=>{
    const marker=p.locator('[data-'+(kind==='editing'?'editing-message':'edit-pending')+']').first(),symbol=marker.locator('[data-edit-state="'+kind+'"] [role="img"]');
    await symbol.waitFor({state:'visible'});assert.equal(await symbol.getAttribute('aria-label'),label);assert.equal(await symbol.evaluate(n=>n.closest('a,button')!==null),false,'transient edit indicator has no action');
-   if(kind==='editing')assert.equal(await symbol.locator('use').getAttribute('href'),'/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
+   if(kind==='editing'){
+    assert.equal(await symbol.locator('use').getAttribute('href'),'/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
+    const controlsFit=await p.locator('#message-composer').evaluate(input=>{
+     const field=input.closest('.oie-composer-field');
+     const cancel=field.querySelector('[data-edit-cancel]').getBoundingClientRect();
+     const emoji=field.querySelector('[data-emoji-trigger]').getBoundingClientRect();
+     const textEnd=input.getBoundingClientRect().right-parseFloat(getComputedStyle(input).paddingInlineEnd);
+     return cancel.width>0&&textEnd<=cancel.left&&cancel.right<=emoji.left&&Math.abs(cancel.bottom-emoji.bottom)<=1;
+    });
+    assert(controlsFit,'emoji and cancel controls fit beside the editable text');
+   }
    const history=marker.locator('[data-message-edited]');if(await history.count())assert(await history.isHidden(),'history action is hidden during editing/pending');
    const before=await marker.boundingBox();await symbol.hover();const tip=p.locator('[role="tooltip"]').filter({hasText:label});
    await until(async()=>await tip.evaluateAll(nodes=>nodes.some(n=>Number(getComputedStyle(n).opacity)>.95&&n.getBoundingClientRect().width>0)),'localized edit tooltip');
