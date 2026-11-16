@@ -93,7 +93,7 @@ func validHistoryPage(p engineapi.MessageEditHistoryPage, source engineapi.Messa
 				return false
 			}
 			for _, file := range *item.AttachmentLinks {
-				if len(file.FileName) > 300 || !utf8.ValidString(file.FileName) || len(file.Url) > 4096 || safePreviewURL(file.Url) == "" {
+				if !utf8.ValidString(file.FileName) || utf8.RuneCountInString(file.FileName) > 300 || len(file.Url) > 4096 || safePreviewURL(file.Url) == "" {
 					return false
 				}
 			}

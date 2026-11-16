@@ -15,13 +15,18 @@ import (
 
 type forwardingMedia struct{}
 
+const forwardingAudioURL = "https://example.test/voice-123"
+
 func (forwardingMedia) Open(context.Context, string, application.MediaReadRequest) (application.MediaRead, error) {
 	return application.MediaRead{}, application.ErrInvalid
 }
 
 func (forwardingMedia) OpenForwardAttachment(_ context.Context, url string) (string, io.ReadCloser, error) {
-	if url == "https://example.test/missing.pdf" {
+	switch url {
+	case "https://example.test/missing.pdf":
 		return "", nil, application.ErrNotFound
+	case forwardingAudioURL:
+		return "audio/mpeg", io.NopCloser(strings.NewReader("full audio bytes")), nil
 	}
 	return "application/pdf", io.NopCloser(strings.NewReader("full file bytes")), nil
 }
@@ -93,10 +98,14 @@ func TestForwardMessageCreatesScopedOutboxCopies(t *testing.T) {
 			t.Fatalf("attachment was not copied: %+v %s %v", file, body, err)
 		}
 	}
-	received := func(body string) domain.Message {
+	received := func(in application.Incoming) domain.Message {
 		t.Helper()
-		if err := e.Receive(ctx, application.Incoming{AccountID: source.AccountID, Address: source.Address, SenderName: "Speaker",
-			ProviderID: string(id()), OriginalText: body, CreatedAt: time.Now().UTC()}); err != nil {
+		in.AccountID = source.AccountID
+		in.Address = source.Address
+		in.SenderName = "Speaker"
+		in.ProviderID = string(id())
+		in.CreatedAt = time.Now().UTC()
+		if err := e.Receive(ctx, in); err != nil {
 			t.Fatal(err)
 		}
 		messages, err := e.Messages(ctx, source.ID, "", 10)
@@ -104,19 +113,37 @@ func TestForwardMessageCreatesScopedOutboxCopies(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, message := range messages {
-			if message.OriginalText == body {
+			if message.OriginalText == in.OriginalText {
 				return message
 			}
 		}
 		t.Fatal("received message missing")
 		return domain.Message{}
 	}
-	withURL := received("Report: [full report](https://example.test/report.pdf) and https://example.test/page")
+	withURL := received(application.Incoming{OriginalText: "Report: [full report](https://example.test/report.pdf) and https://example.test/page"})
 	remote := post(withURL, id(), first.Conversation.ID, withURL.RevisionID, 202)
 	if remote == nil || remote.OriginalText != "Report: full report and https://example.test/page" || remote.Attachments == nil || len(*remote.Attachments) != 1 || (*remote.Attachments)[0].FileName != "report.pdf" {
 		t.Fatalf("remote attachment was not replaced by a new upload: %+v", remote)
 	}
-	missing := received("https://example.test/missing.pdf")
+	voice := received(application.Incoming{
+		OriginalText:   "Meeting recording",
+		AudioURLs:      []string{forwardingAudioURL},
+		FileReferences: []domain.SharedReference{{URL: forwardingAudioURL, Kind: "audio", FileName: "meeting recording.mp3"}},
+	})
+	audio := post(voice, id(), other.ID, voice.RevisionID, 202)
+	if audio == nil || audio.OriginalText != voice.OriginalText || audio.ConversationId != string(other.ID) || audio.AccountId != string(other.AccountID) || audio.Attachments == nil || len(*audio.Attachments) != 1 {
+		t.Fatalf("structured audio was not copied with its caption to the direct destination: %+v", audio)
+	}
+	file, content, err := e.OpenStagedAttachment(ctx, other.ID, domain.ID((*audio.Attachments)[0].Id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(content)
+	_ = content.Close()
+	if err != nil || string(body) != "full audio bytes" || file.FileName != "meeting recording.mp3" || file.MediaType != "audio/mpeg" {
+		t.Fatalf("structured audio copy lost its name, media type or contents: %+v %q %v", file, body, err)
+	}
+	missing := received(application.Incoming{OriginalText: "https://example.test/missing.pdf"})
 	post(missing, id(), first.Conversation.ID, missing.RevisionID, 404)
 	_, err = e.LeaveRoom(ctx, id(), second.Conversation.ID, roomIntentRevision(t, e, second.Conversation.ID))
 	if err != nil {

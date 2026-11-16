@@ -357,6 +357,21 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		if matchingComposition(*receipt, conversation, account, payload) {
 			return acceptedResult(text, *receipt)
 		}
+		if receipt.IsOwn && receipt.ConversationId == conversation && receipt.AccountId == account &&
+			(receipt.Retraction != nil || receipt.Moderation != nil) {
+			verify := true
+			params.XOieVerifyExpiredSend = &verify
+			response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
+			if err == nil {
+				switch response.StatusCode() {
+				case http.StatusNoContent:
+					return acceptedResult(text, *receipt)
+				case http.StatusConflict:
+					return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
+				}
+			}
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
+		}
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	case "expired":
 		owner, err := s.client.GetConversationWithResponse(ctx, conversation)

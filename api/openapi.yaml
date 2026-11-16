@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.37.0
+  version: 0.38.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -3151,7 +3151,7 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
         '204':
-          description: Exact expired send receipt verified without replaying the write.
+          description: Exact expired or withdrawn send receipt verified without replaying the write.
         '200':
           description: Original acceptance replayed
           content:
@@ -3179,7 +3179,7 @@ paths:
           $ref: '#/components/schemas/ID'
       - name: X-Oie-Verify-Expired-Send
         in: header
-        description: Verify the exact intent of an expired send receipt. With true, this request has no send side effects.
+        description: Verify the exact intent of an expired or withdrawn send receipt. With true, this request has no send side effects.
         schema: {type: boolean}
       - name: X-Oie-Expected-Conversation-Kind
         in: header
@@ -4423,6 +4423,7 @@ components:
           - 0.35.0
           - 0.36.0
           - 0.37.0
+          - 0.38.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.

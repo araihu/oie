@@ -59,7 +59,7 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 	files := source.Attachments
 	var references []domain.SharedReference
 	if len(files) == 0 {
-		references = forwardFileReferences(body, source.MediaThumbnails)
+		references = forwardFileReferences(source)
 		body = withoutForwardedLinks(body, references)
 		if strings.TrimSpace(body) == "" {
 			body = ""
@@ -143,11 +143,11 @@ func forwardedFileName(name string) string {
 	return name
 }
 
-func forwardFileReferences(body string, thumbnails []domain.MediaThumbnail) []domain.SharedReference {
+func forwardFileReferences(message domain.Message) []domain.SharedReference {
 	var files []domain.SharedReference
-	for _, ref := range SharedReferences(body) {
+	for _, ref := range MessageSharedReferences(message) {
 		isFile := ref.Kind != "link"
-		for _, thumbnail := range thumbnails {
+		for _, thumbnail := range message.MediaThumbnails {
 			isFile = isFile || thumbnail.URL == ref.URL
 		}
 		if isFile {

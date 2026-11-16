@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.37.0",
+    "version": "0.38.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -5084,7 +5084,7 @@
             "$ref": "#/components/responses/Unavailable"
           },
           "204": {
-            "description": "Exact expired send receipt verified without replaying the write."
+            "description": "Exact expired or withdrawn send receipt verified without replaying the write."
           },
           "200": {
             "description": "Original acceptance replayed",
@@ -5124,7 +5124,7 @@
           {
             "name": "X-Oie-Verify-Expired-Send",
             "in": "header",
-            "description": "Verify the exact intent of an expired send receipt. With true, this request has no send side effects.",
+            "description": "Verify the exact intent of an expired or withdrawn send receipt. With true, this request has no send side effects.",
             "schema": {
               "type": "boolean"
             }
@@ -7289,7 +7289,8 @@
               "0.34.0",
               "0.35.0",
               "0.36.0",
-              "0.37.0"
+              "0.37.0",
+              "0.38.0"
             ]
           },
           "eventCursor": {
