@@ -151,6 +151,7 @@ OIECTL_TOKEN="$(cat oie.key)" oiectl --server https://oie.example.com system hea
 Other API clients send `Authorization: Bearer <key>` over HTTPS. For the
 native desktop client, launch `oie-desktop --engine-url https://oie.example.com
 --engine-token-file /path/to/oie.key` with a private key file (mode 0600).
+Supply the HTTPS engine URL explicitly whenever you launch with a key file.
 
 To rotate a key, create a replacement, update the client, then revoke the old
 key by ID.

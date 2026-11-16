@@ -36,3 +36,31 @@ func TestDesktopEnginePreferenceReadsExistingProfiles(t *testing.T) {
 		t.Fatalf("explicit address inherited the saved key: %v", err)
 	}
 }
+
+func TestDesktopTokenFileRequiresExplicitEngineURL(t *testing.T) {
+	config := Config{DataDir: t.TempDir()}
+	config.EngineTokenFile = filepath.Join(config.DataDir, "engine.key")
+	if err := os.WriteFile(config.EngineTokenFile, []byte("fixture-key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := desktopEngineSelection(config); err == nil {
+		t.Fatal("accepted a key file without an explicit address on a new profile")
+	}
+
+	path := engineModePath(config.DataDir)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivateJSON(path, apphost.DesktopEngine{URL: "https://other.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := desktopEngineSelection(config); err == nil {
+		t.Fatal("accepted a key file with only a saved address")
+	}
+
+	config.EngineURL = "https://host.example"
+	got, err := desktopEngineSelection(config)
+	if err != nil || got != (apphost.DesktopEngine{URL: config.EngineURL}) {
+		t.Fatalf("failed to select the explicit address: %v", err)
+	}
+}

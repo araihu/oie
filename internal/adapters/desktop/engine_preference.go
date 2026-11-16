@@ -15,6 +15,9 @@ func desktopEngineSelection(config Config) (apphost.DesktopEngine, error) {
 	if config.EngineURL != "" {
 		return apphost.DesktopEngine{URL: config.EngineURL}, nil
 	}
+	if config.EngineTokenFile != "" {
+		return apphost.DesktopEngine{}, errors.New("--engine-token-file requires an explicit --engine-url")
+	}
 	path := engineModePath(config.DataDir)
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {

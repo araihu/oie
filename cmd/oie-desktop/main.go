@@ -22,7 +22,7 @@ func main() {
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&config.DataDir, "data-dir", "", "database and media directory (defaults to the user's application data directory)")
 	flags.StringVar(&config.EngineURL, "engine-url", "", "optional hosted engine URL")
-	flags.StringVar(&config.EngineTokenFile, "engine-token-file", "", "private file containing the hosted engine API key")
+	flags.StringVar(&config.EngineTokenFile, "engine-token-file", "", "private file containing the hosted engine API key (requires an explicit HTTPS --engine-url)")
 	flags.StringVar(&config.XMPPCAFile, "xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS")
 	flags.StringVar(&config.Language, "lang", "auto", "desktop menu language: auto, en, or pt-BR")
 	if err := flags.Parse(os.Args[1:]); err != nil {
