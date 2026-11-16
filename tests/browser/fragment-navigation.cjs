@@ -1,5 +1,6 @@
 // Navigation exercises real HTMX against an independent API, without a browser
 // protocol client or any connection to the user's retained accounts.
+const {openConversationDetails} = require('./fixtures/conversation-menu.cjs');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
@@ -360,7 +361,7 @@ async function assertMobileControlOwnership(page) {
     await scoped.locator('#account-blocks:visible').waitFor();await keepChat();
     await scoped.keyboard.press('Escape');
     await scoped.locator('#accounts-body').waitFor({state:'hidden'});
-    await scoped.locator('[data-open-details]').click();
+    await openConversationDetails(scoped);
     await scoped.locator('[data-info-entry=media]:visible').click();
     await scoped.locator('#chat-info-content[data-info-view=shared]').waitFor();
     await scoped.locator('#chat-info-content [data-shared-tab=links]').click();

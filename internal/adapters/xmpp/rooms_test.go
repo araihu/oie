@@ -109,6 +109,47 @@ func TestRoomPermissionFailuresCarryTerminalObservation(t *testing.T) {
 		})
 	}
 }
+
+func TestRoomDestructionRecognizesOwnUnavailableWithoutStatus110(t *testing.T) {
+	const notice = `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="unavailable"><x xmlns="http://jabber.org/protocol/muc#user"><item affiliation="none" role="none"/><destroy/></x></presence>`
+	m, e, slot, host := roomFixture(t)
+	feedRoomPresence(t, m, e, notice)
+	if slot.snapshot.State != "joining" || len(host.changes) != 0 {
+		t.Fatal("destruction notice from an earlier session interrupted a pending join")
+	}
+	slot.snapshot.State = "joined"
+	feedRoomPresence(t, m, e, strings.Replace(notice, "/Oie", "/Guest", 1))
+	if slot.snapshot.State != "joined" || len(host.changes) != 0 {
+		t.Fatal("notice for a different occupant changed the current session")
+	}
+	feedRoomPresence(t, m, e, notice)
+	if slot.snapshot.State != "failed" || slot.snapshot.LastErrorCode != "room_destroyed" ||
+		!slot.snapshot.Revoked || len(host.changes) != 1 {
+		t.Fatalf("missing destruction observation: %+v", slot.snapshot)
+	}
+}
+
+func TestRoomCreationRequiresMUCServiceIdentityAndFeature(t *testing.T) {
+	for _, tc := range []struct {
+		name, identity, feature string
+		want                    bool
+	}{
+		{"text conference only", "conference", "urn:xmpp:ping", false},
+		{"MUC feature only", "server", "http://jabber.org/protocol/muc", false},
+		{"MUC service", "conference", "http://jabber.org/protocol/muc", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			info, err := parseDiscoInfo(fmt.Sprintf(`<query xmlns="http://jabber.org/protocol/disco#info"><identity category="%s" type="text"/><feature var="%s"/></query>`, tc.identity, tc.feature))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := supportsRoomCreation(info); got != tc.want {
+				t.Fatalf("supportsRoomCreation returned %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	m, e, slot, host := roomFixture(t)
 	slot.snapshot.State = "joined"

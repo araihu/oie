@@ -28,8 +28,15 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 		out.Request = &request
 		out.LastMessage = ""
 	}
+	if c.RemovedFromChats {
+		out.RemovedFromChats = &c.RemovedFromChats
+	}
 	if c.UnreadMention {
 		out.UnreadMention = &c.UnreadMention
+	}
+	if c.RoomSession != nil {
+		status := engineapi.RoomStatus(c.RoomSession.DisplayStatus())
+		out.RoomStatus = &status
 	}
 	return out
 }

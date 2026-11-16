@@ -131,7 +131,7 @@ func roomSessionDialog(v view) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		if v.Selected != nil && v.Selected.Kind == "room" {
+		if v.Selected != nil && v.Selected.Kind == "room" && !v.conversationRemoved() {
 			templ_7745c5c3_Err = modal.Dialog(modal.DialogConfig{ID: "room-session-dialog", Title: v.Text.RoomSessionTitle, Content: roomSessionStatus(v), FullscreenMobile: true}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

@@ -87,6 +87,9 @@ func (s *Store) SetRoomIntent(ctx context.Context, in application.RoomIntentMuta
 	if c.AccountID != in.Session.AccountID || c.Kind != "room" {
 		return application.RoomIntentResult{}, application.ErrInvalid
 	}
+	if in.Session.Active && c.RemovedFromChats {
+		return application.RoomIntentResult{}, application.ErrStateConflict
+	}
 	if in.Session.Active && (c.Request == domain.RoomInvitation || in.ExpectedConversationRevisionID != "") &&
 		(c.Request != domain.RoomInvitation || c.RevisionID != in.ExpectedConversationRevisionID) {
 		return application.RoomIntentResult{}, application.RoomStateConflict{Current: domain.RoomSession{AccountID: c.AccountID, ConversationID: c.ID, State: "not_joined", UpdatedAt: in.Operation.CreatedAt}}
@@ -142,6 +145,14 @@ func (s *Store) RevokeRoomIntent(ctx context.Context, id, expected, revision dom
 		return domain.RoomSession{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	current, err := revokeRoomIntent(ctx, q, id, expected, revision, code, at)
+	if err != nil {
+		return current, err
+	}
+	return current, tx.Commit()
+}
+
+func revokeRoomIntent(ctx context.Context, q *dbgen.Queries, id, expected, revision domain.ID, code string, at time.Time) (domain.RoomSession, error) {
 	row, err := q.GetRoomIntent(ctx, string(id))
 	if err != nil {
 		return domain.RoomSession{}, notFound(err)
@@ -165,7 +176,7 @@ func (s *Store) RevokeRoomIntent(ctx context.Context, id, expected, revision dom
 	if _, err = change(ctx, q, "conversation.room_session_changed", current, at); err != nil {
 		return current, err
 	}
-	return current, tx.Commit()
+	return current, nil
 }
 func (s *Store) RecordRoomSession(ctx context.Context, state domain.RoomSession, revision domain.ID) error {
 	tx, q, err := begin(ctx, s)

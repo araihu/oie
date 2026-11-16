@@ -97,16 +97,13 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-archived-close{display:flex;margin-inline-start:auto;flex-shrink:0}
 .oie-conversation-scroll{flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;scrollbar-width:thin;scrollbar-color:var(--oie-border) transparent}
 .oie-conversations{list-style:none;margin:0;padding:0 8px 12px}
+.oie-conversations>li+li{margin-block-start:1px}
 .oie-chat-link{position:relative;display:flex;align-items:center;gap:11px;min-width:0;height:78px;padding:10px 11px;border-radius:9px;color:var(--oie-text);text-decoration:none;font-weight:400}
 @media(hover:hover){
  .oie-chat-link:hover{color:var(--oie-text);text-decoration:none}
  .oie-chat-link:not([aria-current=true]):hover{background:var(--oie-raised)}
 }
 .oie-chat-link[aria-current=true]{background:var(--oie-accent-soft)}
-.oie-chat-link[aria-current=true]::before{
- content:"";position:absolute;inset-block:12px;inset-inline-start:4px;
- border-inline-start:3px solid var(--oie-accent-text);border-radius:3px;pointer-events:none
-}
 .oie-chat-link:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:-2px}
 .oie-chat-avatar{flex-shrink:0}
 .oie-row-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
@@ -114,6 +111,7 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-row-top strong{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:650;line-height:1.4}
 .oie-row-top time{color:var(--oie-muted);font-size:11px;flex-shrink:0}
 .oie-row-bottom>span:first-child{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--oie-muted);line-height:1.35}
+.oie-row-room-status{order:-1;flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.35;padding-inline:5px;border:1px solid var(--oie-border);border-radius:999px;color:var(--oie-text)}
 .oie-unread-count{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;background:var(--oie-accent);color:var(--oie-on-accent);flex-shrink:0}
 .oie-row-mention-slot{flex:0 0 18px;height:18px}
 .oie-row-mention{display:grid;place-items:center;height:100%;border-radius:50%;font-size:12px;font-weight:700;background:var(--oie-accent-soft);color:var(--oie-accent-text)}
@@ -124,6 +122,9 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-conversation-pane>.oie-chat-pane{flex:1}
 .oie-chat-pane{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--oie-chat)}
 :is(.oie-chat-header,.oie-chat-skeleton-header){height:65px;min-height:65px;display:flex;align-items:center;gap:11px;padding:10px 20px;background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
+.oie-chat-avatar{position:relative;display:flex;flex:none}
+.oie-chat-avatar .oie-chat-avatar-trigger{position:absolute;inset:0;padding:0;border-radius:50%}
+.oie-chat-avatar-trigger:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-chat-identity{flex:1;min-width:0}.oie-chat-identity h2{font-weight:650;font-size:14px;margin:0 0 3px}.oie-chat-identity p{font-size:11px;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
 .oie-back-button{display:none;color:var(--oie-text)}
 .oie-preview-note{margin:0;padding:7px 20px;text-align:center;font-size:11px;color:var(--oie-muted);background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
@@ -694,7 +695,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-action form p{margin:0;overflow-wrap:anywhere}
 .oie-room-action form [data-form-feedback]:empty{display:none}
 .oie-room-avatar-actions,.oie-room-action-buttons{display:flex;flex-wrap:wrap;gap:4px 8px}
-.oie-room-avatar-actions{justify-content:center}
+.oie-room-avatar-actions,#conversation-removal-form .oie-room-action-buttons{justify-content:center}
 .oie-room-avatar-actions [hidden],.oie-room-management form[hidden]{display:none}
 .oie-room-management form{display:grid;gap:8px}
 .oie-room-management form>button{justify-self:start}

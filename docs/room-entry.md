@@ -69,3 +69,10 @@ behavior.
 | Occupied address or competing command | Create | Report a room conflict or an existing room | Keep the form or show the room status. | Zero changes to existing room configuration |
 | Operation response lost or later leave | Retry with the same key | Reuse the original result | The form keeps its original account, address and nickname until the retry resolves. | No repeated join or creation |
 | Missing request token or stale engine | Submit preview or entry | Reject the request | Keep the form context. | Zero provider requests |
+
+Before saving a new room, Oiê verifies the domain in the address as an XMPP room
+service and checks whether the room already exists. A refused or unreachable
+service leaves the form open, with its address, name, and nickname intact.
+Oiê does not assume that a room service is named `conference` or belongs to the
+account's home server. After the checks pass, the confirmation still comes from
+the room's successful configuration reply.

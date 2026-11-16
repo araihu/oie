@@ -54,7 +54,7 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 	if source.Capabilities != nil && source.Capabilities.AccountId == owner.AccountId {
 		v.MessagingCapabilities = source.Capabilities
 	}
-	if source.EditTarget != nil && validEditTarget(*source.EditTarget, owner.AccountId, owner.Id, "") {
+	if !v.conversationRemoved() && source.EditTarget != nil && validEditTarget(*source.EditTarget, owner.AccountId, owner.Id, "") {
 		v.LatestEditTarget = source.EditTarget
 	}
 	if owner.Kind == "room" {
@@ -75,7 +75,7 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 	reads.Go(func() {
 		accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit})
 		if err == nil && accounts.JSON200 != nil {
-			v.Accounts = accounts.JSON200.Items
+			v.setAccounts(accounts.JSON200.Items)
 			accountsOK = v.account(owner.AccountId).Address != ""
 		}
 	})
