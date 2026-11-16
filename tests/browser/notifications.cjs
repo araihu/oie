@@ -664,7 +664,7 @@ async function run() {
     assert.equal(await tone.textContent(), 'Oiê');
     await toneProfile.close();
 
-    const nativeProfile = await browser.newContext();
+    const nativeProfile = await browser.newContext({serviceWorkers: 'block'});
     const nativePage = await nativeProfile.newPage();
     nativePage.on('pageerror', error => errors.push(error.message));
     await nativePage.addInitScript(() => {
@@ -722,12 +722,16 @@ async function run() {
       localStorage.setItem('oie.notifications.sound', '0');
       window.Notification = class { static permission = 'granted'; };
       window.banners = 0;
-      navigator.serviceWorker.register = () => new Promise(resolve => {
-        window.finishRegistration = () => resolve({
-          active: true,
-          showNotification: async () => { window.banners++; }
+      const register = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      navigator.serviceWorker.register = (script, options) => {
+        if (new URL(script, location.origin).pathname !== '/ui/notification-worker.js') return register(script, options);
+        return new Promise(resolve => {
+          window.finishRegistration = () => resolve({
+            active: true,
+            showNotification: async () => { window.banners++; }
+          });
         });
-      });
+      };
     });
     await dndPage.goto(base + '/?lang=en');
     await dndPage.waitForFunction(() => window.OieEvents.connected);
