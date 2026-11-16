@@ -65,8 +65,9 @@ async function clickWorkerBanner(worker, data) {
 async function run() {
   const streams = new Set();
   const events = [];
+  const eventAttempts = [];
   const messages = new Map();
-  let seq = 0, engineAvailable = true, eventsAvailable = true;
+  let seq = 0, activeEngine = engine, engineAvailable = true, eventsAvailable = true, resetsRemaining = 0;
   const chats = [[chat, 'direct', false], [other, 'direct', false], [room, 'room', false], [archivedRoom, 'room', true]]
     .map(([id, kind, archived], index) => ({
       id, revisionId: revision, accountId: account, kind, archived, address: 'chat' + index + '@example',
@@ -99,7 +100,7 @@ async function run() {
     };
     const route = url.pathname;
     if (!engineAvailable || route === '/api/v1/events' && !eventsAvailable) return send({status: 503}, 503);
-    if (route === '/api/v1/engine') return send({id: engine, role: 'hosted', apiVersion: '0.31.0', eventCursor: engine + ':' + seq});
+    if (route === '/api/v1/engine') return send({id: activeEngine, role: 'hosted', apiVersion: '0.31.0', eventCursor: activeEngine + ':' + seq});
     if (route === '/api/v1/accounts') return send({items: [profile]});
     if (route === '/api/v1/accounts/' + account) return send(profile);
     if (route.endsWith('/connection')) return send({accountId: account, state: 'connected', updatedAt: now});
@@ -117,9 +118,16 @@ async function run() {
     if (selected) return send(selected);
     if (/\/(messages|avatars|previews|message-stars)$/.test(route)) return send({items: []});
     if (route === '/api/v1/events') {
+      const cursor = req.headers['last-event-id'];
+      eventAttempts.push({cursor, at: performance.now()});
+      if (resetsRemaining > 0) {
+        resetsRemaining--;
+        return send({status: 409}, 409);
+      }
+      if (cursor && !cursor.startsWith(activeEngine + ':')) return send({status: 409}, 409);
       res.writeHead(200, {'Content-Type': 'text/event-stream'});
       res.write(': ready\n\n');
-      const after = Number(req.headers['last-event-id']?.split(':').at(-1) || 0);
+      const after = Number(cursor?.split(':').at(-1) || 0);
       for (const event of events.slice(after)) res.write(event);
       streams.add(res);
       res.on('close', () => streams.delete(res));
@@ -214,6 +222,50 @@ async function run() {
       await cold.close();
       await until(() => streams.size === 0, 'cold-start stream closed');
     }
+    const resetPage = await profile.newPage();
+    await resetPage.addInitScript(() => {
+      window.EventSource = class extends EventSource {
+        constructor(...options) {
+          super(...options);
+          this.addEventListener('message.created', event => { window.lastWireEvent = event.lastEventId; });
+        }
+      };
+    });
+    const resetStart = eventAttempts.length;
+    resetsRemaining = 2;
+    await resetPage.goto(base + '/?chat=' + chat);
+    await resetPage.waitForFunction(() => window.OieEvents.connected);
+    const resetAttempts = eventAttempts.slice(resetStart);
+    assert.equal(resetAttempts.length, 3);
+    assert(resetAttempts[1].at - resetAttempts[0].at >= 350, 'first reset backs off');
+    assert(resetAttempts[2].at - resetAttempts[1].at >= 700, 'repeated reset increases the delay');
+
+    push({conversationId: chat});
+    const lastCursor = engine + ':' + seq;
+    await resetPage.waitForFunction(cursor => window.OieEvents.latest('') === cursor, lastCursor);
+    const staleCursor = engine + ':0', foreignCursor = id(9999) + ':3';
+    for (const stream of streams) stream.write(`id: ${staleCursor}\nevent: message.created\ndata: {}\n\nid: ${foreignCursor}\nevent: message.created\ndata: {}\n\n`);
+    await resetPage.waitForFunction(cursor => window.lastWireEvent === cursor, foreignCursor);
+    assert.equal(await resetPage.evaluate(() => window.OieEvents.latest('')), lastCursor);
+    const reconnectStart = eventAttempts.length;
+    for (const stream of streams) stream.end();
+    await until(() => eventAttempts.length > reconnectStart, 'resume after invalid event IDs');
+    assert.equal(eventAttempts[reconnectStart].cursor, lastCursor);
+    await resetPage.waitForFunction(() => window.OieEvents.connected);
+
+    const oldComposer = resetPage.locator('#message-composer');
+    await oldComposer.fill('Draft for the original engine');
+    await resetPage.route('**/ui/refresh?*', route => route.abort('connectionreset'));
+    activeEngine = id(9999);
+    for (const stream of streams) stream.end();
+    await resetPage.waitForFunction(() => window.OieEvents.replaced);
+    assert.equal(await resetPage.locator('body').getAttribute('data-engine-id'), engine);
+    assert.equal(await oldComposer.inputValue(), 'Draft for the original engine');
+    assert(await resetPage.locator('[data-send-message]').isDisabled(), 'engine replacement blocks writes in the old workspace');
+    await resetPage.close();
+    activeEngine = engine;
+    await until(() => streams.size === 0, 'reset test stream closed');
+
     const first = await profile.newPage();
     const second = await profile.newPage();
     // The first tab uses Chromium's playback path. Use offline decoding and a

@@ -10,6 +10,7 @@
   ];
   const inboxEvents = new Set(['account.registered', 'account.removed', 'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated']);
   const idleTimeout = 40000;
+  const maxSequence = 9223372036854775807n;
   let source, retry, watchdog, lastActivity = 0, delay = 500;
   let engine = '', cursor = '', connected = false, replaced = false, suspended = false;
 
@@ -36,8 +37,18 @@
     delay = Math.min(15000, delay * 2);
   }
 
+  function sequence(id, owner = engine) {
+    const prefix = owner + ':';
+    if (!owner || typeof id !== 'string' || !id.startsWith(prefix)) return null;
+    const value = id.slice(prefix.length);
+    if (value.length > 19 || !/^(0|[1-9]\d*)$/.test(value)) return null;
+    const parsed = BigInt(value);
+    return parsed <= maxSequence ? parsed : null;
+  }
+
   function connect() {
     if (source || retry !== undefined || suspended || replaced) return;
+    const requested = sequence(cursor);
     const connection = new EventSource('/ui/events?cursor=' + encodeURIComponent(cursor));
     source = connection;
     let liveAfter = null;
@@ -49,40 +60,39 @@
     activity();
     connection.onopen = () => {
       if (source !== connection) return;
-      connected = true;
       activity();
-      emit('open');
     };
     connection.onerror = () => reconnect(connection);
     connection.addEventListener('oie.heartbeat', () => {
-      if (source !== connection) return;
+      if (source !== connection || !connected) return;
       delay = 500;
       activity();
     });
-    function sequence(id) {
-      const prefix = engine + ':';
-      if (typeof id !== 'string' || !id.startsWith(prefix)) return null;
-      const value = id.slice(prefix.length);
-      return /^\d+$/.test(value) ? BigInt(value) : null;
-    }
     connection.addEventListener('oie.live', event => {
       if (source !== connection) return;
       activity();
       try { liveAfter = sequence(JSON.parse(event.data)); }
       catch { liveAfter = null; }
+      if (liveAfter === null || (requested !== null && liveAfter < requested)) {
+        reconnect(connection);
+        return;
+      }
+      if (!connected) {
+        connected = true;
+        emit('open');
+      }
     });
     for (const type of eventTypes) {
       connection.addEventListener(type, event => {
-        if (source !== connection) return;
+        if (source !== connection || !connected) return;
         activity();
-        if (event.lastEventId) cursor = event.lastEventId;
+        const current = sequence(event.lastEventId), previous = sequence(cursor);
+        if (current === null || (previous !== null && current < previous)) return;
+        cursor = event.lastEventId;
         if (inboxEvents.has(type)) window.OieInbox.invalidate();
         emit(type, event);
-        if (type === 'message.created' && liveAfter !== null) {
-          const current = sequence(event.lastEventId);
-          if (current !== null && current > liveAfter) {
-            emit('message.live', {engine, event});
-          }
+        if (type === 'message.created' && liveAfter !== null && current > liveAfter) {
+          emit('message.live', {engine, event});
         }
       });
     }
@@ -90,16 +100,14 @@
       if (source !== connection) return;
       try {
         const reset = JSON.parse(event.data);
-        if (typeof reset.engineId !== 'string' || typeof reset.cursor !== 'string') throw new Error('invalid reset');
+        if (typeof reset.engineId !== 'string' || sequence(reset.cursor, reset.engineId) === null) throw new Error('invalid reset');
         if (reset.engineId !== engine) {
           markReplaced();
           emit('engine-changed');
           return;
         }
-        stop();
-        window.OieInbox.invalidate();
         cursor = reset.cursor;
-        connect();
+        reconnect(connection);
       } catch { reconnect(connection); }
     });
   }
@@ -110,7 +118,7 @@
       stop();
       if (engine) window.OieInbox.clear();
       engine = id;
-      cursor = snapshotCursor;
+      cursor = sequence(snapshotCursor) === null ? '' : snapshotCursor;
       replaced = false;
       delay = 500;
     }
@@ -118,11 +126,9 @@
   }
 
   function latest(snapshotCursor) {
-    if (!cursor || !snapshotCursor) return snapshotCursor || cursor;
-    if (cursor === snapshotCursor) return cursor;
-    const prefix = engine + ':';
-    if (![cursor, snapshotCursor].every(value => value.startsWith(prefix) && /^\d+$/.test(value.slice(prefix.length)))) return snapshotCursor;
-    return BigInt(cursor.slice(prefix.length)) > BigInt(snapshotCursor.slice(prefix.length)) ? cursor : snapshotCursor;
+    const current = sequence(cursor), snapshot = sequence(snapshotCursor);
+    if (current === null) return snapshot === null ? '' : snapshotCursor;
+    return snapshot === null || current > snapshot ? cursor : snapshotCursor;
   }
 
   function markReplaced() {
@@ -131,8 +137,9 @@
     window.OieInbox.clear();
   }
 
-  function wake() {
+  function wake(online = false) {
     if (!engine || replaced || suspended) return;
+    if (retry !== undefined && !online) return;
     if (source && Date.now() - lastActivity < idleTimeout) return;
     stop();
     connect();

@@ -257,6 +257,36 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 	}
 }
 
+func TestLiveSSERetriesWhenReplayBoundaryUnavailable(t *testing.T) {
+	for _, replayCursor := range []string{"", testAccount + ":3", testEngine + ":03"} {
+		t.Run(replayCursor, func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/engine" {
+					t.Error("opened upstream stream without a valid replay boundary")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				if replayCursor == "" {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]string{"id": testEngine, "eventCursor": replayCursor})
+			}))
+			t.Cleanup(backend.Close)
+			ui, err := New(backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			ui.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ui/events?cursor="+testEngine+":1", nil))
+			if response.Code != http.StatusServiceUnavailable {
+				t.Fatalf("stream status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+			}
+		})
+	}
+}
+
 func (f *liveFixture) effectCount() int     { f.mu.Lock(); defer f.mu.Unlock(); return f.effects }
 func (f *liveFixture) passwordSeen() string { f.mu.Lock(); defer f.mu.Unlock(); return f.lastPassword }
 

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -23,23 +25,19 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	// A reconnect still feeds replayed events to the UI, but only events
 	// after this snapshot can alert. The marker has no SSE ID of its own.
-	snapshot, snapshotErr := s.client.GetEngineWithResponse(r.Context())
-	liveCursor := ""
-	if snapshotErr == nil && snapshot.JSON200 != nil {
-		liveCursor = snapshot.JSON200.EventCursor
+	_, liveCursor, ok := s.eventSnapshot(r.Context())
+	if !ok {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
 	if cursor == "" {
-		if liveCursor == "" {
-			w.WriteHeader(503)
-			return
-		}
 		cursor = liveCursor
 	}
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	response, err := s.streamClient.StreamEvents(ctx, &engineapi.StreamEventsParams{LastEventID: &cursor})
 	if err != nil {
-		w.WriteHeader(503)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -53,13 +51,13 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		return !flush || control.Flush() == nil
 	}
 	if response.StatusCode == http.StatusConflict {
-		snapshot, err := s.client.GetEngineWithResponse(r.Context())
-		if err != nil || snapshot.JSON200 == nil {
+		engineID, cursor, ok := s.eventSnapshot(r.Context())
+		if !ok {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 		setEventStreamHeaders(w)
-		data, _ := json.Marshal(map[string]string{"engineId": snapshot.JSON200.Id, "cursor": snapshot.JSON200.EventCursor})
+		data, _ := json.Marshal(map[string]string{"engineId": engineID, "cursor": cursor})
 		write(fmt.Sprintf("event: oie.reset\ndata: %s\n\n", data), true)
 		return
 	}
@@ -88,6 +86,19 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// A missing or inconsistent snapshot cannot establish the boundary between
+// replayed events and events that can produce notifications.
+func (s *Server) eventSnapshot(ctx context.Context) (engineID, cursor string, ok bool) {
+	snapshot, err := s.client.GetEngineWithResponse(ctx)
+	if err != nil || snapshot.JSON200 == nil {
+		return "", "", false
+	}
+	engineID, cursor = snapshot.JSON200.Id, snapshot.JSON200.EventCursor
+	id, digits, valid := strings.Cut(cursor, ":")
+	seq, err := strconv.ParseInt(digits, 10, 64)
+	return engineID, cursor, valid && id != "" && id == engineID && err == nil && seq >= 0 && strconv.FormatInt(seq, 10) == digits
 }
 
 func setEventStreamHeaders(w http.ResponseWriter) {

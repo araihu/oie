@@ -1333,7 +1333,6 @@ window.OieRuntime.register('live', life => {
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
     }
   });
-  function retryPending() { if (composer && journal?.pending && composer.dataset.busy !== 'true' && !stopped && navigator.onLine) composer.requestSubmit(); }
   function engineChanged(notify = true) {
     if (stopped) return;
     stopped = true; events.markReplaced();
@@ -1418,7 +1417,7 @@ window.OieRuntime.register('live', life => {
     for (const type of events.eventTypes) {
       life.on(events.target,type,event=>{if(!stopped)(handlers[type]||scheduleRefresh)(event.detail);});
     }
-    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();retryPending();}});
+    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();}});
     life.on(events.target,'error',()=>{if(!stopped)announce(text('liveRetry'));});
     life.on(events.target,'engine-changed',()=>engineChanged());
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
@@ -1429,22 +1428,21 @@ window.OieRuntime.register('live', life => {
       if((mountedList&&(!inbox.current(mountedList)||
         (body.dataset.eventCursor&&mountedList.dataset.inboxCursor!==body.dataset.eventCursor&&
           events.latest(mountedList.dataset.inboxCursor)!==body.dataset.eventCursor)))||
-        events.latest(body.dataset.eventCursor)!==body.dataset.eventCursor)scheduleRefresh();
-      retryPending();
+        events.latest(body.dataset.eventCursor)!==body.dataset.eventCursor||journal?.pending)scheduleRefresh();
     }else announce(text('liveConnecting'),true);
   }
   // Bounded recovery polling also covers a proxy that buffers or disables SSE.
   function recoverLive(){
     if(mock||stopped)return;
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
-    scheduleRefresh();retryPending();
+    scheduleRefresh();
   }
   life.interval(() => { if (!document.hidden) recoverLive(); },15000);
-  function wakeLive(){
+  function wakeLive(online){
     if(mock||stopped)return;
-    inbox.invalidate();events.wake();recoverLive();
+    inbox.invalidate();events.wake(online);recoverLive();
   }
-  life.on(window,'online',wakeLive);
+  life.on(window,'online',()=>wakeLive(true));
   life.on(document,'visibilitychange',()=>{if(!document.hidden)wakeLive();});
   if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
