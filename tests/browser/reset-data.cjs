@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { startHostedOie } = require('./fixtures/hosted-oie.cjs');
-const { resizeVisibleViewport } = require('./fixtures/viewport.cjs');
 
 const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
 
@@ -13,25 +12,9 @@ async function openSettings(page, server, fixture) {
   for (const name of [fixture.accessKeys, fixture.diagnostics, fixture.about, fixture.destructiveActions]) {
     await general.getByRole('button', { name, exact: true }).waitFor();
   }
-  const footer = settings.locator('footer');
-  await footer.getByRole('button', { name: fixture.signOut, exact: true }).waitFor();
-  assert.equal(await footer.getByRole('button').count(), 1);
+  assert.equal(await settings.getByRole('button', { name: fixture.signOut, exact: true }).count(), 0);
   assert.equal(await general.getByText(fixture.engineHeading, { exact: true }).count(), 0);
   assert.equal(await general.getByText(fixture.engineLabel, { exact: true }).count(), 0);
-  await resizeVisibleViewport(page, { width: fixture.viewport.width, height: 280 });
-  const placement = await footer.evaluate(node => {
-    const panel = node.closest('[role="dialog"]');
-    const content = panel.querySelector('.oie-settings-scroll');
-    const before = node.getBoundingClientRect().bottom;
-    content.scrollTop = content.scrollHeight;
-    return {
-      scrolled: content.scrollTop > 0,
-      shift: Math.abs(node.getBoundingClientRect().bottom - before),
-      gap: Math.abs(node.getBoundingClientRect().bottom - panel.getBoundingClientRect().bottom),
-    };
-  });
-  assert(placement.scrolled && placement.shift <= 1 && placement.gap <= 1, JSON.stringify(placement));
-  await resizeVisibleViewport(page, fixture.viewport);
 
   const entry = settings.getByRole('button', { name: fixture.destructiveActions, exact: true });
   const actions = page.getByRole('dialog', { name: fixture.destructiveActions, exact: true });

@@ -35,10 +35,11 @@ as the Oiê service user.
 
 If sign-in is required when opening a conversation, a message notification,
 or a workspace search, Oiê opens the requested view after sign-in.
-Clicking a hosted notification opens its link in a browser window. Signing
-out ends the browser session across tabs. If the session expires before a new
-message submission reaches the engine, sign in again to continue from its
-saved draft.
+Clicking a hosted notification opens its link in a browser window. To end the
+browser session across tabs, open **Settings → Engine**, choose **Sign out**,
+and confirm. The hosted engine keeps running. If the session expires before
+a new message submission reaches the engine, sign in again to continue from
+its saved draft.
 
 Use a hostname dedicated to Oiê. Browsers share cookies across HTTPS ports
 on the same hostname. If the service user cannot bind port 443 directly, use a
@@ -52,8 +53,8 @@ or short response timeouts for SSE. Keep OAuth callback query strings and
 authorization headers out of proxy logs.
 
 Local and development BFF roles are for trusted access. Use `--role hosted`
-for a public installation. The hosted browser holds a seven-day session and has
-a **Sign out** action in Settings. API clients use bearer keys. All engine API
+for a public installation. The hosted browser holds a seven-day session.
+API clients use bearer keys. All engine API
 routes require a key, including health, events, and the served API contract.
 [Diagnostics](diagnostics.md#access-server-diagnostics) uses the same owner
 session or API key.

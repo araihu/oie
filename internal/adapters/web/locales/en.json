@@ -12,6 +12,8 @@
   "SignInRejected": "Could not sign in. Try again.",
   "SignInUnavailable": "Sign-in is temporarily unavailable.",
   "SignOutLabel": "Sign out",
+  "SignOutTitle": "Sign out of Oiê?",
+  "SignOutDescription": "You’ll sign out of Oiê in all tabs in this browser. The engine will keep running on the server.",
   "Forward": "Forward",
   "ForwardTitle": "Forward message",
   "ForwardChooseRooms": "Choose destinations",

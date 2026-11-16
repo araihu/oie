@@ -628,8 +628,8 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 
 #settings-body{display:flex;flex-direction:column;overflow:hidden}
 .oie-settings-scroll{flex:1;min-height:0;overflow-y:auto}
-.oie-settings-footer{flex:none;padding:12px 16px;border-top:1px solid var(--oie-border)}
-.oie-settings-footer .oie-icon{width:18px;height:18px}
+.oie-engine-sign-out{margin-block-start:20px;padding-block-start:16px;border-block-start:1px solid var(--oie-border)}
+.oie-engine-sign-out .oie-icon{width:18px;height:18px}
 .oie-reset-submit-label{display:grid}
 .oie-reset-submit-label>span{grid-area:1/1}
 .oie-reset-submit-label>span:last-child,

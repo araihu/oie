@@ -271,7 +271,7 @@ type view struct {
 type copy struct {
 	ConversationRemoved string
 
-	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                                                   string
+	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel, SignOutTitle, SignOutDescription                                 string
 	AccessKeys, AccessKeyName, AccessKeyCreate, AccessKeySecret, AccessKeyCopy, AccessKeyCopied, AccessKeyFailed, AccessKeyInvalid string
 	EngineModeSignIn, EngineModeSignInHelp, EngineModeOpenBrowser, EngineModeEnterKey                                              string
 	EngineModeKey, EngineModeKeySaved, EngineModeAuthentication, EngineModeKeyHTTPS                                                string

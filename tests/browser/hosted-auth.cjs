@@ -59,6 +59,58 @@ async function verifySignInAppearance(browser, origin) {
   }
 }
 
+async function signOutConfirmation(page, copy) {
+  const engine = page.getByRole('tabpanel', {name: copy.engine, exact: true});
+  const open = engine.getByRole('button', {name: copy.action, exact: true});
+  const dialog = page.getByRole('dialog', {name: copy.title, exact: true});
+  const cancel = dialog.getByRole('button', {name: copy.cancel, exact: true});
+  const confirm = dialog.getByRole('button', {name: copy.action, exact: true});
+  let logoutRequests = 0;
+  const countLogout = request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/auth/logout') logoutRequests++;
+  };
+  page.on('request', countLogout);
+  try {
+    await open.press('Enter');
+    await dialog.waitFor();
+    assert.equal(await dialog.locator('#hosted-sign-out-description').textContent(), copy.description);
+    assert.equal(await confirm.evaluate(button => document.activeElement === button), false);
+    await cancel.click();
+    await dialog.waitFor({state: 'hidden'});
+    assert(await open.evaluate(button => document.activeElement === button));
+    await open.press('Enter');
+    await dialog.waitFor();
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({state: 'hidden'});
+    assert.equal(logoutRequests, 0);
+    assert.equal((await page.request.get(new URL('/auth/session', page.url()).href)).status(), 204);
+    await open.press('Enter');
+    await dialog.waitFor();
+    return confirm;
+  } finally {
+    page.off('request', countLogout);
+  }
+}
+
+async function verifyMobileSignOut(browser, server, engineID) {
+  const context = await browser.newContext({
+    ignoreHTTPSErrors: true, locale: 'pt-BR', viewport: {width: 390, height: 844},
+  });
+  try {
+    const page = await context.newPage();
+    await server.signIn(page, '/?open=settings&settingsTab=engine&lang=pt-BR');
+    const confirm = await signOutConfirmation(page, {
+      engine: 'Motor', action: 'Sair', title: 'Sair do Oiê?', cancel: 'Cancelar',
+      description: 'Você vai sair do Oiê em todas as abas deste navegador. O motor continuará rodando no servidor.',
+    });
+    await Promise.all([page.waitForURL(signIn), confirm.click()]);
+    assert.equal((await page.request.get(new URL('/auth/session', page.url()).href)).status(), 401);
+    assert.equal((await (await server.api.get('/api/v1/engine')).json()).id, engineID);
+  } finally {
+    await context.close();
+  }
+}
+
 async function expireWhenSending(page, context) {
   await page.route('**/ui/messages/send', async route => {
     await context.clearCookies({name: '__Host-oie-session'});
@@ -90,6 +142,7 @@ async function create(api, endpoint, sequence, data) {
     const workspace = '/?' + new URLSearchParams({chat: chat.id, lang: 'en'});
     browser = await chromium.launch({args: ['--ignore-certificate-errors-spki-list=' + server.certificatePin]});
     await verifySignInAppearance(browser, url);
+    await verifyMobileSignOut(browser, server, engine.id);
     const context = await browser.newContext({ignoreHTTPSErrors: true, locale: 'en', viewport: {width: 1440, height: 900}});
     const page = await context.newPage();
     await server.signIn(page, search);
@@ -133,13 +186,42 @@ async function create(api, endpoint, sequence, data) {
     const composer = page.locator('#message-composer');
     await composer.waitFor();
     const settings = await context.newPage();
-    await settings.goto(url + '/?open=settings&lang=en');
-    await Promise.all([
-      page.waitForURL(signIn, {timeout: 6000}),
-      settings.waitForURL(signIn),
-      settings.getByRole('button', {name: 'Sign out', exact: true}).click(),
-    ]);
+    await settings.goto(url + '/?open=settings&settingsTab=engine&lang=en');
+    const confirm = await signOutConfirmation(settings, {
+      engine: 'Engine', action: 'Sign out', title: 'Sign out of Oiê?', cancel: 'Cancel',
+      description: 'You’ll sign out of Oiê in all tabs in this browser. The engine will keep running on the server.',
+    });
+    const releaseLogout = Promise.withResolvers();
+    let logoutRequests = 0;
+    await settings.route('**/auth/logout', async route => {
+      logoutRequests++;
+      await releaseLogout.promise;
+      await route.continue();
+    });
+    const logoutRequest = settings.waitForRequest(request => new URL(request.url()).pathname === '/auth/logout');
+    await confirm.focus();
+    const before = await confirm.boundingBox();
+    await confirm.press('Enter');
+    await logoutRequest;
+    await confirm.press('Enter');
+    assert(await confirm.evaluate(button => document.activeElement === button));
+    const shifts = await confirm.evaluate((button, before) => new Promise(resolve => {
+      const frames = [];
+      const sample = () => {
+        const now = button.getBoundingClientRect();
+        frames.push(Math.max(...['x', 'y', 'width', 'height'].map(key => Math.abs(now[key] - before[key]))));
+        if (frames.length === 10) resolve(frames);
+        else requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }), before);
+    assert(shifts.every(shift => shift <= 1), JSON.stringify(shifts));
+    assert.equal(logoutRequests, 1);
+    const signedOut = Promise.all([page.waitForURL(signIn, {timeout: 6000}), settings.waitForURL(signIn)]);
+    releaseLogout.resolve();
+    await signedOut;
     releaseCheck.resolve();
+    assert.equal((await (await api.get('/api/v1/engine')).json()).id, engine.id);
     assert.equal(await composer.count(), 0);
     assert.equal(new URL(page.url()).searchParams.get('next'), workspace);
     await loginLink(page).click();
