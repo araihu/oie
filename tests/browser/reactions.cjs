@@ -132,7 +132,23 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   // Cross-account and CSRF attempts are rejected before any mutation.
   const effects=state.effects,csrf=await page.locator('meta[name="oie-csrf"]').getAttribute('content'),bad=new URLSearchParams({csrf,engineId:engine,accountId:id(999),conversationId:chat,messageId:message,operationKey:id(901),expectedOwnRevisionId:state.ownRevision||'',emojis:'[]',lang:'en'});
   const foreign=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(foreign.status(),404);bad.set('accountId',account);bad.set('csrf','wrong');const denied=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(denied.status(),403);assert.equal(state.effects,effects);
-  state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();await react();await pick('😂');await own('😂',true);assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
+  state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();
+  await react();
+  const catalogReaction=modal.locator('[data-emoji-pick="😂"]').first();
+  await catalogReaction.waitFor({state:'visible'});
+  // WebKit can focus the workspace after pointerdown and before the click.
+  await catalogReaction.evaluate(button=>{
+   button.dispatchEvent(new PointerEvent('pointerdown',{pointerType:'mouse',bubbles:true}));
+   document.getElementById('main-content').focus({preventScroll:true});
+  });
+  assert.equal(await modal.isVisible(),true,'the catalog stays open until the emoji receives its click');
+  const beforeCatalogChoice=state.posts;
+  await catalogReaction.click();
+  await own('😂',true);
+  assert.equal(state.posts,beforeCatalogChoice+1,'the catalog choice submits exactly once');
+  assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');
+  assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);
+  await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
   const summary=region.locator('[data-reaction-summary]'),count=summary.locator('[data-reaction-summary-count]');
   const busySummary=region.locator('[data-reaction-summary][aria-busy="true"]');
   state.commandState='queued';await react();

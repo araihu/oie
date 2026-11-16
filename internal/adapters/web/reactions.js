@@ -315,13 +315,14 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   close();
  });
  life.on(document,'pointerdown',event=>{
-  choosingWithPointer=quick.contains(event.target)&&!!event.target.closest('[data-reaction-quick-emoji],[data-reaction-more]');
-  if(quick.contains(event.target)||opener?.contains(event.target))return;
+  const inside=quick.contains(event.target);
+  choosingWithPointer=inside&&(catalog.contains(event.target)||!!event.target.closest('[data-reaction-quick-emoji]'));
+  if(inside||opener?.contains(event.target))return;
   cancelPreparation();
   close(false);
  },{capture:true});
  life.on(document,'focusin',event=>{
-  // WebKit can focus the workspace before sending the button's touch click.
+  // WebKit can focus the workspace between pointerdown and click.
   if(!choosingWithPointer&&!quick.hidden&&!quick.contains(event.target)&&event.target!==opener)close(false);
  });
  life.on(document,'scroll',event=>{if(!quick.contains(event.target))positionQuick()},{capture:true,passive:true});
