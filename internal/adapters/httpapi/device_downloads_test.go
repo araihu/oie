@@ -51,11 +51,22 @@ func TestCompleteDownloadVerifiesSenderAndRetainsPerDevice(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	clip := "https://files.example/clip"
+	if err := e.Receive(ctx, application.Incoming{
+		AccountID: c.AccountID, Address: c.Address, OriginalText: "A video with a caption", ProviderID: "clip",
+		FileReferences: []domain.SharedReference{{URL: clip, Kind: "video", FileName: "trail.mp4"}},
+		FileDigests:    []domain.FileDigest{{URL: clip, Algorithm: "sha-256", Value: hash}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	startMediaEngine(t, e)
 	catalog := waitVideoCatalog(t, e)
 	items := map[string]string{}
 	for _, item := range catalog.Items {
 		items[item.URL] = string(item.ID)
+		if item.URL == clip && (item.Message.OriginalText != "A video with a caption" || item.FileName != "trail.mp4") {
+			t.Fatalf("captioned attachment: %+v", item)
+		}
 	}
 	client, err := engineapi.NewClientWithResponses(server.URL)
 	if err != nil {
@@ -93,6 +104,10 @@ func TestCompleteDownloadVerifiesSenderAndRetainsPerDevice(t *testing.T) {
 	if audioHeaders.Get("Content-Type") != "audio/mpeg" || audioHeaders.Get("X-Oie-Integrity") != "sender_verified" || !bytes.Equal(audioData, body) {
 		t.Fatal("advertised audio did not deliver its complete verified bytes", audioHeaders)
 	}
+	clipHeaders, clipData := read(clip, "", "", true, http.StatusOK)
+	if clipHeaders.Get("X-Oie-Integrity") != "sender_verified" || !bytes.Equal(clipData, body) {
+		t.Fatal("captioned video did not deliver its complete verified bytes", clipHeaders)
+	}
 	deviceA, deviceB := string(id()), string(id())
 	header, data := read(good, "", "bytes=0-3", false, http.StatusPartialContent)
 	if header.Get("X-Oie-Integrity") != "" || !bytes.Equal(data, body[:4]) {
@@ -115,6 +130,17 @@ func TestCompleteDownloadVerifiesSenderAndRetainsPerDevice(t *testing.T) {
 	checkDownload(good, deviceA, "sender_verified")
 	if source.calls.Load() != before {
 		t.Fatal("a retained download was fetched again")
+	}
+	if err := os.WriteFile(filepath.Join(filesDir, hash), bytes.Repeat([]byte{'x'}, len(body)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	checkDownload(good, deviceA, "sender_verified")
+	if source.calls.Load() != before+1 {
+		t.Fatal("a corrupted retained download was not fetched again")
+	}
+	checkDownload(plain, deviceB, "computed_only")
+	if source.calls.Load() != before+1 {
+		t.Fatal("repair did not replace the shared corrupt file")
 	}
 	checkPolicy := func(device string, days, count int) {
 		t.Helper()

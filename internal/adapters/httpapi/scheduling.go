@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -126,6 +127,9 @@ func (s *Server) GetStagedMessageAttachment(ctx context.Context, r engineapi.Get
 	if err != nil {
 		return nil, err
 	}
+	if seekable, ok := body.(io.ReadSeeker); ok {
+		return stagedAttachmentStream{file: file, body: body, seekable: seekable, byteRange: r.Params.Range}, nil
+	}
 	return engineapi.GetStagedMessageAttachment200ApplicationoctetStreamResponse{
 		Body: body, ContentLength: file.Size,
 		Headers: engineapi.GetStagedMessageAttachment200ResponseHeaders{
@@ -133,6 +137,26 @@ func (s *Server) GetStagedMessageAttachment(ctx context.Context, r engineapi.Get
 			XOieAttachmentType: new(file.MediaType),
 		},
 	}, nil
+}
+
+type stagedAttachmentStream struct {
+	file      domain.StagedAttachment
+	body      io.Closer
+	seekable  io.ReadSeeker
+	byteRange *string
+}
+
+func (s stagedAttachmentStream) VisitGetStagedMessageAttachmentResponse(w http.ResponseWriter) error {
+	defer func() { _ = s.body.Close() }()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": s.file.FileName}))
+	w.Header().Set("X-Oie-Attachment-Type", s.file.MediaType)
+	r := &http.Request{Method: http.MethodGet, Header: make(http.Header)}
+	if s.byteRange != nil {
+		r.Header.Set("Range", *s.byteRange)
+	}
+	http.ServeContent(w, r, "", time.Time{}, s.seekable)
+	return nil
 }
 
 type scheduleCursor struct {

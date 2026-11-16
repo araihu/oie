@@ -629,6 +629,7 @@ paths:
           content:
             application/json:
               schema: {$ref: './openapi.yaml#/components/schemas/DownloadRetention'}
+        '400': {description: Invalid engine identity}
         '409': {description: Engine changed}
         '503': {description: Retention unavailable}
     post:
@@ -679,6 +680,7 @@ paths:
         '400': {description: Invalid request}
         '404': {description: Media not found}
         '409': {description: Engine changed}
+        '413': {description: Original file exceeds the download limit}
         '415': {description: Unsupported media}
         '416': {description: Unsatisfied range}
         '422': {description: Preview sample unavailable within the video byte budget}
@@ -689,6 +691,7 @@ paths:
               description: Present when the original differs from the advertised file.
               schema: {type: string, enum: [mismatch]}
         '503': {description: Media unavailable}
+        '504': {description: Media provider timed out}
   /ui/api/v1/shared-content/{id}/thumbnail:
     parameters:
     - {in: path, name: id, required: true, description: Scoped resource identity., schema: {type: string, format: uuid}}

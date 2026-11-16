@@ -438,7 +438,7 @@
   let url;try{url=new URL(form?node.action:node.href,location.href)}catch{continue}
   if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||(!form&&(node.getAttribute('href')||'').startsWith('#')))continue;
   const pane=!form&&node.matches('#conversation-list a[data-conversation-id],.oie-back-button')&&conversationRoute(url);
-  const scoped=node.id==='favorites-search-form'?'favorites-results':node.id==='shared-content-search'?'shared-search-results':form&&node.matches('[data-info-search]')?'chat-info-content':scopedKind(url,node);
+  const scoped=node.id==='favorites-search-form'?'favorites-results':node.id==='shared-content-search'?'shared-search-results':form&&node.matches('[data-info-search]')?'chat-info-content':scopedKind(url,node,node.matches('[data-return-latest]'));
   const source=!form&&node.matches('[data-shared-actions] a[id^="shared-source-"],a[id^="favorite-source-"]')&&
    url.searchParams.has('message')&&url.searchParams.has('chat');
   const sourceInPane=source&&conversationRoute(url);

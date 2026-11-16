@@ -8,7 +8,7 @@ window.OieRuntime.register('previews', life => {
     if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(path,name);
     const anchor=document.createElement('a');anchor.href=path;anchor.download=name;document.body.append(anchor);anchor.click();anchor.remove();return true;
   }
-  const downloading=new Set(),refreshing=new Set();
+  const downloading=new Map(),refreshing=new Set();
   const preferenceKey='oie.device.auto-image-downloads.v1';
   let automatic=true;
   try { automatic=localStorage.getItem(preferenceKey)!=='false'; }
@@ -85,7 +85,8 @@ window.OieRuntime.register('previews', life => {
   }
   function updateViewer(scope) {
     if(!viewer)return;const data=state(viewer);if(!data)return;
-    const next=scope.dataset.previewFile || '';
+    const file=scope.dataset.previewFile;
+    const next=file?file+'?original=1':'';
     if(data.viewerSrc!==next){data.viewerFailed=false;data.viewerSrc=next;}
     data.viewerLabel=scope.dataset.previewTitle || labels.image || '';
     data.viewerStatus=next?'':scope.dataset.previewStatus || labels.notDownloaded || '';
@@ -216,8 +217,7 @@ window.OieRuntime.register('previews', life => {
     if(saving.has(id)){request.onState?.('cancelled');return;}saving.add(id);notify('loading');
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),60000);
     try{
-      if(scope.dataset.previewFile||['queued','downloading'].includes(scope.dataset.previewDownload))registerOriginal(scope);
-      else if(!await download(scope))throw Error('ensure_failed');
+      if(!await download(scope))throw Error('ensure_failed');
       let delay=300;
       while(active()&&!controller.signal.aborted){
         const current=findAll(id)[0];if(!current)throw Error('preview_missing');
@@ -250,9 +250,19 @@ window.OieRuntime.register('previews', life => {
       .then(response=>{if(!response.ok)scopedOriginals.delete(key);return response.body?.cancel();})
       .catch(()=>scopedOriginals.delete(key));
   }
-  async function download(scope) {
-    const id=scope.dataset.previewId;if(downloading.has(id))return true;
-    downloading.add(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=true;
+  function download(scope) {
+    const id=scope.dataset.previewId;
+    if(downloading.has(id))return downloading.get(id);
+    const pending=requestDownload(scope).finally(()=>{
+      downloading.delete(id);
+      if(!life.signal.aborted)for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=false;
+    });
+    downloading.set(id,pending);
+    for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=true;
+    return pending;
+  }
+  async function requestDownload(scope) {
+    const id=scope.dataset.previewId;
     const feedback=scope.querySelector('[data-preview-feedback]');if(feedback)feedback.textContent=labels.loading || '';
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),12000);
     let failure=labels.failed || '';
@@ -274,7 +284,7 @@ window.OieRuntime.register('previews', life => {
       if(viewing===id&&state(viewer))state(viewer).viewerStatus=message || '';
       return false;
     } finally {
-      clearTimeout(timeout);if(life.signal.aborted)return;downloading.delete(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=false;
+      clearTimeout(timeout);
     }
   }
   async function refreshLink(scope){
@@ -301,9 +311,9 @@ window.OieRuntime.register('previews', life => {
     const scope=button.closest('[data-preview-id]')||(menu&&find(id));if(!scope||scope.dataset.previewKind!=='image')return;
     event.preventDefault();
     if(menu?.id.startsWith('save-preview-')){
+      if(!await download(scope))return;
       const path=scope.dataset.previewFile;if(!/^\/ui\/media\/[0-9a-f]{64}$/.test(path||''))return;
       const name=scope.dataset.previewName||'image';
-      registerOriginal(scope);
       try{await saveFile(path+'?download='+encodeURIComponent(name),name);}catch{if(!life.signal.aborted)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:labels.failed||''}}));}return;
     }
     if(menu?.id.startsWith('info-preview-')){

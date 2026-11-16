@@ -96,7 +96,10 @@ func sharedMediaFormat(item domain.SharedContentItem) (MediaFormat, bool) {
 		return "", false
 	}
 	format := MediaFormat(strings.TrimPrefix(strings.ToLower(path.Ext(u.Path)), "."))
-	return format, format.Limit() > 0 && format != "video"
+	if format.Limit() == 0 {
+		format = MediaFormat(strings.TrimPrefix(strings.ToLower(path.Ext(item.FileName)), "."))
+	}
+	return format, format.Limit() > 0 && format != "video" && format != "audio"
 }
 
 // ByteRange is an inclusive byte selection. End=-1 means open-ended; for a

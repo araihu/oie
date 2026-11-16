@@ -235,13 +235,20 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(value)
 		return
 	}
-	response, err := s.streamClient.GetStagedMessageAttachment(ctx, conversation, attachment)
+	params := &engineapi.GetStagedMessageAttachmentParams{}
+	if value := r.Header.Get("Range"); !q.Has("download") && value != "" && !strings.Contains(value, ",") {
+		params.Range = &value
+	}
+	response, err := s.streamClient.GetStagedMessageAttachment(ctx, conversation, attachment, params)
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+		w.Header().Set("Content-Range", response.Header.Get("Content-Range"))
+	}
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
 		w.WriteHeader(response.StatusCode)
 		return
 	}
@@ -266,11 +273,13 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Disposition", disposition)
 	}
-	if size := response.Header.Get("Content-Length"); size != "" {
-		w.Header().Set("Content-Length", size)
+	for _, header := range []string{"Content-Length", "Accept-Ranges", "Content-Range"} {
+		if value := response.Header.Get(header); value != "" {
+			w.Header().Set(header, value)
+		}
 	}
 	w.Header().Set("Content-Type", contentType)
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(response.StatusCode)
 	_, _ = io.Copy(w, body)
 }
 

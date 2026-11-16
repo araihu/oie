@@ -27,6 +27,9 @@ WHERE excluded.kind='file';
 UPDATE device_downloads SET hash=?,mime_type=?,size=?,verified_algorithm=?,downloaded_at_ms=?
 WHERE kind='image' AND source_id=? AND hash='';
 
+-- name: DiscardPendingImageDownloads :exec
+DELETE FROM device_downloads WHERE kind='image' AND source_id=? AND hash='';
+
 -- name: CountDeviceDownloads :one
 SELECT count(*) FROM device_downloads WHERE device_id=? AND hash<>'';
 
@@ -73,3 +76,6 @@ ON CONFLICT DO NOTHING;
 
 -- name: RemoveLegacyDownloadDevice :exec
 DELETE FROM download_devices WHERE device_id='legacy';
+
+-- name: ListRetainedDownloadHashes :many
+SELECT DISTINCT hash FROM device_downloads WHERE kind='file';

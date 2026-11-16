@@ -134,12 +134,13 @@ func (e *Engine) cleanDownloads(ctx context.Context, repo DownloadRepository, de
 
 func (e *Engine) reuseDownload(ctx context.Context, repo DownloadRepository, device domain.ID, item domain.SharedContentItem, source domain.Message) (MediaRead, int64, error) {
 	e.downloadMu.Lock()
-	defer e.downloadMu.Unlock()
 	policy, err := repo.DownloadPolicy(ctx, device)
 	if err != nil {
+		e.downloadMu.Unlock()
 		return MediaRead{}, 0, err
 	}
 	saved, err := repo.DeviceDownload(ctx, device, item.ID, source.RevisionID)
+	e.downloadMu.Unlock()
 	if err != nil {
 		return MediaRead{}, policy.Generation, err
 	}
@@ -216,8 +217,21 @@ func (e *Engine) retainDownload(ctx context.Context, ref domain.Download, stage 
 	} else if !errors.Is(err, ErrNotFound) {
 		return err
 	}
-	if err := stage.Publish(ref.Hash); err != nil {
-		return err
+	err = stage.Publish(ref.Hash)
+	if err == nil {
+		err = repo.SaveDownload(ctx, ref)
 	}
-	return repo.SaveDownload(ctx, ref)
+	if err == nil {
+		return nil
+	}
+
+	// A file may have been published before the request or commit failed.
+	// Check live references under the download lock before rolling it back.
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	remove, lookupErr := repo.ShouldDeleteDownload(cleanup, domain.DownloadGarbage{Kind: "file", Hash: ref.Hash})
+	if lookupErr != nil || !remove {
+		return errors.Join(err, lookupErr)
+	}
+	return errors.Join(err, e.downloadFiles.Remove(ref.Hash))
 }

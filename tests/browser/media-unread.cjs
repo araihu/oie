@@ -9,6 +9,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const engine = id(1), account = id(2), chat = id(3), other = id(4), revision = id(5), media = id(6);
 const date = Date.UTC(2026, 10, 12, 16), timestamp = new Date(date).toISOString();
 const attachment = 'https://files.example.test/roteiro.wav';
+const stagedAudio = id(7);
 const messages = Array.from({length: 110}, (_, index) => ({
   id: id(100 + index), revisionId: revision, accountId: account, conversationId: chat,
   sender: {id: id(9), displayName: 'Lia'}, originalText: 'Trilha de sábado · mensagem ' + (index + 1),
@@ -59,6 +60,12 @@ const api = http.createServer(async (request, response) => {
       const collection = entry.id === chat ? messages : [];
       const limit = Number(url.searchParams.get('limit') || 50), initial = Math.max(0, collection.length - limit);
       return send(200, {items: collection.slice(initial).reverse(), nextCursor: initial ? collection[initial].id : undefined});
+    }
+    if (endpoint === base + '/staged-attachments/' + stagedAudio) {
+      if (request.headers.range !== 'bytes=0-1') return send(400, {status: 400});
+      response.writeHead(206, {'Content-Type': 'application/octet-stream', 'Content-Length': 2, 'Content-Range': 'bytes 0-1/' + wav.length,
+        'Accept-Ranges': 'bytes', 'X-Oie-Attachment-Type': 'audio/wav', 'Content-Disposition': 'attachment; filename="roteiro.wav"'});
+      return response.end(wav.subarray(0, 2));
     }
     const target = endpoint.match(new RegExp('^' + base + '/messages/([^/]+)/context$'))?.[1];
     if (target && entry.id === chat) {
@@ -141,6 +148,7 @@ async function test(base) {
       const retry = timeline.locator('[data-audio-retry]');
       assert(await audio.isVisible());
       assert.equal(await audio.getAttribute('preload'), 'none');
+      assert.equal(await audio.getAttribute('controlslist'), 'nodownload');
       assert(await retry.isHidden());
       assert(await audio.evaluate(player => player.paused && player.readyState === HTMLMediaElement.HAVE_NOTHING));
       assert.equal(state.reads, beforeOpen, 'opening the conversation does not fetch audio');
@@ -178,6 +186,13 @@ async function test(base) {
       const download = await downloadEvent;
       assert.equal(download.suggestedFilename(), 'roteiro.wav');
       assert.equal(await download.failure(), null);
+      const staged = await context.request.get(new URL('/ui/scheduling/file?' + new URLSearchParams({
+        engineId: engine, conversationId: chat, attachmentId: stagedAudio,
+      }), base).href, {headers: {Range: 'bytes=0-1'}});
+      assert.equal(staged.status(), 206);
+      assert.equal(staged.headers()['content-type'], 'audio/wav');
+      assert.equal(staged.headers()['content-range'], 'bytes 0-1/' + wav.length);
+      assert.deepEqual(await staged.body(), wav.subarray(0, 2));
 
       if (width < 500) {
         await page.locator('.oie-chat-pane').getByRole('link', {name: 'Voltar'}).first().click();
@@ -204,6 +219,12 @@ async function test(base) {
       const explicit = page.locator('[data-message-id="' + messages[74].id + '"]');
       await explicit.waitFor();
       assert(await explicit.evaluate(row => document.activeElement === row));
+      await page.goto(new URL('/?chat=' + chat + '&message=' + id(999) + '&lang=' + lang, base).href);
+      await page.locator('[data-return-latest]').click();
+      await page.waitForURL(url => !url.searchParams.has('message'));
+      await page.locator('[data-message-id="' + newest.id + '"]').waitFor();
+      assert.equal(await page.locator('[data-message-id="' + first.id + '"]').count(), 0);
+      assert(!new URL(page.url()).searchParams.has('message'));
       assert.deepEqual(errors, []);
       await context.close();
     }

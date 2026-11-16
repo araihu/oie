@@ -44,6 +44,10 @@ func (s *Store) DeviceDownload(ctx context.Context, device, source, revision dom
 	}, nil
 }
 
+func (s *Store) RetainedDownloadHashes(ctx context.Context) ([]string, error) {
+	return s.read.ListRetainedDownloadHashes(ctx)
+}
+
 func (s *Store) SaveDownload(ctx context.Context, download domain.Download) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -52,6 +56,19 @@ func (s *Store) SaveDownload(ctx context.Context, download domain.Download) erro
 	defer func() { _ = tx.Rollback() }()
 	if err := q.EnsureDownloadDevice(ctx, string(download.DeviceID)); err != nil {
 		return err
+	}
+	if download.Kind == "file" {
+		previous, err := q.GetDeviceDownload(ctx, dbgen.GetDeviceDownloadParams{
+			DeviceID: string(download.DeviceID), SourceID: string(download.SourceID), SourceRevision: string(download.SourceRevision),
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil && previous.Hash != download.Hash {
+			if err := q.QueueDownloadGarbage(ctx, dbgen.QueueDownloadGarbageParams{Kind: previous.Kind, Hash: previous.Hash}); err != nil {
+				return err
+			}
+		}
 	}
 	err = q.InsertDeviceDownload(ctx, dbgen.InsertDeviceDownloadParams{
 		DeviceID: string(download.DeviceID), SourceID: string(download.SourceID), SourceRevision: string(download.SourceRevision),
@@ -73,12 +90,17 @@ func (s *Store) SaveDownloadedPreview(ctx context.Context, p domain.MessagePrevi
 	if err = updatePreview(ctx, q, p, expected); err != nil {
 		return err
 	}
-	if p.DownloadState == "ready" {
+	switch p.DownloadState {
+	case "ready":
 		err = q.FinishImageDownloads(ctx, dbgen.FinishImageDownloadsParams{
 			Hash: p.FileHash, MimeType: p.FileMimeType, Size: p.FileSize, VerifiedAlgorithm: p.VerifiedAlgorithm,
 			DownloadedAtMs: downloadedAt.UnixMilli(), SourceID: string(p.ID),
 		})
 		if err != nil {
+			return err
+		}
+	case "failed":
+		if err := q.DiscardPendingImageDownloads(ctx, string(p.ID)); err != nil {
 			return err
 		}
 	}

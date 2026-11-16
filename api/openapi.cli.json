@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.35.0",
+    "version": "0.37.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -491,6 +491,9 @@
         "operationId": "getDownloadRetention",
         "summary": "Read downloaded-file retention for a device",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Device retention settings and retained download count.",
             "content": {
@@ -528,6 +531,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Updated device retention.",
             "content": {
@@ -541,6 +547,26 @@
           "400": {
             "$ref": "#/components/responses/Invalid"
           },
+          "413": {
+            "description": "Retention request body exceeds the allowed size.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Retention request requires JSON.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "503": {
             "$ref": "#/components/responses/Unavailable"
           }
@@ -553,6 +579,9 @@
         "operationId": "clearDeviceDownloads",
         "summary": "Remove originals retained for this device",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Device retention settings after removing its downloads.",
             "content": {
@@ -5899,6 +5928,16 @@
         "operationId": "getStagedMessageAttachment",
         "summary": "Read retained bytes of an outgoing attachment",
         "description": "Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.",
+        "parameters": [
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "Optional byte range for playback and seeking.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "401": {
             "$ref": "#/components/responses/AuthenticationRequired"
@@ -5906,6 +5945,12 @@
           "200": {
             "description": "Retained attachment bytes",
             "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support for the staged file.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "X-Oie-Attachment-Type": {
                 "description": "Staged attachment media type supplied by the uploader.",
                 "schema": {
@@ -5929,11 +5974,72 @@
               }
             }
           },
+          "206": {
+            "description": "Requested staged attachment bytes.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support for the staged file.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected bytes and the full file size.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Oie-Attachment-Type": {
+                "description": "Staged attachment media type supplied by the uploader.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "description": "Attachment disposition with the original filename.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "multipart/byteranges": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
           "400": {
             "$ref": "#/components/responses/Invalid"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "description": "The specified byte range is invalid or outside the file.",
+            "headers": {
+              "Content-Range": {
+                "description": "Total file size when the range is outside the file.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/Unavailable"
@@ -6823,7 +6929,8 @@
               "0.32.0",
               "0.33.0",
               "0.34.0",
-              "0.35.0"
+              "0.35.0",
+              "0.37.0"
             ]
           },
           "eventCursor": {
@@ -10090,6 +10197,16 @@
             "type": "array",
             "maxItems": 32,
             "description": "Current message audio attachment links advertised by the sender.",
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 4096
+            }
+          },
+          "videoAttachmentUrls": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Current message video attachment links advertised by the sender.",
             "items": {
               "type": "string",
               "format": "uri",

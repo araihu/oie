@@ -694,7 +694,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	if own && canonical != "" {
 		observeOwnCorrectionSource(e, string(canonical), correction, address, body)
 	}
-	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), FileDigests: decodeFileDigests(files), AudioURLs: decodeAudioURLs(files), AccountID: e.account.ID, Address: address, Kind: "room", OwnRoomNickname: nickname, SenderName: msg.From.Resourcepart(), SenderAddress: liveRoomSenderAddress(e, msg.From, stamp, delayFrom), ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
+	err := m.host.Receive(ctx, application.Incoming{MediaThumbnails: decodeFileThumbnails(files), FileDigests: decodeFileDigests(files), AudioURLs: decodeAudioURLs(files), FileReferences: decodeFileReferences(files), AccountID: e.account.ID, Address: address, Kind: "room", OwnRoomNickname: nickname, SenderName: msg.From.Resourcepart(), SenderAddress: liveRoomSenderAddress(e, msg.From, stamp, delayFrom), ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}

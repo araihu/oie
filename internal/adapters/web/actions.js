@@ -222,7 +222,9 @@ window.OieRuntime.register('download-retention', life => {
   const select = form.querySelector('select');
   const status = section.querySelector('[role="status"]');
   const dialog = document.getElementById('remove-device-downloads-dialog');
+  const save = form.querySelector('[data-save-download-retention]');
   const remove = form.querySelector('[data-remove-device-downloads]');
+  const confirm = dialog.querySelector('[data-confirm-remove-downloads]');
   const headers = {'X-Oie-Engine-ID':engine};
   let busy = false;
 
@@ -230,6 +232,8 @@ window.OieRuntime.register('download-retention', life => {
     if (busy) return;
     busy = true;
     form.setAttribute('aria-busy', 'true');
+    for (const button of [save, remove, confirm]) button.setAttribute('aria-disabled', 'true');
+    select.disabled = true;
     const options = {credentials:'same-origin', cache:'no-store', headers};
     if (action) {
       options.method = 'POST';
@@ -247,22 +251,28 @@ window.OieRuntime.register('download-retention', life => {
       select.value = days;
       fields.disabled = false;
       status.textContent = action === 'clear' ? cleared : action === 'save' ? saved : '';
+      if (action) document.dispatchEvent(new Event('oie:refresh-request'));
     } catch {
       if (!life.signal.aborted) {
         fields.disabled = false;
         status.textContent = failed;
       }
     } finally {
-      if (!life.signal.aborted) form.removeAttribute('aria-busy');
+      if (!life.signal.aborted) {
+        form.removeAttribute('aria-busy');
+        for (const button of [save, remove, confirm]) button.removeAttribute('aria-disabled');
+        select.disabled = false;
+      }
       busy = false;
     }
   }
 
   life.on(window, 'drawer:open', event => { if (event.detail?.id === 'settings') update(); });
-  life.on(form.querySelector('[data-save-download-retention]'), 'click', () => update('save'));
+  life.on(save, 'click', () => update('save'));
   const modal = type => window.dispatchEvent(new CustomEvent('modal:'+type, {detail:{id:dialog.id}}));
-  life.on(remove, 'click', () => modal('open'));
-  life.on(dialog.querySelector('[data-confirm-remove-downloads]'), 'click', () => {
+  life.on(remove, 'click', () => { if (!busy) modal('open'); });
+  life.on(confirm, 'click', () => {
+    if (busy) return;
     modal('close');
     update('clear');
   });

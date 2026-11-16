@@ -10,16 +10,13 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-func normalizeFileDigests(body string, audioURLs []string, candidates []domain.FileDigest) []domain.FileDigest {
+func normalizeFileDigests(references []domain.SharedReference, candidates []domain.FileDigest) []domain.FileDigest {
 	if len(candidates) == 0 {
 		return nil
 	}
 	urls := map[string]bool{}
-	for _, ref := range SharedReferences(body) {
+	for _, ref := range references {
 		urls[ref.URL] = true
-	}
-	for _, url := range normalizeAudioURLs(audioURLs) {
-		urls[url] = true
 	}
 	var digests []domain.FileDigest
 	seen := map[domain.FileDigest]bool{}
@@ -38,7 +35,7 @@ func normalizeFileDigests(body string, audioURLs []string, candidates []domain.F
 
 func fileDigests(source domain.Message, address string) []domain.FileDigest {
 	var expected []domain.FileDigest
-	for _, digest := range normalizeFileDigests(domain.DisplayBody(source), source.AudioURLs, source.FileDigests) {
+	for _, digest := range normalizeFileDigests(MessageSharedReferences(source), source.FileDigests) {
 		if digest.URL == address {
 			expected = append(expected, digest)
 		}

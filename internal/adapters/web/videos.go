@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -308,7 +309,8 @@ func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
 }
 
 func validMessageVideo(item engineapi.SharedContentItem, message messageView, owner *engineapi.Conversation) bool {
-	return item.Kind == "video" && validMessageMedia(item, message, owner) && hasMediaReference(message.displayBody(), item.Url)
+	return item.Kind == "video" && validMessageMedia(item, message, owner) &&
+		(hasMediaReference(message.displayBody(), item.Url) || message.VideoAttachmentUrls != nil && slices.Contains(*message.VideoAttachmentUrls, item.Url))
 }
 
 func validMessageMedia(item engineapi.SharedContentItem, message messageView, owner *engineapi.Conversation) bool {

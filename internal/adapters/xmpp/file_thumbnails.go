@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"mime"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
 
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
 
@@ -16,6 +18,7 @@ import (
 type fileSharingMetadata struct {
 	Files []struct {
 		File struct {
+			Name      string `xml:"urn:xmpp:file:metadata:0 name"`
 			MediaType string `xml:"urn:xmpp:file:metadata:0 media-type"`
 			Hashes    []struct {
 				Algorithm string `xml:"algo,attr"`
@@ -107,6 +110,56 @@ func decodeAudioURLs(meta fileSharingMetadata) []string {
 		}
 	}
 	return urls
+}
+
+func decodeFileReferences(meta fileSharingMetadata) []domain.SharedReference {
+	var refs []domain.SharedReference
+	for _, file := range meta.Files {
+		mediaType, _, _ := mime.ParseMediaType(file.File.MediaType)
+		if domain.PlayableAudioType(mediaType) != "" {
+			continue
+		}
+		name := path.Base(strings.ReplaceAll(file.File.Name, "\\", "/"))
+		var kind string
+		switch mediaType {
+		case "image/png", "image/jpeg", "image/gif":
+			kind = "image"
+		case "video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/x-msvideo":
+			kind = "video"
+		case "application/pdf":
+			kind = "document"
+			if !strings.HasSuffix(strings.ToLower(name), ".pdf") {
+				name += ".pdf"
+			}
+		case "text/plain":
+			kind = "document"
+			if path.Ext(name) == "" {
+				name += ".txt"
+			}
+		}
+		for _, source := range file.Sources.URLs {
+			if len(refs) >= 32 {
+				return refs
+			}
+			if len(source.Target) > 4096 {
+				continue
+			}
+			u, err := url.Parse(source.Target)
+			if err != nil || u.Hostname() == "" || u.User != nil || (u.Scheme != "https" && u.Scheme != "http") {
+				continue
+			}
+			sourceKind := kind
+			if sourceKind == "" {
+				if matches := application.SharedReferences(source.Target); len(matches) == 1 && matches[0].URL == source.Target {
+					sourceKind = matches[0].Kind
+				}
+			}
+			if sourceKind != "" && sourceKind != "link" {
+				refs = append(refs, domain.SharedReference{URL: source.Target, Kind: sourceKind, FileName: name})
+			}
+		}
+	}
+	return refs
 }
 
 func attachmentBodyFallback(body string, meta fileSharingMetadata) string {

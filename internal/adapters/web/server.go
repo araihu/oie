@@ -966,7 +966,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/media/") {
-		cachehttp.PrivateImmutable.Wrap(http.HandlerFunc(s.mediaImage)).ServeHTTP(w, r)
+		handler := http.Handler(http.HandlerFunc(s.mediaImage))
+		if r.URL.Query().Get("original") == "1" || r.URL.Query().Has("download") {
+			handler = cachehttp.PrivateRevalidate.Wrap(handler)
+		} else {
+			handler = cachehttp.PrivateImmutable.Wrap(handler)
+		}
+		handler.ServeHTTP(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/thumbnail") {

@@ -78,6 +78,15 @@ func (q *Queries) DeleteDownloadImageFile(ctx context.Context, hash string) erro
 	return err
 }
 
+const discardPendingImageDownloads = `-- name: DiscardPendingImageDownloads :exec
+DELETE FROM device_downloads WHERE kind='image' AND source_id=? AND hash=''
+`
+
+func (q *Queries) DiscardPendingImageDownloads(ctx context.Context, sourceID string) error {
+	_, err := q.db.ExecContext(ctx, discardPendingImageDownloads, sourceID)
+	return err
+}
+
 const dropDeviceDownloads = `-- name: DropDeviceDownloads :many
 DELETE FROM device_downloads WHERE device_id=? RETURNING device_id, source_id, source_revision, kind, hash, mime_type, size, verified_algorithm, downloaded_at_ms
 `
@@ -302,6 +311,33 @@ func (q *Queries) ListDownloadGarbage(ctx context.Context) ([]DownloadGarbage, e
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRetainedDownloadHashes = `-- name: ListRetainedDownloadHashes :many
+SELECT DISTINCT hash FROM device_downloads WHERE kind='file'
+`
+
+func (q *Queries) ListRetainedDownloadHashes(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRetainedDownloadHashes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			return nil, err
+		}
+		items = append(items, hash)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

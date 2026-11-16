@@ -156,7 +156,7 @@ func (e *Engine) SharedContent(ctx context.Context, q domain.SharedContentQuery)
 			item.Preview = nil
 			continue
 		}
-		p, err := e.ensureMessagePreview(ctx, previews, previewSource(item.Message), item.URL)
+		p, err := e.ensureMessagePreview(ctx, previews, previewSource(item.Message), item.URL, item.SharedReference)
 		if err != nil {
 			return empty, err
 		}
@@ -239,8 +239,45 @@ func normalizeAudioURLs(candidates []string) []string {
 	return urls
 }
 
+func normalizeFileReferences(candidates []domain.SharedReference) []domain.SharedReference {
+	var refs []domain.SharedReference
+	seen := map[string]bool{}
+	for _, ref := range candidates {
+		if len(ref.URL) > 4096 || !utf8.ValidString(ref.URL) || strings.ContainsAny(ref.URL, "\r\n\t <>\"") || seen[ref.URL] {
+			continue
+		}
+		u, err := url.Parse(ref.URL)
+		if err != nil || u.User != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") {
+			continue
+		}
+		switch ref.Kind {
+		case "image", "video", "audio", "document":
+		default:
+			continue
+		}
+		name := path.Base(strings.ReplaceAll(ref.FileName, "\\", "/"))
+		if name == "." || name == "/" || len(name) > 300 || strings.ContainsAny(name, "\r\n\t") {
+			name = sharedFileName(u)
+		}
+		refs = append(refs, domain.SharedReference{URL: ref.URL, Kind: ref.Kind, FileName: name})
+		seen[ref.URL] = true
+		if len(refs) == 32 {
+			break
+		}
+	}
+	return refs
+}
+
 func MessageSharedReferences(message domain.Message) []domain.SharedReference {
 	refs := SharedReferences(domain.DisplayBody(message))
+	for _, file := range message.FileReferences {
+		index := slices.IndexFunc(refs, func(ref domain.SharedReference) bool { return ref.URL == file.URL })
+		if index >= 0 {
+			refs[index] = file
+		} else if len(refs) < 32 {
+			refs = append(refs, file)
+		}
+	}
 	for _, address := range message.AudioURLs {
 		index := slices.IndexFunc(refs, func(ref domain.SharedReference) bool { return ref.URL == address })
 		if index >= 0 {

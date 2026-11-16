@@ -41,6 +41,7 @@ type Querier interface {
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
+	DiscardPendingImageDownloads(ctx context.Context, sourceID string) error
 	DropDeviceDownloads(ctx context.Context, deviceID string) ([]DeviceDownload, error)
 	DropExpiredDownloads(ctx context.Context, nowMs int64) ([]DeviceDownload, error)
 	DropExpiredMessageEvents(ctx context.Context, ids string) error
@@ -174,6 +175,7 @@ type Querier interface {
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
+	ListRetainedDownloadHashes(ctx context.Context) ([]string, error)
 	ListRetentionAccountScopes(ctx context.Context) ([]string, error)
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomBannedNicknames(ctx context.Context, conversationID string) ([]ListRoomBannedNicknamesRow, error)

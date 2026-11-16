@@ -15,7 +15,7 @@ type SuppliedThumbnailFetcher interface {
 	SmallThumbnail(context.Context, string) ([]byte, error)
 }
 
-func normalizeMediaThumbnails(body string, hints []domain.MediaThumbnail) []domain.MediaThumbnail {
+func normalizeThumbnailReferences(references []domain.SharedReference, hints []domain.MediaThumbnail) []domain.MediaThumbnail {
 	var result []domain.MediaThumbnail
 	seen := map[string]bool{}
 	for _, hint := range hints {
@@ -29,7 +29,7 @@ func normalizeMediaThumbnails(body string, hints []domain.MediaThumbnail) []doma
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.Fragment != "" || strings.ContainsAny(hint.ThumbnailURL, "\r\n\t") {
 			continue
 		}
-		for _, ref := range SharedReferences(body) {
+		for _, ref := range references {
 			if ref.Kind == "video" && ref.URL == hint.URL {
 				result = append(result, hint)
 				seen[hint.URL] = true
@@ -40,7 +40,7 @@ func normalizeMediaThumbnails(body string, hints []domain.MediaThumbnail) []doma
 	return result
 }
 func suppliedThumbnail(item domain.SharedContentItem) string {
-	for _, hint := range normalizeMediaThumbnails(domain.DisplayBody(item.Message), item.Message.MediaThumbnails) {
+	for _, hint := range normalizeThumbnailReferences(MessageSharedReferences(item.Message), item.Message.MediaThumbnails) {
 		if hint.URL == item.URL {
 			return hint.ThumbnailURL
 		}
@@ -189,6 +189,9 @@ func (e *Engine) processVideoThumbnail(ctx context.Context, repo PreviewReposito
 			err = ErrNotFound
 		}
 	}
+	// Keep the blob and its preview reference consistent with original-file cleanup.
+	e.downloadMu.Lock()
+	defer e.downloadMu.Unlock()
 	if err == nil {
 		file, storeErr := e.mediaFiles.Thumbnail(job, data)
 		err = storeErr

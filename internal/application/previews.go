@@ -19,10 +19,11 @@ type PreviewSource struct {
 	ID, AccountID, ConversationID domain.ID
 	Text                          string
 	AudioURLs                     []string
+	FileReferences                []domain.SharedReference
 }
 
 func previewSource(m domain.Message) PreviewSource {
-	return PreviewSource{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, Text: domain.DisplayBody(m), AudioURLs: m.AudioURLs}
+	return PreviewSource{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, Text: domain.DisplayBody(m), AudioURLs: m.AudioURLs, FileReferences: m.FileReferences}
 }
 
 // PreviewRepository owns derived cache records and reads their message sources.
@@ -172,11 +173,21 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	}
 	out := []domain.MessagePreview{}
 	for _, source := range sources {
-		for _, address := range previewURLs(source.Text) {
-			if knownNonPreviewFile(address) || slices.Contains(source.AudioURLs, address) {
+		addresses := previewURLs(source.Text)
+		files := make(map[string]domain.SharedReference, len(source.FileReferences))
+		for _, file := range source.FileReferences {
+			files[file.URL] = file
+			if file.Kind == "image" && !slices.Contains(addresses, file.URL) {
+				addresses = append(addresses, file.URL)
+			}
+		}
+		for _, address := range addresses {
+			file := files[address]
+			if (file.Kind != "" && file.Kind != "image") || slices.Contains(source.AudioURLs, address) ||
+				(file.Kind == "" && knownNonPreviewFile(address)) {
 				continue
 			}
-			p, err := e.ensureMessagePreview(ctx, r, source, address)
+			p, err := e.ensureMessagePreview(ctx, r, source, address, file)
 			if err != nil {
 				return nil, err
 			}
@@ -194,10 +205,7 @@ func knownNonPreviewFile(address string) bool {
 	}
 	return false
 }
-func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, source PreviewSource, address string) (domain.MessagePreview, error) {
-	if knownNonPreviewFile(address) {
-		return domain.MessagePreview{}, ErrInvalid
-	}
+func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, source PreviewSource, address string, file domain.SharedReference) (domain.MessagePreview, error) {
 	id, err := e.newID()
 	if err != nil {
 		return domain.MessagePreview{}, err
@@ -209,10 +217,13 @@ func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, 
 	p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: source.AccountID, ConversationID: source.ConversationID, MessageID: source.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
 	u, _ := url.Parse(address)
 	ext := strings.ToLower(path.Ext(u.Path))
-	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
+	if file.Kind == "image" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
 		p.Kind = "image"
 		p.State = "ready"
 		p.Title = path.Base(u.Path)
+		if file.FileName != "" {
+			p.Title = file.FileName
+		}
 		if title := []rune(p.Title); len(title) > 300 {
 			p.Title = string(title[:300])
 		}
@@ -331,7 +342,7 @@ func (e *Engine) DownloadPreviewForDevice(ctx context.Context, id, device domain
 		if err != nil {
 			return p, err
 		}
-		if p.Kind != "image" || knownNonPreviewFile(p.URL) {
+		if p.Kind != "image" {
 			return p, ErrInvalid
 		}
 		if repo, ok := e.repo.(DownloadRepository); ok {
@@ -466,7 +477,7 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 	if p.Kind == "video" {
 		return e.processVideoThumbnail(ctx, r, p)
 	}
-	if knownNonPreviewFile(p.URL) {
+	if p.Kind != "image" && knownNonPreviewFile(p.URL) {
 		old := p.RevisionID
 		var err error
 		p.RevisionID, err = e.newID()

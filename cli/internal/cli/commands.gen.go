@@ -584,7 +584,11 @@ func build46(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("path", "attachmentId", &path1); err != nil {
 		return nil, err
 	}
-	return api.NewGetStagedMessageAttachmentRequest(server, path0, path1)
+	var params api.GetStagedMessageAttachmentParams
+	if err := input.Decode("header", "Range", &params.Range); err != nil {
+		return nil, err
+	}
+	return api.NewGetStagedMessageAttachmentRequest(server, path0, path1, &params)
 }
 func build47(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID

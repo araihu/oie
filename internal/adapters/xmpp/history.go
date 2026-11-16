@@ -154,7 +154,7 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 		return application.Incoming{}, false, errArchive
 	}
 	own, _ := jid.Parse(account.Address)
-	in := application.Incoming{MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), AccountID: account.ID, ProviderID: msg.ID, OriginalText: body, CreatedAt: at.UTC(), Historical: true, ArchiveScope: scope, ArchiveID: r.ID, Kind: "direct"}
+	in := application.Incoming{MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: account.ID, ProviderID: msg.ID, OriginalText: body, CreatedAt: at.UTC(), Historical: true, ArchiveScope: scope, ArchiveID: r.ID, Kind: "direct"}
 	if msg.Type == stanza.GroupChatMessage {
 		if msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 			return in, false, errArchive

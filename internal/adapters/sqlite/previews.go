@@ -27,6 +27,7 @@ func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids 
 		}
 		var body struct {
 			AudioURLs      []string
+			FileReferences []domain.SharedReference
 			OriginalText   string
 			WireBodySHA256 string
 			OutboundReply  *domain.OutboundReply
@@ -46,7 +47,7 @@ func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids 
 			text, _ = domain.ReplyBody(text, ref.Fallback)
 		}
 		sources = append(sources, application.PreviewSource{
-			ID: domain.ID(row.MessageID), AccountID: domain.ID(row.AccountID), ConversationID: conversation, Text: text, AudioURLs: body.AudioURLs,
+			ID: domain.ID(row.MessageID), AccountID: domain.ID(row.AccountID), ConversationID: conversation, Text: text, AudioURLs: body.AudioURLs, FileReferences: body.FileReferences,
 		})
 	}
 	return sources, nil

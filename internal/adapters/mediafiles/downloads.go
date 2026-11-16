@@ -2,10 +2,13 @@ package mediafiles
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
@@ -29,8 +32,7 @@ func (f stagedDownload) Publish(hash string) error {
 		return err
 	}
 	dirName := filepath.Dir(f.Name())
-	err := os.Link(f.Name(), filepath.Join(dirName, hash))
-	if err != nil && !errors.Is(err, os.ErrExist) {
+	if err := os.Rename(f.Name(), filepath.Join(dirName, hash)); err != nil {
 		return err
 	}
 	dir, err := os.Open(dirName)
@@ -74,7 +76,63 @@ func (d *Downloads) Open(ctx context.Context, download domain.Download) (io.Read
 		_ = file.Close()
 		return nil, application.ErrNotFound
 	}
+	digest := sha256.New()
+	if _, err := io.Copy(digest, downloadReader{ctx: ctx, src: file}); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if hex.EncodeToString(digest.Sum(nil)) != download.Hash {
+		_ = file.Close()
+		return nil, application.ErrNotFound
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
 	return file, nil
+}
+
+type downloadReader struct {
+	ctx context.Context
+	src io.Reader
+}
+
+func (r downloadReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.src.Read(p)
+}
+
+// Reconcile runs before the engine accepts transfers. Only database references
+// establish which published originals survived a previous process.
+func (d *Downloads) Reconcile(ctx context.Context, hashes []string) error {
+	entries, err := os.ReadDir(d.dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	retained := make(map[string]struct{}, len(hashes))
+	for _, hash := range hashes {
+		retained[hash] = struct{}{}
+	}
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		name := entry.Name()
+		if _, keep := retained[name]; keep || entry.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(name, ".part-") || application.ValidImageHash(name) {
+			if err := removeFile(filepath.Join(d.dir, name)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (d *Downloads) Remove(hash string) error {
