@@ -295,10 +295,15 @@ The rehearsal uploads the verified assets to the workflow run. If publishing
 fails after the package build succeeds, resume from those verified artifacts
 with `gh workflow run desktop-packages.yml --ref main -f resume_tag=TAG -f resume_run=RUN_ID`.
 
-The [Homebrew tap](https://github.com/araihu/homebrew-oie) synchronizes recipes
-from published GitHub Releases through its own workflow. Recipes become
-available in the tap after that workflow runs. The Homebrew archive is also
-available among the release assets.
+After publishing the verified desktop assets, the release workflow starts
+[Homebrew publication](../.github/workflows/publish-homebrew.yml) on `main`.
+It dispatches the [tap workflow](https://github.com/araihu/homebrew-oie/blob/main/.github/workflows/sync.yml),
+which checks the recipe archive against `SHA256SUMS` and updates the cask and
+formula together. The tap's scheduled sync also picks up published releases.
+Maintainers can run `gh workflow run publish-homebrew.yml --ref main` to retry
+the dispatch. The Arai Hû Assets Distribution GitHub App must be installed on
+`araihu/homebrew-oie` with Actions write access. The dispatch uses the existing
+app credentials and requests a token scoped to that repository and permission.
 
 To build the package-manager files from existing release assets locally with
 Python 3.10+ and Go 1.27.4+, run:
