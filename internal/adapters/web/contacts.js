@@ -18,7 +18,7 @@
     panel.setAttribute('aria-busy', 'true');
     let saved = false;
     try {
-      const response = await fetch(form.action, {
+      const response = await window.OieRuntime.request(form.action, {
         method: 'POST',
         headers: {Accept: 'application/json'},
         body: values,
@@ -32,7 +32,7 @@
       const input = form.querySelector('#add-contact-address');
       if (input?.value === values.get('address')) input.value = '';
       const current = panel.querySelector('[data-account-contact-list]');
-      const fragment = await fetch(values.get('returnTo'), {
+      const fragment = await window.OieRuntime.request(values.get('returnTo'), {
         headers: {'HX-Request': 'true', 'X-Oie-Fragment': 'accounts'},
         signal: AbortSignal.timeout(15000)
       });

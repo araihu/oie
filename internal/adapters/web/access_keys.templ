@@ -1,0 +1,34 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/textinput"
+)
+
+templ accessKeysSettings(v view) {
+	@settingsSubpage("access-keys", v.Text.AccessKeys, v.Text.BackToSettings) {
+		<form class="grid gap-3" method="post" action="/ui/access-keys" data-create-access-key data-failed={ v.Text.AccessKeyFailed }>
+			<input name="csrf" type="hidden" value={ v.CSRF }/>
+			@textinput.TextInput(textinput.Config{
+				ID: "access-key-name", Name: "name", Label: v.Text.AccessKeyName, Required: true, MaxLength: 100,
+			})
+			<div>
+				@button.Button(button.WithType("submit")) {
+					{ v.Text.AccessKeyCreate }
+				}
+			</div>
+		</form>
+		<div data-created-access-key hidden>
+			<div class="grid gap-3">
+				@textinput.TextInput(textinput.Config{
+					ID: "created-access-key", Label: v.Text.AccessKeySecret, Readonly: true, Autocomplete: "off",
+				})
+				<div>
+					@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-copied": v.Text.AccessKeyCopied})) {
+						{ v.Text.AccessKeyCopy }
+					}
+				</div>
+			</div>
+		</div>
+	}
+}

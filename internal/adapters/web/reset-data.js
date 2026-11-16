@@ -12,7 +12,7 @@
 
   function returnToEmptyApp(confirmed = false) {
     window.OieRuntime?.stop();
-    window.OieEvents?.stop();
+    window.OieEvents?.suspend();
     window.OieInbox?.clear();
     for (const name of ['localStorage', 'sessionStorage']) {
       try {
@@ -104,7 +104,7 @@
     for (const button of buttons) button.disabled = true;
 
     try {
-      const response = await fetch(node.action, {method: 'POST', body, credentials: 'same-origin'});
+      const response = await window.OieRuntime.request(node.action, {method: 'POST', body, credentials: 'same-origin'});
       if (response.status !== 204) throw new Error('reset failed');
     } catch {
       node.removeAttribute('aria-busy');

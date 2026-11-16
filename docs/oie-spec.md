@@ -23,7 +23,13 @@ Sections 2–13 describe **AGREED** behavior unless a paragraph carries a recomm
 
 The broader alpha target includes local standalone operation, hosted-engine operation, optional app/history sync, multi-account XMPP, reliable immediate and scheduled sends, retained searchable history, rooms, attachments, responsive web UI, PWA/offline behavior, and manual merge restore. The current source prerelease is [v0.0.1-rc.2](releases/v0.0.1-rc.2.md). It ships the standalone desktop packages described in section 2.1.1.
 
-Alpha is single-user: one Oiê owner per instance. Multiple accounts and devices remain supported. Built-in application authentication, multi-user hosting, XMPP E2EE, calls, and other deferred features are listed in section 16. Protocol account credentials are still needed to connect existing XMPP accounts; this does not reopen the deferred application-login design.
+Alpha is single-user. One owner can connect multiple protocol accounts and
+access the same hosted engine from multiple devices. Hosted access uses one
+configured OIDC issuer and subject, with full-access API keys for API clients.
+The operator registers and recovers the owner on the host. The signed-in
+owner can create an access key in Settings for a desktop connection. Host
+commands also create, list, and revoke keys.
+Protocol account credentials are still needed for existing XMPP accounts.
 
 No specific XMPP client, SQLite driver, browser database, UUID library, Go toolchain version, or final library dependency set is selected by this draft.
 
@@ -46,10 +52,15 @@ default or **Remote** with an HTTP(S) base address. Save the selection per
 desktop profile. Check the remote engine before changing the active selection.
 Local mode runs the embedded engine and resumes its SQLite/media profile.
 Remote mode runs the desktop client against the configured engine, with the
-embedded engine stopped. Remote engine authentication via OAuth/OIDC is tracked
-in B18.
+embedded engine stopped. For authenticated hosted engines, enter an API key
+alongside the HTTPS address in desktop settings. See [hosted access](hosted-auth.md).
 
 Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
+
+Network engines can expose unauthenticated infrastructure probes on a
+separate private HTTP listener. Readiness checks the engine and its database.
+Liveness checks whether the process responds. See the
+[internal probe contract](../api/probe.openapi.yaml).
 
 Ordinary engine restart/reconnect resumes eligible pending sends automatically. Backup recovery has a separate review rule in section 13.
 
@@ -1105,7 +1116,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B15** | Web Push and notifications while the app is closed. |
 | **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
-| **B18** | Built-in Oiê application authentication, including OAuth 2.0 / OpenID Connect (OIDC) for remote engines and their desktop clients. Provider selection and token lifecycle are open. |
+| **B18** | Interactive OIDC enrollment and sign-in from desktop clients. The hosted browser uses OIDC and desktop can supply a hosted API key. |
 | **B19** | Sticker selection, packs and sending. |
 | **B20** | GIF search, selection and sending. Existing ordinary media behavior does not imply a GIF discovery service. |
 | **B21** | Returning to Conversations from another navigation section restores the previously selected conversation in the same engine/account context, if it still exists and is accessible. |

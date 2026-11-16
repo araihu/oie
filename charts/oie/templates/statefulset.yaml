@@ -28,12 +28,51 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.hosted.enabled }}
+      initContainers:
+        - name: configure-owner
+          image: {{ include "oie.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - auth
+            - init
+            - --data-dir=/data
+          env:
+            - name: OIE_OIDC_ISSUER
+              value: {{ required "Set hosted.oidc.issuer." .Values.hosted.oidc.issuer | toString | replace "$" "$$" | quote }}
+            - name: OIE_OIDC_SUBJECT
+              value: {{ required "Set hosted.oidc.subject." .Values.hosted.oidc.subject | toString | replace "$" "$$" | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      {{- end }}
       containers:
         - name: oie
           image: {{ include "oie.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["--listen", "0.0.0.0:8080", "--data-dir", "/data"]
-          {{- if .Values.diagnostics.existingSecret }}
+          args:
+            {{- if .Values.hosted.enabled }}
+            - --role=hosted
+            {{- end }}
+            - --listen=0.0.0.0:8080
+            - --probe-listen=0.0.0.0:8081
+            - --data-dir=/data
+          {{- if .Values.hosted.enabled }}
+          env:
+            - name: OIE_PUBLIC_URL
+              value: {{ required "Set hosted.publicURL." .Values.hosted.publicURL | toString | replace "$" "$$" | quote }}
+            - name: OIE_TRUSTED_TLS_PROXIES
+              value: {{ required "Set hosted.trustedTLSProxies." .Values.hosted.trustedTLSProxies | toString | replace "$" "$$" | quote }}
+            - name: OIE_OIDC_CLIENT_ID
+              value: {{ required "Set hosted.oidc.clientID." .Values.hosted.oidc.clientID | toString | replace "$" "$$" | quote }}
+            - name: OIE_OIDC_CLIENT_SECRET_FILE
+              value: /run/secrets/oidc/client-secret
+          {{- else if .Values.diagnostics.existingSecret }}
           env:
             - name: OIE_DIAGNOSTICS_KEY
               valueFrom:
@@ -44,6 +83,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: probes
+              containerPort: 8081
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -51,21 +92,21 @@ spec:
               drop: ["ALL"]
           startupProbe:
             httpGet:
-              path: /api/v1/health
-              port: http
+              path: /readyz
+              port: probes
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 60
           readinessProbe:
             httpGet:
-              path: /api/v1/health
-              port: http
+              path: /readyz
+              port: probes
             periodSeconds: 5
             timeoutSeconds: 3
           livenessProbe:
             httpGet:
-              path: /api/v1/health
-              port: http
+              path: /livez
+              port: probes
             periodSeconds: 10
             timeoutSeconds: 3
           {{- with .Values.resources }}
@@ -77,6 +118,11 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.hosted.enabled }}
+            - name: oidc
+              mountPath: /run/secrets/oidc
+              readOnly: true
+            {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -87,3 +133,12 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.hosted.enabled }}
+        - name: oidc
+          secret:
+            secretName: {{ required "Set hosted.oidc.clientSecretName." .Values.hosted.oidc.clientSecretName | quote }}
+            defaultMode: 0440
+            items:
+              - key: {{ default "client-secret" .Values.hosted.oidc.clientSecretKey | quote }}
+                path: client-secret
+        {{- end }}

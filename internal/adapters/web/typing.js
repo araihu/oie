@@ -65,7 +65,7 @@ window.OieRuntime.register('typing', life => {
     confirmedAt = -Infinity;
     if (!mayBeActive) return;
     mayBeActive = false;
-    void fetch(path, {...update(false), keepalive: true}).catch(() => {});
+    void window.OieRuntime.request(path, {...update(false), keepalive: true}).catch(() => {});
   }
   life.on(input, 'input', event => {
     if (!event.isTrusted || !visible()) return;

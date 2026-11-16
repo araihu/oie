@@ -9,10 +9,10 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.26**. Desktop downloads include
+The current release candidate is **v0.0.1-rc.27**. Desktop downloads include
 corresponding source archives and updated third-party license notices.
-See the [release notes](docs/releases/v0.0.1-rc.26.md) and
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.26).
+See the [release notes](docs/releases/v0.0.1-rc.27.md) and
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.27).
 
 - [Desktop installation on macOS and Linux](docs/installation.md#desktop-installation-on-macos-and-linux)
 - [Live browser setup and development accounts](docs/live-preview.md)
@@ -101,16 +101,16 @@ bin/oie --data-dir ./data
 
 Open [the local interface](http://127.0.0.1:8080).
 
-The same executable can run a hosted engine or a BFF using another engine:
+For internet access, use [hosted mode with OIDC and API keys](docs/hosted-auth.md).
+For a private development BFF, start a local engine and point the BFF to it.
 
 ```sh
-bin/oie --role hosted --listen 127.0.0.1:8080 --data-dir ./data
+bin/oie --role local --listen 127.0.0.1:8080 --data-dir ./data
 # In another terminal:
 bin/oie --role bff --listen 127.0.0.1:8081 --engine-url http://127.0.0.1:8080
 ```
 
-The default role is local. The BFF calls the generated HTTP client and does not
-open the engine database. A sync-service role is not implemented yet.
+The BFF calls the generated HTTP client. A sync-service role remains planned.
 
 ## API and generated development CLI
 

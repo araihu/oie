@@ -245,6 +245,12 @@ window.OieRuntime.register('live', life => {
   }
   function readDraft() {
     if (!draftKey) return null;
+    if (window.OieHostedSession) {
+      try {
+        const saved = sessionStorage.getItem(draftKey);
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
     try { const raw = localStorage.getItem(draftKey); return raw ? JSON.parse(raw) : inMemory.get(draftKey)||null; }
     catch { storageWarning(); return inMemory.get(draftKey) || null; }
   }
@@ -252,8 +258,21 @@ window.OieRuntime.register('live', life => {
     if (!draftKey) return;
     record = {...record, conversationKind: record.conversationKind || conversationKind};
     journal = record; inMemory.set(draftKey, record);
-    try { localStorage.setItem(draftKey, JSON.stringify(record)); }
-    catch { storageWarning(); }
+    const serialized = JSON.stringify(record);
+    try { localStorage.setItem(draftKey, serialized); }
+    catch {
+      if (window.OieHostedSession) {
+        try { sessionStorage.setItem(draftKey, serialized); return; } catch {}
+      }
+      storageWarning();
+      return;
+    }
+    clearSessionDraft();
+  }
+  function clearSessionDraft() {
+    if (window.OieHostedSession) {
+      try { sessionStorage.removeItem(draftKey); } catch {}
+    }
   }
   function clearDraft(key) {
     if (!draftKey) return;
@@ -261,6 +280,7 @@ window.OieRuntime.register('live', life => {
     if (!stored || stored.key === key) {
       inMemory.delete(draftKey);
       try { localStorage.removeItem(draftKey); } catch { storageWarning(); }
+      clearSessionDraft();
     }
     journal = null;
     delete composer.dataset.privateMapLinks;
@@ -450,6 +470,7 @@ window.OieRuntime.register('live', life => {
       }
     });
     life.on(window,'beforeunload', event => {
+      if (window.OieHostedSession?.leaving) return;
       if (journal?.pending || editSession?.submitted || (storageDenied && input.value)) { event.preventDefault(); event.returnValue = ''; }
     });
   }
@@ -1174,6 +1195,7 @@ window.OieRuntime.register('live', life => {
     event.preventDefault();
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
+    const retryingSend = sending && journal?.pending === true;
     const accountAvatar = form.dataset.oieAction === 'account-avatar';
     const removingAccount = form.dataset.oieAction === 'remove-account';
     const accountLabel = form.dataset.oieAction === 'account-label';
@@ -1275,7 +1297,9 @@ window.OieRuntime.register('live', life => {
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(),15000);
     try {
       const response = await life.fetch(form.action,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal});
-      const result = await response.json();
+      const signedOut = window.OieHostedSession?.requiresSignIn(response);
+      if (signedOut && (!sending || retryingSend)) return;
+      const result = signedOut ? {rejected: true} : await response.json();
       if(life.signal.aborted)return;
       if (form.dataset.oieAction === 'account-communication') {
         if (result.ok && result.accountCommunication) {

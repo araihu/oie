@@ -110,6 +110,16 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await fs.mkdir('artifacts', {recursive: true});
     const aliceContext = await browser.newContext({viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'});
     const bobContext = await browser.newContext({viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'});
+    for (const context of [aliceContext, bobContext]) {
+      await context.addInitScript(() => {
+        // This fixture exercises messaging without a host audio device.
+        window.AudioContext = class extends AudioContext {
+          constructor() {
+            super({sinkId: {type: 'none'}});
+          }
+        };
+      });
+    }
     const alicePage = await aliceContext.newPage();
     const bobPage = await bobContext.newPage();
     const preferenceConflictURLs=new Map(),readConflictURLs=new Map(),consoleLocations=[];

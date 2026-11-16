@@ -11,9 +11,10 @@ The browser fetches the viewer script and records when the drawer opens.
 
 Desktop displays **This device** even if the engine fails to start or the
 server is unreachable. For a configured remote engine, select **Server**
-to fetch the hosted record from a supported HTTPS or loopback URL. Use an
-owner diagnostics access key when prompted. The key stays in the open
-drawer for the current session and is discarded when it closes.
+to fetch the hosted records. For an authenticated hosted engine, launch
+desktop with the [engine token file](hosted-auth.md#create-and-revoke-api-keys).
+For an older engine, enter its diagnostics access key if prompted. That key
+is discarded when the drawer closes.
 
 ## Retrieve logs outside the app
 
@@ -36,22 +37,20 @@ The viewer filters records to at most seven days. Files are private to the
 application's OS user. If the disk sink fails, the process reports a
 sanitized storage warning to stderr and keeps running.
 
-## Enable hosted viewing
+## Access server diagnostics
 
-A local browser connected directly to the loopback listener can read
-Diagnostics. A hosted role or a non-loopback listener requires
-`OIE_DIAGNOSTICS_KEY` to be set in the Oiê process. This also applies to the
-container's default listener. Set a randomly generated key of 16 to 512
-characters, for example the output of `openssl rand -hex 32`, and restart the instance. Enter the key in **Diagnostics** when
-prompted. Keep the browser interface and engine behind an authenticated
-HTTPS proxy for remote access. The diagnostics key grants access only to
-the log snapshot.
+In [hosted mode](hosted-auth.md), sign in as the owner to view Diagnostics.
+Scripted clients can fetch `/ui/diagnostics/log` with an Oiê API key in
+`Authorization: Bearer …` and the `X-Oie-Diagnostics: 1` header. The log
+endpoint also works on a hosted data-only instance.
 
-For Docker, pass `--env-file /path/to/private/oie.env` with the variable set.
-For Helm, put the key in an existing Secret in the release namespace and
-configure `diagnostics.existingSecret`. The Secret entry defaults to `key`
-and can be changed with `diagnostics.secretKey`. For a data-only instance, use the **Server** source in desktop Diagnostics
-or retrieve the files through the server operator.
+A local browser on a loopback listener can read Diagnostics directly.
+For a legacy installation using a private, non-loopback listener and an
+external authenticated proxy, set `OIE_DIAGNOSTICS_KEY` to a separate
+random key of 16 to 512 characters. Enter it in Diagnostics when prompted.
+In Docker, set the variable through a private `--env-file`. In Helm, set
+`diagnostics.existingSecret` to the Secret holding the legacy key.
+The entry defaults to `key` and can be changed with `diagnostics.secretKey`.
 
 ## What a report contains
 

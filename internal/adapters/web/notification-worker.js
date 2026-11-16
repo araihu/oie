@@ -1,3 +1,5 @@
+const hosted = new URL(self.location.href).searchParams.get('hosted') === '1';
+
 // Handle clicks even after the page that showed the banner has closed.
 self.addEventListener('notificationclick', event => {
   event.notification.close();
@@ -6,6 +8,10 @@ self.addEventListener('notificationclick', event => {
   if (![engine, account, conversation, message].every(id => typeof id === 'string' && uuid.test(id))) return;
 
   const destination = '/?' + new URLSearchParams({account, chat: conversation, message, notificationEngine: engine});
+  if (hosted) {
+    event.waitUntil(self.clients.openWindow(destination));
+    return;
+  }
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
     for (const client of windows) {

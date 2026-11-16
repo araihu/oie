@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.35.0",
-    "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.",
+    "version": "0.36.0",
+    "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
       "url": "https://github.com/araihu/oie"
@@ -14,6 +14,12 @@
       "url": "http://127.0.0.1:8080",
       "description": "Local development engine"
     }
+  ],
+  "security": [
+    {
+      "hostedBearer": []
+    },
+    {}
   ],
   "tags": [
     {
@@ -272,6 +278,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Saved contacts with independent provider observation coverage",
             "content": {
@@ -366,6 +375,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Bounded message hits and current metadata coverage, including an empty page when nothing matches",
             "content": {
@@ -500,6 +512,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Shared items and catalog indexing progress in the selected account/conversation scope",
             "content": {
@@ -547,6 +562,9 @@
         "summary": "Read a retained video thumbnail state",
         "description": "Reads local cache state for a current video reference without retrieving provider bytes. A missing cache record is represented as not_requested. Removed references return 404.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current source-linked thumbnail metadata, including not requested or unavailable state",
             "content": {
@@ -581,6 +599,9 @@
         "summary": "Ensure a cached video thumbnail",
         "description": "Queues retrieval of a retained HTTP(S) thumbnail supplied in XMPP file metadata (at most 1 MiB). Concurrent requests share work and a ready thumbnail is reused. A failed retrieval can be explicitly retried. The source is revalidated before publication. Without a retained or supplied thumbnail this operation returns 503 without retrieving video bytes. Clients may use a bounded media range to generate a preview locally.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Thumbnail already retained",
             "content": {
@@ -659,6 +680,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Complete media/document response; the provider may have ignored Range.",
             "headers": {
@@ -989,6 +1013,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Retained context window including the target",
             "content": {
@@ -1030,6 +1057,9 @@
         "summary": "Read the conversation and presentation data for a retained message jump",
         "description": "Returns the engine identity, owning conversation and a window of up to 16 visible messages around the source. Optional fields are scoped to that conversation and window. Missing optional fields represent unavailable data. Preview reads can register local preview metadata as on the corresponding preview endpoints. This operation does not fetch provider history or mark messages read.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Conversation, retained context and available presentation data.",
             "content": {
@@ -1041,7 +1071,7 @@
                   "engine": {
                     "id": "019a5df0-0000-7000-8000-000000000003",
                     "role": "local",
-                    "apiVersion": "0.35.0",
+                    "apiVersion": "0.36.0",
                     "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                   },
                   "conversation": {
@@ -1108,6 +1138,9 @@
         "summary": "Read the source message star",
         "description": "App-owned state independent of message content revisions and protocol support. Before the first change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current star state",
             "content": {
@@ -1164,6 +1197,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -1228,6 +1264,9 @@
         "summary": "Read retained conversation read state",
         "description": "Reads app-owned read state without changing messages or sending provider receipts.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current read state and unread count",
             "content": {
@@ -1295,6 +1334,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -1469,6 +1511,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current states, including explicit false and null revisions for untouched messages",
             "content": {
@@ -1552,6 +1597,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current starred-message page",
             "content": {
@@ -1622,6 +1670,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Cached structured previews, including queued or unavailable metadata",
             "content": {
@@ -1665,6 +1716,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Metadata and optional raster image for the submitted URL.",
             "content": {
@@ -1707,6 +1761,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current preview state",
             "content": {
@@ -1750,6 +1807,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "202": {
             "description": "Refresh queued with existing metadata preserved",
             "content": {
@@ -1796,6 +1856,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Original already retained",
             "content": {
@@ -1864,6 +1927,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Retained image bytes. Content-Type identifies PNG, JPEG or GIF.",
             "headers": {
@@ -1933,6 +1999,9 @@
         "summary": "Check engine readiness",
         "description": "Returns ready only when the database can be queried.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Engine ready",
             "content": {
@@ -1962,6 +2031,9 @@
         "summary": "Read the persistent engine identity",
         "description": "Read eventCursor before fetching snapshots. After fetching them, pass that cursor as Last-Event-ID to GET /api/v1/events to replay changes that occurred while the snapshots were being read.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Engine identity and current event boundary",
             "content": {
@@ -1972,7 +2044,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.35.0",
+                  "apiVersion": "0.36.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -1993,6 +2065,9 @@
         "operationId": "getGlobalRetention",
         "summary": "Read engine-wide message retention",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current engine-wide retention settings",
             "content": {
@@ -2048,6 +2123,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Updated engine-wide retention settings",
             "content": {
@@ -2130,6 +2208,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "204": {
             "description": "Data deleted and empty engine ready."
           },
@@ -2177,6 +2258,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "A page of accounts",
             "content": {
@@ -2244,6 +2328,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -2354,6 +2441,9 @@
         "summary": "Read an account",
         "description": "Returns the retained account and its current revision.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Registered account",
             "content": {
@@ -2393,6 +2483,9 @@
         "summary": "Remove an account from Oiê",
         "description": "Disconnects this account, forgets its saved credentials, and removes its conversations, retained history and pending sends from this engine. The provider account and its server history are unaffected. Repeating the request for the same UUID is safe.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "204": {
             "description": "The account is absent from this engine."
           },
@@ -2435,6 +2528,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "The account with its current name and revision.",
             "content": {
@@ -2498,6 +2594,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "204": {
             "description": "The photo is published and retained."
           },
@@ -2552,6 +2651,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Known profile metadata, ordered by stable avatar UUID",
             "content": {
@@ -2613,6 +2715,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Static PNG thumbnail, at most 256 pixels on either axis",
             "headers": {
@@ -2675,6 +2780,9 @@
         "summary": "Read account history recovery progress",
         "description": "Recovery starts on protocol connection. Saved room entries and authorized text archives are read serially, with persistent checkpoints and deduplication. Historical imports do not create sends or unread counts. Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim. Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Persistent recovery state and retained counts",
             "content": {
@@ -2719,6 +2827,9 @@
         "summary": "Read account capability evidence",
         "description": "Read application implementation, protocol support and cached server discovery evidence separately. This query never contacts the protocol server. Evidence is scoped, bounded and cleared when a connection ends. An absent advertisement does not prove that a client-level feature is unsupported. Discovery runs once per connection; room evidence is also collected during history recovery.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current account capability evidence",
             "content": {
@@ -2781,6 +2892,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Durable operation receipt",
             "content": {
@@ -2838,6 +2952,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "SSE stream whose data fields follow the Event schema",
             "content": {
@@ -2875,6 +2992,9 @@
         "summary": "Read account connection state",
         "description": "State is runtime evidence, distinct from saved account metadata.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -2910,6 +3030,9 @@
         "summary": "Configure and connect an account",
         "description": "Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient network or authentication service failures reconnect with bounded backoff. A stopped connection can be retried with the same settings once the underlying problem is resolved. An unchanged configuration leaves a running connection or retry loop in place. Ordinary engine restart reloads enabled configurations.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -2990,6 +3113,9 @@
         "summary": "Disconnect and disable automatic connection",
         "description": "Keeps protocol credentials local for a later explicit configuration; does not delete account history or pending sends. Repeating disconnect is safe.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -3054,6 +3180,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Available public room information or its lookup state.",
             "content": {
@@ -3101,6 +3230,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Public room directory results.",
             "content": {
@@ -3152,6 +3284,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "202": {
             "description": "Saved conversation with an accepted or replayed entry request.",
             "content": {
@@ -3206,6 +3341,9 @@
         "summary": "List retained conversations",
         "description": "Keyset pages ordered by descending engine activity. Search matches conversation address/title and latest text preview; this is not full message search.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -3327,6 +3465,9 @@
         "summary": "Open a direct conversation",
         "description": "Finds an existing conversation for the canonical account/peer or creates one. Durable operation keys retain original results. Opening a removed direct conversation adds it back to chat lists. Does not add a contact or send presence subscriptions.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -3458,6 +3599,9 @@
         "summary": "Read current room participants",
         "description": "Returns participants observed by the joined account in its current room session. The read does not join the room or query its public directory.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current room participants.",
             "content": {
@@ -3527,6 +3671,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Room management snapshot.",
             "content": {
@@ -3581,6 +3728,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Provider outcome or submission receipt for this action.",
             "content": {
@@ -3620,6 +3770,9 @@
         "summary": "Read this engine's room session and durable join intent",
         "description": "Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current own room-session projection",
             "content": {
@@ -3676,6 +3829,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -3768,6 +3924,9 @@
           "400": {
             "$ref": "#/components/responses/Invalid"
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -3822,6 +3981,9 @@
           "400": {
             "$ref": "#/components/responses/Invalid"
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -3870,6 +4032,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -3934,6 +4099,9 @@
         "summary": "Read observed room mention candidates",
         "description": "Read a bounded, account-scoped snapshot of visible room occupants. This never joins a room or discovers hidden personal identities. Candidates supply exact readable insertion text. Structured references are available only when the protocol adapter has a valid disclosed target; otherwise sending preserves the same readable text without protocol metadata.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Available room candidates and explicit observation state",
             "content": {
@@ -3984,6 +4152,9 @@
         "operationId": "getConversationRetention",
         "summary": "Read conversation message retention",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current conversation retention settings",
             "content": {
@@ -4039,6 +4210,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Updated conversation retention settings",
             "content": {
@@ -4095,6 +4269,9 @@
         "summary": "Read room archive recovery settings and progress",
         "description": "Reads retained state for the room without sending a protocol request.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current room archive state",
             "content": {
@@ -4152,6 +4329,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Saved mode and current progress",
             "content": {
@@ -4216,6 +4396,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Archive read outcome and canonical stored messages",
             "content": {
@@ -4270,6 +4453,9 @@
         "summary": "Read scoped conversation details",
         "description": "Read the current account connection and session-local conversation metadata. Returns immediately; a connected adapter may schedule a deduplicated, serialized discovery refresh no more often than once per sixty seconds. This never joins a room, requests a subscription, probes a peer or sends a message. Occupant discovery is a bounded snapshot, never a complete member roster. Missing presence remains unknown. Disconnect clears observations.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "503": {
             "description": "Engine state is temporarily unavailable.",
             "content": {
@@ -4314,6 +4500,9 @@
         "summary": "Read a conversation",
         "description": "Returns the current conversation projection.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -4384,6 +4573,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -4469,6 +4661,9 @@
         "summary": "Read retained messages",
         "description": "Returns a bounded page of retained messages newest-first by timelineAt when present and createdAt otherwise, at UTC millisecond precision with a UUID tie-break. Includes serially recovered archive messages. Pending scheduled messages are omitted until release. The default direction is older; without a cursor it reads the latest page. Newer requires a cursor and reads the nearest messages after that retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first. nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -4536,6 +4731,9 @@
         "summary": "Accept an immediate or scheduled message",
         "description": "Atomically commits one logical message, operation receipt and outbox intent for the complete composition, including the ordered references to staged attachments. The engine checks the destination, reply, mentions, attachment scope and effective send capabilities before acceptance. Invalid or unavailable attachments reject the whole composition. Attachment bytes are staged locally and any provider upload belongs to dispatch. Room dispatch waits for confirmed membership under an active explicit join intent.\nA new submission conflicts with a conversation removed from chat lists. Matching accepted submissions still replay.\nOmitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "The request body exceeds the one MiB engine limit or an attachment exceeds the known provider upload limit.",
             "content": {
@@ -4708,6 +4906,9 @@
         "summary": "Read retained reactions and current own mutation eligibility",
         "description": "Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Scoped retained reaction snapshot",
             "content": {
@@ -4764,6 +4965,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -4869,6 +5073,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Scoped bounded reaction snapshots",
             "content": {
@@ -4916,6 +5123,9 @@
         "summary": "Read a durable reaction command receipt",
         "description": "Read-only reconciliation after lost responses. A missing receipt does not authorize a new key for the same uncertain intent. No provider call or dispatch is performed.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Immutable reaction intent and actual transmission state",
             "content": {
@@ -4957,6 +5167,9 @@
         "summary": "Inspect eligibility and current content before editing",
         "description": "Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Scoped current edit target and eligibility",
             "content": {
@@ -4999,6 +5212,9 @@
         "summary": "Inspect the latest own retained message for keyboard editing",
         "description": "Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Latest original engine transmission and current eligibility",
             "content": {
@@ -5063,6 +5279,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -5152,6 +5371,9 @@
         "summary": "Reconcile a correction command by its stable UUID",
         "description": "Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Retained correction command and actual dispatch state",
             "content": {
@@ -5215,6 +5437,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Scoped retained content revisions and optional older-page cursor",
             "content": {
@@ -5278,6 +5503,9 @@
         "summary": "Read the author's available published profile",
         "description": "Resolves the author from the retained message and message-time protocol identity evidence. May issue a bounded read-only profile query to a known personal address. Room nicknames and current same-name occupants never establish a historical author's personal JID. Missing or undisclosed identity remains unavailable; user-provided vCard JABBERID does not establish it. Does not join rooms, add contacts, subscribe to presence or mark messages read.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "503": {
             "description": "Engine state is temporarily unavailable.",
             "content": {
@@ -5335,6 +5563,9 @@
         "summary": "Read a retained message",
         "description": "Returns the latest revision and send evidence. A retained correction-source alias resolves to its canonical logical message, whose id can differ from the requested messageId. Use the scoped context operation when explicit requestedTargetId alias proof is needed.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Current resource",
             "content": {
@@ -5408,6 +5639,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Original acceptance replayed.",
             "content": {
@@ -5468,6 +5702,9 @@
         "summary": "Cancel a pending send",
         "description": "Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "413": {
             "description": "Request body exceeds the one MiB engine limit.",
             "content": {
@@ -5599,6 +5836,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "201": {
             "description": "File durably staged",
             "headers": {
@@ -5670,6 +5910,9 @@
         "summary": "Read retained bytes of an outgoing attachment",
         "description": "Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.",
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "Retained attachment bytes",
             "headers": {
@@ -5762,6 +6005,9 @@
           }
         ],
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "description": "One page of pending scheduled messages",
             "content": {
@@ -5818,6 +6064,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "$ref": "#/components/responses/PendingMessageUpdated"
           },
@@ -5872,6 +6121,9 @@
           }
         },
         "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
           "200": {
             "$ref": "#/components/responses/PendingMessageUpdated"
           },
@@ -5898,6 +6150,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "hostedBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A full-access API key issued by the hosted Oiê operator."
+      }
+    },
     "parameters": {
       "SearchAccountIDs": {
         "name": "accountIds",
@@ -5966,6 +6225,30 @@
       }
     },
     "responses": {
+      "AuthenticationRequired": {
+        "description": "The hosted engine requires a valid API key.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer authentication challenge."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthenticationProblem"
+            },
+            "example": {
+              "type": "urn:oie:problem:authentication_required",
+              "title": "Authentication required",
+              "status": 401,
+              "code": "authentication_required"
+            }
+          }
+        }
+      },
       "Invalid": {
         "description": "Invalid request",
         "content": {
@@ -6536,7 +6819,8 @@
               "0.32.0",
               "0.33.0",
               "0.34.0",
-              "0.35.0"
+              "0.35.0",
+              "0.36.0"
             ]
           },
           "eventCursor": {
@@ -7086,6 +7370,52 @@
           }
         }
       },
+      "AuthenticationProblem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "description": "RFC 9457 Problem Details for a missing or invalid hosted API key.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "urn:oie:problem:authentication_required"
+            ],
+            "example": "urn:oie:problem:authentication_required"
+          },
+          "title": {
+            "type": "string",
+            "enum": [
+              "Authentication required"
+            ],
+            "example": "Authentication required"
+          },
+          "status": {
+            "type": "integer",
+            "enum": [
+              401
+            ],
+            "example": 401
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "authentication_required"
+            ],
+            "example": "authentication_required"
+          },
+          "documentation": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#authentication_required"
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "example": {
@@ -7181,6 +7511,7 @@
           "type-prefix": "urn:oie:problem:",
           "documentation-base": "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md",
           "titles": {
+            "authentication_required": "Authentication required",
             "invalid_request": "Invalid request",
             "not_found": "Not Found",
             "idempotency_conflict": "Idempotency key conflict",

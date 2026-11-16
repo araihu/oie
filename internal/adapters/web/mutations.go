@@ -40,7 +40,7 @@ func csrfToken(w http.ResponseWriter, r *http.Request) string {
 		return ""
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw[:])
-	http.SetCookie(w, &http.Cookie{Name: csrfCookie, Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: csrfCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode})
 	return token
 }
 func validCSRF(r *http.Request) bool {
