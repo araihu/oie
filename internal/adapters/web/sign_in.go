@@ -3,6 +3,7 @@ package web
 import (
 	_ "embed"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/hostauth"
@@ -36,7 +37,23 @@ func WithHostedSignIn(auth *hostauth.Auth) Option {
 }
 
 // SignIn renders the public hosted sign-in page without accessing the engine.
-func (s *Server) SignIn(w http.ResponseWriter, r *http.Request, status int, loginURL string) {
+func (s *Server) SignIn(w http.ResponseWriter, r *http.Request, status int, loginURL, destination string) {
+	// Apply presentation preferences from the original navigation before OIDC
+	// completes. Explicit preferences on the sign-in URL take precedence.
+	if target, err := url.ParseRequestURI(destination); err == nil && target.RawQuery != "" {
+		query := r.URL.Query()
+		targetQuery := target.Query()
+		for _, key := range []string{"lang", "theme"} {
+			if !query.Has(key) && targetQuery.Has(key) {
+				query.Set(key, targetQuery.Get(key))
+			}
+		}
+		presentation := r.WithContext(r.Context())
+		presentationURL := *r.URL
+		presentationURL.RawQuery = query.Encode()
+		presentation.URL = &presentationURL
+		r = presentation
+	}
 	lang, mode := locale(r), appearanceMode(r)
 	savePreference(w, r, "lang", lang)
 	savePreference(w, r, "theme", mode)

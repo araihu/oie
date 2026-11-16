@@ -4,8 +4,13 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id='019a5df0-0000-7000-8000-000000000001';
 (async()=>{
  const streams=new Set();
+ let engineAvailable = true;
  const api=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://fixture');
+  if (!engineAvailable) {
+    res.writeHead(503);
+    return res.end();
+  }
   if(req.method!=='GET'){res.writeHead(405);return res.end();}
   if(url.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);req.on('close',()=>streams.delete(res));return;}
   res.setHeader('Content-Type','application/json');
@@ -65,6 +70,15 @@ const id='019a5df0-0000-7000-8000-000000000001';
    assert.deepEqual(await audit(),[]);
    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await context.close();
   }
-  assert.deepEqual(errors,[]);console.log('PASS: one settings entry in the navigation footer across four sections, desktop/mobile, EN/PT, keyboard, drawer and accessibility');
+  engineAvailable = false;
+  const offline = await browser.newPage();
+  await offline.goto(base + '/settings/retention?lang=pt-BR');
+  const settings = offline.getByRole('dialog', {name: 'Configurações', exact: true});
+  const general = settings.getByRole('tab', {name: 'Geral', exact: true, selected: true});
+  await general.waitFor();
+  await settings.getByRole('tabpanel', {name: 'Geral', exact: true}).waitFor();
+  assert.equal(await settings.getByRole('tab', {name: 'Motor', exact: true}).count(), 0);
+  await offline.close();
+  assert.deepEqual(errors,[]);console.log('PASS: settings navigation, keyboard, accessibility and unavailable engine fallback');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

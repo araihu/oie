@@ -155,11 +155,59 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
       return form.querySelector('[data-retention-status]').textContent === form.dataset.saved;
     });
     assert.equal((await policy(server.api)).directDays, 0);
+
+    await setPolicy(server.api, 95, 45);
+    const writesBeforeConcurrent = writes;
+    const samePeriod = page.waitForResponse(response => response.url().includes('/ui/settings/retention?') &&
+      response.request().postData()?.includes('room-days=95') && response.status() === 409);
+    await room.fill('95');
+    await directMode.focus();
+    await samePeriod;
+    await page.waitForFunction(() => {
+      const form = document.querySelector('[data-engine-retention]');
+      return form.querySelector('[data-retention-status]').textContent === form.dataset.saved;
+    });
+    assert.equal(await direct.isVisible(), false, 'the focused choice stays in place');
+    await room.focus();
+    await direct.waitFor();
+    assert.equal(await direct.inputValue(), '45', 'leaving an unchanged choice reconciles the engine value');
+    assert.equal(writes, writesBeforeConcurrent + 1);
+
+    const reachedEngine = Promise.withResolvers();
+    const loseResponse = Promise.withResolvers();
+    await page.route(formPath, async route => {
+      const response = await route.fetch();
+      reachedEngine.resolve(response);
+      await loseResponse.promise;
+      await route.abort();
+    }, {times: 1});
+    await room.fill('110');
+    await direct.focus();
+    assert((await reachedEngine.promise).ok());
+    assert.equal((await policy(server.api)).roomDays, 110);
+    await room.fill('95');
+    await direct.focus();
+    loseResponse.resolve();
+    await retry.waitFor();
+
+    const lostRevision = page.waitForResponse(response => response.url().includes('/ui/settings/retention?') &&
+      response.request().postData()?.includes('room-days=95') && response.status() === 409);
+    await retry.click();
+    await lostRevision;
+    await page.waitForFunction(() => {
+      const form = document.querySelector('[data-engine-retention]');
+      return form.querySelector('[data-retention-status]').textContent === form.dataset.conflict;
+    });
+    assert.equal((await policy(server.api)).roomDays, 110);
+    await retry.click();
+    await retry.waitFor({state: 'hidden'});
+    assert.equal((await policy(server.api)).roomDays, 95, 'a lost response cannot discard a queued undo');
+
     await page.goto(server.url + '/settings/retention?lang=' + lang + '&theme=' + theme);
     await tab.waitFor();
     assert.equal(await tab.getAttribute('aria-selected'), 'true');
     await room.waitFor();
-    assert.equal(await room.inputValue(), '100');
+    assert.equal(await room.inputValue(), '95');
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

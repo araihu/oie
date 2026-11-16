@@ -20,7 +20,7 @@ templ settings(v view) {
 	{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.Settings}}) }}
 	@workspaceDrawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
 		<div class="oie-settings oie-settings-scroll">
-			@tabs.Tabs(tabs.Config{ID: "settings-tabs", DefaultTab: v.SettingsTab, Tabs: settingsTabs(v)})
+			@tabs.Tabs(settingsTabs(v))
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
 	}
@@ -39,7 +39,7 @@ templ settings(v view) {
 	}
 }
 
-func settingsTabs(v view) []tabs.Tab {
+func settingsTabs(v view) tabs.Config {
 	options := []tabs.Tab{
 		{ID: "general", Label: v.Text.SettingsGeneral, Content: generalSettings(v)},
 		{ID: "composition", Label: v.Text.Composition, Content: compositionSettings(v)},
@@ -48,7 +48,14 @@ func settingsTabs(v view) []tabs.Tab {
 	if v.HostedSignIn || (!v.Preview && v.EngineID != "") {
 		options = append(options, tabs.Tab{ID: "engine", Label: v.Text.EngineMode, Content: engineSettings(v)})
 	}
-	return options
+	config := tabs.Config{ID: "settings-tabs", DefaultTab: options[0].ID, Tabs: options}
+	for _, option := range options {
+		if option.ID == v.SettingsTab {
+			config.DefaultTab = option.ID
+			break
+		}
+	}
+	return config
 }
 
 func settingsDrawerTransition(from, to string) string {

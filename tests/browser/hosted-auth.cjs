@@ -20,7 +20,6 @@ async function verifySignInAppearance(browser, origin) {
   const page = await browser.newPage({ignoreHTTPSErrors: true, viewport: {width: 1440, height: 900}});
   try {
     await page.emulateMedia({colorScheme: 'light'});
-    await page.goto(origin + '/auth/sign-in?lang=pt-BR');
     const action = page.getByRole('link', {name: 'Entrar', exact: true});
     const check = async (dark, width, height) => {
       const background = dark ? 'rgb(28, 29, 28)' : 'rgb(247, 248, 247)';
@@ -37,6 +36,12 @@ async function verifySignInAppearance(browser, origin) {
       assert((await action.boundingBox()).height >= 48);
     };
 
+    await page.goto(origin + '/?open=settings&lang=pt-BR&theme=dark');
+    await action.waitFor();
+    await check(true, 1440, 900);
+    await page.goto(origin + '/auth/sign-in');
+    await check(true, 1440, 900);
+    await page.goto(origin + '/auth/sign-in?theme=system');
     await check(false, 1440, 900);
     const originalFrame = await page.getByRole('main').boundingBox();
     await page.keyboard.press('Tab');

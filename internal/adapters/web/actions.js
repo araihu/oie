@@ -223,7 +223,7 @@ window.OieRuntime.register('engine-retention', life => {
   const stateFor = form => {
     if (!states.has(form)) {
       const saved = snapshot(form);
-      states.set(form, {saved, observed: {...saved}, queued: new Map(), busy: false, failed: false});
+      states.set(form, {saved, observed: {...saved}, queued: new Map(), pending: null, uncertain: false, failed: false});
     }
     return states.get(form);
   };
@@ -238,24 +238,28 @@ window.OieRuntime.register('engine-retention', life => {
     return input.validity.valid && Number.isInteger(days) && days > 0 ? days : null;
   }
 
+  function syncChoice(choice, state) {
+    const key = choice.dataset.retentionChoice;
+    const days = state.saved[key];
+    if (state.uncertain || state.queued.has(key) || state.pending?.has(key) ||
+        choiceValue(choice) !== state.observed[key] || state.observed[key] === days) return;
+    const mode = modeFor(choice);
+    if (days > 0) choice.querySelector('input[type=number]').value = days;
+    mode.value = days === 0 ? 'unlimited' : 'finite';
+    mode.dispatchEvent(new Event('change', {bubbles: true}));
+    state.observed[key] = days;
+  }
+
   function acceptSnapshot(form, state, saved) {
     state.saved = saved;
-    // Keep edits in progress and update fields that the user has left alone.
     for (const choice of form.querySelectorAll('[data-retention-choice]')) {
-      const key = choice.dataset.retentionChoice;
-      if (state.queued.has(key) || choice.contains(document.activeElement) ||
-          choiceValue(choice) !== state.observed[key] || state.observed[key] === saved[key]) continue;
-      const mode = modeFor(choice);
-      if (saved[key] > 0) choice.querySelector('input[type=number]').value = saved[key];
-      mode.value = saved[key] === 0 ? 'unlimited' : 'finite';
-      mode.dispatchEvent(new Event('change', {bubbles: true}));
-      state.observed[key] = saved[key];
+      if (!choice.contains(document.activeElement)) syncChoice(choice, state);
     }
   }
 
   async function save(form, state) {
-    if (state.busy || state.failed || state.queued.size === 0 || !form.isConnected || life.signal.aborted) return;
-    const changes = [...state.queued].filter(([key, days]) => days !== state.saved[key]);
+    if (state.pending || state.failed || state.queued.size === 0 || !form.isConnected || life.signal.aborted) return;
+    const changes = [...state.queued].filter(([key, days]) => state.uncertain || days !== state.saved[key]);
     state.queued.clear();
     if (changes.length === 0) {
       finish(form, '');
@@ -269,7 +273,7 @@ window.OieRuntime.register('engine-retention', life => {
     });
     const status = statusFor(form);
     const retry = retryFor(form);
-    state.busy = true;
+    state.pending = new Set(changes.map(([key]) => key));
     status.textContent = form.dataset.saving;
     retry.setAttribute('aria-disabled', 'true');
     let error = form.dataset.unavailable;
@@ -293,7 +297,9 @@ window.OieRuntime.register('engine-retention', life => {
     } catch {}
     if (life.signal.aborted || !form.isConnected) return;
 
-    state.busy = false;
+    state.pending = null;
+    // A failed response without a snapshot may hide a successful write.
+    state.uncertain = !saved;
     if (error) {
       for (const [key, days] of changes) {
         if (state.observed[key] === days && !state.queued.has(key)) state.queued.set(key, days);
@@ -338,7 +344,11 @@ window.OieRuntime.register('engine-retention', life => {
       return;
     }
     input.removeAttribute('aria-invalid');
-    if (state.observed[key] === days) return;
+    if (state.observed[key] === days) {
+      // A concurrent update may have arrived while this unchanged choice had focus.
+      if (!choice.contains(event.relatedTarget)) syncChoice(choice, state);
+      return;
+    }
     state.observed[key] = days;
     state.queued.set(key, days);
     void save(form, state);
