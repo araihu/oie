@@ -69,6 +69,7 @@ const engine=id(1),account=id(2),chat=id(3);
     return;
   }
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en',timezoneId:'America/Sao_Paulo'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  page.on('dialog', dialog => dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss());
   await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');await page.locator('#message-composer').waitFor();
   await page.locator('[data-account-switcher]:visible').click();
   const switcher=page.getByRole('dialog',{name:'Switch account',exact:true});
@@ -111,7 +112,7 @@ const engine=id(1),account=id(2),chat=id(3);
   const pending=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('oie.draft.v1')).map(k=>JSON.parse(localStorage.getItem(k))).find(v=>v.pending));assert(pending&&pending.text===draft);
   const pendingReady=async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('[data-pending-send-retry]').isEnabled();
   for(const width of [390,1440])for(const lang of ['en','pt-BR'])for(const mode of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal']){
-    await page.setViewportSize({width,height:900});await page.goto(base+'/?chat='+chat+'&lang='+lang+'&theme='+mode);
+    await page.setViewportSize({width,height:900});await page.goto(base+'/?chat='+chat+'&lang='+lang+'&theme='+mode,{waitUntil:'domcontentloaded'});
     await until(pendingReady,'matrix pending bubble');
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,libraryTheme);
     const retry=page.locator('[data-pending-send-retry]');await retry.scrollIntoViewIfNeeded();assert(await retry.isVisible());assert((await retry.getAttribute('aria-label')).includes(lang==='en'?'Retry submission':'Verificar e tentar novamente'));
@@ -122,8 +123,8 @@ const engine=id(1),account=id(2),chat=id(3);
     const violations=await page.evaluate(async()=>{const result=await axe.run(document.querySelector('[data-pending-send]'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({html:n.html,checks:n.any.map(c=>c.data)}))}))});assert.deepEqual(violations,[],JSON.stringify({width,lang,mode,libraryTheme,violations}));
     if(lang==='en'&&libraryTheme==='goshtoso'){await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`pending-send-${width}-${mode}.png`)});}
   }
-  await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');
-  await page.reload();await until(pendingReady,'pending bubble restored after reload');assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);
+  await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
+  await page.reload({waitUntil:'domcontentloaded'});await until(pendingReady,'pending bubble restored after reload');assert.equal(await page.locator('[data-pending-send-text]').textContent(),draft);
   allowRetry=true;await page.locator('[data-pending-send-retry]').focus();await page.keyboard.press('Enter');await until(async()=>!await page.locator('#message-composer').evaluate(e=>e.readOnly),'receipt reconciliation');assert.equal(state.effects,1);assert.equal(await page.locator('#send-message-form [data-form-feedback]').textContent(),'');assert.equal(await page.locator('.oie-list-footer').count(),0);
   await until(async()=>await page.locator('[data-pending-send]').count()===0,'canonical message replaces local placeholder');
   const outgoing=page.locator('[data-message-id="'+state.messages[0].id+'"]');assert.equal(await outgoing.locator('.oie-message-content').evaluate(e=>getComputedStyle(e).opacity),'0.8');assert.equal(await outgoing.locator('.oie-message-stamp [data-message-status]').count(),1,'queued state stays in the bubble timestamp row');assert.equal((await outgoing.locator('[data-message-status]').textContent()).trim(),'','queued state has no visible progress label');
@@ -176,9 +177,9 @@ const engine=id(1),account=id(2),chat=id(3);
   await page.locator('#message-composer').fill('Recover this acceptance without another send');await page.locator('[data-send-message]').click();
   await until(async()=>state.effects===3&&!await page.locator('#message-composer').evaluate(e=>e.readOnly)&&await page.locator('[data-pending-send]').count()===0,'read-only acceptance receipt recovery');
   assert.equal(state.posts,postsBefore+1,'receipt recovery never dispatches another send');
-  assert(!await page.evaluate(()=>Object.keys(localStorage).some(key=>key.startsWith('oie.send-attempt.v1:') &&
+  assert(!await page.evaluate(()=>Object.keys(localStorage).some(key=>/^oie\.send-(attempt|accepted)\.v1:/.test(key) &&
     localStorage.getItem(key)?.includes('Recover this acceptance without another send'))),
-    'the local attempt journal does not retain the message body after recovery');
+    'local submission metadata does not retain the message body after recovery');
   findings.push('A lost accepted response resolves through read-only receipt lookup before merging the canonical timeline, with exactly one send POST');
 
   await page.unroute('**/ui/messages/send');
