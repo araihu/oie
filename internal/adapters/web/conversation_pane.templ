@@ -45,6 +45,7 @@ if v.requestKind()!="" {
 				}
 				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
 <div class="oie-timeline-frame">
+@conversationPreferenceOverlay(v)
 @conversationTimeline(v)
 </div>
 				@composer(v)
