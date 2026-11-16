@@ -39,17 +39,17 @@ func run() error {
 	var hosted apphost.HostedConfig
 	flags := flag.NewFlagSet("oie", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	flags.StringVar(&hosted.PublicURL, "public-url", "", "public HTTPS origin for hosted mode")
-	flags.StringVar(&hosted.TLSCertFile, "tls-cert-file", "", "hosted TLS certificate PEM")
-	flags.StringVar(&hosted.TLSKeyFile, "tls-key-file", "", "hosted TLS private key PEM")
-	flags.StringVar(&hosted.TrustedTLSProxies, "trusted-tls-proxies", "", "private TLS-terminating proxy CIDRs, comma-separated")
-	flags.StringVar(&hosted.OIDCClientID, "oidc-client-id", "", "hosted OIDC client ID")
-	flags.StringVar(&hosted.OIDCClientSecretFile, "oidc-client-secret-file", "", "file containing the hosted OIDC client secret")
-	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
-	probeListen := flags.String("probe-listen", "", "private HTTP probe listener address (disabled by default)")
-	role := flags.String("role", "local", "local, hosted, or bff")
+	flags.StringVar(&hosted.PublicURL, "public-url", os.Getenv("OIE_PUBLIC_URL"), "public HTTPS origin for hosted mode")
+	flags.StringVar(&hosted.TLSCertFile, "tls-cert-file", os.Getenv("OIE_TLS_CERT_FILE"), "hosted TLS certificate PEM")
+	flags.StringVar(&hosted.TLSKeyFile, "tls-key-file", os.Getenv("OIE_TLS_KEY_FILE"), "hosted TLS private key PEM")
+	flags.StringVar(&hosted.TrustedTLSProxies, "trusted-tls-proxies", os.Getenv("OIE_TRUSTED_TLS_PROXIES"), "private TLS-terminating proxy CIDRs, comma-separated")
+	flags.StringVar(&hosted.OIDCClientID, "oidc-client-id", os.Getenv("OIE_OIDC_CLIENT_ID"), "hosted OIDC client ID")
+	flags.StringVar(&hosted.OIDCClientSecretFile, "oidc-client-secret-file", os.Getenv("OIE_OIDC_CLIENT_SECRET_FILE"), "file containing the hosted OIDC client secret")
+	listen := flags.String("listen", envOrDefault("OIE_LISTEN", "127.0.0.1:8080"), "HTTP listen address")
+	probeListen := flags.String("probe-listen", os.Getenv("OIE_PROBE_LISTEN"), "private HTTP probe listener address (disabled by default)")
+	role := flags.String("role", envOrDefault("OIE_ROLE", "local"), "local, hosted, or bff")
 	dataOnly := flags.Bool("data-only", false, "serve the engine API without the web interface")
-	dataDir := flags.String("data-dir", "./data", "engine database and media directory")
+	dataDir := flags.String("data-dir", envOrDefault("OIE_DATA_DIR", "./data"), "engine database and media directory")
 	engineURL := flags.String("engine-url", "", "engine base URL (required for bff role)")
 	devReload := flags.Bool("dev-reload", false, "reload the development browser after BFF restarts (bff role only)")
 	xmppCA := flags.String("xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS (development/private servers)")
@@ -99,4 +99,11 @@ func run() error {
 		}
 		return err
 	}
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }

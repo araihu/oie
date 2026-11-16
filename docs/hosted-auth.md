@@ -58,6 +58,44 @@ routes require a key, including health, events, and the served API contract.
 session or API key.
 `--data-only` serves the authenticated API without the browser interface.
 
+## Configure with environment variables
+
+Environment variables supply defaults for the corresponding flags. An explicit
+flag takes precedence. Store the OIDC client secret and any direct TLS private
+key in files readable by the service user. Set the file paths in the environment.
+
+| Variable | Flag | Use |
+| --- | --- | --- |
+| `OIE_ROLE` | `--role` | Set to `hosted`. |
+| `OIE_DATA_DIR` | `--data-dir` | Use the same persistent directory for the server and all `oie auth` commands. |
+| `OIE_LISTEN` | `--listen` | Application listener address. |
+| `OIE_PROBE_LISTEN` | `--probe-listen` | Optional private HTTP probe listener address. |
+| `OIE_PUBLIC_URL` | `--public-url` | Public HTTPS origin. |
+| `OIE_TRUSTED_TLS_PROXIES` | `--trusted-tls-proxies` | Private source CIDRs for TLS-terminating proxies. |
+| `OIE_TLS_CERT_FILE` | `--tls-cert-file` | Certificate PEM for direct TLS. |
+| `OIE_TLS_KEY_FILE` | `--tls-key-file` | Private key PEM for direct TLS. |
+| `OIE_OIDC_CLIENT_ID` | `--oidc-client-id` | OIDC application client ID. |
+| `OIE_OIDC_CLIENT_SECRET_FILE` | `--oidc-client-secret-file` | File containing the OIDC client secret. |
+| `OIE_OIDC_ISSUER` | `--issuer` | Exact issuer URL for `oie auth init` and `oie auth recover`. |
+| `OIE_OIDC_SUBJECT` | `--subject` | Exact owner subject for `oie auth init` and `oie auth recover`. |
+
+The example below uses a proxy on the same host. Run the commands as the
+service user.
+
+```sh
+export OIE_DATA_DIR=/srv/oie/data
+OIE_OIDC_ISSUER=https://id.example.com OIE_OIDC_SUBJECT=OWNER_SUBJECT oie auth init
+
+export OIE_ROLE=hosted OIE_LISTEN=127.0.0.1:8080
+export OIE_PUBLIC_URL=https://oie.example.com OIE_TRUSTED_TLS_PROXIES=127.0.0.1/32
+export OIE_OIDC_CLIENT_ID=OIE_CLIENT_ID
+export OIE_OIDC_CLIENT_SECRET_FILE=/run/secrets/oie/client-secret
+oie
+```
+
+The service reads the client secret at startup. Restart Oiê after replacing
+the file with a rotated secret.
+
 ## Configure internal probes
 
 Set `--probe-listen 127.0.0.1:8081` for a local health checker. For a remote

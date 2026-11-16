@@ -84,7 +84,7 @@ async function startIssuer(cert, key, callback) {
 async function startHostedOie(binary) {
   let issuer, server, api, key, certificatePin;
   try {
-    server = await startOie(binary, ['--role', 'hosted'], '/readyz', async ({listen, dir}) => {
+    server = await startOie(binary, [], '/readyz', async ({listen, dir}) => {
       const url = 'https://' + listen;
       const cert = path.join(dir, 'tls.crt');
       const tlsKey = path.join(dir, 'tls.key');
@@ -97,14 +97,18 @@ async function startHostedOie(binary) {
       const publicKey = new X509Certificate(pem).publicKey.export({type: 'spki', format: 'der'});
       certificatePin = createHash('sha256').update(publicKey).digest('base64');
       issuer = await startIssuer(pem, await readFile(tlsKey), url + '/auth/callback');
-      await run(binary, ['auth', 'init', '--data-dir', dir, '--issuer', issuer.url, '--subject', subject]);
-      key = (await run(binary, ['auth', 'key-create', '--data-dir', dir, '--name', 'browser-fixture'])).stdout.trim();
+      const authEnv = {...process.env, OIE_DATA_DIR: dir, OIE_OIDC_ISSUER: issuer.url, OIE_OIDC_SUBJECT: subject};
+      await run(binary, ['auth', 'init'], {env: authEnv});
+      key = (await run(binary, ['auth', 'key-create', '--name', 'browser-fixture'], {env: authEnv})).stdout.trim();
       const probe = await loopbackAddress();
       return {
         url, readyOrigin: 'http://' + probe,
-        env: {...process.env, SSL_CERT_FILE: cert},
-        args: ['--public-url', url, '--probe-listen', probe, '--tls-cert-file', cert, '--tls-key-file', tlsKey,
-          '--oidc-client-id', clientID, '--oidc-client-secret-file', credentials],
+        env: {
+          ...process.env, SSL_CERT_FILE: cert,
+          OIE_ROLE: 'hosted', OIE_PUBLIC_URL: url, OIE_PROBE_LISTEN: probe,
+          OIE_TLS_CERT_FILE: cert, OIE_TLS_KEY_FILE: tlsKey, OIE_TRUSTED_TLS_PROXIES: '',
+          OIE_OIDC_CLIENT_ID: clientID, OIE_OIDC_CLIENT_SECRET_FILE: credentials,
+        },
       };
     });
     api = await request.newContext({

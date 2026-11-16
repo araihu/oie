@@ -62,7 +62,9 @@ retains its claim. Keep the claim and namespace to reuse the data.
 
 The published chart and image above rely on an authenticated HTTPS proxy for
 remote access. The development chart supports Oiê's own OIDC and API-key checks
-with a compatible image. See [Ingress and Gateway API configuration](../charts/oie/README.md#remote-access).
+with a compatible image. Helm sets the OIDC configuration in the pod environment
+and mounts the client secret from an existing Kubernetes Secret. See
+[Ingress and Gateway API configuration](../charts/oie/README.md#remote-access).
 Starting with chart `0.2.2`, you can set `httpRoute.timeouts.request` to
 `"0s"` to keep live chat events streaming through a Gateway that applies a
 request timeout by default. See the [chart configuration](../charts/oie/README.md)

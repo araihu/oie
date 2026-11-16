@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/hostauth"
@@ -21,12 +22,12 @@ func runAuth(ctx context.Context, args []string, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	flags := flag.NewFlagSet("oie auth "+args[0], flag.ContinueOnError)
-	dataDir := flags.String("data-dir", "./data", "engine data directory")
+	dataDir := flags.String("data-dir", envOrDefault("OIE_DATA_DIR", "./data"), "engine data directory")
 	var action func(hostauth.Store) error
 	switch args[0] {
 	case "init", "recover":
-		issuer := flags.String("issuer", "", "owner's exact OIDC issuer URL")
-		subject := flags.String("subject", "", "owner's exact OIDC subject claim")
+		issuer := flags.String("issuer", os.Getenv("OIE_OIDC_ISSUER"), "owner's exact OIDC issuer URL")
+		subject := flags.String("subject", os.Getenv("OIE_OIDC_SUBJECT"), "owner's exact OIDC subject claim")
 		action = func(store hostauth.Store) error {
 			owner := hostauth.Owner{Issuer: *issuer, Subject: *subject}
 			if args[0] == "init" {

@@ -29,12 +29,22 @@ uses its own storage class, access mode and capacity.
 
 ## Remote access
 
-Use an image that supports hosted authentication and a TLS-terminating Ingress
-or Gateway. Configure the OIDC client callback as
-`https://oie.example.com/auth/callback` and create a Secret in the release
-namespace with a key named `client-secret`.
+Use the development chart and set `image.tag` to an image built with hosted
+authentication and environment variable support. Set up a TLS-terminating
+Ingress or Gateway and register the OIDC callback
+`https://oie.example.com/auth/callback` with your provider. Create the
+release namespace first, then create a Secret from the file containing
+your OIDC client secret.
+
+```sh
+kubectl -n oie create secret generic oie-oidc --from-file=client-secret=./oidc-client-secret
+```
+
+Add the public origin and OIDC settings to your values file.
 
 ```yaml
+image:
+  tag: "OIDC_CAPABLE_IMAGE_TAG"
 hosted:
   enabled: true
   publicURL: https://oie.example.com
@@ -44,7 +54,13 @@ hosted:
     subject: "OWNER_SUBJECT"
     clientID: oie
     clientSecretName: oie-oidc
+    clientSecretKey: client-secret
 ```
+
+Helm passes the OIDC and public settings as container environment variables
+and mounts the referenced Secret entry as a read-only file in the Oiê container. Use
+`clientSecretKey` if your Secret has a different key name. Restart the
+StatefulSet after rotating the client secret.
 
 The proxy must preserve the public host, overwrite `X-Forwarded-Proto` with
 `https` for HTTPS traffic, and stream server-sent events without buffering.
@@ -54,8 +70,9 @@ calls `/readyz` for startup and readiness and `/livez` for liveness. The Service
 and public routes use the application port. Keep the probe port private.
 See the [internal probe OpenAPI contract](../../api/probe.openapi.yaml).
 
-The init container sets the owner on the first start. For key management and
-recovery, run the [host commands](../../docs/hosted-auth.md) in the running
+The init container sets the owner on the first start. To change an existing
+owner, use `oie auth recover` and update the Helm values to match. For key
+management and recovery, run the [host commands](../../docs/hosted-auth.md) in the running
 pod as the service user. For example:
 
 ```sh

@@ -30,7 +30,9 @@ hosted:
     issuer: ""
     subject: ""
     clientID: ""
+    # Existing Secret in the release namespace. Its value is mounted as a file.
     clientSecretName: ""
+    clientSecretKey: client-secret
 
 # Existing installations can explicitly use an external authenticated proxy.
 externalAuthentication: false

@@ -37,8 +37,11 @@ spec:
             - auth
             - init
             - --data-dir=/data
-            - {{ printf "--issuer=%s" (required "Set hosted.oidc.issuer." .Values.hosted.oidc.issuer) | quote }}
-            - {{ printf "--subject=%s" (required "Set hosted.oidc.subject." .Values.hosted.oidc.subject) | quote }}
+          env:
+            - name: OIE_OIDC_ISSUER
+              value: {{ required "Set hosted.oidc.issuer." .Values.hosted.oidc.issuer | toString | replace "$" "$$" | quote }}
+            - name: OIE_OIDC_SUBJECT
+              value: {{ required "Set hosted.oidc.subject." .Values.hosted.oidc.subject | toString | replace "$" "$$" | quote }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -58,20 +61,25 @@ spec:
             - --listen=0.0.0.0:8080
             - --probe-listen=0.0.0.0:8081
             - --data-dir=/data
-            - {{ printf "--public-url=%s" (required "Set hosted.publicURL." .Values.hosted.publicURL) | quote }}
-            - {{ printf "--trusted-tls-proxies=%s" (required "Set hosted.trustedTLSProxies." .Values.hosted.trustedTLSProxies) | quote }}
-            - {{ printf "--oidc-client-id=%s" (required "Set hosted.oidc.clientID." .Values.hosted.oidc.clientID) | quote }}
-            - --oidc-client-secret-file=/run/secrets/oidc/client-secret
+          env:
+            - name: OIE_PUBLIC_URL
+              value: {{ required "Set hosted.publicURL." .Values.hosted.publicURL | toString | replace "$" "$$" | quote }}
+            - name: OIE_TRUSTED_TLS_PROXIES
+              value: {{ required "Set hosted.trustedTLSProxies." .Values.hosted.trustedTLSProxies | toString | replace "$" "$$" | quote }}
+            - name: OIE_OIDC_CLIENT_ID
+              value: {{ required "Set hosted.oidc.clientID." .Values.hosted.oidc.clientID | toString | replace "$" "$$" | quote }}
+            - name: OIE_OIDC_CLIENT_SECRET_FILE
+              value: /run/secrets/oidc/client-secret
           {{- else }}
           args: ["--listen", "0.0.0.0:8080", "--data-dir", "/data"]
-          {{- end }}
-          {{- if and (not .Values.hosted.enabled) .Values.diagnostics.existingSecret }}
+          {{- if .Values.diagnostics.existingSecret }}
           env:
             - name: OIE_DIAGNOSTICS_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.diagnostics.existingSecret | quote }}
                   key: {{ .Values.diagnostics.secretKey | quote }}
+          {{- end }}
           {{- end }}
           ports:
             - name: http
@@ -152,6 +160,6 @@ spec:
             secretName: {{ required "Set hosted.oidc.clientSecretName." .Values.hosted.oidc.clientSecretName | quote }}
             defaultMode: 0440
             items:
-              - key: client-secret
+              - key: {{ default "client-secret" .Values.hosted.oidc.clientSecretKey | quote }}
                 path: client-secret
         {{- end }}
