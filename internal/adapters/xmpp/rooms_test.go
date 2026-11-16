@@ -109,6 +109,47 @@ func TestRoomPermissionFailuresCarryTerminalObservation(t *testing.T) {
 		})
 	}
 }
+
+func TestRoomDestructionRecognizesOwnUnavailableWithoutStatus110(t *testing.T) {
+	const notice = `<presence xmlns="jabber:client" from="room@conference.example.test/Oie" type="unavailable"><x xmlns="http://jabber.org/protocol/muc#user"><item affiliation="none" role="none"/><destroy/></x></presence>`
+	m, e, slot, host := roomFixture(t)
+	feedRoomPresence(t, m, e, notice)
+	if slot.snapshot.State != "joining" || len(host.changes) != 0 {
+		t.Fatal("destruction notice from an earlier session interrupted a pending join")
+	}
+	slot.snapshot.State = "joined"
+	feedRoomPresence(t, m, e, strings.Replace(notice, "/Oie", "/Guest", 1))
+	if slot.snapshot.State != "joined" || len(host.changes) != 0 {
+		t.Fatal("notice for a different occupant changed the current session")
+	}
+	feedRoomPresence(t, m, e, notice)
+	if slot.snapshot.State != "failed" || slot.snapshot.LastErrorCode != "room_destroyed" ||
+		!slot.snapshot.Revoked || len(host.changes) != 1 {
+		t.Fatalf("missing destruction observation: %+v", slot.snapshot)
+	}
+}
+
+func TestRoomCreationRequiresMUCServiceIdentityAndFeature(t *testing.T) {
+	for _, tc := range []struct {
+		name, identity, feature string
+		want                    bool
+	}{
+		{"text conference only", "conference", "urn:xmpp:ping", false},
+		{"MUC feature only", "server", "http://jabber.org/protocol/muc", false},
+		{"MUC service", "conference", "http://jabber.org/protocol/muc", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			info, err := parseDiscoInfo(fmt.Sprintf(`<query xmlns="http://jabber.org/protocol/disco#info"><identity category="%s" type="text"/><feature var="%s"/></query>`, tc.identity, tc.feature))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := supportsRoomCreation(info); got != tc.want {
+				t.Fatalf("supportsRoomCreation returned %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	m, e, slot, host := roomFixture(t)
 	slot.snapshot.State = "joined"
@@ -200,6 +241,82 @@ func TestRoomJoinTimeoutAndDisconnectedObservationKeepIntentBinding(t *testing.T
 	snapshot, err = m.RoomSession(t.Context(), e.account, slot.conversation)
 	if err != nil || snapshot.State != "not_joined" || snapshot.LastErrorCode != "not_connected" || snapshot.IntentRevisionID != binding {
 		t.Fatal("retired connection still proved membership", snapshot, err)
+	}
+}
+
+func TestRoomLeaveCanRetryAfterResume(t *testing.T) {
+	for _, tc := range []struct {
+		name, state string
+		failedWrite bool
+	}{
+		{name: "suspended joined room", state: "joined"},
+		{name: "suspended pending join", state: "joining"},
+		{name: "unavailable write failed", state: "joined", failedWrite: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, e, slot, host := roomFixture(t)
+			slot.snapshot.State = tc.state
+			revision := domain.ID("019a5df0-0000-7000-8000-000000000004")
+			install := func() net.Conn {
+				left, right := net.Pipe()
+				t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
+				session, err := mx.NewSession(t.Context(), jid.MustParse("example.test"), jid.MustParse("alice@example.test/test"), left, mx.Ready, func(context.Context, *stream.Info, *stream.Info, *mx.Session, any) (mx.SessionState, io.ReadWriter, any, error) {
+					return mx.Ready, nil, nil, nil
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				e.session, e.raw, slot.session = session, left, session
+				e.state.State = "connected"
+				return right
+			}
+
+			if tc.failedWrite {
+				peer := install()
+				_ = peer.Close()
+			} else {
+				e.suspended, e.session = e.session, nil
+				e.state.State = "connecting"
+			}
+			result, err := m.LeaveRoom(t.Context(), e.account, slot.conversation, revision)
+			if tc.failedWrite && err == nil {
+				t.Fatal("expected unavailable write to fail before it could be queued")
+			}
+			if !tc.failedWrite && (err != nil || result.LastErrorCode != "not_connected") {
+				t.Fatalf("leave raced with transport detach: %+v, %v", result, err)
+			}
+			if slot.snapshot.State != tc.state || !slot.leaving || len(host.changes) != 0 {
+				t.Fatalf("unsubmitted leave discarded the occupied slot: %+v", slot.snapshot)
+			}
+
+			// Move the retained room slot to the resumed transport as run does.
+			peer := install()
+			e.suspended = nil
+			slot.joinDeadline = time.Now().Add(-time.Second)
+			observation, err := m.RoomSession(t.Context(), e.account, slot.conversation)
+			if err != nil || observation.State != tc.state {
+				t.Fatalf("durable leave worker cannot discover the retained room: %+v, %v", observation, err)
+			}
+			from := jid.MustParse(slot.conversation.Address + "/Other")
+			if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "queued while leaving", "", "", fileSharingMetadata{}); err != nil || len(host.received) != 0 {
+				t.Fatalf("leave pending room accepted a message: %v, %v", host.received, err)
+			}
+
+			received := make(chan stanza.Presence, 1)
+			go func() {
+				_ = peer.SetReadDeadline(time.Now().Add(time.Second))
+				var presence stanza.Presence
+				_ = xml.NewDecoder(peer).Decode(&presence)
+				received <- presence
+			}()
+			result, err = m.LeaveRoom(t.Context(), e.account, slot.conversation, revision)
+			if err != nil || result.State != "not_joined" || result.IntentRevisionID != revision || len(host.changes) != 1 {
+				t.Fatalf("leave did not complete on the resumed stream: %+v, %v", result, err)
+			}
+			if presence := <-received; presence.Type != stanza.UnavailablePresence || presence.To.String() != slot.conversation.Address+"/Oie" {
+				t.Fatalf("resumed stream sent the wrong leave stanza: %+v", presence)
+			}
+		})
 	}
 }
 

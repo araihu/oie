@@ -39,6 +39,10 @@ func (p *roomHTTPProtocol) JoinRoom(ctx context.Context, a domain.Account, c dom
 	p.roomMu.Unlock()
 	return s, p.host.RoomSessionChanged(ctx, s)
 }
+func (p *roomHTTPProtocol) CheckRoomCreation(context.Context, domain.Account, string) error {
+	return nil
+}
+
 func (p *roomHTTPProtocol) CreateRoom(ctx context.Context, a domain.Account, c domain.Conversation, nickname, _ string, revision domain.ID) (domain.RoomSession, error) {
 	return p.JoinRoom(ctx, a, c, nickname, revision)
 }

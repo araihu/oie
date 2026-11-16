@@ -1180,6 +1180,15 @@ type ResetBrowserEngineDataFormdataBody struct {
 // ResetBrowserEngineDataFormdataBodyConfirmation defines parameters for ResetBrowserEngineData.
 type ResetBrowserEngineDataFormdataBodyConfirmation string
 
+// StreamWorkspaceEventsParams defines parameters for StreamWorkspaceEvents.
+type StreamWorkspaceEventsParams struct {
+	// Cursor Engine cursor from the rendered view or last received event.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// LastEventID Last received event ID. Takes precedence over the query cursor.
+	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
 // ResolveBrowserDraftLinkPreviewParams defines parameters for ResolveBrowserDraftLinkPreview.
 type ResolveBrowserDraftLinkPreviewParams struct {
 	// XOieEngineID Selected engine identity.

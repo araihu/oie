@@ -33,7 +33,8 @@ func captureRoomMentionPresence(e *entry, p incomingPresence) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	slot := e.rooms[p.From.Bare().String()]
-	if slot == nil || slot.session != e.session || e.state.State != "connected" || (slot.snapshot.State != "joined" && slot.snapshot.State != "joining") {
+	if slot == nil || e.session == nil || slot.session != e.session || e.state.State != "connected" && !e.replaying ||
+		(slot.snapshot.State != "joined" && slot.snapshot.State != "joining") {
 		return
 	}
 	if slot.mentionOccupants == nil {

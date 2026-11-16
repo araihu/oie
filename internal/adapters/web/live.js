@@ -8,6 +8,7 @@ window.OieRuntime.register('live', life => {
   const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet || !message; } };
   const errorToast = message => { if (message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message}})); };
   const mock = body.dataset.mock === 'true';
+  const recoveringView = document.getElementById('oie-route')?.hasAttribute('data-engine-unavailable');
   const events = window.OieEvents, inbox = window.OieInbox;
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let accountRenameEpoch = 0;
@@ -636,10 +637,15 @@ window.OieRuntime.register('live', life => {
     };
     life.raf(openAfterMenu);
   });
-  life.on(document, 'oie:conversation-drawer-open', ({target, detail: id}) => {
+  function afterConversationMenu(target, open) {
     const menu = target.closest('#chat-options-panel');
+    if (!menu) {
+      target.focus({preventScroll: true});
+      open();
+      return;
+    }
     const trigger = document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
-    if (!menu || trigger?.getAttribute('aria-expanded') !== 'true') return;
+    if (trigger?.getAttribute('aria-expanded') !== 'true') return;
 
     trigger.click();
     // The drawer's focus trap must start after the dropdown leaves the top layer.
@@ -650,9 +656,36 @@ window.OieRuntime.register('live', life => {
         return;
       }
       trigger.focus({preventScroll: true});
-      window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id}}));
+      open();
     };
     life.raf(openAfterMenu);
+  }
+  life.on(document, 'oie:conversation-drawer-open', ({target, detail: id}) => {
+    afterConversationMenu(target, () => window.dispatchEvent(new CustomEvent('drawer:open', {detail: {id}})));
+  });
+  let removalSnapshot;
+  function rememberConversationForRemoval(conversation) {
+    if (conversation && conversation.id === body.dataset.conversationId && conversation.accountId === body.dataset.accountId &&
+        canonicalID(conversation.revisionId) && typeof conversation.title === 'string') {
+      removalSnapshot = conversation;
+    }
+  }
+  life.on(document, 'oie:conversation-remove-open', ({target}) => {
+    afterConversationMenu(target, () => {
+      const dialog = document.getElementById('conversation-removal');
+      const form = dialog?.querySelector('form');
+      if (!form || dialog.open || form.dataset.busy === 'true') return;
+      if (form.dataset.removalRetry !== 'true') {
+        if (removalSnapshot && !removalSnapshot.removedFromChats &&
+            removalSnapshot.id === form.elements.conversationId.value &&
+            removalSnapshot.accountId === form.elements.accountId.value) {
+          form.elements.expectedRevisionId.value = removalSnapshot.revisionId;
+          form.querySelector('[data-removal-title]').textContent = removalSnapshot.title;
+        }
+        feedback(form, '');
+      }
+      window.dispatchEvent(new CustomEvent('modal:open', {detail: {id: dialog.id}}));
+    });
   });
   restoreRoomOperation();syncRoomLeave();
   if (roomOperation && document.getElementById('room-session-dialog')) {
@@ -673,7 +706,9 @@ window.OieRuntime.register('live', life => {
     for (const status of root.querySelectorAll('[data-account-status]')) {
       const next = nextRoot.querySelector(`[data-account-status="${CSS.escape(status.dataset.accountStatus)}"]`);
       if (next && (status.dataset.connectionState !== next.dataset.connectionState ||
-          status.dataset.accountAvatarName !== next.dataset.accountAvatarName)) {
+          status.dataset.accountAvatarName !== next.dataset.accountAvatarName ||
+          status.dataset.accountAvatarBorder !== next.dataset.accountAvatarBorder)) {
+        status.dataset.accountAvatarBorder = next.dataset.accountAvatarBorder;
         status.dataset.accountAvatarName = next.dataset.accountAvatarName;
         status.dataset.connectionState = next.dataset.connectionState;
         status.title = next.title;
@@ -880,6 +915,10 @@ window.OieRuntime.register('live', life => {
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
         engineChanged(); return;
       }
+      if (recoveringView && regions.dataset.engineId) {
+        await window.OieNavigation.go(location.href,{history:true,workspace:'oie-app',noInboxReuse:true});
+        return;
+      }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
       if(pinned())showJump(true);
@@ -917,6 +956,24 @@ window.OieRuntime.register('live', life => {
           }
         }
         const pane=document.getElementById('conversation-pane');
+        const removed=regions.dataset.conversationRemoved==='true';
+        if (pane && removed !== (pane.dataset.conversationRemoved==='true')) {
+          // Retire the old composer immediately, including while navigation is pending.
+          if (removed && composer) {
+            composer.dataset.sendAllowed='false';
+            composer.inert=true;
+          }
+          const restoreFocus=pane.contains(document.activeElement);
+          const url=new URL(location.href);
+          if (!window.OieNavigation) { location.reload(); return; }
+          await window.OieNavigation.go(url.href, {
+            history:true, workspace:url.searchParams.has('chat')?'conversation-pane':'oie-app', noInboxReuse:true,
+          });
+          if (restoreFocus && document.activeElement === document.body) {
+            document.getElementById('message-timeline')?.focus({preventScroll:true});
+          }
+          return;
+        }
         if(pane&&(pane.dataset.conversationRequest||'')!==(regions.dataset.conversationRequest||'')){
           const focus=pane.querySelector('[data-conversation-request-panel]')?.contains(document.activeElement);
           const route=location.pathname+location.search;
@@ -928,7 +985,17 @@ window.OieRuntime.register('live', life => {
         const timeline = document.querySelector('#message-timeline'), next = page.querySelector('#live-timeline');
         if (timeline && next && window.OieTimeline) window.OieTimeline.refresh(page,reactionStartedAt);
         const header = document.querySelector('#chat-header'), nextHeader = page.querySelector('#live-header');
-        if (preferencesCurrent && header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version && !header.contains(document.activeElement)) {
+        if (preferencesCurrent) {
+          const state=nextHeader?.querySelector('[data-conversation-preference-state]');
+          if (state) rememberConversationForRemoval({
+            id:state.dataset.conversation, accountId:state.dataset.account, revisionId:state.dataset.revision,
+            title:nextHeader.querySelector('h2')?.textContent, removedFromChats:removed,
+          });
+        }
+        // A native confirmation returns focus to the current menu trigger.
+        const confirmingRemoval = document.getElementById('conversation-removal')?.open;
+        if (preferencesCurrent && header && nextHeader?.firstElementChild && header.dataset.version !== nextHeader.dataset.version &&
+            !confirmingRemoval && !header.contains(document.activeElement)) {
           const replacement = nextHeader.firstElementChild.cloneNode(true);
           const apply = () => { window.Alpine?.destroyTree(header); header.replaceWith(replacement); window.Alpine?.initTree(replacement); };
           if (window.Alpine?.mutateDom) window.Alpine.mutateDom(apply); else apply();
@@ -1030,7 +1097,9 @@ window.OieRuntime.register('live', life => {
       }
       const nextTrigger = page.querySelector('#live-account-trigger [data-account-switcher]');
       if (nextTrigger) for (const trigger of document.querySelectorAll('[data-account-switcher]')) {
-        if (trigger.dataset.activeAccountName !== nextTrigger.dataset.activeAccountName) {
+        if (trigger.dataset.activeAccountName !== nextTrigger.dataset.activeAccountName ||
+            trigger.dataset.accountAvatarBorder !== nextTrigger.dataset.accountAvatarBorder) {
+          trigger.dataset.accountAvatarBorder = nextTrigger.dataset.accountAvatarBorder;
           trigger.dataset.activeAccountName = nextTrigger.dataset.activeAccountName;
           mutateDOM(trigger, nextTrigger.innerHTML);
         }
@@ -1155,6 +1224,8 @@ window.OieRuntime.register('live', life => {
     const nameInput = accountLabel ? form.elements.namedItem('label') : null;
     const editorSave = accountEditor ? form.querySelector('button[type="submit"]') : null;
     let values = form.enctype === 'multipart/form-data' ? fields : new URLSearchParams(fields);
+    const removingConversation = form.dataset.oieAction === 'remove-conversation';
+    if (removingConversation) form.dataset.removalRetry = 'true';
     const roomManagement = form.dataset.oieAction === 'room-management';
     const managementKey = roomManagement ? values.get('operationKey') : '';
     if (managementKey) {
@@ -1195,7 +1266,11 @@ window.OieRuntime.register('live', life => {
     else buttons.forEach(button => button.disabled = true);
     syncRoomLeave();
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
-    feedback(form,sending?'':removingAccount?form.dataset.removing:text('saving'));
+    if (roomEntry) {
+      const submit = form.querySelector('[data-room-entry-label]');
+      if (submit) submit.textContent = submit.dataset.roomEntryLabel;
+    }
+    feedback(form,sending?'':removingAccount?form.dataset.removing:form.dataset.roomEntryChecking||text('saving'));
     pendingRequests++;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(),15000);
     try {
@@ -1204,6 +1279,11 @@ window.OieRuntime.register('live', life => {
       if(life.signal.aborted)return;
       if (form.dataset.oieAction === 'account-communication' && result.accountCommunication) {
         form.elements.expectedRevisionId.value = result.accountCommunication.revisionId || '';
+      }
+      if (removingConversation && result.rejected) {
+        delete form.dataset.removalRetry;
+        form.elements.operationKey.value = roomOperationKey();
+        rememberConversationForRemoval(result.conversation);
       }
       if (roomManagement) {
         if (result.ok || result.rejected) {
@@ -1290,6 +1370,11 @@ window.OieRuntime.register('live', life => {
             document.dispatchEvent(new CustomEvent('oie:agenda-refresh',{detail:{form}}));
             return;
           }
+        } else if ((removingConversation || roomManagement) && result.redirect) {
+          inbox.invalidate();
+          if (window.OieNavigation) window.OieNavigation.go(result.redirect);
+          else location.replace(result.redirect);
+          return;
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }
@@ -1331,7 +1416,6 @@ window.OieRuntime.register('live', life => {
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
     }
   });
-  function retryPending() { if (composer && journal?.pending && composer.dataset.busy !== 'true' && !stopped && navigator.onLine) composer.requestSubmit(); }
   function engineChanged(notify = true) {
     if (stopped) return;
     stopped = true; events.markReplaced();
@@ -1416,7 +1500,7 @@ window.OieRuntime.register('live', life => {
     for (const type of events.eventTypes) {
       life.on(events.target,type,event=>{if(!stopped)(handlers[type]||scheduleRefresh)(event.detail);});
     }
-    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();retryPending();}});
+    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();}});
     life.on(events.target,'error',()=>{if(!stopped)announce(text('liveRetry'));});
     life.on(events.target,'engine-changed',()=>engineChanged());
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
@@ -1427,18 +1511,23 @@ window.OieRuntime.register('live', life => {
       if((mountedList&&(!inbox.current(mountedList)||
         (body.dataset.eventCursor&&mountedList.dataset.inboxCursor!==body.dataset.eventCursor&&
           events.latest(mountedList.dataset.inboxCursor)!==body.dataset.eventCursor)))||
-        events.latest(body.dataset.eventCursor)!==body.dataset.eventCursor)scheduleRefresh();
-      retryPending();
+        events.latest(body.dataset.eventCursor)!==body.dataset.eventCursor||journal?.pending)scheduleRefresh();
     }else announce(text('liveConnecting'),true);
   }
   // Bounded recovery polling also covers a proxy that buffers or disables SSE.
   function recoverLive(){
     if(mock||stopped)return;
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
-    scheduleRefresh();retryPending();
+    scheduleRefresh();
   }
   life.interval(() => { if (!document.hidden) recoverLive(); },15000);
-  life.on(window,'online', () => {inbox.invalidate();recoverLive();});
+  function wakeLive(online){
+    if(mock||stopped)return;
+    inbox.invalidate();events.wake(online);recoverLive();
+  }
+  life.on(window,'online',()=>wakeLive(true));
+  life.on(document,'visibilitychange',()=>{if(!document.hidden)wakeLive();});
+  if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
     const show = () => {

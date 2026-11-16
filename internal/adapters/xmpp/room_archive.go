@@ -207,7 +207,7 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 func pendingRoomReactionReplay(e *entry, session *mx.Session, room string, deferred bool) *roomSlot {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	slot, semianonymous, verified := roomReactionSupport(e, room)
+	slot, semianonymous, verified := roomReactionSupport(e, room, false)
 	if slot == nil || slot.session != session || !semianonymous || !verified || slot.ownOccupantID == "" || (slot.recentReactionsRecovered && !deferred) {
 		return nil
 	}

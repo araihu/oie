@@ -18,7 +18,7 @@ import (
 
 templ conversationDetails(v view){
 if v.Selected!=nil {
-@drawer.Drawer(drawer.Config{ID:"details",Title:v.Text.Details,PanelClass:"oie-conversation-details-drawer"}){
+@workspaceDrawer(drawer.Config{ID:"details",Title:v.Text.Details,PanelClass:"oie-conversation-details-drawer"}){
 @chatInfoShell(v)
 }
 }

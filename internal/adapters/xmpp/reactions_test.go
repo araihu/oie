@@ -224,6 +224,29 @@ func TestSemianonymousRoomReactionsUseVerifiedOccupantIDs(t *testing.T) {
 	}
 }
 
+func TestRoomEventsAreHandledWhileTheManagedTransportReplays(t *testing.T) {
+	m, e, slot, host := reactionRoomFixture(t)
+	room := slot.conversation.Address
+	disco := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text"/><feature var="muc_semianonymous"/><feature var="urn:xmpp:occupant-id:0"/><feature var="urn:xmpp:sid:0"/></query>`
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, disco, 0); err != nil {
+		t.Fatal(err)
+	}
+	slot.ownOccupantID = "own-id"
+	e.state.State = "connecting"
+	e.replaying = true
+	feedReaction(t, m, e, `<presence xmlns="jabber:client" from="`+room+`/Bob" type="unavailable"><x xmlns="http://jabber.org/protocol/muc#user"/></presence>`)
+	if slot.mentionOccupants[room+"/Bob"].present {
+		t.Fatal("replayed departure left the occupant present")
+	}
+	feedReaction(t, m, e, `<message xmlns="jabber:client" from="`+room+`/Juliet" type="groupchat"><stanza-id xmlns="urn:xmpp:sid:0" by="`+room+`" id="replayed-event"/><occupant-id xmlns="urn:xmpp:occupant-id:0" id="juliet"/><reactions xmlns="urn:xmpp:reactions:0" id="room-source"><reaction>👍</reaction></reactions></message>`)
+	if len(host.received) != 1 || host.received[0].Reaction.Actor != roomReactionActor(e.account.ID, room, "juliet") {
+		t.Fatal("verified replayed reaction was lost", host.received)
+	}
+	if _, err := m.PrepareReaction(t.Context(), e.account, slot.conversation, reactionTarget(e, slot.conversation)); !errors.Is(err, application.ErrProtocolUnavailable) {
+		t.Fatalf("outgoing reaction while replaying = %v", err)
+	}
+}
+
 func TestRoomConfigurationInvalidatesReactionTrust(t *testing.T) {
 	m, e, slot, host := reactionRoomFixture(t)
 	room := slot.conversation.Address

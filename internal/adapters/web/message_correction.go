@@ -38,7 +38,7 @@ func validEditText(text string) bool {
 	return utf8.ValidString(text) && strings.TrimSpace(text) != "" && !strings.ContainsRune(text, 0) && utf8.RuneCountInString(text) <= 16384
 }
 func (s *Server) latestEditTarget(ctx context.Context, v *view) {
-	if v.Selected == nil || v.Preview || !v.messagingImplemented("send_corrections") {
+	if v.Selected == nil || v.Preview || v.conversationRemoved() || !v.messagingImplemented("send_corrections") {
 		return
 	}
 	response, err := s.client.GetConversationEditTargetWithResponse(ctx, v.Selected.Id)

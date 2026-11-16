@@ -23,13 +23,18 @@ SELECT sqlc.embed(conversations), CAST(CASE
         AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
         ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC
         LIMIT sqlc.arg(message_page_limit)
-    )) END AS INTEGER) AS latest_message_page_count
+    )) END AS INTEGER) AS latest_message_page_count,
+    CAST(COALESCE(ri.revision_id, '') AS TEXT) AS room_intent_revision,
+    CAST(COALESCE(ri.active, 0) AS INTEGER) AS room_intent_active,
+    CAST(COALESCE(ri.last_error_code, '') AS TEXT) AS room_intent_error,
+    ri.creation_name AS room_intent_creation_name
 FROM conversations
 JOIN (
     SELECT c.id FROM conversations AS c
     WHERE c.activity_sequence < sqlc.arg(cursor)
     AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR c.account_id=CAST(sqlc.arg(account_id) AS TEXT))
     AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
+    AND COALESCE(json_extract(c.payload,'$.RemovedFromChats'),0)=0
     AND c.archived=sqlc.arg(archived)
     AND (CAST(sqlc.arg(favorites_only) AS INTEGER)=0 OR c.favorite=1)
     AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR c.unread_count>0 OR json_extract(c.payload,'$.UnreadReminder')=1)
@@ -37,6 +42,7 @@ JOIN (
     AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
     ORDER BY c.activity_sequence DESC LIMIT sqlc.arg(page_limit)
 ) AS conversation_page ON conversation_page.id=conversations.id
+LEFT JOIN room_intents AS ri ON ri.conversation_id=conversations.id
 ORDER BY conversations.activity_sequence DESC;
 -- name: InsertMessage :exec
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms) VALUES(?,?,?,?,?,?,?,?,?);

@@ -17,6 +17,8 @@ github.com/araihu/goshtoso v0.6.3 h1:Cwm9lgkNPnR5GIb/RF1PfVvr4UqF7cJiJlJjDiKNbK8
 github.com/araihu/goshtoso v0.6.3/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/margo v0.0.36 h1:VV+plQdiHGRXY83v3/hwt2OfR4v00fpiwuYfmg7LIP0=
 github.com/araihu/margo v0.0.36/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
+github.com/araihu/xmpp v0.24.0-araihu.2 h1:7MDKpEf1hizDNz9EZVQLzMCF63W61yd2SSv+bapgfdE=
+github.com/araihu/xmpp v0.24.0-araihu.2/go.mod h1:IvZgNBBzp57lP0Jfb5B1fTRuSpwAn/GpbSy4sX42cDM=
 github.com/bits-and-blooms/bitset v1.24.2 h1:M7/NzVbsytmtfHbumG+K2bremQPMJuqv1JD3vOaFxp0=
 github.com/bits-and-blooms/bitset v1.24.2/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/blevesearch/bleve/v2 v2.6.1 h1:47vLskRTqxvQEtxVPYHjf5KpOgzD2msslXFjvUQCgWQ=
@@ -199,8 +201,6 @@ mellium.im/sasl v0.3.2 h1:PT6Xp7ccn9XaXAnJ03FcEjmAn7kK1x7aoXV6F+Vmrl0=
 mellium.im/sasl v0.3.2/go.mod h1:NKXDi1zkr+BlMHLQjY3ofYuU4KSPFxknb8mfEu6SveY=
 mellium.im/xmlstream v0.15.4 h1:gLKxcWl4rLMUpKgtzrTBvr4OexPeO/edYus+uK3F6ZI=
 mellium.im/xmlstream v0.15.4/go.mod h1:yXaCW2++fmVO4L9piKVkyLDqnCmictVYF7FDQW8prb4=
-mellium.im/xmpp v0.23.0 h1:rvKvOvMdIURCLaAWEJN8J0QpO3AJYCDKjxLsqtTPSjY=
-mellium.im/xmpp v0.23.0/go.mod h1:GHDKlKKQe0LNmD9YqExyxnFEEBiz84KGqnfiA2VNzb8=
 modernc.org/cc/v4 v4.30.6-0.20261101114202-1b9d1a076f6b h1:WE5SLOURcNd8s6uPR/n4WV4weQxxYKi5OpEZkfNVvdE=
 modernc.org/cc/v4 v4.30.6-0.20261101114202-1b9d1a076f6b/go.mod h1:OnovgIhbbMXMu1aISnJ0wvVD1KnW+cAUJkIrAWh+kVI=
 modernc.org/ccgo/v4 v4.38.1 h1:wdxJVBuFT8JufZnnQyS6Bbz3NOWhViD0xJOGR96Bpd4=

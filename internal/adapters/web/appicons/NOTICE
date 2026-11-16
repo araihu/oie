@@ -34,6 +34,10 @@ heroicons-retention
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/circle-stack.svg
 License: MIT
 
+heroicons-room-entry
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-left-end-on-rectangle.svg
+License: MIT
+
 heroicons-room-exit
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-right-start-on-rectangle.svg
 License: MIT

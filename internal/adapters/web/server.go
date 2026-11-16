@@ -171,9 +171,10 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
-	EngineMode     *engineMode
-	StarredContent starredContent
-	PreviewScope   string
+	AccountAvatarBorders map[string]string
+	EngineMode           *engineMode
+	StarredContent       starredContent
+	PreviewScope         string
 
 	FavoritesPage                   *engineapi.StarredMessagePage
 	FavoritesCursor, FavoritesQuery string
@@ -259,6 +260,8 @@ type view struct {
 }
 
 type copy struct {
+	ConversationRemoved string
+
 	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting string
 	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                      string
 
@@ -637,6 +640,9 @@ type copy struct {
 	Settings, You, All, Unread, Groups                                                                                                                                   string
 	RoomInvitation, ViewRoom, RoomAddressConflict, ConversationChanged                                                                                                   string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
+	RoomInvalidService, RoomCreationUnavailable, RemoveFromChats, RoomRemoveWarning, DirectRemoveWarning, RemoveFromChatsUnavailable, RemoveFromChatsConflict            string
+	RoomStatusJoining, RoomStatusDisconnected, RoomStatusDestroyed, RoomStatusAccessDenied, RoomStatusUnavailable                                                        string
+	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
@@ -708,6 +714,9 @@ var previewsScript []byte
 
 //go:embed runtime.js
 var runtimeScript []byte
+
+//go:embed viewport.js
+var viewportScript []byte
 
 //go:embed masonry.js
 var masonryScript []byte
@@ -918,7 +927,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/timeline.js":        {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/video-frames.js": {"text/javascript", videoFramesScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
-		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/diagnostics.js": {"text/javascript", diagnosticsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/typing.js": {"text/javascript", typingScript}, "/ui/contacts.js": {"text/javascript", contactsScript}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
+		"/ui/typing.js":    {"text/javascript", typingScript},
+		"/ui/contacts.js":  {"text/javascript", contactsScript},
+		"/ui/viewport.js":  {"text/javascript", viewportScript},
+		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/diagnostics.js": {"text/javascript", diagnosticsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", asset.mime)
@@ -1097,7 +1109,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		v.Unavailable = true
 		return
 	}
-	v.Accounts = accounts.JSON200.Items
+	v.setAccounts(accounts.JSON200.Items)
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
 		return
@@ -1235,7 +1247,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	c := conversation.JSON200
-	if fromCache && ((c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
+	if fromCache && (removedConversation(c) || (c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
 		(c != nil && (c.Archived || v.AccountFilter != "" && c.AccountId != v.AccountFilter ||
 			v.Filter == "unread" && !hasUnread(*c) || v.Filter == "favorites" && !c.Favorite ||
 			v.Filter == "groups" && c.Kind != "room"))) {
@@ -1422,7 +1434,8 @@ func (v view) headerVersion() string {
 	if v.Selected == nil {
 		return ""
 	}
-	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
+	status, _ := v.roomStatusPresentation(v.selectedRoomStatus())
+	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.conversationRemoved()) + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.AccountAvatarBorders[v.Selected.AccountId] + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

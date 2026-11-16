@@ -105,14 +105,25 @@ func (s *Server) openRoom(ctx context.Context, r *http.Request, text copy) (int,
 	c := response.JSON202
 	if c == nil {
 		result := problemResult(text, response.StatusCode(), response.Body)
-		switch result.Code {
-		case "state_conflict":
+		var problem engineapi.Problem
+		_ = json.Unmarshal(response.Body, &problem)
+		switch {
+		case problem.RoomCreationError != nil:
+			switch *problem.RoomCreationError {
+			case "invalid_service":
+				result.Message = text.RoomInvalidService
+			case "verification_unavailable":
+				result.Message = text.RoomCreationUnavailable
+			case "already_exists":
+				result.Message = text.RoomExists
+			}
+			result.Rejected = true
+		case result.Code == "state_conflict":
 			result.Message, result.Rejected = text.RoomConflict, true
-			var problem engineapi.Problem
-			if json.Unmarshal(response.Body, &problem) == nil && problem.RoomAddressInUse != nil && *problem.RoomAddressInUse {
+			if problem.RoomAddressInUse != nil && *problem.RoomAddressInUse {
 				result.Message = text.RoomAddressConflict
 			}
-		case "idempotency_conflict":
+		case result.Code == "idempotency_conflict":
 			result.NextKey = newOperationKey()
 		}
 		return response.StatusCode(), result

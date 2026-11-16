@@ -366,13 +366,18 @@ SELECT conversations.id, conversations.revision_id, conversations.account_id, co
         AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
         ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC
         LIMIT ?2
-    )) END AS INTEGER) AS latest_message_page_count
+    )) END AS INTEGER) AS latest_message_page_count,
+    CAST(COALESCE(ri.revision_id, '') AS TEXT) AS room_intent_revision,
+    CAST(COALESCE(ri.active, 0) AS INTEGER) AS room_intent_active,
+    CAST(COALESCE(ri.last_error_code, '') AS TEXT) AS room_intent_error,
+    ri.creation_name AS room_intent_creation_name
 FROM conversations
 JOIN (
     SELECT c.id FROM conversations AS c
     WHERE c.activity_sequence < ?3
     AND (CAST(?4 AS TEXT)='' OR c.account_id=CAST(?4 AS TEXT))
     AND (CAST(?5 AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
+    AND COALESCE(json_extract(c.payload,'$.RemovedFromChats'),0)=0
     AND c.archived=?6
     AND (CAST(?7 AS INTEGER)=0 OR c.favorite=1)
     AND (CAST(?8 AS INTEGER)=0 OR c.unread_count>0 OR json_extract(c.payload,'$.UnreadReminder')=1)
@@ -380,6 +385,7 @@ JOIN (
     AND (CAST(?10 AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(?10 AS TEXT)))>0)
     ORDER BY c.activity_sequence DESC LIMIT ?11
 ) AS conversation_page ON conversation_page.id=conversations.id
+LEFT JOIN room_intents AS ri ON ri.conversation_id=conversations.id
 ORDER BY conversations.activity_sequence DESC
 `
 
@@ -400,6 +406,10 @@ type ListConversationsParams struct {
 type ListConversationsRow struct {
 	Conversation           Conversation
 	LatestMessagePageCount int64
+	RoomIntentRevision     string
+	RoomIntentActive       int64
+	RoomIntentError        string
+	RoomIntentCreationName *string
 }
 
 func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error) {
@@ -435,6 +445,10 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.Conversation.Archived,
 			&i.Conversation.Favorite,
 			&i.LatestMessagePageCount,
+			&i.RoomIntentRevision,
+			&i.RoomIntentActive,
+			&i.RoomIntentError,
+			&i.RoomIntentCreationName,
 		); err != nil {
 			return nil, err
 		}

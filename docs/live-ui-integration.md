@@ -50,8 +50,11 @@ user's real account data. Its evidence path is anchored to
 
 The initial page reads the engine cursor before its snapshots. `/ui/events`
 proxies the canonical structured SSE using a separate generated raw client with
-no total timeout. It forwards Last-Event-ID on reconnect; upstream headers,
-downstream writes and cancellation are bounded. A foreign/reset cursor triggers
+no total timeout. It forwards Last-Event-ID, or the last event cursor supplied by
+an application-created EventSource. The engine sends a heartbeat every 15 seconds.
+The BFF relays it as an ID-less event and closes upstream streams after 35 seconds
+without a complete event or heartbeat. Downstream writes and upstream headers
+are also bounded. A foreign/reset cursor triggers
 a fresh snapshot/reset notice. A changed engine identity blocks further writes
 until the user reloads and reviews it. The BFF also emits a live cursor when the
 connection starts so notifications can skip replayed messages while the inbox
@@ -59,11 +62,18 @@ and timeline still consume them. See [message notifications](notifications.md).
 
 A small browser coordinator coalesces events and fetches BFF-owned HTML from
 `/ui/refresh`. It does not poll/replace whole documents or the composer. A bounded
-15-second recovery poll covers unavailable/buffered SSE. List position and
-message scroll anchors are preserved; users already at the bottom follow new
-messages. A new-message action jumps to latest when the user has scrolled up.
-Initial documents that open while the engine is unreachable offer an explicit
-Retry; existing active documents retain their composer during an outage.
+15-second foreground poll covers unavailable or buffered SSE. The browser also
+reopens failed streams with jittered backoff after HTTP errors or 40 seconds
+without activity. Returning online or to the foreground prompts an immediate
+recovery check. List position and message scroll anchors are preserved; users
+already at the bottom follow new messages. A new-message action jumps to latest
+when the user has scrolled up.
+
+A document initially rendered while the selected engine is unavailable restores
+the requested workspace when the engine returns. The existing Retry link is
+available during the outage. An already-open chat keeps its composer. Native
+desktop local mode recreates an unexpectedly stopped embedded engine using the
+same profile after it releases the store. The WebView origin stays stable.
 
 Draft/submission records live only in browser storage, scoped by engine,
 account, and conversation UUIDs. They never live in shared BFF memory or the

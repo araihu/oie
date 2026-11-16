@@ -68,6 +68,15 @@ the quote again before submitting.
 **Protocol unavailable · HTTP 503.** The requested protocol service is
 unavailable. Check the account's connection and capabilities before retrying.
 
+### Room creation
+
+A creation refusal can include `roomCreationError`:
+
+- `invalid_service` (400): Verify the domain of the new room.
+- `verification_unavailable` (503): Reconnect the account or retry when the
+  service is available. No creation intent was saved.
+- `already_exists` (409): Enter the existing room or choose another address.
+
 ## media_blocked
 
 **Media access blocked · HTTP 422.** The engine blocked access to the media

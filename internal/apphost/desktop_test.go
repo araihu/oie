@@ -130,6 +130,66 @@ func TestDesktopEngineSelection(t *testing.T) {
 	}
 }
 
+func TestDesktopRestartsStoppedLocalEngine(t *testing.T) {
+	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", "", nil, func(string) error {
+		t.Error("automatic restart rewrote the selected engine")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := desktop.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	app := httptest.NewServer(desktop)
+	defer app.Close()
+	before := desktop.active.Load()
+	workspaceIdentity := func() string {
+		t.Helper()
+		resp, err := app.Client().Get(app.URL + "/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, err := io.ReadAll(resp.Body)
+		match := regexp.MustCompile(`data-engine-id="([^"]+)"`).FindSubmatch(body)
+		if err != nil || resp.StatusCode != http.StatusOK || len(match) != 2 {
+			t.Fatalf("workspace did not render the local engine: %s %v", resp.Status, err)
+		}
+		return string(match[1])
+	}
+	id := workspaceIdentity()
+	restart := func(previous *desktopTarget) *desktopTarget {
+		t.Helper()
+		previous.engine.beginClose()
+		deadline := time.Now().Add(10 * time.Second)
+		for desktop.active.Load() == previous && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		current := desktop.active.Load()
+		if current == previous || current.engine == nil || current.selection != previous.selection {
+			t.Fatal("desktop did not restart the selected local engine")
+		}
+		if got := workspaceIdentity(); got != id {
+			t.Fatalf("recovered engine identity = %s, want %s", got, id)
+		}
+		if current.engine.ctx.Err() != nil {
+			t.Fatal("recovered engine was stopped with old target")
+		}
+		return current
+	}
+	after := restart(before)
+	failedAgain := time.Now()
+	restart(after)
+	if elapsed := time.Since(failedAgain); elapsed < time.Second {
+		t.Fatalf("restarted a short-lived replacement without backoff after %s", elapsed)
+	}
+}
+
 func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 	dir := t.TempDir()
 	remote := testServer(t, Config{Role: "hosted", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})

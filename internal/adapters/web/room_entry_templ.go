@@ -46,6 +46,13 @@ func roomAccountIDs(options []selectfield.Option) string {
 	return strings.Join(ids, " ")
 }
 
+func roomEntryChecking(text copy, create bool) string {
+	if create {
+		return text.RoomCheckingAddress
+	}
+	return ""
+}
+
 func roomEntryDrawer(v view, create bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -109,7 +116,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.AddAccount)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 58, Col: 54}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 65, Col: 54}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -145,7 +152,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(action).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 62, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 69, Col: 57}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
@@ -158,13 +165,13 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Locale).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 63, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 70, Col: 53}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><div class=\"oie-room-entry-fields\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -197,7 +204,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 							var templ_7745c5c3_Var9 string
 							templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.PreviewRoom)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 69, Col: 178}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 77, Col: 179}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 							if templ_7745c5c3_Err != nil {
@@ -220,7 +227,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var10 string
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RoomPreviewLoading).Resolve(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 71, Col: 126}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 79, Col: 127}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 						if templ_7745c5c3_Err != nil {
@@ -233,7 +240,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var11 string
 						templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RoomPreviewUnavailable).Resolve(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 71, Col: 175}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 79, Col: 176}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 						if templ_7745c5c3_Err != nil {
@@ -246,7 +253,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var12 string
 						templ_7745c5c3_Var12, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RoomAddressInvalid).Resolve(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 71, Col: 216}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 79, Col: 217}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 						if templ_7745c5c3_Err != nil {
@@ -259,7 +266,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var13 string
 						templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RoomManagementLoading).Resolve(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 72, Col: 77}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 80, Col: 78}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 						if templ_7745c5c3_Err != nil {
@@ -272,7 +279,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var14 string
 						templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RoomDirectoryUnavailable).Resolve(ctx)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 72, Col: 128}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 80, Col: 129}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 						if templ_7745c5c3_Err != nil {
@@ -285,7 +292,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var15 string
 						templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.RoomDiscover)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 73, Col: 36}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 81, Col: 37}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 						if templ_7745c5c3_Err != nil {
@@ -314,7 +321,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 							var templ_7745c5c3_Var17 string
 							templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.RoomDiscover)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 75, Col: 176}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 83, Col: 177}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 							if templ_7745c5c3_Err != nil {
@@ -331,11 +338,11 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " ")
+					templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: target + "-nickname", Name: "nickname", Label: v.Text.RoomNickname, Value: nickname, InputAttrs: templ.Attributes{"maxlength": "100"}}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: target + "-nickname", Name: "nickname", Label: v.Text.RoomNickname, Value: nickname, InputAttrs: templ.Attributes{"maxlength": "100"}}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div><div class=\"oie-room-entry-footer\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -354,7 +361,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 						var templ_7745c5c3_Var19 string
 						templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 80, Col: 120}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 90, Col: 121}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 						if templ_7745c5c3_Err != nil {
@@ -366,13 +373,13 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div data-form-feedback role=\"status\" aria-live=\"polite\"></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div data-form-feedback role=\"status\" aria-live=\"polite\"></div></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = form.Form(form.Config{ID: target + "-form", Action: "/ui/rooms/open", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "open", "data-room-entry": action, "data-room-account-ids": roomAccountIDs(options)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = form.Form(form.Config{ID: target + "-form", Action: "/ui/rooms/open", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "open", "data-room-entry": action, "data-room-entry-checking": roomEntryChecking(v.Text, create), "data-room-account-ids": roomAccountIDs(options)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -383,7 +390,7 @@ func roomEntryDrawer(v view, create bool) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = drawer.Drawer(drawer.Config{ID: target, Title: title}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = workspaceDrawer(drawer.Config{ID: target, Title: title}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -424,7 +431,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(address).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 98, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 109, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 			if templ_7745c5c3_Err != nil {
@@ -455,7 +462,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(roomPreviewName(preview))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 104, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 115, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 			if templ_7745c5c3_Err != nil {
@@ -473,7 +480,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(preview.Address)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 106, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 117, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
@@ -492,7 +499,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(text.RoomOccupants)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 109, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 120, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 				if templ_7745c5c3_Err != nil {
@@ -505,7 +512,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(*preview.OccupantCount))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 109, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 120, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -528,7 +535,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(*preview.Topic)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 114, Col: 22}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 125, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -551,7 +558,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(*preview.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 117, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 128, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -570,7 +577,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(text.NotConnected)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 120, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 131, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -588,7 +595,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 			var templ_7745c5c3_Var29 string
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(text.RoomNotFound)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 122, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 133, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 			if templ_7745c5c3_Err != nil {
@@ -606,7 +613,7 @@ func roomPreviewContent(text copy, preview engineapi.RoomPreview, address string
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(text.RoomPreviewUnavailable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 124, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 135, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -645,7 +652,7 @@ func roomInvitationCard(v view, scope invitationScope, address string) templ.Com
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templruntime.NewAttributeExpression(address).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 129, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 140, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -658,7 +665,7 @@ func roomInvitationCard(v view, scope invitationScope, address string) templ.Com
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templruntime.NewAttributeExpression(scope.account).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 129, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 140, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
@@ -724,7 +731,7 @@ func roomInvitationCardBody(v view, scope invitationScope, address string) templ
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ViewRoom)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 139, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 150, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
@@ -788,7 +795,7 @@ func roomInvitationSummary(text copy, preview engineapi.RoomPreview) templ.Compo
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(title).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 158, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 169, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -801,7 +808,7 @@ func roomInvitationSummary(text copy, preview engineapi.RoomPreview) templ.Compo
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 158, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 169, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -814,7 +821,7 @@ func roomInvitationSummary(text copy, preview engineapi.RoomPreview) templ.Compo
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.NewAttributeExpression(preview.Address).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 159, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 170, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -827,7 +834,7 @@ func roomInvitationSummary(text copy, preview engineapi.RoomPreview) templ.Compo
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(preview.Address)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 159, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 170, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
@@ -840,7 +847,7 @@ func roomInvitationSummary(text copy, preview engineapi.RoomPreview) templ.Compo
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templruntime.NewAttributeExpression(description).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 160, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 171, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
@@ -853,7 +860,7 @@ func roomInvitationSummary(text copy, preview engineapi.RoomPreview) templ.Compo
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 160, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 171, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -893,7 +900,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(text.NotConnected)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 167, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 178, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -911,7 +918,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 			var templ_7745c5c3_Var46 string
 			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(text.RoomDirectoryUnavailable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 169, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 180, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
@@ -930,7 +937,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 				var templ_7745c5c3_Var47 string
 				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(text.RoomDirectoryPartial)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 172, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 183, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 				if templ_7745c5c3_Err != nil {
@@ -953,7 +960,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 				var templ_7745c5c3_Var48 string
 				templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(text.RoomDirectoryEmpty)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 175, Col: 31}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 186, Col: 31}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 				if templ_7745c5c3_Err != nil {
@@ -990,7 +997,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 								var templ_7745c5c3_Var50 string
 								templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(*room.Name)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 183, Col: 21}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 194, Col: 21}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 								if templ_7745c5c3_Err != nil {
@@ -1000,7 +1007,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 								var templ_7745c5c3_Var51 string
 								templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(room.Address)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 185, Col: 23}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 196, Col: 23}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 								if templ_7745c5c3_Err != nil {
@@ -1021,7 +1028,7 @@ func roomDirectoryContent(text copy, result engineapi.RoomDirectory) templ.Compo
 							var templ_7745c5c3_Var52 string
 							templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(room.Address)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 189, Col: 29}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/room_entry.templ`, Line: 200, Col: 29}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 							if templ_7745c5c3_Err != nil {

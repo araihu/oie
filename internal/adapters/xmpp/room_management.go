@@ -147,7 +147,7 @@ func (s roomManagement) actions() []string {
 	out := []string{}
 	role, aff, flags := s.self.role, s.self.affiliation, s.flags
 	if aff == "owner" {
-		out = append(out, "rename")
+		out = append(out, "rename", "destroy")
 		if flags.avatar {
 			out = append(out, "set_avatar", "remove_avatar")
 		}
@@ -445,6 +445,8 @@ func (s roomManagement) payload(a domain.Account, c domain.Conversation, cmd dom
 		reason = "<reason>" + escaped(cmd.Reason) + "</reason>"
 	}
 	switch cmd.Action {
+	case "destroy":
+		return `<query xmlns="http://jabber.org/protocol/muc#owner"><destroy>` + reason + "</destroy></query>", ""
 	case "topic":
 		return "<subject>" + escaped(cmd.Value) + "</subject>", ""
 	case "invite":

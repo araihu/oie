@@ -101,7 +101,16 @@ window.OieRuntime.register('timeline',life=>{
   if(trimmed.length){if(direction==='older'){newer=true;liveAttached=false}else older=true}
   for(const plan of aliases){if(anchor?.id===plan.previous)anchor.id=plan.record.id;if(document.body.dataset.focusMessage===plan.previous)document.body.dataset.focusMessage=plan.record.id;document.dispatchEvent(new CustomEvent('oie:timeline-alias',{detail:{requested:plan.previous,canonical:plan.record.id}}))}hooks(page.scope,starGeneration,page.startedAt);correct();life.raf(correct);observe();return true;
  }
- function observe(){observer?.disconnect();resizer?.disconnect();if(resizer)for(const row of rows())resizer.observe(row);if(failed||busy||disposed||focusPending)return;if(observer){if(older)observer.observe(edge('older'));if(newer)observer.observe(edge('newer'))}}
+ function observe(){
+  observer?.disconnect();resizer?.disconnect();
+  if(resizer){
+   // The composer and keyboard can resize the timeline while all rows keep their size.
+   resizer.observe(root);
+   for(const row of rows())resizer.observe(row);
+  }
+  if(failed||busy||disposed||focusPending)return;
+  if(observer){if(older)observer.observe(edge('older'));if(newer)observer.observe(edge('newer'))}
+ }
  function aliasPlans(pageDocument,requested){
   const plans=[],seen=new Set();for(const template of pageDocument.querySelectorAll('template[data-timeline-alias],template[data-timeline-release-boundary]')){const previous=template.dataset.timelineAlias||template.dataset.timelineReleaseBoundary,id=template.dataset.canonical,node=template.content.firstElementChild,ms=Number(node?.dataset.createdMs),release=template.hasAttribute('data-timeline-release-boundary');if(!requested.includes(previous)||seen.has(previous)||!uuid(id)||release!==(id===previous)||!node||release&&!node.hasAttribute('data-timeline-release')||node.dataset.messageId!==id||node.dataset.messageAccount!==identity.account||node.dataset.messageConversation!==identity.conversation||!uuid(node.dataset.messageRevision)||!/^[-]?\d+$/.test(node.dataset.createdMs||'')||!Number.isSafeInteger(ms)||!node.dataset.messageVersion)throw Error('alias');seen.add(previous);plans.push({previous,release,record:{id,ms,node,version:node.dataset.messageVersion}})}return plans;
  }
