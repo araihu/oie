@@ -682,6 +682,7 @@ type copy struct {
 	CancelConflict, CancelSuccess, MessageAccepted, PendingAcceptance, RetrySubmission                                                                                   string
 	SendPending, SendUnconfirmed, SendAccepted                                                                                                                           string
 	SendWaitingForConnection, OfflineSendStorageFailed, OfflineSendReturned                                                                                              string
+	OfflineSendExplanation, OfflineSendCancelFailed                                                                                                                      string
 	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                                                                                                    string
 	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                                                                                                   string
 	QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                                  string

@@ -30,6 +30,7 @@
       window.indexedDB?.deleteDatabase('oie.pdf-previews.v1');
       window.indexedDB?.deleteDatabase('oie.video-previews.v1');
       window.indexedDB?.deleteDatabase('oie-notifications');
+      window.indexedDB?.deleteDatabase('oie.offline-sends');
     } catch {}
     let destination = '/';
     if (confirmed) {

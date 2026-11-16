@@ -445,7 +445,10 @@ The closed browser is not assumed to run a persistent background dispatcher. Swi
 
 **IMPLEMENTED:** a previously opened composer can save an immediate send when
 the browser is offline or Oiê confirms it could not reach the engine before
-submission. The pending bubble shows **Waiting for connection**. The device
+submission. The pending bubble shows a signal-slash warning. A short note and
+**Cancel send** appear directly below the bubble, and the message menu offers the
+same action. Cancelling before the first attempt returns the composition to the
+draft. Claiming the send and cancelling use the same exclusive transition. The device
 journal keeps the original operation, reply, mentions and previously staged
 attachments. Oiê checks the owning engine when the app is open again, including
 from the inbox. If an attempt may have reached the engine, Oiê checks its
@@ -1191,7 +1194,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Send durability | After engine acceptance, ordinary restart preserves intent and retries known-unsent recoverable work. Provider/recipient/read evidence remains distinct. A missing read receipt does not resend a delivered message. |
 | Cutoff races | Race cancel/edit/reschedule with dispatch. The winner is applied atomically; a rejected mutation returns actual state, and no UI falsely shows a successful cancellation. Unknown acceptance remains unknown until reconciled. |
 | Scheduling | Do not send before the UTC instant. A timezone display change does not move it. A missed schedule sends on next owning-engine availability unless cancelled. Backup-recovered schedules remain paused. |
-| Offline Send | Offline explicit Send persists a pending submission and later submits automatically. A saved draft does not. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
+| Offline Send | Offline explicit Send persists a pending submission and later submits automatically. Cancelling before the first attempt restores a draft and prevents automatic submission. A saved draft does not submit. Lost acceptance responses do not create a second logical send; storage failure does not claim success or discard the draft. |
 | Ownership | Synced pending items are visible without another engine dispatching them. Alpha remote changes require owning-engine confirmation. Copying history or changing the selected engine does not silently take over sends. |
 | History | Gradually import authorized history within the effective retention window by default and fetch eligible older pages as needed in on-demand rooms. Resume after interruption within the cutoff. Reopening a conversation uses retained messages, including those whose provider copies have expired. |
 | Room message retention | With default settings, a room with 20 messages within 180 days and at least 80 older messages keeps its latest 100 plus any starred messages outside those 100. A room with 150 messages within 180 days keeps all 150. A 90-day room override changes the date cutoff for purge and retrieval, with the same local minimum. XMPP reconstruction and remote search skip messages older than the effective cutoff, even when a fresh install recovers fewer than 100 messages. |

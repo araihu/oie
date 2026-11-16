@@ -375,6 +375,17 @@ window.OieRuntime.register('live', life => {
     for(const node of pendingBubble.querySelectorAll('[data-pending-state]'))node.hidden=node.dataset.pendingState!==state;
     const disabled=state!=='uncertain'||stopped||composer.dataset.busy==='true';
     for(const action of pendingBubble.querySelectorAll('[data-pending-send-retry],#retry-pending-send')){action.disabled=disabled;action.setAttribute('aria-disabled',String(disabled));}
+    const actions = pendingBubble.querySelector('[data-offline-send-actions]');
+    const cancelMenu = pendingBubble.querySelector('#cancel-offline-send');
+    const retryMenu = pendingBubble.querySelector('#retry-pending-send');
+    actions.hidden = !journal.offline;
+    if (state !== 'waiting' && (actions.contains(document.activeElement) || cancelMenu === document.activeElement)) {
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+      pendingBubble.focus({preventScroll:true});
+    }
+    cancelMenu.hidden = cancelMenu.disabled = state !== 'waiting';
+    actions.querySelector('button').disabled = state !== 'waiting';
+    retryMenu.hidden = state === 'waiting';
   }
   function acceptPendingSend(id){
     if(!pendingBubble)return;
@@ -395,6 +406,12 @@ window.OieRuntime.register('live', life => {
     }
   });
   life.on(document,'click',event=>{
+    const cancel = event.target.closest('[data-cancel-offline-send],#cancel-offline-send');
+    if (cancel && pendingBubble?.contains(cancel) && !cancel.disabled && journal?.offline === 'waiting') {
+      event.preventDefault();
+      void cancelOfflineSend();
+      return;
+    }
     const action=event.target.closest('[data-pending-send-retry],#retry-pending-send');
     if(!action||!pendingBubble?.contains(action)||action.disabled||!journal?.pending)return;
     event.preventDefault();composer.requestSubmit();
@@ -627,7 +644,7 @@ window.OieRuntime.register('live', life => {
     }
     restoreRoomEntry(form, saved);
   }
-  function roomOperationKey() {
+  function localOperationKey() {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     let timestamp = Date.now();
     for (let i = 5; i >= 0; i--) {
@@ -651,7 +668,7 @@ window.OieRuntime.register('live', life => {
       inMemory.delete(scope);
       try { sessionStorage.removeItem(scope); } catch {}
       restoreRoomEntry(form, null);
-      form.elements.namedItem('operationKey').value = roomOperationKey();
+      form.elements.namedItem('operationKey').value = localOperationKey();
       feedback(form, '');
     }
   });
@@ -957,6 +974,52 @@ window.OieRuntime.register('live', life => {
   const offlineEngine = body.dataset.engineId;
   const offlinePrefix = 'oie.draft.v1:' + offlineEngine + ':';
   let resumingOfflineSends = false;
+  let cancellingOfflineSend = false;
+  function updateOfflineDraft(key, raw, next) {
+    const write = () => {
+      if (life.signal.aborted || stopped || localStorage.getItem(key) !== raw) return false;
+      localStorage.setItem(key, JSON.stringify(next));
+      return true;
+    };
+    if (navigator.locks) return navigator.locks.request(key, write);
+    // IndexedDB read-write transactions serialize local transitions on origins
+    // without Web Locks. The journal itself stays in the device draft store.
+    return new Promise((resolve, reject) => {
+      const open = indexedDB.open('oie.offline-sends', 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('draft-lock');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction('draft-lock', 'readwrite');
+        const permit = tx.objectStore('draft-lock').get(key);
+        permit.onsuccess = () => {
+          try { resolve(write()); } catch (error) { reject(error); }
+        };
+        tx.onabort = () => reject(tx.error);
+        db.close();
+      };
+    });
+  }
+  async function cancelOfflineSend() {
+    if (cancellingOfflineSend) return;
+    cancellingOfflineSend = true;
+    const key = draftKey;
+    try {
+      const raw = localStorage.getItem(key);
+      const previous = parseDraft(raw);
+      if (previous?.key === journal?.key && previous?.offline === 'waiting') {
+        const {offline, submittedAt, ...draft} = previous;
+        const next = {...draft, key: localOperationKey(), pending:false};
+        if (await updateOfflineDraft(key, raw, next)) {
+          applyOfflineUpdate(key, previous, next);
+          if (!life.signal.aborted) input.focus({preventScroll:true});
+          return;
+        }
+      }
+    } catch { /* Offer cancellation again if the send is still waiting. */ }
+    finally { cancellingOfflineSend = false; }
+    if (!life.signal.aborted) errorToast(offlineCopy.cancelFailed);
+  }
   function applyOfflineUpdate(key, previous, next, result) {
     if (key !== draftKey || !previous?.offline || journal?.key !== previous.key || !journal.pending) return;
     if (next?.pending && next.key === previous.key) {
@@ -1012,36 +1075,35 @@ window.OieRuntime.register('live', life => {
       attachmentIds: JSON.stringify((Array.isArray(record.attachments) ? record.attachments : []).map(file => file?.id)),
       offlineCapable: '1',
     });
-    function update(next, result) {
-      if (life.signal.aborted || stopped || localStorage.getItem(key) !== raw) return false;
+    async function update(next, result) {
+      if (!await updateOfflineDraft(key, raw, next)) return false;
       const previous = record;
       raw = JSON.stringify(next);
-      localStorage.setItem(key, raw);
       record = next;
-      applyOfflineUpdate(key, previous, next, result);
+      if (!life.signal.aborted) applyOfflineUpdate(key, previous, next, result);
       return true;
     }
     let result = await offlineRequest('reconcile', values);
     if (record.offline === 'waiting' && result?.code === 'not_found' && navigator.onLine) {
       // Persist before the write so a closed window cannot make the next
       // window treat a lost response as a submission that never started.
-      if (!update({...record, offline: 'attempted'})) return;
+      if (!await update({...record, offline: 'attempted'}) || life.signal.aborted) return;
       if (key === draftKey && journal?.key === record.key) renderPendingSend('sending');
       result = await offlineRequest('send', values);
       if (result?.code === 'engine_unavailable') {
-        update({...record, offline: 'waiting'});
+        await update({...record, offline: 'waiting'});
         return;
       }
       if (!result?.accepted && key === draftKey && journal?.key === record.key) renderPendingSend('uncertain');
     }
     if (result?.accepted && canonicalID(result.messageId) && canonicalID(result.nextKey)) {
-      if (update({key: result.nextKey, text: ''}, result)) {
+      if (await update({key: result.nextKey, text: ''}, result)) {
         inbox.invalidate();
         scheduleRefresh();
       }
     } else if (result?.rejected) {
       const {offline, submittedAt, ...draft} = record;
-      update({...draft, pending: false, offlineReturned: true,
+      await update({...draft, pending: false, offlineReturned: true,
         mentions: result.code === 'mention_unavailable' ? [] : draft.mentions});
     }
   }
@@ -1052,11 +1114,7 @@ window.OieRuntime.register('live', life => {
       const keys = Object.keys(localStorage).filter(key => key.startsWith(offlinePrefix));
       for (const key of keys) {
         if (life.signal.aborted || stopped || !navigator.onLine) break;
-        if (navigator.locks) {
-          await navigator.locks.request(key, {ifAvailable: true}, lock => lock && resumeOfflineSend(key));
-        } else {
-          await resumeOfflineSend(key);
-        }
+        await resumeOfflineSend(key);
       }
     } catch { /* The saved operation can be recovered when storage is available again. */ }
     finally { resumingOfflineSends = false; }
@@ -1499,13 +1557,13 @@ window.OieRuntime.register('live', life => {
       }
       if (removingConversation && result.rejected) {
         delete form.dataset.removalRetry;
-        form.elements.operationKey.value = roomOperationKey();
+        form.elements.operationKey.value = localOperationKey();
         rememberConversationForRemoval(result.conversation);
       }
       if (roomManagement) {
         if (result.ok || result.rejected) {
           inMemory.delete('oie.room-management:' + managementKey);
-          form.elements.operationKey.value = roomOperationKey();
+          form.elements.operationKey.value = localOperationKey();
         }
         document.dispatchEvent(new CustomEvent('oie:room-management-result', {detail: {form, result}}));
       }

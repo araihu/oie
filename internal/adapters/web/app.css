@@ -254,6 +254,12 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 /* Keep pending messages subdued while retaining readable text and timestamps. */
 .oie-message-own[data-send-state=queued]>.oie-message-content,.oie-message-own[data-send-state=dispatching]>.oie-message-content,.oie-message-own[data-send-state=queued]>.oie-media-message,.oie-message-own[data-send-state=dispatching]>.oie-media-message,.oie-message[data-pending-send]>.oie-message-content{opacity:.8}
 .oie-message-own:is([data-send-state=queued],[data-send-state=dispatching],[data-pending-send]) .oie-message-stamp{color:inherit}
+.oie-offline-send-icon,.oie-offline-send-actions{color:light-dark(#805011,#f4cb88)}
+.oie-offline-send-actions{display:flex;align-items:baseline;justify-content:flex-end;gap:2px 8px;flex-wrap:wrap;margin-top:4px;font-size:11px;text-align:end}
+.oie-offline-send-actions[hidden]{display:none}
+[data-pending-state]:not([data-pending-state=waiting])>.oie-offline-send-actions{visibility:hidden}
+.oie-offline-send-actions button{border:0;background:transparent;padding:0;font:inherit;font-weight:600;color:inherit;text-decoration:underline;cursor:pointer;min-height:24px}
+#cancel-offline-send[hidden],#retry-pending-send[hidden]{display:none}
 .oie-message-meta:empty{display:none}
 /* Enhanced cancellation lives in the message menu; keep the native form for
    browsers without scripting, without adding a transient row during dispatch. */
