@@ -788,6 +788,12 @@ Suppress banners for the conversation visible in the active, focused window. Sou
 
 Archived conversations remain archived on new arrivals and their unread counts update. Archived rooms are silent by default. The device sound setting can enable sound in archived rooms under the selected room policy. Archiving preserves the room membership and history.
 
+**IMPLEMENTATION SCOPE:** **Remove from chats** hides an account-scoped direct
+conversation in both Chats and Archived, while retaining its history.
+Explicitly opening that address or receiving a new live message from the contact
+returns the conversation to Chats. Archive imports, duplicate messages and
+replays of a prior removal do not change its visibility.
+
 Coordinate cooperating tabs/windows, including installed PWA windows, within the same browser profile and app origin: at most one notification and one notification sound per eligible message. Do not assume this coordinates independent browser profiles or origins.
 
 Separate devices notify independently even if another device is active. Activity-based routing/suppression across devices is backlogged; normal read-state and mute/DND policies still apply.

@@ -429,7 +429,7 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	if err != nil {
 		return nil, err
 	}
-	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" || op.Kind == application.RoomManagementOperation || op.Kind == application.RemoveRoomOperation {
+	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" || op.Kind == application.RoomManagementOperation || op.Kind == application.RemoveRoomOperation || op.Kind == application.RemoveDirectOperation {
 		return nil, application.ErrNotFound
 	}
 	kind := engineapi.OperationKind(op.Kind)

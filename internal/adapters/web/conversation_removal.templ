@@ -1,0 +1,43 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/form"
+	"github.com/araihu/goshtoso/components/modal"
+	"github.com/araihu/goshtoso/expressions"
+)
+
+templ conversationRemovalDialog(v view) {
+	if v.canRemoveFromChats() {
+		@modal.Dialog(modal.DialogConfig{ID: "conversation-removal", Title: v.Text.RemoveFromChats, Content: conversationRemovalForm(v)}).WithExpressions(expressions.Modal{DialogCloseAriaLabel: v.Text.Close})
+	}
+}
+
+templ conversationRemovalForm(v view) {
+	@form.Form(form.Config{ID: "conversation-removal-form", Action: v.conversationRemovalPath(), Method: "post", RootClass: "grid gap-4", RootAttrs: templ.Attributes{"data-oie-action": "remove-conversation"}}) {
+		@mutationFields(v, "conversation-removal", newOperationKey())
+		<input type="hidden" name="conversationId" value={ v.Selected.Id }/>
+		<input type="hidden" name="accountId" value={ v.Selected.AccountId }/>
+		<input type="hidden" name="expectedRevisionId" value={ v.Selected.RevisionId }/>
+		<input type="hidden" name="lang" value={ v.Locale }/>
+		<strong>{ v.Selected.Title }</strong>
+		if v.Selected.Kind == "room" {
+			<p>{ v.Text.RoomRemoveWarning }</p>
+		} else {
+			<p>{ v.Text.DirectRemoveWarning }</p>
+		}
+		<div class="oie-room-action-buttons">
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('modal:close',{id:'conversation-removal'})"})) {
+				{ v.Text.RoomCancelAction }
+			}
+			@button.Button(button.WithType("submit"), button.WithTone(button.ToneDanger)) {
+				{ v.Text.RemoveFromChats }
+			}
+		</div>
+		<div data-form-feedback role="status" aria-live="polite">
+			if v.FormTarget == "conversation-removal" {
+				{ v.ErrorMessage }
+			}
+		</div>
+	}
+}

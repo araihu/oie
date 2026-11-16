@@ -1937,7 +1937,7 @@ paths:
       - Conversations
       summary: Open a direct conversation
       description: Finds an existing conversation for the canonical account/peer or creates one. Durable operation
-        keys retain original results. Does not add a contact or send presence subscriptions.
+        keys retain original results. Opening a removed direct conversation adds it back to chat lists. Does not add a contact or send presence subscriptions.
       responses:
         '413':
           description: Request body exceeds the one MiB engine limit.
@@ -2193,6 +2193,37 @@ paths:
       responses:
         '204':
           description: Room removed from chat lists, or a replay of that removal.
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/conversations/{conversationId}/remove-direct:
+    parameters:
+    - $ref: '#/components/parameters/ConversationID'
+    post:
+      operationId: removeDirectFromChats
+      tags: [Conversations]
+      summary: Remove a direct conversation from Oiê's chat lists
+      description: Removes the direct conversation from the active and archived lists and retains stored history. Opening it by address or receiving a new live message adds it back.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        description: Stable operation UUID for the direct conversation removal.
+        schema: {$ref: '#/components/schemas/ID'}
+      requestBody:
+        required: true
+        description: Account and direct conversation revision reviewed before removal.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RemoveDirectFromChats'}
+      responses:
+        '204':
+          description: Direct conversation removed from chat lists, or a replay of that removal.
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
@@ -5053,7 +5084,7 @@ components:
           description: True when an unread incoming room message mentions the owning account by its room nickname. Omitted means false.
         removedFromChats:
           type: boolean
-          description: The room was removed from chat lists. Retained history remains available.
+          description: The conversation was removed from chat lists. Retained history remains available.
         archived:
           type: boolean
         favorite:
@@ -6034,6 +6065,14 @@ components:
           items: {$ref: '#/components/schemas/RoomAffiliation'}
     RemoveRoomFromChats:
       description: The account and the room conversation revision selected for removal.
+      type: object
+      additionalProperties: false
+      required: [accountId, expectedRevisionId]
+      properties:
+        accountId: {$ref: '#/components/schemas/ID'}
+        expectedRevisionId: {$ref: '#/components/schemas/ID'}
+    RemoveDirectFromChats:
+      description: The account and the direct conversation revision selected for removal.
       type: object
       additionalProperties: false
       required: [accountId, expectedRevisionId]

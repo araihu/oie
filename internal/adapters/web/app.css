@@ -697,7 +697,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-action form p{margin:0;overflow-wrap:anywhere}
 .oie-room-action form [data-form-feedback]:empty{display:none}
 .oie-room-avatar-actions,.oie-room-action-buttons{display:flex;flex-wrap:wrap;gap:4px 8px}
-.oie-room-avatar-actions,#room-removal-form .oie-room-action-buttons{justify-content:center}
+.oie-room-avatar-actions,#conversation-removal-form .oie-room-action-buttons{justify-content:center}
 .oie-room-avatar-actions [hidden],.oie-room-management form[hidden]{display:none}
 .oie-room-management form{display:grid;gap:8px}
 .oie-room-management form>button{justify-self:start}

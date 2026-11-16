@@ -10,7 +10,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-func (s *Store) RemoveRoomFromChats(ctx context.Context, in application.RoomRemoval) error {
+func (s *Store) RemoveConversationFromChats(ctx context.Context, in application.ConversationRemoval) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -24,24 +24,28 @@ func (s *Store) RemoveRoomFromChats(ctx context.Context, in application.RoomRemo
 	if err != nil {
 		return err
 	}
-	if c.AccountID != in.AccountID || c.Kind != "room" {
+	if c.AccountID != in.AccountID || c.Kind != in.Kind {
 		return application.ErrNotFound
 	}
 	if c.RevisionID != in.ExpectedRevisionID || c.RemovedFromChats {
 		return application.ErrStateConflict
 	}
-	if err := stopRemovedRoom(ctx, q, c, in); err != nil {
-		return err
-	}
 	next := c
 	next.RemovedFromChats = true
+	if c.Kind == "room" {
+		if err := stopRemovedRoom(ctx, q, c, in); err != nil {
+			return err
+		}
+	} else {
+		next.Archived = false
+	}
 	if err := writeConversationDecision(ctx, q, c, next, in.RevisionID, in.CreatedAt); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func stopRemovedRoom(ctx context.Context, q *dbgen.Queries, c domain.Conversation, in application.RoomRemoval) error {
+func stopRemovedRoom(ctx context.Context, q *dbgen.Queries, c domain.Conversation, in application.ConversationRemoval) error {
 	row, err := q.GetRoomIntent(ctx, string(c.ID))
 	if !errors.Is(err, sql.ErrNoRows) && err != nil {
 		return err

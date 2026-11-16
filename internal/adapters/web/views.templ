@@ -467,10 +467,12 @@ if v.canInviteToRoom() {
 if v.canJoinRoom() {
 {{ roomItems=append(roomItems,dropdown.Item{ID:"chat-join-room",Label:v.Text.JoinRoom,Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsRoomEntry16SolidArrowLeftEndOnRectangle,Decorative:true,RootClass:"oie-icon"}),OnClick:"$dispatch('oie:join-saved-room')"}) }}
 }
-if !v.Preview && !removedRoom(v.Selected) {
-{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-remove-room",Label:v.Text.RoomRemoveFromChats,Icon:glyph(heroicons.Icon16SolidTrash),OnClick:"close(); $dispatch('modal:open', {id: 'room-removal'})"}) }}
+if v.canRemoveFromChats() {
+{{ roomItems=append(roomItems,v.removeFromChatsItem("chat-remove-room")) }}
 }
 {{ sections=append(sections,dropdown.Section{Items:roomItems}) }}
+} else if v.canRemoveFromChats() {
+{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{v.removeFromChatsItem("chat-remove-direct")}}) }}
 }
 		@dropdown.Dropdown(dropdown.Config{ID:"chat-options",Label:v.Text.More,Trigger:menuTrigger(v.Text.More),MenuAlign:dropdown.AlignEnd,Sections:sections})
 }
