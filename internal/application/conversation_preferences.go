@@ -10,7 +10,7 @@ import (
 // are omitted, rather than false; at least one flag must be provided.
 type ConversationPreferencesInput struct {
 	AccountID, ExpectedRevisionID domain.ID
-	Archived, Favorite            *bool
+	Archived, Favorite, Read      *bool
 	AcceptRequest                 bool
 }
 
@@ -18,7 +18,8 @@ type ConversationPreferencesMutation struct {
 	Operation
 	Fingerprint                                               string
 	ConversationID, AccountID, ExpectedRevisionID, RevisionID domain.ID
-	Archived, Favorite                                        *bool
+	Archived, Favorite, Read                                  *bool
+	ReadRevisionID                                            domain.ID
 	AcceptRequest                                             bool
 }
 
@@ -43,7 +44,7 @@ func copyPreference(value *bool) *bool {
 // serializes its receipt, precondition and projection updates in one transaction.
 // No protocol call or send intent is involved.
 func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, conversationID domain.ID, in ConversationPreferencesInput) (ConversationResult, error) {
-	if !validID(key) || !validID(conversationID) || !validID(in.AccountID) || !validID(in.ExpectedRevisionID) || (in.Archived == nil && in.Favorite == nil && !in.AcceptRequest) || (in.AcceptRequest && (in.Archived != nil || in.Favorite != nil)) {
+	if !validID(key) || !validID(conversationID) || !validID(in.AccountID) || !validID(in.ExpectedRevisionID) || (in.Archived == nil && in.Favorite == nil && in.Read == nil && !in.AcceptRequest) || ((in.AcceptRequest || in.Read != nil) && (in.Archived != nil || in.Favorite != nil)) || (in.AcceptRequest && in.Read != nil) {
 		return ConversationResult{}, ErrInvalid
 	}
 	repo, ok := e.repo.(ConversationPreferencesRepository)
@@ -55,6 +56,13 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 	if err != nil {
 		return ConversationResult{}, err
 	}
+	var readRevision domain.ID
+	if in.Read != nil && *in.Read {
+		readRevision, err = e.newID()
+		if err != nil {
+			return ConversationResult{}, err
+		}
+	}
 	const kind = "update_conversation_preferences"
 	requestFingerprint := fingerprint(kind, struct {
 		AccountID, ConversationID, ExpectedRevisionID domain.ID
@@ -63,12 +71,19 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 	if in.AcceptRequest {
 		requestFingerprint = fingerprint(kind, []string{string(in.AccountID), string(conversationID), string(in.ExpectedRevisionID), "accept"})
 	}
+	read := copyPreference(in.Read)
+	if read != nil {
+		requestFingerprint = fingerprint(kind, struct {
+			AccountID, ConversationID, ExpectedRevisionID domain.ID
+			Read                                          bool
+		}{in.AccountID, conversationID, in.ExpectedRevisionID, *read})
+	}
 	result, err := repo.UpdateConversationPreferences(ctx, ConversationPreferencesMutation{
 		Operation:      Operation{ID: key, ResourceID: conversationID, Kind: kind, CreatedAt: e.now().UTC()},
 		Fingerprint:    requestFingerprint,
-		ConversationID: conversationID, AccountID: in.AccountID, ExpectedRevisionID: in.ExpectedRevisionID, RevisionID: revision, Archived: archived, Favorite: favorite, AcceptRequest: in.AcceptRequest,
+		ConversationID: conversationID, AccountID: in.AccountID, ExpectedRevisionID: in.ExpectedRevisionID, RevisionID: revision, Archived: archived, Favorite: favorite, AcceptRequest: in.AcceptRequest, Read: read, ReadRevisionID: readRevision,
 	})
-	if err == nil && in.AcceptRequest {
+	if err == nil && (in.AcceptRequest || read != nil) && !result.Replayed {
 		e.notifyEvents()
 	}
 	return result, err

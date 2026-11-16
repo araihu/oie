@@ -18,6 +18,7 @@ type Conversation struct {
 	UpdatedAt                         time.Time
 	UnreadCount                       int
 	LatestMessagePageCount            *int `json:"-"`
+	UnreadReminder                    bool `json:",omitempty"`
 	UnreadMention                     bool `json:",omitempty"`
 	Archived, Favorite                bool
 	ActivitySequence                  int64

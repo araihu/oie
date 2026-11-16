@@ -327,7 +327,9 @@
     const canPlaySound = () => canNotify() && (soundScopeEnabled('focused') || !viewing(engine, conversation));
 
     if (canShowBanner()) {
-      void claim(engine, message.id).then(claimed => {
+      void notificationContext(engine, message).then(async context => {
+        if (!context || context.doNotDisturb || !canShowBanner()) return;
+        const claimed = await claim(engine, message.id);
         if (claimed && canShowBanner()) return showBanner(engine, message);
       }).catch(() => {});
     }
@@ -359,7 +361,7 @@
     if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
     try {
       const conversation = await notificationContext(engine, message);
-      if (!conversation || !ready() || !eligible() || withinWindow()) return;
+      if (!conversation || conversation.doNotDisturb || !ready() || !eligible() || withinWindow()) return;
       const permitsSound = () => {
         if (conversation.kind === 'direct') return soundScopeEnabled('direct');
         if (conversation.kind !== 'room' || (conversation.archived && !soundScopeEnabled('archived'))) return false;

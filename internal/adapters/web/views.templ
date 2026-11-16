@@ -123,6 +123,8 @@ templ page(v view) {
 <link rel="stylesheet" href="/ui/message-history.css"/>
 <link rel="stylesheet" href="/ui/message-correction.css"/>
 <script src="/ui/conversation-preferences.js" defer></script>
+<script src="/ui/contacts.js" defer></script>
+<script src="/ui/typing.js" defer></script>
 <script src="/ui/message-search.js" defer></script>
 <script src="/ui/conversation-search.js" defer></script>
 <script src="/ui/previews.js" defer></script>
@@ -417,6 +419,8 @@ templ conversationRow(v view, c engineapi.Conversation) {
 					}
 					if c.UnreadCount>0 {
 						<span class="oie-unread-count" aria-label={ v.Text.Unread + ": " + strconv.Itoa(c.UnreadCount) }>{ strconv.Itoa(c.UnreadCount) }</span>
+					} else if hasUnread(c) {
+						<span class="oie-unread-count oie-unread-reminder" role="img" aria-label={v.Text.Unread}></span>
 					}
 					if c.Favorite {
 						<span class="oie-conversation-favorite" role="img" aria-label={ v.Text.Favorites } title={ v.Text.Favorites }>@glyph(heroicons.Icon16SolidHeart)</span>
@@ -520,6 +524,9 @@ if v.scheduleAllowed() {
 <span class="sr-only" data-edit-announcement role="status" aria-live="polite"></span>
 <div class="oie-edit-status" data-edit-last-status role="status" aria-live="polite" hidden><span data-edit-last-copy></span> @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-edit-last-check":""})){<span>{v.Text.EditCheckStatus}</span>}</div>
 <div class="oie-composer-overlay">
+if !v.Preview && v.Selected.Kind == "direct" && v.Selected.Request==nil && v.composeAllowed() && v.messagingImplemented("typing") {
+<span class="oie-typing-notice" data-typing-notice role="status" hidden>{v.Text.TypingNotice}</span>
+}
 <button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
 <div class="oie-composer-auxiliary">
 if v.composeAllowed() {
@@ -583,6 +590,8 @@ case "add":
 }
 case "capabilities":
 @accountCapabilities(v)
+case "contacts":
+@accountContacts(v)
 case "remove":
 if a:=v.account(v.managedAccountID());a.Address!="" && !v.Preview && !v.Unavailable {
 @accountRemoval(v,a)
@@ -618,6 +627,7 @@ templ accountBack(v view){
 }
 func (v view) accountDrawerTitle() string {
  if v.accountScreen() == "detail" { return v.Text.AccountProfile }
+ if v.accountScreen() == "contacts" { return v.Text.ContactsTitle }
  return v.Text.Accounts
 }
 templ accountProfileBack(v view) {
@@ -686,11 +696,20 @@ templ accountDetail(v view,a engineapi.Account) {
      <span class="oie-profile-field-label">{v.Text.AccountAddress}</span>
      <div class="oie-profile-row"><span title={a.Address}>{a.Address}</span></div>
     </div>
+    if !v.Preview && a.Protocol == "xmpp" {
+     @link.Link(v.contactsHref(a.Id,""),link.WithRootClass("oie-profile-row"),link.WithAttrs(templ.Attributes{"data-account-contacts-link":a.Id})) {
+      <span>{v.Text.ContactsTitle}</span>
+      @glyph(heroicons.Icon16SolidChevronRight)
+     }
+    }
     @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-profile-row"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})) {
      <span>{v.Text.Capabilities}</span>
      @glyph(heroicons.Icon16SolidChevronRight)
     }
    </div>
+   if v.AccountCommunication != nil {
+    @accountCommunication(v,a.Id,*v.AccountCommunication)
+   }
    <p class="oie-history-status">{v.historyCaption(a.Id)}</p>
    <div id={"connection-error-"+a.Id} role="status" aria-live="polite">
     if problem:=v.connectionError(a.Id);problem!="" {

@@ -256,6 +256,9 @@ func (v view) accountScreen() string {
 	if v.AccountPage == "remove" && v.ManagedAccount != "" {
 		return "remove"
 	}
+	if v.AccountPage == "contacts" && v.ManagedAccount != "" {
+		return "contacts"
+	}
 	if v.AccountPage == "capabilities" {
 		return "capabilities"
 	}

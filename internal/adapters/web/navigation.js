@@ -320,7 +320,7 @@
   const localInfo=node?.closest('#chat-info-content');
   const detailsHistory=!node&&(params.get('open')==='details'||current.get('open')==='details')&&sameRoute(url,['open','infoView','infoType','infoQuery','infoCursor','infoFocus','chat']);
   if(sameChat&&(params.get('open')==='details'&&localInfo||detailsHistory))return 'chat-info-content';
-  if(document.getElementById('account-workspace')&&(params.get('open')==='accounts'||!node&&current.get('open')==='accounts'&&!params.has('open'))&&sameRoute(url,['open','accountPage','managedAccount','accountFocus']))return 'account-workspace';
+  if(document.getElementById('account-workspace')&&(params.get('open')==='accounts'||!node&&current.get('open')==='accounts'&&!params.has('open'))&&sameRoute(url,['open','accountPage','managedAccount','accountFocus','contactCursor']))return 'account-workspace';
   if(sameChat&&document.getElementById('schedule-editor')&&params.get('editSchedule')!==current.get('editSchedule')&&sameRoute(url,['editSchedule','open']))return 'schedule-editor';
   if(document.getElementById('scheduled-results')&&params.get('section')==='scheduled'&&(!node||node.matches('[data-agenda-next]'))&&sameRoute(url,['scheduleCursor','scheduleConversation']))return 'scheduled-results';
   if(document.getElementById('favorites-results')&&params.get('section')==='favorites'&&(!node||node.closest('#favorites-results'))&&sameRoute(url,['favoritesQuery','favoritesCursor']))return 'favorites-results';
@@ -404,7 +404,7 @@
    return;
   }
   if(new URL(previousURL).searchParams.get('open')!=='accounts'||!panel?.getClientRects().length)window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'accounts'}}));
-  const focus=query.get('accountPage')==='capabilities'?'[data-account-capabilities-title]':query.get('accountFocus')==='capabilities'?'[data-account-capabilities]':query.get('accountPage')==='remove'?'[data-account-remove-title],[data-account-back]':query.get('accountFocus')==='remove'?'[data-account-remove]':'[data-account-back],[data-account-add]';
+  const focus=query.get('accountPage')==='contacts'?'[data-contact-title]':query.get('accountPage')==='capabilities'?'[data-account-capabilities-title]':query.get('accountFocus')==='capabilities'?'[data-account-capabilities]':query.get('accountPage')==='remove'?'[data-account-remove-title],[data-account-back]':query.get('accountFocus')==='remove'?'[data-account-remove]':'[data-account-back],[data-account-add]';
   const saved=positions.get(location.href);
   if(body)body.scrollTop=saved?.['accounts-body']||0;
   const detail=document.getElementById('account-detail-scroll');

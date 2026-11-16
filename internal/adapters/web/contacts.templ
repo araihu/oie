@@ -1,0 +1,105 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/form"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/textinput"
+)
+
+templ accountContacts(v view) {
+	@link.Link(v.accountsHref(v.managedAccountID()), link.WithRootClass("oie-account-back"), link.WithAttrs(templ.Attributes{"data-account-back":""})) {
+		@glyph(heroicons.Icon16SolidChevronLeft)
+		<span>{v.Text.AccountProfile}</span>
+	}
+	if a := v.account(v.managedAccountID()); a.Address != "" && !v.Preview && !v.Unavailable {
+		<section data-account-contacts data-contact-account={a.Id} data-contact-failed={v.Text.ContactChangeFailed}>
+			<header class="oie-account-intro">
+				<strong tabindex="-1" data-contact-title>{a.Label}</strong>
+			</header>
+			if v.ErrorMessage != "" && v.FormTarget == "contact-action" {
+				<p role="alert">{v.ErrorMessage}</p>
+			}
+			if v.ContactRequests != nil {
+				@form.Form(form.Config{Action:"/ui/accounts/contacts",Method:"post",RootAttrs:templ.Attributes{"data-contact-add":""}}) {
+					@contactFields(v,a.Id,"add")
+					{{ address := "" }}
+					if v.FormTarget == "contact-action" && v.field("contactAction")=="add" {
+						{{ address = v.field("address") }}
+					}
+					@textinput.TextInput(textinput.Config{ID:"add-contact-address",Name:"address",Label:v.Text.AccountAddress,Placeholder:v.Text.AddressPlaceholder,Value:address,Required:true})
+					@button.Button(button.WithType("submit")) { {v.Text.ContactAdd} }
+				}
+			}
+			@accountContactList(v,a.Id)
+		</section>
+	} else {
+		@emptystate.EmptyState(emptystate.Config{Title:v.Text.AccountMissing})
+	}
+}
+
+templ accountContactList(v view, account string) {
+	<section data-account-contact-list>
+		if v.ContactRequests == nil {
+			<p>{v.Text.ContactConnect}</p>
+			@link.Link(v.contactsHref(account,"")) { {v.Text.Retry} }
+		} else if len(v.ContactRequests.Items) > 0 {
+			<h3>{v.Text.ContactRequestsTitle}</h3>
+			<ul class="oie-account-list">
+				for _, address := range v.ContactRequests.Items {
+					<li class="oie-contact-row">
+						<span title={address}>{address}</span>
+						<div class="oie-contact-actions">
+							@contactAction(v,account,address,"accept",v.Text.ContactAccept)
+							@contactAction(v,account,address,"decline",v.Text.ContactDecline)
+						</div>
+					</li>
+				}
+			</ul>
+		}
+		if v.Contacts == nil {
+			@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable})
+			@link.Link(v.contactsHref(account,"")) { {v.Text.Retry} }
+		} else if len(v.Contacts.Items) == 0 {
+			@emptystate.EmptyState(emptystate.Config{Title:v.Text.ContactEmpty})
+		} else {
+			<ul class="oie-account-list">
+				for _, c := range v.Contacts.Items {
+					<li class="oie-contact-row">
+						<span class="oie-profile-identity"><strong>{c.DisplayName}</strong>
+							if c.DisplayName != c.Address {
+								<small>{c.Address}</small>
+							}
+							if c.Presence != nil {
+								<small>{v.presenceLabel(string(c.Presence.State))}</small>
+							}
+						</span>
+						if v.ContactRequests != nil {
+							@contactAction(v,account,c.Address,"remove",v.Text.ContactRemove)
+						}
+					</li>
+				}
+			</ul>
+			if v.Contacts.NextCursor != nil {
+				@link.Link(v.contactsHref(account,*v.Contacts.NextCursor)) { {v.Text.Next} }
+			}
+		}
+	</section>
+}
+
+templ contactFields(v view, account, action string) {
+	@mutationFieldsAt(v,"contact-action","",v.contactsHref(account,""))
+	<input type="hidden" name="lang" value={v.Locale}/>
+	<input type="hidden" name="accountId" value={account}/>
+	<input type="hidden" name="contactAction" value={action}/>
+}
+
+templ contactAction(v view, account, address, action, label string) {
+	<form method="post" action="/ui/accounts/contacts">
+		@contactFields(v,account,action)
+		<input type="hidden" name="address" value={address}/>
+		@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"aria-label":label+" "+address})) { {label} }
+	</form>
+}

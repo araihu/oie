@@ -1168,6 +1168,10 @@ components:
           description: Whether the conversation is currently archived.
           type: boolean
           example: true
+        doNotDisturb:
+          description: Whether the conversation's owning account has disabled alerts.
+          type: boolean
+          example: true
         replyToYou:
           description: Whether the retained original belongs to the receiving account in this conversation. False for unavailable originals.
           type: boolean

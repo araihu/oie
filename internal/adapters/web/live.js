@@ -1202,6 +1202,9 @@ window.OieRuntime.register('live', life => {
       const response = await life.fetch(form.action,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal:controller.signal});
       const result = await response.json();
       if(life.signal.aborted)return;
+      if (form.dataset.oieAction === 'account-communication' && result.accountCommunication) {
+        form.elements.expectedRevisionId.value = result.accountCommunication.revisionId || '';
+      }
       if (roomManagement) {
         if (result.ok || result.rejected) {
           inMemory.delete('oie.room-management:' + managementKey);

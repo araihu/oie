@@ -77,6 +77,13 @@ type entry struct {
 	avatarDirty         map[string]string
 	contactsWake        chan struct{}
 	profiles            map[string]*profileSlot
+
+	presenceMu           sync.Mutex
+	presenceShow         string
+	typingPeers          map[string]typingPeer
+	contactsGate         chan struct{}
+	contactRequests      map[string]struct{}
+	contactSubscriptions map[string]bool
 }
 type Manager struct {
 	diagnostics     *diagnostics.Logger
@@ -383,6 +390,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.attachmentUploads = nil
 			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
+			e.contactsGate = make(chan struct{}, 1)
+			e.contactRequests = map[string]struct{}{}
+			e.contactSubscriptions = nil
+			e.typingPeers = map[string]typingPeer{}
 			e.historyWake = make(chan struct{}, 1)
 			e.requestsWake = make(chan struct{}, 1)
 			requestsWake := e.requestsWake
@@ -397,6 +408,9 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				return
 			}
 			if err = m.publish(ctx, e, "connected", ""); err == nil {
+				presenceCtx, cancelPresence := context.WithTimeout(ctx, 3*time.Second)
+				m.RefreshAccountPresence(presenceCtx, e.account)
+				cancelPresence()
 				m.workers.Add(4)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
@@ -535,7 +549,11 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, net.Conn,
 		err = errors.New("TLS required")
 	}
 	if err == nil {
-		err = session.Send(attempt, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(avatarCaps().TokenReader()))
+		show := m.configuredPresence(attempt, e.account.ID)
+		err = session.Send(attempt, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show)))
+		e.presenceMu.Lock()
+		e.presenceShow = show
+		e.presenceMu.Unlock()
 	}
 	if err != nil {
 		_ = raw.Close()
@@ -583,6 +601,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if err != nil {
 		return application.Failed
 	}
+	payload.ChatState = m.outgoingChatState(ctx, a, out)
 	if len(payload.Mentions) > 0 && !m.roomAllowsMentionReferences(ctx, e, session, out) {
 		payload.Mentions = nil
 	}
@@ -645,6 +664,14 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		_ = raw.Close()
 		return application.Unknown
 	}
+	if payload.ChatState != nil {
+		e.mu.Lock()
+		if peer, ok := e.typingPeers[out.Address]; ok && e.session == session {
+			peer.sent = false
+			e.typingPeers[out.Address] = peer
+		}
+		e.mu.Unlock()
+	}
 	return application.Submitted
 }
 
@@ -686,6 +713,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			correctionMetadata
 			reactionMetadata
 			roomModerationMetadata
+			typingMetadata
 			Subject     *string        `xml:"jabber:client subject"`
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
@@ -761,6 +789,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			m.observeRoomTopic(e, msg.Message, *msg.Subject)
 			return nil
 		}
+		if msg.Delay.Stamp == "" && msg.Delay.From == "" {
+			e.captureTyping(msg.Message, msg.Body, msg.typingMetadata)
+		}
 		if len(msg.Reactions) != 0 {
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
@@ -813,6 +844,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if handled, err := m.captureRoomPresence(ctx, e, presence); handled {
 			return err
 		}
+		captureContactRequest(e, presence.Presence)
 		capturePeerPresence(e, presence)
 
 		return nil

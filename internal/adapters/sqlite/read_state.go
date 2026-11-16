@@ -83,19 +83,12 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 		if latest.ID != string(in.Latest.MessageID) {
 			return application.ReadResult{}, application.ErrStateConflict
 		}
-		marked, markErr := q.InsertConversationMessageReads(ctx, dbgen.InsertConversationMessageReadsParams{ConversationID: string(c.ID), RevisionID: string(in.RevisionID)})
-		if markErr != nil {
-			return application.ReadResult{}, markErr
-		}
-		ids = make([]domain.ID, 0, len(marked))
-		for _, id := range marked {
-			ids = append(ids, domain.ID(id))
-		}
+		ids, err = insertAllMessageReads(ctx, q, c.ID, in.RevisionID)
 	} else {
 		ids, err = insertObservedReads(ctx, q, c, in)
-		if err != nil {
-			return application.ReadResult{}, err
-		}
+	}
+	if err != nil {
+		return application.ReadResult{}, err
 	}
 	summary, err := q.ConversationUnreadSummary(ctx, string(c.ID))
 	if err != nil {
@@ -103,17 +96,8 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 	}
 	unread, unreadMention := summary.UnreadCount, summary.UnreadMention != 0
 	if len(ids) > 0 || int(unread) != c.UnreadCount || unreadMention != c.UnreadMention {
-		parents := []domain.ID{}
-		if state.RevisionID != "" {
-			parents = append(parents, state.RevisionID)
-		}
-		state.RevisionID = in.RevisionID
-		state.UpdatedAt = in.Operation.CreatedAt
-		state.UnreadCount = int(unread)
-		if err = q.InsertReadRevision(ctx, dbgen.InsertReadRevisionParams{ID: string(in.RevisionID), ConversationID: string(c.ID), Parents: jsonText(parents), Payload: jsonText(state), MessageIds: jsonText(ids), CreatedAt: stamp(state.UpdatedAt)}); err != nil {
-			return application.ReadResult{}, err
-		}
-		if err = q.PutConversationReadHead(ctx, dbgen.PutConversationReadHeadParams{ConversationID: string(c.ID), RevisionID: string(in.RevisionID), UpdatedAt: stamp(state.UpdatedAt)}); err != nil {
+		state, err = writeReadRevision(ctx, q, state, in.RevisionID, in.Operation.CreatedAt, int(unread), ids)
+		if err != nil {
 			return application.ReadResult{}, err
 		}
 		conversationParents := jsonText([]domain.ID{c.RevisionID})
@@ -137,6 +121,37 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 		return application.ReadResult{}, err
 	}
 	return application.ReadResult{State: state}, nil
+}
+
+func insertAllMessageReads(ctx context.Context, q *dbgen.Queries, conversation, revision domain.ID) ([]domain.ID, error) {
+	marked, err := q.InsertConversationMessageReads(ctx, dbgen.InsertConversationMessageReadsParams{
+		ConversationID: string(conversation), RevisionID: string(revision),
+	})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]domain.ID, 0, len(marked))
+	for _, id := range marked {
+		ids = append(ids, domain.ID(id))
+	}
+	return ids, nil
+}
+
+func writeReadRevision(ctx context.Context, q *dbgen.Queries, state domain.ReadState, revision domain.ID, at time.Time, unread int, ids []domain.ID) (domain.ReadState, error) {
+	parents := []domain.ID{}
+	if state.RevisionID != "" {
+		parents = append(parents, state.RevisionID)
+	}
+	state.RevisionID, state.UpdatedAt, state.UnreadCount = revision, at, unread
+	if err := q.InsertReadRevision(ctx, dbgen.InsertReadRevisionParams{
+		ID: string(revision), ConversationID: string(state.ConversationID), Parents: jsonText(parents),
+		Payload: jsonText(state), MessageIds: jsonText(ids), CreatedAt: stamp(at),
+	}); err != nil {
+		return state, err
+	}
+	return state, q.PutConversationReadHead(ctx, dbgen.PutConversationReadHeadParams{
+		ConversationID: string(state.ConversationID), RevisionID: string(revision), UpdatedAt: stamp(at),
+	})
 }
 
 func insertObservedReads(ctx context.Context, q *dbgen.Queries, c domain.Conversation, in application.ReadMutation) ([]domain.ID, error) {

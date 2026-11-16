@@ -10,7 +10,7 @@ import (
 templ conversationPreferenceForms(v view){
 if v.Selected!=nil {
 <div data-conversation-preference-forms>
-for _,field:=range []string{"archived","favorite"} {
+for _,field:=range v.conversationPreferenceFields() {
 <form id={preferenceFormID(v.Selected.Id,field)} action="/ui/conversations/preferences" method="post" data-conversation-preference={field}>
 @mutationFields(v,preferenceFormID(v.Selected.Id,field),newOperationKey())
 <input type="hidden" name="lang" value={v.Locale}/>
@@ -32,7 +32,7 @@ templ conversationPreferenceFeedback(v view){
 
 templ conversationPreferenceData(v view){
 if v.Selected!=nil {
-<div data-conversation-preference-state hidden data-conversation={v.Selected.Id} data-account={v.Selected.AccountId} data-revision={v.Selected.RevisionId} data-archived={strconv.FormatBool(v.Selected.Archived)} data-favorite={strconv.FormatBool(v.Selected.Favorite)}></div>
+<div data-conversation-preference-state hidden data-conversation={v.Selected.Id} data-account={v.Selected.AccountId} data-revision={v.Selected.RevisionId} data-archived={strconv.FormatBool(v.Selected.Archived)} data-favorite={strconv.FormatBool(v.Selected.Favorite)} data-read={strconv.FormatBool(!hasUnread(*v.Selected))}></div>
 }
 }
 
@@ -42,7 +42,7 @@ templ nativeConversationPreferenceRecovery(v view){
 for _,key:=range []string{"accountId","conversationId","expectedRevisionId","lang"} {
 <input type="hidden" name={key} value={v.field(key)}/>
 }
-for _,field:=range []string{"archived","favorite","acceptRequest"} {
+for _,field:=range []string{"archived","favorite","acceptRequest","read"} {
 if value:=v.field(field);value!="" {
 <input type="hidden" name={field} value={value}/>
 }

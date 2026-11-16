@@ -32,7 +32,7 @@ JOIN (
     AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
     AND c.archived=sqlc.arg(archived)
     AND (CAST(sqlc.arg(favorites_only) AS INTEGER)=0 OR c.favorite=1)
-    AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR c.unread_count>0)
+    AND (CAST(sqlc.arg(unread_only) AS INTEGER)=0 OR c.unread_count>0 OR json_extract(c.payload,'$.UnreadReminder')=1)
     AND (CAST(sqlc.arg(kind) AS TEXT)='' OR json_extract(c.payload,'$.Kind')=CAST(sqlc.arg(kind) AS TEXT))
     AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
     ORDER BY c.activity_sequence DESC LIMIT sqlc.arg(page_limit)
@@ -92,5 +92,5 @@ ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) ASC,m.id ASC LIMIT sqlc.arg(
 
 -- name: UpdateConversationPreferences :execrows
 UPDATE conversations
-SET revision_id=sqlc.arg(revision_id),payload=sqlc.arg(payload),archived=sqlc.arg(archived),favorite=sqlc.arg(favorite)
+SET revision_id=sqlc.arg(revision_id),payload=sqlc.arg(payload),archived=sqlc.arg(archived),favorite=sqlc.arg(favorite),unread_count=sqlc.arg(unread_count)
 WHERE id=sqlc.arg(id) AND account_id=sqlc.arg(account_id) AND revision_id=sqlc.arg(expected_revision_id);

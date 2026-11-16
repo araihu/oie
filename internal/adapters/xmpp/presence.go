@@ -1,7 +1,11 @@
 package xmpp
 
 import (
+	"context"
+	"encoding/xml"
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"mellium.im/xmlstream"
 	"mellium.im/xmpp/stanza"
 	"strconv"
 	"time"
@@ -55,7 +59,9 @@ func capturePeerPresence(e *entry, p incomingPresence) {
 	for _, slot := range e.details {
 		known = known || (slot.conversation.Kind == "direct" && slot.conversation.Address == address)
 	}
-	if !known {
+	// Initial presence can arrive before the first roster snapshot. Keep
+	// bounded observations and project them only to subscribed contacts.
+	if !known && e.contactSubscriptions != nil && !e.contactSubscriptions[address] {
 		return
 	}
 	if e.peerPresence == nil {
@@ -111,4 +117,74 @@ func peerPresence(e *entry, address string) domain.PresenceObservation {
 		}
 	}
 	return result
+}
+
+func (m *Manager) configuredPresence(ctx context.Context, account domain.ID) string {
+	if host, ok := m.host.(application.AccountPresenceHost); ok {
+		preferences, err := host.AccountCommunicationPreferences(ctx, account)
+		if err == nil {
+			switch preferences.Presence {
+			case "away", "dnd":
+				return preferences.Presence
+			}
+		}
+	}
+	return ""
+}
+
+func presencePayload(show string) xml.TokenReader {
+	caps := avatarCaps().TokenReader()
+	if show == "" {
+		return caps
+	}
+	name := xml.Name{Space: "jabber:client", Local: "show"}
+	return xmlstream.MultiReader(
+		xmlstream.Token(xml.StartElement{Name: name}),
+		xmlstream.Token(xml.CharData(show)),
+		xmlstream.Token(xml.EndElement{Name: name}),
+		caps,
+	)
+}
+
+func (m *Manager) RefreshAccountPresence(ctx context.Context, account domain.Account) {
+	m.mu.RLock()
+	e := m.entries[account.ID]
+	m.mu.RUnlock()
+	if e == nil {
+		return
+	}
+	e.presenceMu.Lock()
+	defer e.presenceMu.Unlock()
+	e.mu.RLock()
+	s, current := e.session, e.state.State == "connected"
+	e.mu.RUnlock()
+	if s == nil || !current {
+		return
+	}
+	show := m.configuredPresence(ctx, account.ID)
+	if e.presenceShow == show {
+		return
+	}
+	if err := s.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show))); err == nil {
+		e.presenceShow = show
+	}
+}
+
+func (m *Manager) ContactPresence(account domain.ID, address string) *domain.PresenceObservation {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e := m.entries[account]
+	if e == nil {
+		return nil
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.state.State != "connected" || !e.contactSubscriptions[address] {
+		return nil
+	}
+	observed := peerPresence(e, address)
+	if observed.State == "unknown" {
+		return nil
+	}
+	return &observed
 }
