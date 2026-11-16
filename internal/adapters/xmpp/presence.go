@@ -3,12 +3,14 @@ package xmpp
 import (
 	"context"
 	"encoding/xml"
+	"strconv"
+	"time"
+
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmlstream"
+	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/stanza"
-	"strconv"
-	"time"
 )
 
 type peerResource struct {
@@ -53,33 +55,16 @@ func capturePeerPresence(e *entry, p incomingPresence) {
 	e.avatarMu.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.state.State != "connected" {
+	if e.state.State != "connected" && !e.replaying {
 		return
 	}
 	for _, slot := range e.details {
 		known = known || (slot.conversation.Kind == "direct" && slot.conversation.Address == address)
 	}
-	// Initial presence can arrive before the first roster snapshot. Keep
-	// bounded observations and project them only to subscribed contacts.
-	if !known && e.contactSubscriptions != nil && !e.contactSubscriptions[address] {
+	known = known || e.contactSubscriptions[address]
+	// Hold early roster presence separately until the roster authorizes it.
+	if !known && e.initialPeerPresence == nil {
 		return
-	}
-	if e.peerPresence == nil {
-		e.peerPresence = map[string]map[string]peerResource{}
-	}
-	resources := e.peerPresence[address]
-	if resources == nil {
-		if len(e.peerPresence) >= 256 {
-			return
-		}
-		resources = map[string]peerResource{}
-		e.peerPresence[address] = resources
-	}
-	resource := p.From.Resourcepart()
-	if len(resources) >= 16 {
-		if _, ok := resources[resource]; !ok {
-			return
-		}
 	}
 	state := "available"
 	if p.Type == stanza.UnavailablePresence {
@@ -96,7 +81,58 @@ func capturePeerPresence(e *entry, p incomingPresence) {
 			state = "chat"
 		}
 	}
-	resources[resource] = peerResource{observation: domain.PresenceObservation{State: state, StatusText: cleanEvidence(p.Status, 300), ObservedAt: time.Now().UTC()}, priority: priority}
+	observed := peerResource{observation: domain.PresenceObservation{State: state, StatusText: cleanEvidence(p.Status, 300), ObservedAt: time.Now().UTC()}, priority: priority}
+	if !known {
+		storePeerPresence(e.initialPeerPresence, address, p.From.Resourcepart(), observed)
+		return
+	}
+	if e.peerPresence == nil {
+		e.peerPresence = make(map[string]map[string]peerResource)
+	}
+	storePeerPresence(e.peerPresence, address, p.From.Resourcepart(), observed)
+}
+
+func storePeerPresence(peers map[string]map[string]peerResource, address, resource string, observed peerResource) {
+	resources := peers[address]
+	if resources == nil {
+		if len(peers) >= 256 {
+			return
+		}
+		resources = make(map[string]peerResource)
+		peers[address] = resources
+	}
+	current, exists := resources[resource]
+	if !exists && len(resources) >= 16 || exists && observed.observation.ObservedAt.Before(current.observation.ObservedAt) {
+		return
+	}
+	resources[resource] = observed
+}
+
+// Caller holds e.mu.
+func (e *entry) updateContactSubscriptions(items []application.ContactInput) {
+	subscriptions := make(map[string]bool, len(items))
+	for _, item := range items {
+		if item.Subscription == "from" || item.Subscription == "both" {
+			delete(e.contactRequests, item.Address)
+		}
+		if item.Subscription != "to" && item.Subscription != "both" {
+			continue
+		}
+		subscriptions[item.Address] = true
+		for resource, observation := range e.initialPeerPresence[item.Address] {
+			if e.peerPresence == nil {
+				e.peerPresence = make(map[string]map[string]peerResource)
+			}
+			storePeerPresence(e.peerPresence, item.Address, resource, observation)
+		}
+	}
+	for address := range e.contactSubscriptions {
+		if !subscriptions[address] {
+			delete(e.peerPresence, address)
+		}
+	}
+	e.contactSubscriptions = subscriptions
+	e.initialPeerPresence = nil
 }
 
 // Caller holds e.mu. Prefer an available resource; explicit unavailability of one
@@ -119,17 +155,18 @@ func peerPresence(e *entry, address string) domain.PresenceObservation {
 	return result
 }
 
-func (m *Manager) configuredPresence(ctx context.Context, account domain.ID) string {
+func (m *Manager) configuredPresence(ctx context.Context, account domain.ID) (string, error) {
 	if host, ok := m.host.(application.AccountPresenceHost); ok {
 		preferences, err := host.AccountCommunicationPreferences(ctx, account)
-		if err == nil {
-			switch preferences.Presence {
-			case "away", "dnd":
-				return preferences.Presence
-			}
+		if err != nil {
+			return "", err
+		}
+		switch preferences.Presence {
+		case "away", "dnd":
+			return preferences.Presence, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 func presencePayload(show string) xml.TokenReader {
@@ -146,28 +183,62 @@ func presencePayload(show string) xml.TokenReader {
 	)
 }
 
-func (m *Manager) RefreshAccountPresence(ctx context.Context, account domain.Account) {
+func (m *Manager) RefreshAccountPresence(account domain.Account) {
 	m.mu.RLock()
 	e := m.entries[account.ID]
 	m.mu.RUnlock()
 	if e == nil {
 		return
 	}
+	e.mu.RLock()
+	wake := e.presenceWake
+	e.mu.RUnlock()
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) presenceLoop(ctx context.Context, e *entry, s *mx.Session, wake <-chan struct{}) {
+	for ctx.Err() == nil {
+		attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
+		err := m.applyPresence(attempt, e, s)
+		cancel()
+		if err == nil {
+			select {
+			case <-ctx.Done():
+			case <-wake:
+			}
+			continue
+		}
+		timer := time.NewTimer(3 * time.Second)
+		select {
+		case <-ctx.Done():
+		case <-wake:
+		case <-timer.C:
+		}
+		timer.Stop()
+	}
+}
+
+func (m *Manager) applyPresence(ctx context.Context, e *entry, s *mx.Session) error {
 	e.presenceMu.Lock()
 	defer e.presenceMu.Unlock()
-	e.mu.RLock()
-	s, current := e.session, e.state.State == "connected"
-	e.mu.RUnlock()
-	if s == nil || !current {
-		return
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	show := m.configuredPresence(ctx, account.ID)
+	show, err := m.configuredPresence(ctx, e.account.ID)
+	if err != nil {
+		return err
+	}
 	if e.presenceShow == show {
-		return
+		return nil
 	}
-	if err := s.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show))); err == nil {
+	err = s.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show)))
+	if err == nil {
 		e.presenceShow = show
 	}
+	return err
 }
 
 func (m *Manager) ContactPresence(account domain.ID, address string) *domain.PresenceObservation {

@@ -78,10 +78,17 @@ func (m *Manager) contactsLoop(ctx context.Context, e *entry, s *mx.Session, wak
 	if !ok {
 		return
 	}
+	e.mu.Lock()
+	if e.session != s || e.contactsWake != wake {
+		e.mu.Unlock()
+		return
+	}
+	if e.contactsGate == nil {
+		e.contactsGate = make(chan struct{}, 1)
+	}
+	gate := e.contactsGate
+	e.mu.Unlock()
 	for ctx.Err() == nil {
-		e.mu.RLock()
-		gate := e.contactsGate
-		e.mu.RUnlock()
 		if !claimContactGate(ctx, gate) {
 			return
 		}
@@ -143,12 +150,7 @@ func (m *Manager) refreshContacts(ctx context.Context, host application.ContactH
 		if err == nil {
 			err = host.ContactsReceived(ctx, e.account.ID, items)
 			if err == nil {
-				e.contactSubscriptions = make(map[string]bool, len(items))
-				for _, item := range items {
-					if item.Subscription == "to" || item.Subscription == "both" {
-						e.contactSubscriptions[item.Address] = true
-					}
-				}
+				e.updateContactSubscriptions(items)
 			}
 		}
 		if err != nil && ctx.Err() == nil {
@@ -184,7 +186,7 @@ func captureContactRequest(e *entry, p stanza.Presence) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.state.State != "connected" {
+	if e.state.State != "connected" && !e.replaying {
 		return
 	}
 	switch p.Type {
@@ -224,6 +226,23 @@ func (m *Manager) ChangeContact(ctx context.Context, a domain.Account, address, 
 	}
 	switch action {
 	case "accept", "decline":
+		if !pending {
+			return application.ErrStateConflict
+		}
+		host, ok := m.host.(application.ContactHost)
+		if !ok {
+			return application.ErrProtocolUnavailable
+		}
+		if _, current, err := m.refreshContacts(ctx, host, e, s); err != nil || !current {
+			return application.ErrProtocolUnavailable
+		}
+		e.mu.RLock()
+		current = e.session == s && e.contactsGate == gate && e.state.State == "connected"
+		_, pending = e.contactRequests[target.String()]
+		e.mu.RUnlock()
+		if !current {
+			return application.ErrProtocolUnavailable
+		}
 		if !pending {
 			return application.ErrStateConflict
 		}
@@ -322,10 +341,26 @@ func (m *Manager) rosterPush(e *entry, iq stanza.IQ, payload contactRosterPayloa
 	if iq.Type != stanza.SetIQ || iq.From.String() != "" && !iq.From.Equal(account.Bare()) || len(payload.Items) != 1 {
 		return nil
 	}
-	if _, err := decodeContactRoster(payload); err != nil {
+	items, err := decodeContactRoster(payload)
+	if err != nil {
 		return nil
 	}
+	item := items[0]
+	e.mu.Lock()
+	if item.Subscription == "from" || item.Subscription == "both" {
+		delete(e.contactRequests, item.Address)
+	}
+	if item.Subscription == "to" || item.Subscription == "both" {
+		if e.contactSubscriptions == nil {
+			e.contactSubscriptions = make(map[string]bool)
+		}
+		e.contactSubscriptions[item.Address] = true
+	} else if e.contactSubscriptions[item.Address] {
+		delete(e.contactSubscriptions, item.Address)
+		delete(e.peerPresence, item.Address)
+	}
+	e.mu.Unlock()
 	e.wakeContacts()
-	_, err := xmlstream.Copy(t, iq.Result(nil))
+	_, err = xmlstream.Copy(t, iq.Result(nil))
 	return err
 }

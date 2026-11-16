@@ -21,6 +21,41 @@ import (
 	"mellium.im/xmpp/stream"
 )
 
+func TestContactPresenceAndRequestsReconcileAcrossReplay(t *testing.T) {
+	bob, _ := jid.Parse("bob@localhost")
+	phone, _ := bob.WithResource("phone")
+	e := &entry{
+		state:               domain.Connection{State: "connected"},
+		contactRequests:     make(map[string]struct{}),
+		initialPeerPresence: make(map[string]map[string]peerResource),
+	}
+	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: phone}})
+	if got := peerPresence(e, bob.String()).State; got != "unknown" {
+		t.Fatalf("presence before authorization: %s", got)
+	}
+	e.updateContactSubscriptions([]application.ContactInput{{Address: bob.String(), Subscription: "to"}})
+	if got := peerPresence(e, bob.String()).State; got != "available" {
+		t.Fatalf("initial authorized presence: %s", got)
+	}
+
+	e.state.State, e.replaying = "connecting", true
+	capturePeerPresence(e, incomingPresence{Presence: stanza.Presence{From: phone, Type: stanza.UnavailablePresence}})
+	captureContactRequest(e, stanza.Presence{From: bob, Type: stanza.SubscribePresence})
+	if got := peerPresence(e, bob.String()).State; got != "unavailable" {
+		t.Fatalf("replayed unavailable presence: %s", got)
+	}
+	if _, pending := e.contactRequests[bob.String()]; !pending {
+		t.Fatal("replayed subscription request was dropped")
+	}
+	e.updateContactSubscriptions([]application.ContactInput{{Address: bob.String(), Subscription: "from"}})
+	if _, pending := e.contactRequests[bob.String()]; pending {
+		t.Fatal("request remained pending after remote approval")
+	}
+	if got := peerPresence(e, bob.String()).State; got != "unknown" {
+		t.Fatalf("presence after losing subscription: %s", got)
+	}
+}
+
 func TestContactRosterDecodingKeepsCompleteResultAndBounds(t *testing.T) {
 	var payload contactRosterPayload
 	input := `<query xmlns="jabber:iq:roster"><item jid="Bob@Example.test" name="Bob &amp; café" subscription="both"><group>Friends</group><group>Work</group></item><item jid="service.example.test"/><item jid="removed@example.test" subscription="remove"/><item jid="unknown@example.test" subscription="future"/></query>`

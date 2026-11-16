@@ -16,7 +16,7 @@ type AccountPresenceHost interface {
 }
 
 type AccountPresenceProtocol interface {
-	RefreshAccountPresence(context.Context, domain.Account)
+	RefreshAccountPresence(domain.Account)
 }
 
 func (e *Engine) AccountCommunicationPreferences(ctx context.Context, accountID domain.ID) (domain.AccountCommunicationPreferences, error) {
@@ -54,7 +54,7 @@ func (e *Engine) SetAccountCommunicationPreferences(ctx context.Context, account
 	saved, err := repo.SaveAccountCommunicationPreferences(ctx, accountID, revision, domain.AccountCommunicationPreferences{RevisionID: next, Presence: presence}, sendTyping)
 	if err == nil {
 		if protocol, ok := e.protocols.(AccountPresenceProtocol); ok {
-			protocol.RefreshAccountPresence(ctx, account)
+			protocol.RefreshAccountPresence(account)
 		}
 	}
 	return saved, err

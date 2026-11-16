@@ -27,10 +27,34 @@ type typingMetadata struct {
 }
 
 type typingPeer struct {
+	offered   bool
 	supported bool
+	declined  bool
 	until     time.Time
 	sent      bool
 	updatedAt time.Time
+	lastSeen  time.Time
+}
+
+// Caller holds e.mu. Expire the least recently used entry when a new peer arrives.
+func (e *entry) typingPeer(address string) (typingPeer, bool) {
+	if peer, ok := e.typingPeers[address]; ok {
+		return peer, true
+	}
+	if e.typingPeers == nil {
+		e.typingPeers = make(map[string]typingPeer)
+	}
+	if len(e.typingPeers) >= 256 {
+		var oldestAddress string
+		var oldestTime time.Time
+		for candidate, peer := range e.typingPeers {
+			if oldestAddress == "" || peer.lastSeen.Before(oldestTime) {
+				oldestAddress, oldestTime = candidate, peer.lastSeen
+			}
+		}
+		delete(e.typingPeers, oldestAddress)
+	}
+	return typingPeer{}, false
 }
 
 func (e *entry) captureTyping(message stanza.Message, body string, state typingMetadata) {
@@ -51,13 +75,19 @@ func (e *entry) captureTyping(message stanza.Message, body string, state typingM
 	if !known && !supported {
 		return
 	}
-	if !known && len(e.typingPeers) >= 256 {
-		return
+	if !known {
+		peer, _ = e.typingPeer(address)
 	}
-	peer.supported = peer.supported || supported
+	now := time.Now()
+	peer.lastSeen = now
+	if supported {
+		peer.supported, peer.declined = true, false
+	} else if peer.offered && !peer.supported {
+		peer.declined = true
+	}
 	peer.until = time.Time{}
 	if state.Composing != nil && body == "" {
-		peer.until = time.Now().Add(typingLifetime)
+		peer.until = now.Add(typingLifetime)
 	}
 	e.typingPeers[address] = peer
 }
@@ -78,14 +108,14 @@ func (m *Manager) Typing(conversation domain.Conversation) bool {
 	return e.state.State == "connected" && e.typingPeers[conversation.Address].until.After(time.Now())
 }
 
-func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversation, active bool) {
+func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversation, active bool) error {
 	e := m.typingEntry(conversation.AccountID)
 	if e == nil {
-		return
+		return application.ErrProtocolUnavailable
 	}
 	target, err := jid.Parse(conversation.Address)
 	if err != nil {
-		return
+		return application.ErrInvalid
 	}
 	e.sendMu.Lock()
 	defer e.sendMu.Unlock()
@@ -93,9 +123,13 @@ func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversatio
 	session, raw := e.session, e.raw
 	peer := e.typingPeers[conversation.Address]
 	now := time.Now()
-	if session == nil || raw == nil || e.state.State != "connected" || !peer.supported || peer.sent == active || active && now.Sub(peer.updatedAt) < 500*time.Millisecond {
+	if session == nil || raw == nil || e.state.State != "connected" {
 		e.mu.Unlock()
-		return
+		return application.ErrProtocolUnavailable
+	}
+	if !peer.supported || !peer.needsTyping(active, now) {
+		e.mu.Unlock()
+		return nil
 	}
 	e.mu.Unlock()
 	state := "paused"
@@ -110,26 +144,54 @@ func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversatio
 		Message: stanza.Message{To: target, Type: stanza.ChatMessage},
 		State:   chatState{XMLName: xml.Name{Space: typingNamespace, Local: state}},
 	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = now.Add(3 * time.Second)
-	}
-	_ = raw.SetWriteDeadline(deadline)
-	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
-	if err := session.Encode(ctx, payload); err != nil {
-		return
-	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	err = session.Encode(ctx, payload)
+	status := session.StreamManagement()
 	e.mu.Lock()
 	if e.session == session {
-		peer := e.typingPeers[conversation.Address]
-		peer.sent, peer.updatedAt = active, now
-		e.typingPeers[conversation.Address] = peer
+		// Stream management replays exact stanza counts, including chat states.
+		// If their acknowledgement is uncertain, reconnect with a fresh stream.
+		if status.Enabled && status.Unacknowledged != 0 && !definitivelyUnsent(true, err) {
+			last := status.Acknowledged + uint32(status.Unacknowledged)
+			e.pendingTyping = &last
+		}
+		if peer, ok := e.typingPeers[conversation.Address]; ok && err == nil {
+			peer.sent, peer.updatedAt, peer.lastSeen = active, now, now
+			e.typingPeers[conversation.Address] = peer
+		}
 	}
 	e.mu.Unlock()
+	if err != nil {
+		if !definitivelyUnsent(status.Enabled, err) {
+			_ = raw.Close()
+		}
+		return application.ErrProtocolUnavailable
+	}
+	return nil
 }
 
-func (m *Manager) outgoingChatState(ctx context.Context, a domain.Account, out application.Outgoing) *chatState {
+func (peer typingPeer) needsTyping(active bool, now time.Time) bool {
+	if !active {
+		return peer.sent
+	}
+	elapsed := now.Sub(peer.updatedAt)
+	return elapsed >= 500*time.Millisecond && (!peer.sent || elapsed >= typingLifetime)
+}
+
+func typingAwaitingAck(last *uint32, ack uint32) bool {
+	// The replay queue is bounded well below half the counter's range.
+	return last != nil && int32(ack-*last) < 0
+}
+
+func (m *Manager) outgoingChatState(ctx context.Context, e *entry, a domain.Account, out application.Outgoing) *chatState {
 	if out.Kind != "direct" || out.Reaction != nil {
+		return nil
+	}
+	e.mu.RLock()
+	declined := e.typingPeers[out.Address].declined
+	e.mu.RUnlock()
+	if declined {
 		return nil
 	}
 	if host, ok := m.host.(application.AccountPresenceHost); ok {

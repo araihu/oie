@@ -8,7 +8,7 @@ import (
 
 type TypingProtocol interface {
 	Typing(domain.Conversation) bool
-	SetTyping(context.Context, domain.Conversation, bool)
+	SetTyping(context.Context, domain.Conversation, bool) error
 }
 
 func (e *Engine) Typing(ctx context.Context, conversationID domain.ID) (bool, error) {
@@ -37,14 +37,14 @@ func (e *Engine) SetTyping(ctx context.Context, conversationID domain.ID, active
 		return err
 	}
 	if preferences.SendTyping {
-		protocol.SetTyping(ctx, conversation, active)
+		return protocol.SetTyping(ctx, conversation, active)
 	}
 	return nil
 }
 
 func (e *Engine) typingConversation(ctx context.Context, id domain.ID) (domain.Conversation, error) {
 	conversation, err := e.Conversation(ctx, id)
-	if err == nil && (conversation.Kind != "direct" || conversation.Request != "") {
+	if err == nil && (conversation.Kind != "direct" || conversation.Request != "" || conversation.RemovedFromChats) {
 		err = ErrStateConflict
 	}
 	return conversation, err
