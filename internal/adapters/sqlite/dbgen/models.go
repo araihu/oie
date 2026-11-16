@@ -134,6 +134,18 @@ type ConversationRevision struct {
 	CreatedAt string
 }
 
+type DeviceDownload struct {
+	DeviceID          string
+	SourceID          string
+	SourceRevision    string
+	Kind              string
+	Hash              string
+	MimeType          string
+	Size              int64
+	VerifiedAlgorithm string
+	DownloadedAtMs    int64
+}
+
 type DiscardedMessageReference struct {
 	AccountID string
 	Address   string
@@ -142,6 +154,17 @@ type DiscardedMessageReference struct {
 	RemoteID  string
 	Author    string
 	AgeMs     int64
+}
+
+type DownloadDevice struct {
+	DeviceID   string
+	Days       int64
+	Generation int64
+}
+
+type DownloadGarbage struct {
+	Kind string
+	Hash string
 }
 
 type EffectiveRetention struct {

@@ -30,7 +30,7 @@ func TestReadStateHTTPIsScopedDurableAndDoesNotSend(t *testing.T) {
 		t.Fatal(err)
 	}
 	initial, err := client.GetConversationReadStateWithResponse(t.Context(), string(c.ID))
-	if err != nil || initial.JSON200 == nil || initial.JSON200.UnreadCount != 3 || initial.JSON200.RevisionId != nil {
+	if err != nil || initial.JSON200 == nil || initial.JSON200.UnreadCount != 3 || initial.JSON200.RevisionId != nil || initial.JSON200.FirstUnreadMessageId == nil || *initial.JSON200.FirstUnreadMessageId != string(messages[2].ID) {
 		t.Fatal(initial, err)
 	}
 	key := string(id())
@@ -119,6 +119,14 @@ func TestReadLatestHTTPRejectsStaleTimelineAndClearsEarlierPages(t *testing.T) {
 	mark(messages[1].ID, http.StatusPreconditionFailed)
 	receive(c, -1)
 	mark(messages[0].ID, http.StatusPreconditionFailed)
+	first, err := client.GetConversationReadStateWithResponse(ctx, string(c.ID))
+	if err != nil || first.JSON200 == nil || first.JSON200.FirstUnreadMessageId == nil {
+		t.Fatal("missing first unread after out-of-order arrival", first, err)
+	}
+	anchor, err := e.Message(ctx, domain.ID(*first.JSON200.FirstUnreadMessageId))
+	if err != nil || !anchor.CreatedAt.Equal(at.Add(-time.Second)) {
+		t.Fatal("the oldest unread was outside the latest page", anchor, err)
+	}
 	current, err := e.Conversation(ctx, c.ID)
 	if err != nil || current.UnreadCount != 106 {
 		t.Fatal("stale read changed the count", current.UnreadCount, err)

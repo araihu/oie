@@ -130,7 +130,7 @@ func timelineInitialParams(v view) *engineapi.ListMessagesParams {
 	return p
 }
 func (v view) messageVersion(m messageView) string {
-	data, _ := json.Marshal([]any{m.Message, m.Presentation, m.PresentationKnown, v.messageVideos(m.Id), v.Reactions[m.Id]})
+	data, _ := json.Marshal([]any{m.Message, m.Presentation, m.PresentationKnown, v.messageVideos(m.Id), v.MessageAudio[m.Id], v.Reactions[m.Id]})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
@@ -174,6 +174,7 @@ func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.
 			v.MessageVideos[id] = entries
 		}
 	}
+	s.loadMessageAudio(ctx, v)
 	s.loadMessageStars(ctx, v)
 	s.loadReactions(ctx, v)
 	v.formatTimelineMessages(ctx)
@@ -193,6 +194,7 @@ func (v *view) formatTimelineMessages(ctx context.Context) {
 
 func (v view) formatMessage(ctx context.Context, m *messageView) {
 	m.Presentation = videoPresentation(imagePresentation(m.displayBody(), v.MessagePreviews[m.Id]), v.messageVideos(m.Id))
+	m.Presentation = videoPresentation(m.Presentation, v.MessageAudio[m.Id])
 	m.Formatted, m.RoomInvitations = formattedMessageWithInvitations(ctx, m.Presentation, invitationScope{m.AccountId, m.ConversationId, v.Locale})
 }
 
@@ -465,6 +467,7 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 	for requested, alias := range v.TimelineAliases {
 		part := v
 		part.Messages = nil
+		part.MessageAudio = nil
 		part.MessagePreviews = map[string][]engineapi.MessagePreview{}
 		part.MessageVideos = nil
 		part.Stars = nil
@@ -476,6 +479,12 @@ func (s *Server) timelinePage(w http.ResponseWriter, r *http.Request) {
 		}
 		for id, entries := range part.MessageVideos {
 			v.MessageVideos[id] = entries
+		}
+		for id, entries := range part.MessageAudio {
+			if v.MessageAudio == nil {
+				v.MessageAudio = map[string][]engineapi.SharedContentItem{}
+			}
+			v.MessageAudio[id] = entries
 		}
 		for id, state := range part.Reactions {
 			if v.Reactions == nil {

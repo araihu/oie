@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,15 +37,16 @@ type desktopTarget struct {
 // Desktop keeps the native presentation origin stable while changing engines.
 // Its engine listener exists only while the local engine is running.
 type Desktop struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	dataDir     string
-	xmppCAFile  string
-	save        func(DesktopEngine) error
-	mu          sync.Mutex
-	active      atomic.Pointer[desktopTarget]
-	lastLocal   *Server
-	diagnostics *diagnostics.Logger
+	ctx            context.Context
+	cancel         context.CancelFunc
+	dataDir        string
+	xmppCAFile     string
+	save           func(DesktopEngine) error
+	mu             sync.Mutex
+	active         atomic.Pointer[desktopTarget]
+	lastLocal      *Server
+	diagnostics    *diagnostics.Logger
+	downloadDevice string
 }
 
 // StartDesktop uses an empty engine URL for local mode. The caller owns the
@@ -58,7 +60,7 @@ func StartDesktop(ctx context.Context, dataDir, xmppCAFile string, selection Des
 		selection.APIKey = key
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, diagnostics: logger}
+	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, diagnostics: logger, downloadDevice: desktopDownloadDevice(dataDir)}
 	token := rand.Text()
 	target, err := d.prepare(ctx, selection, false, token)
 	if err != nil && !errors.Is(err, web.ErrEngineModeKeyHTTPS) && ctx.Err() == nil && logger != nil {
@@ -196,6 +198,7 @@ func (d *Desktop) options(target *desktopTarget) []web.Option {
 	return []web.Option{
 		web.WithDiagnostics(d.diagnostics, "", web.DiagnosticsNative),
 		web.WithRemoteDiagnostics(selection.URL),
+		web.WithDownloadDevice(d.downloadDevice),
 		web.WithEngineMode(target.token, selection.URL, selection.APIKey != "", func(ctx context.Context, address, key string) error {
 			return d.selectEngine(ctx, target, DesktopEngine{URL: address, APIKey: key})
 		}),
@@ -346,4 +349,30 @@ func (d *Desktop) Close(ctx context.Context) error {
 		return d.lastLocal.Close(ctx)
 	}
 	return nil
+}
+
+func desktopDownloadDevice(dataDir string) string {
+	if dataDir == "" {
+		return ""
+	}
+	dir := filepath.Join(dataDir, "private")
+	path := filepath.Join(dir, "download-device")
+	if data, err := os.ReadFile(path); err == nil {
+		return string(data)
+	}
+	id, err := newID()
+	if err != nil || os.MkdirAll(dir, 0700) != nil {
+		return ""
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		data, _ := os.ReadFile(path)
+		return string(data)
+	}
+	_, writeErr := file.WriteString(string(id))
+	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
+		_ = os.Remove(path)
+		return ""
+	}
+	return string(id)
 }

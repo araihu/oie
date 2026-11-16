@@ -173,6 +173,9 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.As(err, &mediaFailure) {
 		status = http.StatusBadGateway
 		switch mediaFailure.Code {
+		case "media_integrity_mismatch":
+			w.Header().Set("X-Oie-Integrity", "mismatch")
+			mediaFailure.Code = "media_fetch_failed"
 		case "media_blocked":
 			status = http.StatusUnprocessableEntity
 		case "media_too_large":

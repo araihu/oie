@@ -19,7 +19,7 @@ window.OieRuntime.register('actions', life => {
  // Public Dropdown item IDs are application hooks. Escape uses its supported
  // keyboard lifecycle to dismiss and restore focus after native actions.
  life.on(document,'click',event=>{
-  const item=event.target.closest('[id^="copy-message-"],[id^="reply-message-"],[id^="star-message-"],[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"],[id^="refresh-preview-"]');
+  const item=event.target.closest('[id^="copy-message-"],[id^="reply-message-"],[id^="star-message-"],[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"],[id^="refresh-preview-"],[id^="save-audio-"]');
   if(item&&!item.disabled)item.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
  },true);
 });
@@ -143,6 +143,141 @@ window.OieRuntime.register('diagnostics', life => {
   life.cleanup(close);
 });
 
+window.OieRuntime.register('audio', life => {
+  const players = new Set();
+  function release(player) {
+    player.pause();
+    if (!player.isConnected) player.removeAttribute('src');
+    player.load();
+    players.delete(player);
+  }
+  life.cleanup(() => { for (const player of players) release(player); });
+  life.on(document, 'oie:timeline-content', () => {
+    for (const player of players) if (!player.isConnected) release(player);
+  });
+  function recover(player) {
+    if (!player.isConnected || player.hidden) return;
+    const card = player.closest('[data-audio-id]');
+    const retry = card.querySelector('[data-audio-retry]');
+    const restoreFocus = document.activeElement === player || (document.activeElement === document.body && players.has(player));
+    players.delete(player);
+    player.hidden = true;
+    retry.hidden = false;
+    if (restoreFocus) retry.focus({preventScroll:true});
+    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioError}}));
+  }
+
+  life.on(document, 'play', event => {
+    const player = event.target;
+    if (!player.matches?.('[data-audio-player]')) return;
+    for (const previous of players) if (previous !== player) previous.pause();
+    players.add(player);
+  }, true);
+
+  life.on(document, 'error', event => {
+    if (event.target.matches?.('[data-audio-player]')) recover(event.target);
+  }, true);
+
+  life.on(document, 'click', async event => {
+    const action = event.target.closest('[id^="save-audio-"]');
+    if (!action || action.disabled) return;
+    const id = action.id.slice('save-audio-'.length);
+    const card = document.querySelector(`[data-audio-id="${CSS.escape(id)}"]`);
+    if (!card?.dataset.audioDownload) return;
+    const address = card.dataset.audioDownload, name = card.dataset.audioFilename;
+    try {
+      if (window.OieDesktop?.saveFile) {
+        await window.OieDesktop.saveFile(address, name);
+      } else {
+        const link = document.createElement('a');
+        link.href = address;
+        link.download = name;
+        document.body.append(link);
+        link.click();
+        link.remove();
+      }
+    } catch {
+      if (!life.signal.aborted) window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioDownloadFailed}}));
+    }
+  });
+
+  life.on(document, 'click', event => {
+    const retry = event.target.closest('[data-audio-retry]');
+    if (!retry) return;
+    const player = retry.closest('[data-audio-id]').querySelector('[data-audio-player]');
+    retry.hidden = true;
+    player.hidden = false;
+    player.focus({preventScroll:true});
+    player.load();
+    player.play().catch(error => { if (error.name !== 'AbortError') recover(player); });
+  });
+});
+
+window.OieRuntime.register('download-retention', life => {
+  const section = document.querySelector('[data-download-retention]');
+  if (!section) return;
+  const {downloadRetention, engine, daysLabel, saved, cleared, failed} = section.dataset;
+  const form = section.querySelector('[data-download-preferences]');
+  const fields = form.querySelector('fieldset');
+  const select = form.querySelector('select');
+  const status = section.querySelector('[role="status"]');
+  const dialog = document.getElementById('remove-device-downloads-dialog');
+  const save = form.querySelector('[data-save-download-retention]');
+  const remove = form.querySelector('[data-remove-device-downloads]');
+  const confirm = dialog.querySelector('[data-confirm-remove-downloads]');
+  const headers = {'X-Oie-Engine-ID':engine};
+  let busy = false;
+
+  async function update(action) {
+    if (busy) return;
+    busy = true;
+    form.setAttribute('aria-busy', 'true');
+    for (const button of [save, remove, confirm]) button.setAttribute('aria-disabled', 'true');
+    select.disabled = true;
+    const options = {credentials:'same-origin', cache:'no-store', headers};
+    if (action) {
+      options.method = 'POST';
+      options.body = new URLSearchParams({action, days:select.value});
+      options.headers = {...headers, 'X-CSRF-Token':document.querySelector('meta[name="oie-csrf"]').content};
+    }
+    try {
+      const response = await life.fetch(downloadRetention, options);
+      if (!response.ok) throw Error('retention_unavailable');
+      const policy = await response.json();
+      if (life.signal.aborted) return;
+      if (!Number.isInteger(policy.days) || policy.days < 0 || policy.days > 3650) throw Error('retention_unavailable');
+      const days = String(policy.days);
+      if (![...select.options].some(option => option.value === days)) select.add(new Option(daysLabel.replace('{days}', days), days));
+      select.value = days;
+      fields.disabled = false;
+      status.textContent = action === 'clear' ? cleared : action === 'save' ? saved : '';
+      if (action) document.dispatchEvent(new Event('oie:refresh-request'));
+    } catch {
+      if (!life.signal.aborted) {
+        fields.disabled = false;
+        status.textContent = failed;
+      }
+    } finally {
+      if (!life.signal.aborted) {
+        form.removeAttribute('aria-busy');
+        for (const button of [save, remove, confirm]) button.removeAttribute('aria-disabled');
+        select.disabled = false;
+      }
+      busy = false;
+    }
+  }
+
+  life.on(window, 'drawer:open', event => { if (event.detail?.id === 'settings') update(); });
+  life.on(save, 'click', () => update('save'));
+  const modal = type => window.dispatchEvent(new CustomEvent('modal:'+type, {detail:{id:dialog.id}}));
+  life.on(remove, 'click', () => { if (!busy) modal('open'); });
+  life.on(confirm, 'click', () => {
+    if (busy) return;
+    modal('close');
+    update('clear');
+  });
+  life.raf(() => { if (section.closest('[role="dialog"]')?.getClientRects().length) update(); });
+});
 
 window.OieRuntime.register('access-keys', life => {
   const form = document.querySelector('[data-create-access-key]');

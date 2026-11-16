@@ -6,5 +6,6 @@ import "time"
 type ReadState struct {
 	ConversationID, AccountID, RevisionID ID
 	UpdatedAt                             time.Time
+	FirstUnreadMessageID                  ID `json:",omitempty"`
 	UnreadCount                           int
 }

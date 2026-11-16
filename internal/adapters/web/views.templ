@@ -147,7 +147,7 @@ if v.DevBuildID!="" {
 <meta name="oie-csrf" content={v.CSRF}/>
 <noscript><style>#composer-split{display:none}.oie-cancel-form{display:flex!important}.oie-message-meta:has(>.oie-cancel-form){margin-top:4px}</style></noscript>
 		</head>
-		<body data-reset-complete={v.Text.DeleteDataComplete} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
+		<body data-reset-complete={v.Text.DeleteDataComplete} data-open-drawer={v.initialDrawer()} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-first-unread={v.FirstUnread} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-mock={strconv.FormatBool(v.Preview)}>
 @appFragment(v)
 		</body>
 	</html>
@@ -166,7 +166,7 @@ func appRouteAttrs(v view) templ.Attributes {
 	return templ.Attributes{
 		"data-shared-account":v.AccountFilter,"data-route-error":v.Text.NavFailed,"data-route-locale":v.Locale,"data-route-theme":v.Theme,"data-csrf":v.CSRF,
 		"data-open-drawer":v.initialDrawer(),"data-engine-id":v.EngineID,"data-event-cursor":v.EventCursor,"data-conversation-id":v.ChatID,"data-account-id":selectedAccountID(v),
-		"data-focus-message":v.FocusMessage,"data-context-newer":strconv.FormatBool(v.ContextHasNewer),"data-context-missing":strconv.FormatBool(v.ContextMissing),"data-mock":strconv.FormatBool(v.Preview),
+		"data-first-unread":v.FirstUnread,"data-focus-message":v.FocusMessage,"data-context-newer":strconv.FormatBool(v.ContextHasNewer),"data-context-missing":strconv.FormatBool(v.ContextMissing),"data-mock":strconv.FormatBool(v.Preview),
 	}
 }
 
@@ -566,7 +566,7 @@ if v.scheduleAllowed() {
 if !v.Preview && v.Selected.Kind == "direct" && v.Selected.Request==nil && !removedConversation(v.Selected) && v.composeAllowed() && v.messagingImplemented("typing") {
 <span class="oie-typing-notice" data-typing-notice role="status" hidden>{v.Text.TypingNotice}</span>
 }
-<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing}>{v.Text.JumpToLatest}</button>
+<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing&&v.FirstUnread==""}>{v.Text.JumpToLatest}</button>
 <div class="oie-composer-auxiliary">
 if v.composeAllowed() {
 @draftLinkPreview(v)
@@ -1190,6 +1190,9 @@ for _,item:=range v.messageVideos(m.Id) {
 @videoCard(v,item)
 }
 </div>
+for _,item:=range v.MessageAudio[m.Id] {
+@audioPlayer(v,item.Id,v.sharedTitle(item),documentSource(v,item),documentSource(v,item)+"&download=1")
+}
 
 }
 

@@ -32,6 +32,13 @@ function thumbnail(color,width=8,height=8){
   if(u.pathname.endsWith('/message-stars')){if(state.batchUnavailable)return send(503,{code:'unavailable',status:503});return send(200,{items:u.searchParams.getAll('messageId').map(value=>stars.get(value))})}
   if(u.pathname.endsWith('/messages')){if(req.method!=='GET'){state.provider++;return send(500,{code:'unexpected_send'})}return send(200,{items:[...messages].reverse()})}
   if(u.pathname.endsWith('/previews'))return send(200,{items:previews});
+  if(req.method==='POST'&&u.pathname.endsWith('/download')){
+   const retained=previews.find(preview=>preview.kind==='image'&&u.pathname===`/api/v1/previews/${preview.id}/download`);
+   if(retained){
+    assert.match(req.headers['x-oie-download-device'],/^[0-9a-f-]{36}$/);
+    return send(200,retained);
+   }
+  }
   if(u.pathname.startsWith('/api/v1/media/')){res.setHeader('Content-Type','image/png');res.end(bytes);return}
   if(u.pathname.startsWith('/api/v1/operations/')){const operation=ops.get(u.pathname.split('/').at(-1));return operation?send(200,{id:operation.key,kind:'set_message_star',resourceId:operation.snapshot.messageId,status:'succeeded',createdAt:'2026-11-08T12:00:00Z'}):send(404,{code:'not_found'})}
   const match=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)\/star$/);

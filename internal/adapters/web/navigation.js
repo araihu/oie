@@ -9,7 +9,7 @@
  let sharedCountEngine;
  const positions=new Map(),app=()=>document.getElementById('oie-app');
  const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','favorites-scroll','details-body','accounts-body','account-detail-scroll','workspace'];
- const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','focusMessage','contextNewer','contextMissing','mock'];
+ const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','firstUnread','focusMessage','contextNewer','contextMissing','mock'];
  const inboxID='conversation-list-default';
  const routeID='oie-route';
  const replacesWorkspace=kind=>kind==='oie-app'||kind===routeID;
@@ -438,7 +438,7 @@
   let url;try{url=new URL(form?node.action:node.href,location.href)}catch{continue}
   if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||(!form&&(node.getAttribute('href')||'').startsWith('#')))continue;
   const pane=!form&&node.matches('#conversation-list a[data-conversation-id],.oie-back-button')&&conversationRoute(url);
-  const scoped=node.id==='favorites-search-form'?'favorites-results':node.id==='shared-content-search'?'shared-search-results':form&&node.matches('[data-info-search]')?'chat-info-content':scopedKind(url,node);
+  const scoped=node.id==='favorites-search-form'?'favorites-results':node.id==='shared-content-search'?'shared-search-results':form&&node.matches('[data-info-search]')?'chat-info-content':scopedKind(url,node,node.matches('[data-return-latest]'));
   const source=!form&&node.matches('[data-shared-actions] a[id^="shared-source-"],a[id^="favorite-source-"]')&&
    url.searchParams.has('message')&&url.searchParams.has('chat');
   const sourceInPane=source&&conversationRoute(url);
@@ -788,7 +788,7 @@
      if(next.dataset[key]===undefined)delete root.dataset[key];else root.dataset[key]=next.dataset[key];
     }
    }
-   for(const node of [app(),document.body,document.getElementById('conversation-pane')])for(const key of ['focusMessage','contextNewer','contextMissing'])if(node)node.dataset[key]='';
+   for(const node of [app(),document.body,document.getElementById('conversation-pane')])for(const key of ['firstUnread','focusMessage','contextNewer','contextMissing'])if(node)node.dataset[key]='';
    document.getElementById('context-notice')?.replaceChildren();
    document.dispatchEvent(new CustomEvent('oie:timeline-latest',{detail:{root,page:ctx?.oieTimelinePage,generation:ctx?.oieStarGeneration}}));
    upgrade(root);
@@ -808,7 +808,7 @@
    const saved=positions.get(location.href);
    const scheduleEditor=root.querySelector('[data-editing-schedule] #message-composer');
    const savedTimelineTop=saved?.['message-timeline']??(scheduleEditor?positions.get(previousURL)?.['message-timeline']:undefined);
-   if(savedTimelineTop!==undefined&&!new URL(location.href).searchParams.has('message')){
+   if(savedTimelineTop!==undefined&&(ctx?.oieHistory||!document.body.dataset.firstUnread)&&!new URL(location.href).searchParams.has('message')){
     const timeline=document.getElementById('message-timeline');
     if(timeline)timeline.scrollTop=savedTimelineTop;
    }

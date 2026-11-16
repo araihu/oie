@@ -29,6 +29,15 @@ AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id 
 AND NOT EXISTS(SELECT 1 FROM message_reads r WHERE r.message_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a JOIN message_reads r ON r.message_id=a.alias_id
  WHERE a.canonical_id=m.id);
+-- name: FirstUnreadMessage :one
+SELECT m.id FROM messages m
+WHERE m.conversation_id=? AND m.is_own=0 AND COALESCE(json_extract(m.payload,'$.Historical'),0)=0
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
+AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>'')
+AND NOT EXISTS(SELECT 1 FROM message_reads r WHERE r.message_id=m.id)
+AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a JOIN message_reads r ON r.message_id=a.alias_id
+ WHERE a.canonical_id=m.id)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms),m.id LIMIT 1;
 -- name: HasMessageRead :one
 SELECT EXISTS(
  SELECT 1 FROM message_reads r WHERE r.message_id=sqlc.arg(canonical_id)

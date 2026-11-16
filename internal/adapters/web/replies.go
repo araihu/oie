@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -99,4 +100,29 @@ func validContextTarget(page engineapi.MessageContext, requested, conversation, 
 		}
 	}
 	return target
+}
+
+// An automatic anchor is local to the rendered pane. Explicit message links
+// keep their own URL, focus and highlight behavior.
+func (s *Server) unreadContext(ctx context.Context, v *view, account string) ([]engineapi.Message, bool) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	response, err := s.client.GetConversationReadStateWithResponse(ctx, v.ChatID)
+	if err != nil || response.JSON200 == nil {
+		return nil, false
+	}
+	state := response.JSON200
+	if state.ConversationId != v.ChatID || state.AccountId != account || state.UnreadCount < 1 ||
+		state.FirstUnreadMessageId == nil || !validOperationKey(*state.FirstUnreadMessageId) {
+		return nil, false
+	}
+	anchored := *v
+	anchored.FocusMessage = *state.FirstUnreadMessageId
+	items, used := s.contextMessages(ctx, &anchored, account, timelinePageSize)
+	if !used || anchored.Unavailable || !validTimelineMessages(items, account, v.ChatID, timelinePageSize) {
+		return nil, false
+	}
+	v.FirstUnread = anchored.FocusMessage
+	v.ContextHasOlder, v.ContextHasNewer = anchored.ContextHasOlder, anchored.ContextHasNewer
+	return items, true
 }

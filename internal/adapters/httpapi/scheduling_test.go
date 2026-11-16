@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -176,13 +177,18 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	download, err := client.GetStagedMessageAttachmentWithResponse(ctx, room, fileID)
+	download, err := client.GetStagedMessageAttachmentWithResponse(ctx, room, fileID, nil)
 	if err != nil || download.StatusCode() != 200 || string(download.Body) != content {
 		t.Fatalf("staged bytes not durable: %+v %v", download, err)
 	}
 	kind, params, err := mime.ParseMediaType(download.HTTPResponse.Header.Get("Content-Disposition"))
 	if err != nil || kind != "attachment" || params["filename"] != staged.JSON201.FileName {
 		t.Fatalf("staged attachment disposition: %q, %v", download.HTTPResponse.Header.Get("Content-Disposition"), err)
+	}
+	partial, err := client.GetStagedMessageAttachmentWithResponse(ctx, room, fileID, &engineapi.GetStagedMessageAttachmentParams{Range: new("bytes=0-1")})
+	if err != nil || partial.StatusCode() != 206 || string(partial.Body) != content[:2] ||
+		partial.HTTPResponse.Header.Get("Content-Range") != fmt.Sprintf("bytes 0-1/%d", len(content)) {
+		t.Fatalf("staged byte range: %+v %v", partial, err)
 	}
 	if replay := accept(room, keys[0], at, &files); replay.JSON200 == nil || replay.JSON200.Id != first.Id || !replay.JSON200.ScheduledAt.Equal(at) {
 		t.Fatal("acceptance snapshot not replayed after edit and restart")

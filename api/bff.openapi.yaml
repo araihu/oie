@@ -616,15 +616,60 @@ paths:
         '404': {description: Resource unavailable}
         '409': {description: Engine or account changed}
         '503': {description: Engine unavailable}
+  /ui/settings/download-retention:
+    parameters:
+    - {in: header, name: X-Oie-Engine-ID, required: true, description: Selected engine identity., schema: {type: string, format: uuid}}
+    get:
+      operationId: getBrowserDownloadRetention
+      tags: [Messages]
+      summary: Read retention preferences for this device
+      responses:
+        '200':
+          description: Device preferences.
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/DownloadRetention'}
+        '400': {description: Invalid engine identity}
+        '409': {description: Engine changed}
+        '503': {description: Retention unavailable}
+    post:
+      operationId: changeBrowserDownloadRetention
+      tags: [Messages]
+      summary: Save retention preferences or remove this device’s downloads
+      description: Uses the current browser device and rejects changes for a different engine.
+      parameters:
+      - {in: header, name: X-CSRF-Token, required: true, description: Browser CSRF token., schema: {type: string}}
+      requestBody:
+        description: Requested file retention action and its selected period when saving.
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            example: {action: save, days: 30}
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: {type: string, enum: [save, clear], example: save}
+                days: {type: integer, minimum: 0, maximum: 3650, example: 30}
+      responses:
+        '200':
+          description: Device preferences after the change.
+          content:
+            application/json:
+              schema: {$ref: './openapi.yaml#/components/schemas/DownloadRetention'}
+        '400': {description: Invalid request}
+        '403': {description: Invalid CSRF token}
+        '409': {description: Engine changed}
+        '503': {description: Retention unavailable}
   /ui/shared-content/{id}/content:
     get:
       operationId: getBrowserSharedMedia
       tags: [Messages]
-      summary: Stream an engine-scoped media item for playback or a bounded video preview
+      summary: Read an engine-scoped media item for playback, a bounded video preview or download
       parameters:
       - {name: id, in: path, required: true, description: Retained shared-content item., schema: {type: string, format: uuid}}
       - {name: engineId, in: query, description: Expected engine identity., schema: {type: string, format: uuid}}
-      - {name: download, in: query, description: Save the original file., schema: {type: string, enum: ['1']}}
+      - {name: download, in: query, description: Verify and save the complete original file., schema: {type: string, enum: ['1']}}
       - name: preview
         in: query
         description: Requires engineId and excludes download. Returns at most the first 5 MiB of video.
@@ -635,11 +680,18 @@ paths:
         '400': {description: Invalid request}
         '404': {description: Media not found}
         '409': {description: Engine changed}
+        '413': {description: Original file exceeds the download limit}
         '415': {description: Unsupported media}
         '416': {description: Unsatisfied range}
         '422': {description: Preview sample unavailable within the video byte budget}
-        '502': {description: Invalid upstream response}
+        '502':
+          description: Invalid upstream response or failed original verification.
+          headers:
+            X-Oie-Integrity:
+              description: Present when the original differs from the advertised file.
+              schema: {type: string, enum: [mismatch]}
         '503': {description: Media unavailable}
+        '504': {description: Media provider timed out}
   /ui/api/v1/shared-content/{id}/thumbnail:
     parameters:
     - {in: path, name: id, required: true, description: Scoped resource identity., schema: {type: string, format: uuid}}

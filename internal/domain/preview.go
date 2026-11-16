@@ -11,6 +11,7 @@ type MessagePreview struct {
 	ImageHash, FaviconHash, FileHash, FileMimeType       string
 	PreviewVersion                                       int
 	RefreshRequested                                     bool
+	VerifiedAlgorithm                                    string `json:",omitempty"`
 	FileSize                                             int64
 	LastErrorCode                                        string
 	UpdatedAt                                            time.Time
