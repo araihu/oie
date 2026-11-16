@@ -115,12 +115,31 @@ func TestRoomModerationPreviewMigratesIntoSharedCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	candidates, err := store.SharedContentCandidates(ctx, application.SharedContentVersion, 10)
-	if err != nil || len(candidates) != 1 || candidates[0].OriginalText != "https://example.test/visible.pdf" {
+	if err != nil || len(candidates) != 2 {
 		t.Fatalf("catalog candidates after preview migration: %+v, %v", candidates, err)
+	}
+	for _, candidate := range candidates {
+		err = store.IndexSharedContent(ctx, []domain.SharedContentMutation{{
+			Message: candidate, ParserVersion: application.SharedContentVersion,
+			References: []domain.SharedReference{{ID: migrationID(), RevisionID: migrationID(), URL: candidate.OriginalText, Kind: "document"}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	rooms, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: chat.AccountID, Kind: "room", Limit: 10})
 	if err != nil || len(rooms) != 1 {
 		t.Fatalf("rooms after preview migration: %+v, %v", rooms, err)
+	}
+	query := domain.SharedContentQuery{ConversationID: rooms[0].ID, Type: "documents", Limit: 10}
+	visible, err := engine.SharedContent(ctx, query)
+	if err != nil || len(visible.Items) != 1 || visible.Items[0].URL != "https://example.test/visible.pdf" {
+		t.Fatalf("default catalog after preview migration: %+v, %v", visible, err)
+	}
+	query.IncludeRetracted = true
+	retained, err := engine.SharedContent(ctx, query)
+	if err != nil || len(retained.Items) != 2 {
+		t.Fatalf("opt-in catalog after preview migration: %+v, %v", retained, err)
 	}
 	messages, err := engine.Messages(ctx, rooms[0].ID, "", 10)
 	if err != nil || len(messages) != 2 {
