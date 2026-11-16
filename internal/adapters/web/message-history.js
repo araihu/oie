@@ -8,7 +8,7 @@
  'use strict';
  const root=document.getElementById('message-history-content');if(!root)return;
  const results=root.querySelector('[data-history-results]'),loading=root.querySelector('[data-history-loading]'),error=root.querySelector('[data-history-error]'),retry=root.querySelector('[data-history-retry]'),restart=root.querySelector('[data-history-restart]');
- let generation=0,request=null,scope=null,snapshot='',currentRevision='',canonical='',pages=[],position=-1,lastRequest=null,active=false,opener=null,openerKind='edited',observed=null;
+ let generation=0,request=null,scope=null,snapshot='',currentRevision='',canonical='',pages=[],position=-1,lastRequest=null,active=false,opener=null,openerKind='edited',observed=null,revealOnRefresh='';
  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
  const digest=value=>typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);
  function scopedURL(value,wanted=null){
@@ -35,6 +35,22 @@
  life.cleanup(()=>close(false));
  life.on(window,'drawer:close',event=>{if(event.detail?.id==='message-history')close()});
  life.on(window,'drawer:close-request',event=>{if(event.detail?.id==='message-history'&&!event.defaultPrevented)close()});
+
+ function dismissWithdrawn(id,row=sourceRow(id)){
+  const reveal=row?.querySelector('[data-message-history-retracted]');
+  opener=reveal||row;
+  openerKind='edited';
+  revealOnRefresh=reveal?'':id;
+  window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'message-history'}}));
+ }
+ life.on(window.OieEvents?.target,'message.updated',event=>{
+  if(!active||!scope||!scopedURL(scope.url))return;
+  const params=scope.url.searchParams;
+  if(params.get('includeRetracted')==='true')return;
+  let message;try{message=JSON.parse(event.detail.data).message}catch{return;}
+  if(message?.id===(canonical||params.get('messageId'))&&message.accountId===params.get('accountId')&&
+     message.conversationId===params.get('conversationId')&&(message.retraction||message.moderation))dismissWithdrawn(message.id);
+ });
 
  function matches(page,url,wanted){
   const d=page?.dataset,q=url.searchParams;
@@ -69,22 +85,31 @@
  }
  // Content changes invalidate the snapshot. Transport-state revisions alone
  // leave the retained history, focused controls and page position untouched.
- life.on(document,'oie:shared-refresh',()=>{
+ function refreshSource(){
+  if(revealOnRefresh){
+   const row=sourceRow(revealOnRefresh);
+   if(row?.querySelector('[data-message-retracted],[data-message-moderated]')){
+    revealOnRefresh='';
+    const focus=document.activeElement;
+    if(!active&&(focus===document.body||row.contains(focus)||root.contains(focus)))row.querySelector('[data-message-history-retracted]')?.focus({preventScroll:true});
+   }
+  }
   if(!active||!scope)return;
   const id=canonical||scope.url.searchParams.get('messageId'),row=sourceRow(id);
   if(scope.url.searchParams.get('includeRetracted')!=='true'&&row?.querySelector('[data-message-retracted],[data-message-moderated]')){
-   opener=row.querySelector('[data-message-history-retracted]')||row;
-   window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'message-history'}}));
+   dismissWithdrawn(id,row);
    return;
   }
   const current=sourceVersion(id);
   if(observed!==null&&current!==null&&current!==observed){const focus=results.contains(document.activeElement);cancel();fail(true,focus);}
- });
+ }
+ life.on(document,'oie:shared-refresh',refreshSource);
+ life.on(document,'oie:timeline-content',refreshSource);
  life.on(document,'click',event=>{
   const action=event.target.closest('[data-open-message-history],[id^="history-message-"]');
   if(action&&!event.defaultPrevented&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
    const url=scopedURL(action.href);if(!url)return;
-   event.preventDefault();event.stopPropagation();close(false);active=true;scope={url};snapshot='';currentRevision='';canonical='';pages=[];position=-1;observed=sourceVersion(url.searchParams.get('messageId'));
+   event.preventDefault();event.stopPropagation();close(false);active=true;scope={url};snapshot='';currentRevision='';canonical='';pages=[];position=-1;revealOnRefresh='';observed=sourceVersion(url.searchParams.get('messageId'));
    const menuID=action.id?.startsWith('history-message-')?action.id.slice(16):'';openerKind=menuID?'menu':'edited';opener=menuID?document.getElementById('message-menu-'+menuID)?.querySelector('button')||action:action;opener?.focus({preventScroll:true});
    window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'message-history'}}));load(url,[url.href],0);return;
   }

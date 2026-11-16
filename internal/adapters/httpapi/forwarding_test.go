@@ -187,8 +187,7 @@ func (m blockingForwardMedia) OpenForwardAttachment(ctx context.Context, url str
 }
 
 func TestForwardRejectsSourceCancelledDuringAttachmentTransfer(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
-	defer cancel()
+	ctx := t.Context()
 	protocol := &schedulingProtocol{roomHTTPProtocol: &roomHTTPProtocol{protocolStub: &protocolStub{}, rooms: make(map[domain.ID]domain.RoomSession)}}
 	e, _, server := newMessagingEngine(t, t.TempDir(), protocol)
 	source := openTestConversation(t, e, "alice@localhost")
@@ -210,6 +209,8 @@ func TestForwardRejectsSourceCancelledDuringAttachmentTransfer(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 	acceptedKey, racingKey := id(), id()
 	send := func(key, destination domain.ID) (*engineapi.ForwardMessageResponse, error) {
 		return client.ForwardMessageWithResponse(ctx, string(original.Message.ID),

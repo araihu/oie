@@ -4,7 +4,7 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const engine=id(1),account=id(2),direct=id(3),room=id(4),revision=id(5),streams=new Set();
- const state={generation:0,transport:0,fail:false,foreign:false,delay:0,retracted:false,writes:[],historyReads:[],otherReads:[]};
+ const state={generation:0,transport:0,fail:false,failTimeline:false,foreign:false,delay:0,retracted:false,writes:[],historyReads:[],otherReads:[]};
  const retraction={at:'2026-11-09T15:00:00Z',originalAvailable:true};
  const owner={id:account,revisionId:revision,protocol:'xmpp',label:'Fixture account',address:'alice@fixture',createdAt:'2026-11-09T12:00:00Z'};
  const chats=[{id:direct,kind:'direct',address:'bob@fixture',title:'Bob'},{id:room,kind:'room',address:'room@fixture',title:'Saved room'}].map(c=>({...c,revisionId:revision,accountId:account,lastMessage:'Retained text',updatedAt:'2026-11-09T12:19:00Z',unreadCount:0,archived:false,favorite:false}));
@@ -49,7 +49,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    return {messageId,accountId:account,conversationId:chats.find(c=>u.pathname.includes(c.id))?.id||direct,starred,revisionId:starred?id(6):null,updatedAt:starred?owner.createdAt:null};
   })});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
-  for(const c of chats){if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return send(200,{items:messages(c).reverse()});}
+  for(const c of chats){if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return state.failTimeline?send(503,{status:503,code:'unavailable'}):send(200,{items:messages(c).reverse()});}
   const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const m=chats.flatMap(messages).find(m=>m.id===(retained[1]===id(900)?targetID(chats[0]):retained[1]));return m?send(200,m):send(404,{status:404,code:'not_found'})}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   return send(404,{status:404,code:'not_found'});
@@ -73,8 +73,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en',timezoneId:'America/Sao_Paulo'});
   await context.route('**/*',r=>{if(new URL(r.request().url()).origin!==base){external.push(r.request().url());return r.abort()}return r.continue()});
+  await context.addInitScript(()=>document.addEventListener('oie:shared-refresh',()=>{window.historyInitialRefresh=true},{once:true}));
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));let documents=0;page.on('request',r=>{if(r.isNavigationRequest()&&r.frame()===page.mainFrame())documents++});
-  await page.goto(route(chats[0]));await page.locator('[data-message-edited][data-open-message-history]').first().waitFor();await until(()=>streams.size>0,'SSE ready');await page.waitForTimeout(250);
+  await page.goto(route(chats[0]));await page.locator('[data-message-edited][data-open-message-history]').first().waitFor();await until(()=>streams.size>0,'SSE ready');await page.waitForFunction(()=>window.OieEvents?.connected&&window.historyInitialRefresh);
   const target=page.locator('[data-message-id="'+targetID(chats[0])+'"]'),edited=target.locator('[data-message-edited][data-open-message-history]'),slot=page.locator('#message-history-content'),drawer=page.getByRole('dialog',{name:'Message history',exact:true});
   assert.equal(await edited.locator('use').getAttribute('href'),'/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
   await page.locator('#message-composer').fill('Keep this draft 😀');await edited.scrollIntoViewIfNeeded();await edited.focus();
@@ -104,7 +105,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   findings.push('A transport-only row revision keeps the observed page, while a retained-source refresh clears it and offers a fresh scoped read');
   await edited.click();await until(async()=>await rows().count()===20,'history before withdrawal');
   const readsBeforeRetraction=state.historyReads.length;
-  state.retracted=true;
+  state.retracted=true;state.failTimeline=true;
+  const withdrawnMessage=messages(chats[0]).find(message=>message.id===targetID(chats[0]));
+  const sendUpdate=(sequence,message)=>{for(const stream of streams)stream.write(`id: ${engine}:${sequence}\nevent: message.updated\ndata: ${JSON.stringify({message})}\n\n`)};
+  sendUpdate(1,{...withdrawnMessage,conversationId:room});
+  await page.waitForFunction(cursor=>window.OieEvents.latest('')===cursor,engine+':1');
+  assert.equal(await rows().count(),20,'an unrelated conversation cannot close this history');
+  sendUpdate(2,withdrawnMessage);
+  await drawer.waitFor({state:'hidden'});await settleDrawers();
+  assert.equal(await rows().count(),0);assert.equal(state.historyReads.length,readsBeforeRetraction);
+  assert.equal(await target.locator('[data-message-history-retracted]').count(),0,'withdrawal closes history even without a fresh timeline');
+  state.failTimeline=false;
   await page.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:refresh-request')));
   const reveal=target.getByRole('link',{name:'Reveal original',exact:true});
   await reveal.waitFor({state:'visible'});await drawer.waitFor({state:'hidden'});await settleDrawers();
@@ -114,7 +125,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert(state.historyReads.at(-1).includeRetracted);assert(await rows().first().isVisible());
   await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   state.retracted=false;await page.goto(route(chats[0]));await edited.waitFor({state:'visible'});
-  findings.push('Live withdrawal closes ordinary edit history and focuses explicit Reveal original without reading withdrawn content automatically');
+  findings.push('A withdrawal event closes ordinary edit history even without a fresh timeline, then focuses explicit Reveal original when the refreshed row arrives');
   state.fail=true;await edited.click();await drawer.waitFor({state:'visible'});await settleDrawers();await slot.locator('[data-history-retry]').waitFor({state:'visible'});assert.equal(await rows().count(),0);state.fail=false;await slot.locator('[data-history-retry]').click();await until(async()=>await rows().count()===20,'retry saved history');await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   state.foreign=true;await edited.click();await slot.locator('[data-history-retry]').waitFor({state:'visible'});assert.equal(await rows().count(),0);state.foreign=false;await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   findings.push('Transient failures have scoped read-only retry, and a foreign account response never exposes versions');

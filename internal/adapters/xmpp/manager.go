@@ -448,6 +448,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 						slot.session = session
 					}
 				}
+				e.resumeRetractionsLocked(previous, session, time.Now())
 				e.suspended = nil
 			}
 			e.reactionLimits = nil
@@ -537,7 +538,6 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.sendMu.Lock()
 			e.mu.Lock()
 			e.session = nil
-			e.retractionAttempts = nil
 			e.replaying = false
 			e.raw = nil
 			e.presenceWake = nil
@@ -553,6 +553,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if resumable {
 				e.suspended = session
 			} else {
+				e.retainRetractionProofsLocked(time.Now())
 				e.correctionSession = ""
 				e.correctionSources = nil
 				e.correctionLatest = nil
@@ -599,6 +600,9 @@ func (m *Manager) discardSuspendedSession(ctx context.Context, e *entry) {
 	e.mu.Lock()
 	previous := e.suspended
 	e.suspended = nil
+	if previous != nil {
+		e.retainRetractionProofsLocked(time.Now())
+	}
 	e.mu.Unlock()
 	if previous != nil {
 		m.resetRoomSessions(ctx, e, previous)

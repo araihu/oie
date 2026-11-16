@@ -71,10 +71,17 @@ func prepareRetractionLocked(e *entry, a domain.Account, c domain.Conversation, 
 		return empty, false
 	}
 	if c.Kind == "direct" && usableID(target.ProviderID) {
+		plan := application.IncomingRetraction{Scope: "xmpp:correct:sender:" + a.Address, RemoteID: target.ProviderID}
 		if !e.session.StreamManagement().Enabled && featureEvidence(e.discovery, "account", mamNS) != "supported" {
+			now := time.Now()
+			for _, attempt := range e.retractionAttempts {
+				if now.Before(attempt.expiresAt) && attempt.matches(target.ID, plan) && attempt.confirmedDirect() {
+					return plan, true
+				}
+			}
 			return empty, false
 		}
-		return application.IncomingRetraction{Scope: "xmpp:correct:sender:" + a.Address, RemoteID: target.ProviderID}, true
+		return plan, true
 	}
 	if c.Kind != "room" {
 		return empty, false
@@ -123,6 +130,21 @@ func (a *retractionAttempt) complete(err error) {
 	})
 }
 
+func (a *retractionAttempt) confirmedDirect() bool {
+	if a.kind == "direct" {
+		select {
+		case <-a.result:
+			return a.err == nil
+		default:
+		}
+	}
+	return false
+}
+
+func (a *retractionAttempt) matches(id domain.ID, plan application.IncomingRetraction) bool {
+	return a.messageID == id && a.plan.Scope == plan.Scope && a.plan.RemoteID == plan.RemoteID
+}
+
 const retractionRetryWindow = 2 * time.Minute
 
 // The entry lock protects the attempt table. Concurrent retries also share
@@ -131,15 +153,42 @@ func (e *entry) previousRetractionLocked(targetID domain.ID, plan application.In
 	var id string
 	var previous *retractionAttempt
 	for key, attempt := range e.retractionAttempts {
-		if attempt.session != e.session || !now.Before(attempt.expiresAt) {
+		if !now.Before(attempt.expiresAt) || attempt.session != e.session && !attempt.confirmedDirect() {
 			delete(e.retractionAttempts, key)
 			continue
 		}
-		if attempt.messageID == targetID && attempt.plan.Scope == plan.Scope && attempt.plan.RemoteID == plan.RemoteID {
+		if attempt.matches(targetID, plan) {
 			id, previous = key, attempt
 		}
 	}
 	return id, previous
+}
+
+func (e *entry) resumeRetractionsLocked(previous, resumed *mx.Session, now time.Time) {
+	for id, attempt := range e.retractionAttempts {
+		if attempt.confirmedDirect() {
+			if !now.Before(attempt.expiresAt) {
+				delete(e.retractionAttempts, id)
+			}
+			continue
+		}
+		if attempt.session != previous {
+			delete(e.retractionAttempts, id)
+			continue
+		}
+		attempt.session = resumed
+		attempt.expiresAt = now.Add(retractionRetryWindow)
+	}
+}
+
+func (e *entry) retainRetractionProofsLocked(now time.Time) {
+	for id, attempt := range e.retractionAttempts {
+		if !now.Before(attempt.expiresAt) || !attempt.confirmedDirect() {
+			delete(e.retractionAttempts, id)
+			continue
+		}
+		attempt.session = nil
+	}
 }
 
 func (m *Manager) SendRetraction(ctx context.Context, a domain.Account, c domain.Conversation, target domain.Message, plan application.IncomingRetraction) error {
@@ -168,7 +217,7 @@ func (m *Manager) SendRetraction(ctx context.Context, a domain.Account, c domain
 	if id, previous := e.previousRetractionLocked(target.ID, plan, now); previous != nil {
 		e.mu.Unlock()
 		e.sendMu.Unlock()
-		return m.confirmRetraction(ctx, e, id, previous)
+		return m.confirmRetraction(ctx, e, session, id, previous)
 	}
 	id := randomQueryID()
 	if id == "" || len(e.retractionAttempts) >= maxOwnRoomMessages {
@@ -203,20 +252,23 @@ func (m *Manager) SendRetraction(ctx context.Context, a domain.Account, c domain
 	}
 	err = session.Encode(ctx, payload)
 	status := session.StreamManagement()
-	if err != nil {
-		e.forgetRetraction(id, attempt)
-		e.sendMu.Unlock()
-		if !definitivelyUnsent(session.StreamManagement().Enabled, err) {
-			_ = raw.Close()
-		}
-		return application.ErrProtocolUnavailable
-	}
-	if c.Kind == "direct" && status.Enabled {
+	queuedForReplay := status.Resumable && errors.Is(err, mx.ErrStreamManagementOutcomeUnknown)
+	if c.Kind == "direct" && status.Enabled && (err == nil || queuedForReplay) {
 		last := status.Acknowledged + uint32(status.Unacknowledged)
 		attempt.last = &last
 	}
+	if err != nil {
+		if !queuedForReplay {
+			e.forgetRetraction(id, attempt)
+		}
+		if !definitivelyUnsent(status.Enabled, err) {
+			_ = raw.Close()
+		}
+		e.sendMu.Unlock()
+		return application.ErrProtocolUnavailable
+	}
 	e.sendMu.Unlock()
-	return m.confirmRetraction(ctx, e, id, attempt)
+	return m.confirmRetraction(ctx, e, session, id, attempt)
 }
 
 func (e *entry) forgetRetraction(id string, attempt *retractionAttempt) {
@@ -227,29 +279,30 @@ func (e *entry) forgetRetraction(id string, attempt *retractionAttempt) {
 	}
 }
 
-func (m *Manager) confirmRetraction(ctx context.Context, e *entry, id string, attempt *retractionAttempt) (err error) {
-	defer func() {
-		if err == nil || errors.Is(err, application.ErrStateConflict) {
-			e.forgetRetraction(id, attempt)
-		}
-	}()
-	if attempt.kind == "room" {
-		return awaitRetraction(ctx, attempt)
+func (m *Manager) confirmRetraction(ctx context.Context, e *entry, session *mx.Session, id string, attempt *retractionAttempt) error {
+	select {
+	case <-attempt.result:
+		return attempt.err
+	default:
 	}
+	if attempt.kind == "room" {
+		return awaitRetraction(ctx, session, attempt)
+	}
+	// Keep direct confirmation available for a retry of the local write.
 	if attempt.last == nil {
-		return m.awaitArchivedRetraction(ctx, e, attempt, id)
+		return m.awaitArchivedRetraction(ctx, e, session, attempt, id)
 	}
 	// Stream management proves submission to the account server. It cannot
 	// confirm that the recipient has processed the retraction.
-	if typingAwaitingAck(attempt.last, attempt.session.StreamManagement().Acknowledged) {
+	if typingAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
 		// A failed request may coincide with a final acknowledgement already
 		// being read by the stream. The bounded wait checks both possibilities.
-		_ = attempt.session.RequestStreamManagementAck(ctx)
+		_ = session.RequestStreamManagementAck(ctx)
 	}
-	return awaitRetraction(ctx, attempt)
+	return awaitRetraction(ctx, session, attempt)
 }
 
-func awaitRetraction(ctx context.Context, attempt *retractionAttempt) error {
+func awaitRetraction(ctx context.Context, session *mx.Session, attempt *retractionAttempt) error {
 	var poll <-chan time.Time
 	if attempt.last != nil {
 		ticker := time.NewTicker(20 * time.Millisecond)
@@ -257,7 +310,7 @@ func awaitRetraction(ctx context.Context, attempt *retractionAttempt) error {
 		poll = ticker.C
 	}
 	for {
-		if attempt.last != nil && !typingAwaitingAck(attempt.last, attempt.session.StreamManagement().Acknowledged) {
+		if attempt.last != nil && !typingAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
 			// The read loop processes earlier errors before the acknowledgement.
 			attempt.complete(nil)
 			return attempt.err
@@ -277,10 +330,10 @@ func awaitRetraction(ctx context.Context, attempt *retractionAttempt) error {
 	}
 }
 
-func (m *Manager) awaitArchivedRetraction(ctx context.Context, e *entry, attempt *retractionAttempt, id string) error {
+func (m *Manager) awaitArchivedRetraction(ctx context.Context, e *entry, session *mx.Session, attempt *retractionAttempt, id string) error {
 	for range 2 {
 		if release, err := m.acquireArchive(ctx, e.account.Address, archiveInteractive); err == nil {
-			page, err := m.readArchivePage(ctx, e, attempt.session, e.account.Address, archivePageRequest{
+			page, err := m.readArchivePage(ctx, e, session, e.account.Address, archivePageRequest{
 				With: attempt.target.Bare().String(), Backward: true, Limit: 20,
 			})
 			release()
@@ -308,7 +361,7 @@ func (m *Manager) awaitArchivedRetraction(ctx context.Context, e *entry, attempt
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
-	return awaitRetraction(ctx, attempt)
+	return awaitRetraction(ctx, session, attempt)
 }
 
 func rejectRetraction(e *entry, msg stanza.Message) bool {

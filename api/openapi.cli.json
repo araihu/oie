@@ -10305,6 +10305,7 @@
       },
       "MessageHistoryAttachmentLink": {
         "type": "object",
+        "description": "A provider file link from an explicitly revealed retained message version.",
         "additionalProperties": false,
         "required": [
           "fileName",
