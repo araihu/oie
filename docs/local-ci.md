@@ -263,6 +263,9 @@ Dagger job uploads `dagger-ci-evidence-<mode>` with its own stage logs and
 test evidence, including on failure. Actions jobs bypass the local lock.
 The `Required CI` check aggregates both the Dagger and image smoke jobs.
 New commits on a PR cancel its superseded workflow runs.
+Use `gh pr checks` from the PR branch to find the current run. For a failed
+browser job, start with `browser/consumer.log` or `browser/ci.log` in that
+job's artifact, then reproduce the failed scenario with its fixture.
 
 The `main` branch requires a pull request and the `Required CI` check from
 GitHub Actions. With the repository Actions variable `OIE_REQUIRED_PR_CI` set
