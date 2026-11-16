@@ -45,3 +45,17 @@ func TestTypingExpiresAndWaitsForCumulativeAcknowledgment(t *testing.T) {
 		t.Fatal("acknowledgment failed across counter wrap")
 	}
 }
+
+func TestTypingIsSuppressedWithoutConnectedSession(t *testing.T) {
+	manager := &Manager{entries: map[domain.ID]*entry{
+		"connecting": {state: domain.Connection{State: "connecting"}},
+	}}
+	for _, account := range []domain.ID{"disconnected", "connecting"} {
+		conversation := domain.Conversation{AccountID: account, Address: "bob@localhost"}
+		for _, active := range []bool{true, false} {
+			if err := manager.SetTyping(t.Context(), conversation, active); err != nil {
+				t.Fatalf("account %s, active %t: %v", account, active, err)
+			}
+		}
+	}
+}

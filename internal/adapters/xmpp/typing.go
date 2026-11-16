@@ -111,7 +111,7 @@ func (m *Manager) Typing(conversation domain.Conversation) bool {
 func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversation, active bool) error {
 	e := m.typingEntry(conversation.AccountID)
 	if e == nil {
-		return application.ErrProtocolUnavailable
+		return nil
 	}
 	target, err := jid.Parse(conversation.Address)
 	if err != nil {
@@ -123,11 +123,8 @@ func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversatio
 	session, raw := e.session, e.raw
 	peer := e.typingPeers[conversation.Address]
 	now := time.Now()
-	if session == nil || raw == nil || e.state.State != "connected" {
-		e.mu.Unlock()
-		return application.ErrProtocolUnavailable
-	}
-	if !peer.supported || !peer.needsTyping(active, now) {
+	if session == nil || raw == nil || e.state.State != "connected" || !peer.supported || !peer.needsTyping(active, now) {
+		// A typing update expires without a connected session to send it.
 		e.mu.Unlock()
 		return nil
 	}

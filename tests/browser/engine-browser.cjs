@@ -374,6 +374,14 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await menu.locator('form[data-oie-action="disconnect"] button[type="submit"]').click();
     await until(async () => (await api('/api/v1/accounts/' + alice.id + '/connection')).state === 'not_connected', 'explicit profile disconnect');
     assert.equal((await api('/api/v1/accounts/'+bob.id+'/connection')).state,'connected','disconnect targets only the selected account');
+    const typingPath = '/api/v1/conversations/' + aliceConversation.id + '/typing';
+    const offlineTyping = await fetch(engine + typingPath, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({active: true})
+    });
+    assert.equal(offlineTyping.status, 204, 'typing updates are suppressed while disconnected');
+    assert.deepEqual(await api(typingPath), {active: false});
     await alicePage.keyboard.press('Escape');await menu.waitFor({state:'hidden'});
     await alicePage.goto(base+'/?chat='+aliceConversation.id+'&account='+alice.id+'&lang=en&theme=dark');
     await alicePage.locator('#message-composer').waitFor({state:'visible'});
