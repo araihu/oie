@@ -110,7 +110,10 @@ const engine=id(1),account=id(2),chat=id(3);
     return {key:journal.key,text:journal.text};
   });
   const pending=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('oie.draft.v1')).map(k=>JSON.parse(localStorage.getItem(k))).find(v=>v.pending));assert(pending&&pending.text===draft);
-  const pendingReady=async()=>await page.locator('[data-pending-send][data-pending-state=uncertain]').count()===1&&await page.locator('[data-pending-send-retry]').isEnabled();
+  const pendingReady=()=>page.evaluate(()=>{
+    const retry=document.querySelector('[data-pending-send][data-pending-state=uncertain] [data-pending-send-retry]');
+    return Boolean(retry&&!retry.disabled);
+  });
   for(const width of [390,1440])for(const lang of ['en','pt-BR'])for(const mode of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal']){
     await page.setViewportSize({width,height:900});await page.goto(base+'/?chat='+chat+'&lang='+lang+'&theme='+mode,{waitUntil:'domcontentloaded'});
     await until(pendingReady,'matrix pending bubble');

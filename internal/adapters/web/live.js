@@ -384,8 +384,14 @@ window.OieRuntime.register('live', life => {
       record.scheduledAt ? record.reply?.revisionId || '' : '']);
   }
   async function sendIdentity(record) {
-    if (!crypto.subtle) return '';
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(compositionIdentity(record)));
+    const bytes = new TextEncoder().encode(compositionIdentity(record));
+    if (!crypto.subtle) {
+      // FNV-1a fingerprints the composition on origins without WebCrypto.
+      let hash = 0xcbf29ce484222325n;
+      for (const byte of bytes) hash = BigInt.asUintN(64, (hash ^ BigInt(byte)) * 0x100000001b3n);
+      return 'fnv1a64:' + hash.toString(16).padStart(16, '0');
+    }
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
   }
   async function saveOfflineSend(record, reservation) {
