@@ -195,7 +195,9 @@ async function launch() {
   const base = 'http://127.0.0.1:' + port;
   const useWebKit = process.argv.includes('--webkit');
   const browser = useWebKit ? await webkit.launch() : await chromium.launch({
-    args:['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
+    args:['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    // Chromium uses the process locale when converting the suggested filename.
+    env: process.platform === 'linux' ? {...process.env, LC_ALL:'C.UTF-8'} : process.env,
   });
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
