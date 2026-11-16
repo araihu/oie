@@ -1,11 +1,11 @@
 # Oiê Helm chart
 
-See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.4/docs/installation.md#run-on-kubernetes-with-helm)
+See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.5/docs/installation.md#run-on-kubernetes-with-helm)
 for installation and access via `kubectl port-forward`.
 
-Chart releases use their own version. Chart `0.2.4` defaults to the Oiê image
-`v0.0.1-rc.25`. Download the packaged chart and its checksum from
-[Helm chart 0.2.4](https://github.com/araihu/oie/releases/tag/helm-v0.2.4).
+Chart releases use their own version. Chart `0.2.5` defaults to the Oiê image
+`v0.0.1-rc.26`. Download the packaged chart and its checksum from
+[Helm chart 0.2.5](https://github.com/araihu/oie/releases/tag/helm-v0.2.5).
 
 | Setting | Default | Use |
 | --- | --- | --- |

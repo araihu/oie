@@ -43,6 +43,7 @@ type roomSessionHost interface {
 }
 
 type mucUser struct {
+	Destroy   *struct{}  `xml:"http://jabber.org/protocol/muc#user destroy"`
 	Invites   []struct{} `xml:"http://jabber.org/protocol/muc#user invite"`
 	Passwords []string   `xml:"http://jabber.org/protocol/muc#user password"`
 	Status    []struct {
@@ -385,6 +386,25 @@ func (m *Manager) LeaveRoom(ctx context.Context, a domain.Account, c domain.Conv
 	m.notifyRoom(ctx, e, slot, snapshot)
 	return snapshot, nil
 }
+func (m *Manager) RoomSnapshot(c domain.Conversation) domain.RoomSession {
+	m.mu.RLock()
+	e := m.entries[c.AccountID]
+	m.mu.RUnlock()
+	if e == nil {
+		return roomSnapshot(c, "not_joined", "", "not_connected")
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.session == nil || e.state.State != "connected" {
+		return roomSnapshot(c, "not_joined", "", "not_connected")
+	}
+	slot := e.rooms[c.Address]
+	if slot == nil || slot.conversation.ID != c.ID || slot.session != e.session {
+		return roomSnapshot(c, "not_joined", "", "")
+	}
+	return slot.snapshot
+}
+
 func (m *Manager) RoomSession(ctx context.Context, a domain.Account, c domain.Conversation) (domain.RoomSession, error) {
 	e, _, err := m.roomEntry(a, c)
 	if err != nil {
@@ -475,6 +495,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	if self {
 		observeRoomManagement(slot, p, true)
 	}
+	destroyed := p.MUC != nil && p.MUC.Destroy != nil
 	if p.Type == stanza.ErrorPresence {
 		if slot.snapshot.State != "joining" || slot.leaving {
 			e.mu.Unlock()
@@ -497,7 +518,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		}
 		slot.snapshot = roomSnapshot(slot.conversation, "failed", slot.snapshot.Nickname, code, slot.snapshot.IntentRevisionID)
 		slot.snapshot.Revoked = slot.creationName != nil || code == "forbidden" || code == "not_authorized" || code == "registration_required" || code == "room_not_found" || code == "nickname_conflict"
-	} else if self && p.Type == stanza.UnavailablePresence {
+	} else if p.Type == stanza.UnavailablePresence && (self || (destroyed && slot.snapshot.State == "joined")) {
 		code := ""
 		if p.MUC != nil {
 			for _, status := range p.MUC.Status {
@@ -513,6 +534,9 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 				}
 			}
 		}
+		if destroyed {
+			code = "room_destroyed"
+		}
 		state := "not_joined"
 		if code != "" {
 			state = "failed"
@@ -527,7 +551,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		if confirmedRemoval && slot.creationName != nil && code == "" {
 			slot.snapshot = roomSnapshot(slot.conversation, "failed", slot.snapshot.Nickname, "creation_failed", slot.snapshot.IntentRevisionID)
 		}
-		slot.snapshot.Revoked = code == "forbidden" || code == "removed" || (confirmedRemoval && slot.creationName != nil)
+		slot.snapshot.Revoked = code == "room_destroyed" || code == "forbidden" || code == "removed" || (confirmedRemoval && slot.creationName != nil)
 		slot.leaving = false
 	} else if self && p.Type == "" && slot.snapshot.State == "joining" && !slot.leaving {
 		if p.ID != "" && slot.requestID != "" && p.ID != slot.requestID {

@@ -78,13 +78,22 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 	if err != nil {
 		return application.ConversationResult{}, err
 	}
-	if in.RoomEntry != nil {
-		if c.Kind != "room" {
-			c, err = promoteRoomPlaceholder(ctx, q, c, in.Conversation)
-			if err != nil {
-				return application.ConversationResult{}, err
-			}
+	if in.RoomEntry != nil && c.Kind != "room" {
+		c, err = promoteRoomPlaceholder(ctx, q, c, in.Conversation)
+		if err != nil {
+			return application.ConversationResult{}, err
 		}
+	}
+	if c.RemovedFromChats && (in.RoomEntry != nil || c.Kind == "direct") {
+		next := c
+		next.RemovedFromChats, next.Archived = false, false
+		if err := writeConversationDecision(ctx, q, c, next, in.Conversation.RevisionID, in.Operation.CreatedAt); err != nil {
+			return application.ConversationResult{}, err
+		}
+		next.RevisionID = in.Conversation.RevisionID
+		c = next
+	}
+	if in.RoomEntry != nil {
 		if err := openRoomIntent(ctx, q, c.ID, *in.RoomEntry, in.RoomPassword != ""); err != nil {
 			return application.ConversationResult{}, err
 		}
@@ -111,22 +120,15 @@ func promoteRoomPlaceholder(ctx context.Context, q *dbgen.Queries, current, room
 	if current.Kind != "direct" || empty == nil || !*empty {
 		return current, application.ErrRoomAddressConflict
 	}
-	parents := jsonText([]domain.ID{current.RevisionID})
-	current.Kind, current.Title, current.RevisionID = "room", room.Title, room.RevisionID
-	if err := q.UpdateConversation(ctx, dbgen.UpdateConversationParams{
-		ID: string(current.ID), RevisionID: string(current.RevisionID), Payload: jsonText(current),
-		ActivitySequence: current.ActivitySequence, UnreadCount: int64(current.UnreadCount),
-	}); err != nil {
+	next := current
+	next.Kind, next.Title, next.RevisionID = "room", room.Title, room.RevisionID
+	if next.RemovedFromChats {
+		next.RemovedFromChats, next.Archived = false, false
+	}
+	if err := writeConversationDecision(ctx, q, current, next, room.RevisionID, room.UpdatedAt); err != nil {
 		return current, err
 	}
-	if err := q.InsertConversationRevision(ctx, dbgen.InsertConversationRevisionParams{
-		ID: string(current.RevisionID), EntityID: string(current.ID), Parents: parents,
-		Payload: jsonText(current), CreatedAt: stamp(room.UpdatedAt),
-	}); err != nil {
-		return current, err
-	}
-	_, err = change(ctx, q, "conversation.updated", current, room.UpdatedAt)
-	return current, err
+	return next, nil
 }
 
 func (s *Store) Conversation(ctx context.Context, id domain.ID) (domain.Conversation, error) {
@@ -158,6 +160,17 @@ func (s *Store) Conversations(ctx context.Context, in application.ConversationQu
 		if row.LatestMessagePageCount >= 0 {
 			count := int(row.LatestMessagePageCount)
 			c.LatestMessagePageCount = &count
+		}
+		if c.Kind == "room" {
+			c.RoomSession = &domain.RoomSession{
+				IntentRevisionID: domain.ID(row.RoomIntentRevision),
+				Active:           row.RoomIntentActive == 1,
+				LastErrorCode:    row.RoomIntentError,
+				CreationName:     row.RoomIntentCreationName,
+			}
+			if row.RoomIntentError != "" {
+				c.RoomSession.State = "failed"
+			}
 		}
 		out = append(out, c)
 	}
@@ -206,6 +219,9 @@ func updateConversation(ctx context.Context, q *dbgen.Queries, c domain.Conversa
 		c.UpdatedAt = visibleAt
 	}
 	if !m.IsOwn && !m.Historical {
+		if c.Kind == "direct" {
+			c.RemovedFromChats = false
+		}
 		c.UnreadCount++
 		c.UnreadMention = c.UnreadMention || m.MentionsYou
 	}
@@ -318,7 +334,7 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err != nil {
 		return application.MessageResult{}, err
 	}
-	if c.Request != "" || (in.ExpectedConversationKind != "" && c.Kind != in.ExpectedConversationKind) {
+	if c.RemovedFromChats || c.Request != "" || (in.ExpectedConversationKind != "" && c.Kind != in.ExpectedConversationKind) {
 		return application.MessageResult{}, application.ErrStateConflict
 	}
 	if c.Kind == "room" {

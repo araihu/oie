@@ -301,7 +301,10 @@ window.OieRuntime.register('room-management', life => {
                 if (submit) submit.disabled = false;
               }
             }
-            if (revision) form.elements.expectedRevision.value = revision;
+            // An open destructive confirmation keeps the revision the owner reviewed.
+            if (revision && (form.elements.managementAction.value !== 'destroy' || form.hidden)) {
+              form.elements.expectedRevision.value = revision;
+            }
           }
         }
       }
@@ -579,6 +582,18 @@ window.OieRuntime.register('room-management', life => {
     }
     pending.delete(form);
     const action = form.elements.managementAction.value;
+    if (action === 'destroy') {
+      setActionOpen(form, false);
+      if (result.ok) {
+        window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-management'}}));
+      } else {
+        if (result.message) window.dispatchEvent(new CustomEvent('notify', {
+          detail: {kind:'toast', tone:'danger', message:result.message}
+        }));
+        life.timeout(() => {if (active) void load(true);}, 0);
+      }
+      return;
+    }
     const panel = form.closest('[role=tabpanel]');
     const changesBans = result.ok && action === 'affiliation' &&
       (form.elements.value.value === 'outcast' || panel?.id === bansPanelID);

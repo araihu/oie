@@ -37,6 +37,13 @@ func roomAccountIDs(options []selectfield.Option) string {
 	return strings.Join(ids, " ")
 }
 
+func roomEntryChecking(text copy, create bool) string {
+	if create {
+		return text.RoomCheckingAddress
+	}
+	return ""
+}
+
 templ roomEntryDrawer(v view, create bool) {
 	{{ target,title,action := "join-room",v.Text.JoinRoom,"join" }}
 	if create {
@@ -57,7 +64,7 @@ templ roomEntryDrawer(v view, create bool) {
 			if len(options)==0 {
 				@link.Link(v.addAccountHref()){ {v.Text.AddAccount} }
 			} else {
-				@form.Form(form.Config{ID:target+"-form",Action:"/ui/rooms/open",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"open","data-room-entry":action,"data-room-account-ids":roomAccountIDs(options)}}) {
+				@form.Form(form.Config{ID:target+"-form",Action:"/ui/rooms/open",Method:"post",RootAttrs:templ.Attributes{"data-oie-action":"open","data-room-entry":action,"data-room-entry-checking":roomEntryChecking(v.Text,create),"data-room-account-ids":roomAccountIDs(options)}}) {
 					@mutationFields(v,target,key)
 					<input type="hidden" name="roomAction" value={action}/>
 					<input type="hidden" name="lang" value={v.Locale}/>

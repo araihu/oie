@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -129,12 +130,39 @@ func senderAvatarBorder(m engineapi.Message, identity, scope string) string {
 		}
 		identity = scope + "/" + m.Sender.DisplayName
 	}
-	colors := [...]string{
-		"oie-avatar-user-blue", "oie-avatar-user-purple", "oie-avatar-user-pink", "oie-avatar-user-orange",
-		"oie-avatar-user-olive", "oie-avatar-user-green", "oie-avatar-user-teal", "oie-avatar-user-indigo",
-	}
+	return avatarBorderColors[avatarBorderIndex(identity)]
+}
+
+var avatarBorderColors = [...]string{
+	"oie-avatar-user-blue", "oie-avatar-user-purple", "oie-avatar-user-pink", "oie-avatar-user-orange",
+	"oie-avatar-user-olive", "oie-avatar-user-green", "oie-avatar-user-teal", "oie-avatar-user-indigo",
+}
+
+func avatarBorderIndex(identity string) int {
 	hash := sha256.Sum256([]byte(identity))
-	return colors[int(hash[0])%len(colors)]
+	return int(hash[0]) % len(avatarBorderColors)
+}
+
+func (v *view) setAccounts(accounts []engineapi.Account) {
+	v.Accounts = accounts
+	v.AccountAvatarBorders = make(map[string]string, len(accounts))
+	// Assign oldest accounts first. A new account can use a free color
+	// without changing the colors already associated with existing accounts.
+	ordered := slices.Clone(accounts)
+	slices.SortFunc(ordered, func(a, b engineapi.Account) int {
+		return strings.Compare(a.Id, b.Id)
+	})
+	var used [len(avatarBorderColors)]bool
+	for i, account := range ordered {
+		index := avatarBorderIndex(account.Address)
+		if i < len(used) {
+			for used[index] {
+				index = (index + 1) % len(used)
+			}
+			used[index] = true
+		}
+		v.AccountAvatarBorders[account.Id] = avatarBorderColors[index]
+	}
 }
 
 func (s *Server) loadAvatars(ctx context.Context, v *view, account string) {

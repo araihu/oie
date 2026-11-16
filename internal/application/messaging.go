@@ -298,7 +298,26 @@ func (e *Engine) Conversations(ctx context.Context, cursor string, q Conversatio
 		return nil, err
 	}
 	q.Limit++
-	return repo.Conversations(ctx, q)
+	conversations, err := repo.Conversations(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	snapshots, ok := e.protocols.(RoomSnapshotProvider)
+	for i, chat := range conversations {
+		if chat.RoomSession == nil {
+			continue
+		}
+		var observed domain.RoomSession
+		if ok {
+			observed = snapshots.RoomSnapshot(chat)
+		}
+		session, err := resolveRoomSession(chat, *chat.RoomSession, observed, ok)
+		conversations[i].RoomSession = nil
+		if err == nil && (ok || session.LastErrorCode == "room_destroyed") {
+			conversations[i].RoomSession = &session
+		}
+	}
+	return conversations, nil
 }
 func (e *Engine) SendMessage(ctx context.Context, key, conversationID domain.ID, text string) (MessageResult, error) {
 	return e.SendMessageWithReply(ctx, key, conversationID, text, "")

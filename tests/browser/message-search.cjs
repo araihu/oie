@@ -1,5 +1,6 @@
 // Independent read-only engine fixture. Real SQLite search is checked separately
 // by message_search_test.go and the development-XMPP browser workflow.
+const {openConversationDetails} = require('./fixtures/conversation-menu.cjs');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const fs = require('node:fs/promises');
@@ -937,7 +938,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       await field.fill('Latest room term');
       await until(()=>archiveRequests.slice(previous).some(r=>r.query==='Latest room term'),'latest query reaches remote archive');
       assert.deepEqual(archiveRequests.slice(previous).map(r=>r.query),['Latest room term']);
-      await roomPage.locator('[data-open-details]').click();
+      await openConversationDetails(roomPage);
       const toggle=roomPage.getByRole('switch',{name:lang==='en'?'Download older history automatically':'Baixar histórico antigo automaticamente'});
       const help=roomPage.getByRole('button',{name:lang==='en'?'Older history':'Histórico antigo',exact:true});
       const initial=archive.mode==='gradual',changes=archiveModes.length;

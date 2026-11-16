@@ -213,7 +213,7 @@ Older messages without such evidence remain undisclosed until verified archive
 re-observation; opening a profile does not force archive recovery. Published
 full names are optional and are not verified legal identities.
 
-Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it. On the account detail screen, Disconnect stays in the footer while the details scroll.
+Use a profile control at the bottom of the navigation for account switching, following the supplied X account-switcher reference. Its popover lists account names/addresses, marks the active account, shows available unread counts, and offers adding an existing account and managing connections. Account connection status appears on the avatar with a localized tooltip and accessible label, and updates without closing the switcher. Reuse the conversation sender palette for deterministic account avatar borders. Use the owning account’s border color on conversation avatars alongside the account name and address. Retain an All accounts inbox option. Switching the inbox account does not disconnect other protocol sessions, transfer drafts, or change pending-send ownership. Oiê uses Disconnect for an XMPP session; built-in application login/logout remains backlogged. Account management starts with a compact account list and opens only one account’s connection details at a time. The account detail avatar also carries connection status, replacing a separate status panel. Connected or connecting accounts offer Disconnect without the connection form; disconnected accounts and failed connections offer the connection form. Live refreshes update these actions while preserving unfinished connection fields when the state stays the same. Adding an existing account is a separate screen; server/port overrides live under advanced connection settings. In the account-list drawer, Add account remains at the bottom while the account list scrolls independently above it. On the account detail screen, Disconnect stays in the footer while the details scroll.
 
 Account details also allow removing an account after confirmation. Removal
 forgets saved credentials and deletes the account's conversations, retained
@@ -293,6 +293,14 @@ intent using the account username as nickname. Existing manual nickname choices,
 explicit leaves and access revocation take precedence over imported bookmarks.
 The server must still confirm this client's room presence; another client's
 participation does not establish it. See [bookmark autojoin](bookmark-autojoin.md).
+
+**IMPLEMENTATION SCOPE:** verify the destination service and room address before
+saving a creation request. The server's configuration reply confirms creation.
+Removing a room from Chats also removes it from Archived and stops this engine
+from rejoining. It preserves local history and the server room. Joining by
+address adds it back. A joined owner can separately confirm deletion of the room
+on the server using XEP-0045. Server confirmation removes the room from that
+account’s chat lists and retains saved history. See [room management](room-management.md).
 
 **OPEN O03:** room creation defaults, protocol-specific leave/rejoin behavior across independent engines, and the exact representation of participants and memberships.
 
@@ -780,6 +788,12 @@ Selecting an already delivered persistent browser notification opens the message
 Suppress banners for the conversation visible in the active, focused window. Sound is silent there by default, with a device preference to enable it. Other conversations follow conversation mute, per-device override, account DND, notification permission, and device sound preferences.
 
 Archived conversations remain archived on new arrivals and their unread counts update. Archived rooms are silent by default. The device sound setting can enable sound in archived rooms under the selected room policy. Archiving preserves the room membership and history.
+
+**IMPLEMENTATION SCOPE:** **Remove from chats** hides an account-scoped direct
+conversation in both Chats and Archived, while retaining its history.
+Explicitly opening that address or receiving a new live message from the contact
+returns the conversation to Chats. Archive imports, duplicate messages and
+replays of a prior removal do not change its visibility.
 
 Coordinate cooperating tabs/windows, including installed PWA windows, within the same browser profile and app origin: at most one notification and one notification sound per eligible message. Do not assume this coordinates independent browser profiles or origins.
 

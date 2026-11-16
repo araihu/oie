@@ -141,6 +141,12 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, application.ErrAttachmentTooLarge), errors.As(err, &tooLarge):
 		status, code = http.StatusRequestEntityTooLarge, "media_too_large"
+	case errors.Is(err, application.ErrInvalidRoomService):
+		status, code = http.StatusBadRequest, "invalid_request"
+	case errors.Is(err, application.ErrRoomCreationUnavailable):
+		status, code = http.StatusServiceUnavailable, "protocol_unavailable"
+	case errors.Is(err, application.ErrRoomAlreadyExists):
+		status, code = http.StatusConflict, "state_conflict"
 	case errors.Is(err, application.ErrInvalid):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, application.ErrNotFound):
@@ -189,6 +195,15 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	var starConflict application.StarConflict
 	var conflict application.StateConflict
 	switch {
+	case errors.Is(err, application.ErrInvalidRoomService):
+		detail := engineapi.ProblemRoomCreationError("invalid_service")
+		problem.RoomCreationError = &detail
+	case errors.Is(err, application.ErrRoomCreationUnavailable):
+		detail := engineapi.ProblemRoomCreationError("verification_unavailable")
+		problem.RoomCreationError = &detail
+	case errors.Is(err, application.ErrRoomAlreadyExists):
+		detail := engineapi.ProblemRoomCreationError("already_exists")
+		problem.RoomCreationError = &detail
 	case errors.Is(err, application.ErrRoomAddressConflict):
 		addressInUse := true
 		problem.RoomAddressInUse = &addressInUse
@@ -414,7 +429,7 @@ func (s *Server) GetOperation(ctx context.Context, r engineapi.GetOperationReque
 	if err != nil {
 		return nil, err
 	}
-	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" || op.Kind == application.RoomManagementOperation {
+	if op.Kind == "update_pending_message" || op.Kind == "send_scheduled_message_now" || op.Kind == application.RoomManagementOperation || op.Kind == application.RemoveRoomOperation || op.Kind == application.RemoveDirectOperation {
 		return nil, application.ErrNotFound
 	}
 	kind := engineapi.OperationKind(op.Kind)

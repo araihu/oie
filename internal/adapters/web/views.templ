@@ -242,8 +242,9 @@ templ profile(v view,id string) {
 }
 
 templ accountTrigger(v view){
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":"","data-active-account-name":v.activeAccountName()})){
-@profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS})
+{{ border := v.AccountAvatarBorders[v.AccountFilter] }}
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":"","data-active-account-name":v.activeAccountName(),"data-account-avatar-border":border})){
+@profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS,Border:border!="",BorderColor:border})
 <span class="oie-profile-identity"><strong>{v.activeAccountName()}</strong><small>{v.activeAccountAddress()}</small></span>
 @glyph(heroicons.Icon16SolidEllipsisHorizontal)
 }
@@ -398,17 +399,26 @@ templ conversationRow(v view, c engineapi.Conversation) {
 	{{ attrs := navigationAttrs("conversation-pane", "conversation", "outerHTML settle:0ms show:none") }}
 	{{ attrs["data-conversation-id"] = c.Id }}
 	{{ attrs["aria-current"] = strconv.FormatBool(v.ChatID == c.Id) }}
+	{{ roomLabel, roomIndicator := v.roomStatusPresentation(c.RoomStatus) }}
+	{{ border := v.AccountAvatarBorders[c.AccountId] }}
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}
 		if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
 			data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
 		}
 	>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
-			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar"},true)
+			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar",Status:roomIndicator,Border:border!="",BorderColor:border},true)
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
 					<span>{ v.requestLabel(c) }</span>
+					if roomLabel != "" && c.Request == nil {
+						if roomIndicator == avatar.StatusSuccess {
+							<span class="sr-only" data-room-status-label>{ roomLabel }</span>
+						} else {
+							<span class="oie-row-room-status" data-room-status-label title={ roomLabel }>{ roomLabel }</span>
+						}
+					}
 					if c.Kind=="room" {
 						<span class="oie-row-mention-slot">
 							if c.UnreadMention!=nil && *c.UnreadMention {
@@ -432,6 +442,8 @@ if len(v.Accounts)>1 {
 }
 
 templ chatHeader(v view) {
+	{{ roomLabel, roomIndicator := v.roomStatusPresentation(v.selectedRoomStatus()) }}
+	{{ border := v.AccountAvatarBorders[v.Selected.AccountId] }}
 	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
 @conversationPreferenceData(v)
 if v.requestKind()=="" {
@@ -440,26 +452,52 @@ if v.requestKind()=="" {
 		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
-		@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
-		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{v.accountLabel(v.Selected.AccountId)} · {v.connectionLabel(v.Selected.AccountId)}</p></div>
+		<div class="oie-chat-avatar">
+			@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS, Status: roomIndicator, Border:border!="", BorderColor:border})
+			if v.requestKind()=="" {
+				@button.Button(
+					button.WithType("button"),
+					button.WithAppearance(button.AppearancePlain),
+					button.WithRootClass("oie-chat-avatar-trigger"),
+					button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "aria-haspopup": "dialog", "title": v.Text.Details}),
+					button.WithAlpine(&button.AlpineConfig{OnClick: "$el.focus({preventScroll:true}); $dispatch('drawer:open', {id:'details'})"}),
+				) {}
+			}
+		</div>
+		<div class="oie-chat-identity">
+			<h2>{ v.Selected.Title }</h2>
+			if roomLabel != "" && v.requestKind() == "" {
+				<p title={ roomLabel }><span data-room-status-label>{ roomLabel }</span> · { v.accountLabel(v.Selected.AccountId) }</p>
+			} else if v.conversationRemoved() {
+				<p>{ v.Text.ConversationRemoved } · { v.accountLabel(v.Selected.AccountId) }</p>
+			} else {
+				<p>{ v.accountLabel(v.Selected.AccountId) } · { v.connectionLabel(v.Selected.AccountId) }</p>
+			}
+		</div>
 if v.requestKind()=="" {
-		@button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"aria-label": v.Text.Details, "title": v.Text.Details,"data-open-details":""}), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'details'})"})) {
-			@glyph(heroicons.Icon16SolidInformationCircle)
-		}
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{Label:v.Text.Details,OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{ID:"chat-conversation-details",Label:v.Text.Details,Icon:glyph(heroicons.Icon16SolidInformationCircle),OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}}} }}
+if !v.conversationRemoved() {
+{{ sections=append(sections,v.conversationPreferenceSection()) }}
+}
+{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}) }}
 if v.conversationSchedulesAvailable() {
 {{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
 }
-if v.Selected.Kind=="room" {
+if v.Selected.Kind=="room" && !v.conversationRemoved() {
 {{ roomItems:=[]dropdown.Item{{ID:"chat-manage-room",Label:v.Text.RoomManage,Icon:glyph(heroicons.Icon16SolidCog6Tooth),OnClick:"void 0"}} }}
 if v.canInviteToRoom() {
 {{ roomItems=append(roomItems,dropdown.Item{ID:"chat-invite-room",Label:v.Text.RoomInvitePeople,Icon:glyph(heroicons.Icon16SolidUsers),OnClick:"void 0"}) }}
 }
 {{ roomItems=append(roomItems,dropdown.Item{ID:"chat-leave-room",Label:v.Text.LeaveRoom,Icon:roomExitIcon(),OnClick:"$dispatch('oie:leave-room')",Disabled:!v.canLeaveRoom()}) }}
 if v.canJoinRoom() {
-{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-join-room",Label:v.Text.JoinRoom,OnClick:"$dispatch('oie:join-saved-room')"}) }}
+{{ roomItems=append(roomItems,dropdown.Item{ID:"chat-join-room",Label:v.Text.JoinRoom,Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsRoomEntry16SolidArrowLeftEndOnRectangle,Decorative:true,RootClass:"oie-icon"}),OnClick:"$dispatch('oie:join-saved-room')"}) }}
+}
+if v.canRemoveFromChats() {
+{{ roomItems=append(roomItems,v.removeFromChatsItem("chat-remove-room")) }}
 }
 {{ sections=append(sections,dropdown.Section{Items:roomItems}) }}
+} else if v.canRemoveFromChats() {
+{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{v.removeFromChatsItem("chat-remove-direct")}}) }}
 }
 		@dropdown.Dropdown(dropdown.Config{ID:"chat-options",Label:v.Text.More,Trigger:menuTrigger(v.Text.More),MenuAlign:dropdown.AlignEnd,Sections:sections})
 }
@@ -776,8 +814,9 @@ templ accountEditorFeedback(v view,target string) {
  </div>
 }
 templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
-<div class="inline-flex shrink-0" data-account-status={a.Id} data-account-avatar-name={a.Label} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
-@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:size,Status:connectionAvatarStatus(v,a.Id)})
+{{ border := v.AccountAvatarBorders[a.Id] }}
+<div class="inline-flex shrink-0" data-account-status={a.Id} data-account-avatar-name={a.Label} data-account-avatar-border={border} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
+@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:size,Status:connectionAvatarStatus(v,a.Id),Border:border!="",BorderColor:border})
 </div>
 }
 templ accountConnectionControls(v view,id string){
@@ -861,7 +900,7 @@ templ liveCopy(v view){
 <div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
-<div id="oie-live-regions" data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)
