@@ -7,6 +7,12 @@
   const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 
   if (shell) {
+    navigator.serviceWorker.addEventListener('message', ({data}) => {
+      if (data?.type !== 'oie:notification-click') return;
+      const {engine, account, conversation, message} = data;
+      if (![engine, account, conversation, message].every(uuid)) return;
+      location.assign('/?' + new URLSearchParams({notificationEngine: engine, account, chat: conversation, message}));
+    });
     void renderOffline();
     return;
   }

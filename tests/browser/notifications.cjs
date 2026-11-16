@@ -550,7 +550,8 @@ async function run() {
     assert.equal(workerBanner.options.silent, true);
     assert.deepEqual(workerBanner.options.data, {engine, account, conversation: other, message: next.id});
     await until(async () => (await total('alerts')) === previousAlerts + 2, 'independent browser profiles');
-    const [worker] = mobile.serviceWorkers();
+    const worker = mobile.serviceWorkers().find(worker => new URL(worker.url()).pathname === '/ui/notification-worker.js');
+    assert(worker, 'the activated worker belongs to notification delivery');
     const target = '#message-timeline [data-message-id="' + next.id + '"]';
     await mobilePage.evaluate(() => { window.notificationClickPreservedPage = true; });
     assert.deepEqual(await clickWorkerBanner(worker, workerBanner.options.data), {closed: true, focused: true, destination: undefined});

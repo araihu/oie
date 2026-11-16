@@ -1,7 +1,10 @@
 package web
 
 import (
+	"bytes"
+	"crypto/sha256"
 	_ "embed"
+	"fmt"
 	"net/http"
 
 	"github.com/araihu/oie/internal/adapters/cachehttp"
@@ -15,6 +18,22 @@ var offlineHistoryScript []byte
 
 //go:embed offline-history.css
 var offlineHistoryStylesheet []byte
+
+//go:embed offline_history.templ
+var offlineHistoryTemplate []byte
+
+// Make the browser reinstall the worker when its precached assets change.
+var offlineWorkerSource = func() []byte {
+	hash := sha256.New()
+	for _, asset := range [][]byte{offlineHistoryScript, offlineHistoryStylesheet, offlineHistoryTemplate} {
+		hash.Write(asset)
+	}
+	for _, lang := range []string{"en", "pt-BR"} {
+		catalog, _ := localeFiles.ReadFile("locales/" + lang + ".json")
+		hash.Write(catalog)
+	}
+	return fmt.Appendf(bytes.Clone(offlineWorkerScript), "\n// Offline asset revision: %x\n", hash.Sum(nil))
+}()
 
 func (s *Server) offlineHistoryEnabled() bool {
 	return s.createHostedKey == nil && s.engineMode == nil
@@ -33,7 +52,7 @@ func (s *Server) serveOfflineHistory(w http.ResponseWriter, r *http.Request) boo
 	var body []byte
 	switch r.URL.Path {
 	case "/offline-worker.js":
-		body = offlineWorkerScript
+		body = offlineWorkerSource
 	case "/ui/offline-history.js":
 		body = offlineHistoryScript
 	case "/ui/offline-history.css":
