@@ -753,21 +753,34 @@ window.OieRuntime.register('live', life => {
   function localizeTimes(root=document) {
     window.OieTime.localize(root);
     const timeline=root.querySelector('#message-timeline');if(!timeline)return;
-    for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
+    const obsolete=new Set(timeline.querySelectorAll(':scope > .oie-day-divider'));
     const key=date=>window.OieTime.dateKey(date,'day');
     const today=key(new Date());let previous='';
     for(const row of timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')){
       const date=new Date(row.dataset.createdAt);if(Number.isNaN(date.getTime()))continue;
       const current=key(date);if(current===previous)continue;previous=current;
-      const divider=document.createElement('div');divider.className='oie-day-divider';
-      const time=document.createElement('time');time.dateTime=row.dataset.createdAt;time.dataset.day='true';
-      time.textContent=current===today?text('today'):window.OieTime.format(date,{dateStyle:'medium'});
-      divider.append(time);row.before(divider);
+      let divider=row.previousElementSibling;
+      const mounted=obsolete.delete(divider);
+      if(!mounted){
+        divider=document.createElement('div');
+        divider.className='oie-day-divider';
+      }
+      let time=divider.querySelector('time');
+      if(!time){
+        time=document.createElement('time');
+        time.dataset.day='true';
+        divider.replaceChildren(time);
+      }
+      if(time.dateTime!==row.dataset.createdAt)time.dateTime=row.dataset.createdAt;
+      const label=current===today?text('today'):window.OieTime.format(date,{dateStyle:'medium'});
+      if(time.textContent!==label)time.textContent=label;
+      if(!mounted)row.before(divider);
     }
+    for(const divider of obsolete)divider.remove();
   }
   life.on(document,'oie:time-zone',()=>{
     const timeline=document.querySelector('#message-timeline');
-    const follow=window.OieTimeline?.atBottom()&&!pinned();
+    const follow=window.OieTimeline?.atBottom()&&window.OieTimeline.liveAttached;
     const viewport=timeline?.getBoundingClientRect();
     const row=viewport&&[...timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')]
       .find(node=>node.getBoundingClientRect().bottom>viewport.top);
@@ -777,12 +790,9 @@ window.OieRuntime.register('live', life => {
     else if(row)timeline.scrollTop+=row.getBoundingClientRect().top-top;
   },{capture:true});
   let highlightedMessage='',highlightTimer;
-  function pinned(){const timeline=window.OieTimeline;return !!body.dataset.focusMessage||!!(timeline?.hasNewer&&!timeline.liveAttached);}
-  function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}
   function scrollLatest() {
     if(window.OieTimeline)window.OieTimeline.scrollLatest();
     else{const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;}
-    showJump(pinned());
   }
   function focusMessage(id,focus=true){
     const timeline=document.querySelector('#message-timeline'),row=timeline?.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
@@ -801,16 +811,20 @@ window.OieRuntime.register('live', life => {
     if(focusMessage(reply.dataset.replyTarget)){event.preventDefault();event.stopPropagation();}
   },true);
   life.on(document,'click',event=>{
-    if(event.target.closest('[data-jump-latest]')){
+    const jump=event.target.closest('[data-jump-latest]');
+    if(jump){
       const url=new URL(location.href);
-      if(pinned()||url.searchParams.has('message')||url.searchParams.has('timelineCursor')){
+      if(window.OieTimeline?.needsLatestPage()){
         for(const key of ['message','timelineCursor','timelineDirection'])url.searchParams.delete(key);
         window.OieNavigation.go(url,{latest:true});
-      }else scrollLatest();
+      }else{
+        const restoreFocus=jump===document.activeElement;
+        scrollLatest();
+        if(restoreFocus&&jump.hidden)document.getElementById('message-timeline')?.focus({preventScroll:true});
+      }
     }
   });
-  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(window.OieTimeline?.atBottom())showJump(pinned());});
-  localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
+  localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else window.OieTimeline?.syncJump();
 
   life.on(scheduleRetry,'click',()=>composer.requestSubmit());
   function applyScheduleEditor(editor, nextKey = editor.dataset.operationKey) {
@@ -907,6 +921,12 @@ window.OieRuntime.register('live', life => {
     const inboxGeneration = inbox.generation;
     const requestedSearch=location.search;
     const refreshQuery=new URLSearchParams(requestedSearch);
+    // Keep a source link addressable after scrolling to the live timeline.
+    if(window.OieTimeline?.liveAttached&&body.dataset.contextMissing!=='true'){
+      // A retired source clears the mounted identity, so revalidate its URL.
+      if(body.dataset.focusMessage)refreshQuery.delete('message');
+      for(const key of ['timelineCursor','timelineDirection'])refreshQuery.delete(key);
+    }
     if(!refreshQuery.has('chat')&&list){
       if(body.dataset.conversationId)refreshQuery.set('chat',body.dataset.conversationId);
       if(!body.dataset.conversationId||document.querySelector('#conversation-pane[data-open-chat="false"]'))refreshQuery.set('inbox','1');
@@ -937,8 +957,11 @@ window.OieRuntime.register('live', life => {
         return;
       }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
+      if(refreshQuery.has('message')&&body.dataset.contextMissing!=='true'&&!body.dataset.focusMessage&&canonicalID(regions.dataset.focusMessage)){
+        body.dataset.focusMessage=regions.dataset.focusMessage;
+        if(window.OieTimeline?.liveAttached)refreshAgain=true;
+      }
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
-      if(pinned())showJump(true);
       readAvatars(page);
       const room=document.querySelector('#room-session-status'),nextRoom=page.querySelector('#live-room-session #room-session-status');
       if(room&&nextRoom){
@@ -1146,12 +1169,14 @@ window.OieRuntime.register('live', life => {
   life.on(document,'oie:timeline-latest',()=>{
     clearTimeout(highlightTimer);highlightedMessage='';
     const timeline=document.getElementById('message-timeline');
+    const active=document.activeElement;
     for(const node of [...acceptedBubbles,pendingBubble])if(node&&!node.isConnected){
       timeline.insertBefore(node,timeline.querySelector('[data-timeline-edge="newer"]'));window.Alpine?.initTree(node);
     }
-    retireAcceptedBubbles();scrollLatest();timeline.focus({preventScroll:true});
+    retireAcceptedBubbles();scrollLatest();
+    if(active===body||active?.matches('[data-jump-latest]'))timeline.focus({preventScroll:true});
   });
-  life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id,event.detail.focus!==false);showJump(true);});
+  life.on(document,'oie:timeline-focus',event=>focusMessage(event.detail.id,event.detail.focus!==false));
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
   life.on(document,'oie:room-management-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
