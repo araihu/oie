@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	}
 	room, other := string(rooms["one@rooms.localhost"]), string(rooms["two@rooms.localhost"])
 	fileID := string(id())
-	stage := func(conversation, content string, extra bool, id string) *engineapi.StageMessageAttachmentResponse {
+	attachmentForm := func(content string, extra bool) (*bytes.Buffer, string) {
 		t.Helper()
 		var body bytes.Buffer
 		form := multipart.NewWriter(&body)
@@ -84,13 +85,19 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 		if err = form.Close(); err != nil {
 			t.Fatal(err)
 		}
-		res, err := client.StageMessageAttachmentWithBodyWithResponse(ctx, conversation, id, form.FormDataContentType(), &body)
+		return &body, form.FormDataContentType()
+	}
+	stage := func(conversation, content string, extra bool, id string) *engineapi.StageMessageAttachmentResponse {
+		t.Helper()
+		body, contentType := attachmentForm(content, extra)
+		res, err := client.StageMessageAttachmentWithBodyWithResponse(ctx, conversation, id, contentType, body)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return res
 	}
-	content := "persistent file bytes"
+	// Exceed the default request limit to exercise the multipart exception.
+	content := strings.Repeat("persistent file bytes", 1<<16)
 	staged := stage(room, content, false, fileID)
 	if staged.JSON201 == nil || staged.JSON201.Size != int64(len(content)) {
 		t.Fatalf("stage: %s", staged.Body)
@@ -98,6 +105,17 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	if stage(room, content, false, fileID).JSON200 == nil || stage(other, content, false, fileID).StatusCode() != 409 ||
 		stage(room, "different", false, fileID).StatusCode() != 409 || stage(room, content, true, string(id())).StatusCode() != 400 {
 		t.Fatal("invalid multipart or staging replay accepted")
+	}
+	truncated, contentType := attachmentForm(content, false)
+	truncated.Truncate(truncated.Len() - len("--\r\n"))
+	truncatedID := string(id())
+	rejected, err := client.StageMessageAttachmentWithBodyWithResponse(ctx, room, truncatedID, contentType, truncated)
+	if err != nil || rejected.StatusCode() != 400 {
+		t.Fatalf("truncated multipart was not rejected: %+v, %v", rejected, err)
+	}
+	missing, err := client.GetStagedMessageAttachmentWithResponse(ctx, room, truncatedID, nil)
+	if err != nil || missing.StatusCode() != 404 {
+		t.Fatalf("truncated multipart left a stored attachment: %+v, %v", missing, err)
 	}
 	at := time.Now().Add(time.Hour).UTC()
 	keys := []string{string(id()), string(id())}
