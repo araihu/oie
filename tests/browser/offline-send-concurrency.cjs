@@ -140,8 +140,12 @@ async function checkDivergentOfflineDraft(browser, url, state, until) {
     assert.equal(await composer(stale).inputValue(), edited);
     assert.equal(await formKey(stale), sharedKey);
     await context.setOffline(true);
-    await submit(second);
+    const send = second.locator('[data-send-message]');
+    await second.bringToFront();
+    await send.focus();
+    await send.press('Enter');
     await waiting(second).waitFor();
+    await second.waitForFunction(() => document.activeElement.matches('[data-pending-send]'));
     const queuedKey = await pending(second).getAttribute('data-operation-key');
     assert.notEqual(queuedKey, sharedKey, 'queuing the different composition reserves a separate key');
 

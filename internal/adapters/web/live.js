@@ -1770,16 +1770,34 @@ window.OieRuntime.register('live', life => {
       if (validExcerptDigest(journal.reply.excerptSha256)) values.set('expectedReplyExcerptSha256', journal.reply.excerptSha256);
     }
   }
+  function focusAfterSend() {
+    if (journal?.offline && pendingBubble) {
+      pendingBubble.focus({preventScroll:true});
+      return;
+    }
+    let target = input;
+    const voiceDraft = composer.querySelector('[data-record-audio]:not([hidden])');
+    if (voiceDraft) {
+      const retry = pendingBubble?.querySelector('[data-pending-state]:not([hidden]) [data-pending-send-retry]:not(:disabled)');
+      const retrySchedule = scheduleRetry?.matches(':not([hidden]):not(:disabled)') ? scheduleRetry : null;
+      target = retry || retrySchedule ||
+        (composerSend.disabled ? voiceDraft.querySelector('[data-record-audio-remove]:not(:disabled)') : composerSend);
+    }
+    target?.focus({preventScroll:true});
+  }
   life.on(document,'submit', async event => {
     const form = event.target.closest('form[data-oie-action]');
     if (!form || mock) return;
     event.preventDefault();
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
+    const sendFocus = sending && form.contains(document.activeElement) ? document.activeElement : null;
+    const retainsSendFocus = () => sendFocus && [sendFocus, body].includes(document.activeElement);
     const retryingSend = sending && journal?.pending === true;
     let reservation;
     let releaseReservation = false;
     let normalAcceptance;
+    let savedOffline = false;
     const accountAvatar = form.dataset.oieAction === 'account-avatar';
     const removingAccount = form.dataset.oieAction === 'remove-account';
     const accountLabel = form.dataset.oieAction === 'account-label';
@@ -1843,6 +1861,7 @@ window.OieRuntime.register('live', life => {
           form.dataset.busy = 'false';
           lockComposer(Boolean(journal?.pending));
           renderReply();
+          if (retainsSendFocus()) focusAfterSend();
           if (!saved) errorToast(offlineCopy.storageFailed);
         }
         return;
@@ -1857,10 +1876,12 @@ window.OieRuntime.register('live', life => {
         if (reservation === false) {
           lockComposer(Boolean(journal?.pending));
           renderReply();
+          if (retainsSendFocus()) focusAfterSend();
           return;
         }
         if (reservation?.accepted) {
           consumeAcceptedDraft(record, reservation);
+          if (retainsSendFocus()) focusAfterSend();
           return;
         }
         submissionKey.value = record.key;
@@ -1941,7 +1962,8 @@ window.OieRuntime.register('live', life => {
       if (result.accepted) normalAcceptance = result;
       if (sending && result.code === 'engine_unavailable' && values.get('offlineCapable') === '1') {
         releaseReservation = true;
-        if (reservation && await saveOfflineSend(journal, reservation) || life.signal.aborted) return;
+        if (reservation) savedOffline = await saveOfflineSend(journal, reservation);
+        if (savedOffline || life.signal.aborted) return;
         result.rejected = true;
         result.message = offlineCopy.storageFailed;
       }
@@ -2083,17 +2105,7 @@ window.OieRuntime.register('live', life => {
       pendingRequests--;renderReply();syncRoomLeave();
       if (roomEntry) restoreRoomEntry(form, pendingRoomEntry(form));
       if(journal?.pending)renderPendingSend(pendingBubble?.dataset.pendingState||'uncertain');
-      if (sending) {
-        let target = input;
-        const voiceDraft = composer.querySelector('[data-record-audio]:not([hidden])');
-        if (voiceDraft) {
-          const retry = pendingBubble?.querySelector('[data-pending-state]:not([hidden]) [data-pending-send-retry]:not(:disabled)');
-          const retrySchedule = scheduleRetry?.matches(':not([hidden]):not(:disabled)') ? scheduleRetry : null;
-          target = retry || retrySchedule ||
-            (composerSend.disabled ? voiceDraft.querySelector('[data-record-audio-remove]:not(:disabled)') : composerSend);
-        }
-        target?.focus({preventScroll:true});
-      }
+      if (sending && (!savedOffline || retainsSendFocus())) focusAfterSend();
       if(roomMenuSubmit&&form.querySelector('[data-form-feedback]')?.dataset.error==='true'){
         window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'room-session-dialog'}}));
         life.raf(()=>form.querySelector('[data-form-feedback]')?.focus({preventScroll:true}));
