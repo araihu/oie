@@ -10,6 +10,10 @@ heroicons-check-badge
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/check-badge.svg
 License: MIT
 
+heroicons-emoji
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/24/outline/face-smile.svg
+License: MIT
+
 heroicons-forward
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-uturn-right.svg
 License: MIT

@@ -3,7 +3,7 @@
     "internal/adapters/web/brand/SOURCE.json": "0bcdd90f39a8d794dc74fa29552c792c864242b374359ba7d99d3472c75da2bf",
     "internal/adapters/web/cache_vendor/manifest.json": "d5f93763d96f0b961ec57b11d71729cd9cec0c0535622ec8066a14ef1584f9ad",
     "internal/adapters/web/pdfjs/manifest.json": "852a64b04dbcd2daaf6707892ad03c13609da8a1f81c233f56382b8e51017519",
-    "tools/icons/.iconpack.lock.yaml": "279d54c3a44d61e086d9b27d0230e9e69495062e64f2469b70e525efc65674de",
+    "tools/icons/.iconpack.lock.yaml": "9efc36e025139b44583dcd419233de67fb9f6bbfd5d5ce0f5c6aa6c92de5757b",
     "vendor/github.com/araihu/goshtoso/assets/favicon.svg": "56e8b185f2572ad4c7ea6fa8e715aa7dacd7381422b431ce07c35965ab05b3b7",
     "vendor/github.com/araihu/goshtoso/assets/icons/heroicons.svg": "75e282de7a19efba9cf0285b44af0641c1527361f921b7d7f8020efc1f1f0fb7",
     "vendor/github.com/araihu/goshtoso/assets/images/goshtoso-logo.svg": "5801b31fc6b1f54cde98b1a3f3f5e57553f6e67aa3fa0318879e5e2603cd540e",

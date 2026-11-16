@@ -63,6 +63,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   page.on('request',request=>{if(request.url().includes('/ui/emoji/en.json'))reads++});
   await page.goto(route());const input=page.locator('#message-composer'),trigger=page.locator('#oie-emoji-picker [data-emoji-trigger]'),search=page.locator('#emoji-search');
   await page.locator('body[data-oie-live-ready]').waitFor();
+  assert.equal(await trigger.locator('use').getAttribute('href'),'/ui/icons/heroicons-extra.svg#heroicons-emoji-24-outline-face-smile');
   await assertComposerTriggerPosition(input);
   await input.fill('A😀B');await input.evaluate(node=>{node.focus();node.setSelectionRange(1,3);node.dispatchEvent(new Event('select'))});
   const originalKey=await page.locator('#send-message-form [name=operationKey]').inputValue(),originalURL=page.url();assert.equal(reads,0,'catalog should load lazily');
