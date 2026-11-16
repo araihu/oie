@@ -57,6 +57,17 @@ func (s *Server) notificationContext(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+	preferences, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, accountID)
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if preferences.JSON200 != nil {
+		value.DoNotDisturb = new(preferences.JSON200.Presence == "dnd")
+	} else if preferences.StatusCode() != http.StatusNotFound && preferences.StatusCode() != http.StatusMethodNotAllowed {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	if replyTo != "" && owner.Kind == engineapi.ConversationKindRoom {
 		if target, err := s.client.GetMessageWithResponse(ctx, replyTo); err == nil && target.JSON200 != nil {
 			message := target.JSON200

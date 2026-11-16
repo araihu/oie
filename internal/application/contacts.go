@@ -149,5 +149,56 @@ func (e *Engine) Contacts(ctx context.Context, q domain.ContactQuery) (domain.Co
 	if !ok {
 		return empty, ErrProtocolUnavailable
 	}
-	return r.Contacts(ctx, q)
+	page, err := r.Contacts(ctx, q)
+	if protocol, ok := e.protocols.(ContactPresenceProtocol); err == nil && ok && q.IncludePresence {
+		for i := range page.Items {
+			contact := &page.Items[i]
+			if contact.Subscription == "to" || contact.Subscription == "both" {
+				contact.Presence = protocol.ContactPresence(contact.AccountID, contact.Address)
+			}
+		}
+	}
+	return page, err
+}
+
+type ContactPresenceProtocol interface {
+	ContactPresence(domain.ID, string) *domain.PresenceObservation
+}
+
+type ContactEditingProtocol interface {
+	ContactRequests(context.Context, domain.Account) ([]string, error)
+	ChangeContact(context.Context, domain.Account, string, string) error
+}
+
+func (e *Engine) ContactRequests(ctx context.Context, accountID domain.ID) ([]string, error) {
+	account, err := e.Account(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	protocol, ok := e.protocols.(ContactEditingProtocol)
+	if !ok {
+		return nil, ErrProtocolUnavailable
+	}
+	return protocol.ContactRequests(ctx, account)
+}
+
+func (e *Engine) ChangeContact(ctx context.Context, accountID domain.ID, address, action string) error {
+	address = strings.TrimSpace(address)
+	if !validText(address, 1023) {
+		return ErrInvalid
+	}
+	switch action {
+	case "add", "remove", "accept", "decline":
+	default:
+		return ErrInvalid
+	}
+	account, err := e.Account(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	protocol, ok := e.protocols.(ContactEditingProtocol)
+	if !ok {
+		return ErrProtocolUnavailable
+	}
+	return protocol.ChangeContact(ctx, account, address, action)
 }

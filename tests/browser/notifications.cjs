@@ -68,6 +68,7 @@ async function run() {
   const eventAttempts = [];
   const messages = new Map();
   let seq = 0, activeEngine = engine, engineAvailable = true, eventsAvailable = true, resetsRemaining = 0;
+  let presence = 'available';
   const chats = [[chat, 'direct', false], [other, 'direct', false], [room, 'room', false], [archivedRoom, 'room', true]]
     .map(([id, kind, archived], index) => ({
       id, revisionId: revision, accountId: account, kind, archived, address: 'chat' + index + '@example',
@@ -103,6 +104,7 @@ async function run() {
     if (route === '/api/v1/engine') return send({id: activeEngine, role: 'hosted', apiVersion: '0.31.0', eventCursor: activeEngine + ':' + seq});
     if (route === '/api/v1/accounts') return send({items: [profile]});
     if (route === '/api/v1/accounts/' + account) return send(profile);
+    if (route === '/api/v1/accounts/' + account + '/communication-preferences') return send({presence, revisionId: null, sendTyping: true});
     if (route.endsWith('/connection')) return send({accountId: account, state: 'connected', updatedAt: now});
     if (route === '/api/v1/conversations') return send({items: chats.filter(c => c.archived === (url.searchParams.get('archived') === 'true'))});
     const originalID = route.split('/').at(-1);
@@ -703,8 +705,36 @@ async function run() {
     await until(() => nativePage.evaluate(wav => window.nativeSounds[2] === wav, encodedTone), 'the hidden native window plays the selected tone');
     await nativeProfile.close();
 
+    const dndProfile = await browser.newContext();
+    const dndPage = await dndProfile.newPage();
+    await dndPage.addInitScript(() => {
+      localStorage.setItem('oie.notifications.banners', '1');
+      localStorage.setItem('oie.notifications.sound', '0');
+      window.Notification = class { static permission = 'granted'; };
+      window.banners = 0;
+      navigator.serviceWorker.register = () => new Promise(resolve => {
+        window.finishRegistration = () => resolve({
+          active: true,
+          showNotification: async () => { window.banners++; }
+        });
+      });
+    });
+    await dndPage.goto(base + '/?lang=en');
+    await dndPage.waitForFunction(() => window.OieEvents.connected);
+    push();
+    await dndPage.waitForFunction(() => !!window.finishRegistration);
+    presence = 'dnd';
+    const rechecked = dndPage.waitForResponse(response => new URL(response.url()).pathname === '/ui/notification-context');
+    await dndPage.evaluate(() => window.finishRegistration());
+    assert.equal((await (await rechecked).json()).doNotDisturb, true);
+    assert.equal(await dndPage.evaluate(() => window.banners), 0);
+    presence = 'available';
+    push();
+    await dndPage.waitForFunction(() => window.banners === 1);
+    await dndProfile.close();
+
     assert.deepEqual(errors, []);
-    console.log('PASS: notification preferences, native sound without Web Audio, two-second window, mute, replay and banner clicks');
+    console.log('PASS: notification preferences, native sound, two-second window, mute, replay, banner clicks and DND during worker startup');
   } finally {
     await browser?.close();
     app.kill();

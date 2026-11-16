@@ -50,6 +50,7 @@ type Querier interface {
 	FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error)
 	FirstContentRevisionSource(ctx context.Context, id string) (string, error)
 	GetAccount(ctx context.Context, id string) (string, error)
+	GetAccountCommunicationPreferences(ctx context.Context, accountID string) (GetAccountCommunicationPreferencesRow, error)
 	GetActiveMessageEdit(ctx context.Context, messageID string) (MessageEditCommand, error)
 	GetActiveMessageReaction(ctx context.Context, messageID string) (MessageReactionCommand, error)
 	GetArchiveAlias(ctx context.Context, arg GetArchiveAliasParams) (string, error)
@@ -188,6 +189,7 @@ type Querier interface {
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
 	PendingMessagesByAttachments(ctx context.Context, arg PendingMessagesByAttachmentsParams) ([]PendingMessagesByAttachmentsRow, error)
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
+	PutAccountCommunicationPreferences(ctx context.Context, arg PutAccountCommunicationPreferencesParams) error
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
 	PutCanonicalAlias(ctx context.Context, arg PutCanonicalAliasParams) error
 	PutContact(ctx context.Context, arg PutContactParams) error

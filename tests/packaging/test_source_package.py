@@ -16,6 +16,15 @@ SPEC.loader.exec_module(PACKAGE)
 
 
 class SourcePackageTest(unittest.TestCase):
+    def test_tracked_browser_source_inputs_match_manifest(self):
+        manifest = json.loads((ROOT / "packaging/browser-source.json").read_text())
+        for path, expected in manifest["inputs"].items():
+            if path.startswith("vendor/"):
+                continue
+            with self.subTest(path=path):
+                actual = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+                self.assertEqual(actual, expected, f"Update packaging/browser-source.json for {path}")
+
     def test_filtered_archive_keeps_source_and_drops_fixtures(self):
         original = io.BytesIO()
         with tarfile.open(fileobj=original, mode="w:gz") as archive:

@@ -19,6 +19,7 @@ type Conversation struct {
 	UnreadCount                       int
 	LatestMessagePageCount            *int         `json:"-"`
 	RoomSession                       *RoomSession `json:"-"`
+	UnreadReminder                    bool         `json:",omitempty"`
 	UnreadMention                     bool         `json:",omitempty"`
 	RemovedFromChats                  bool         `json:",omitempty"`
 	Archived, Favorite                bool

@@ -79,6 +79,31 @@ func migrateFixtureToVersion(t *testing.T, store *Store, version uint) {
 	}
 }
 
+func TestMessageRetractionsMigrateFromAccountCommunication(t *testing.T) {
+	ctx := t.Context()
+	store, engine, chat := outboxFixture(t)
+	migrateFixtureToVersion(t, store, 34)
+	prefs, err := engine.SetAccountCommunicationPreferences(ctx, chat.AccountID, "", "dnd", new(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = upgraded.Close() })
+	if saved, err := upgraded.AccountCommunicationPreferences(ctx, chat.AccountID); err != nil || saved != prefs {
+		t.Fatalf("communication preferences after retraction migration: %+v, %v", saved, err)
+	}
+	retraction := application.IncomingRetraction{Scope: "xmpp:correct:sender:" + chat.Address, RemoteID: "retained-message", At: time.Now().UTC()}
+	if err = upgraded.RecordMessageRetraction(ctx, chat.AccountID, chat.Kind, chat.Address, retraction); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRoomModerationPreviewMigratesIntoSharedCatalog(t *testing.T) {
 	ctx := t.Context()
 	store, engine, chat := outboxFixture(t)
@@ -330,7 +355,10 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"000034_message_retractions", "000033_account_removal", "000032_retention_recovery", "000031_retention", "000030_message_search_index", "000029_room_ban_nicknames", "000028_room_message_moderation", "000027_shared_catalog_projection", "000026_room_invitation_credentials", "000025_room_creation", "000024_reaction_target_lookups", "000023_dispatch_wire_stage", "000022_scheduled_timeline", "000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
+	// Preserve the scheduling tables from migration 21 while reconstructing
+	// the older preview layout in which they were deployed.
+	migrateFixtureToVersion(t, store, 21)
+	for _, name := range []string{"000020_room_reaction_retained_identity", "000019_room_reaction_identity_mode", "000018_room_reaction_reconciliation"} {
 		down, err := migrations.ReadFile("migrations/" + name + ".down.sql")
 		if err != nil {
 			t.Fatal(err)

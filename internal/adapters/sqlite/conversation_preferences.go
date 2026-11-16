@@ -41,10 +41,21 @@ func (s *Store) UpdateConversationPreferences(ctx context.Context, in applicatio
 	if conversation.RevisionID != in.ExpectedRevisionID {
 		return application.ConversationResult{}, application.ConversationPreferencesConflict{Current: conversation}
 	}
-	if in.AcceptRequest && conversation.Request != domain.MessageRequest {
+	if in.AcceptRequest && conversation.Request != domain.MessageRequest || in.Read != nil && conversation.Request != "" {
 		return application.ConversationResult{}, application.ConversationPreferencesConflict{Current: conversation}
 	}
 	next, changed := applyConversationPreferences(conversation, in)
+	if in.Read != nil {
+		next.UnreadReminder = !*in.Read
+		changed = conversation.UnreadReminder != next.UnreadReminder
+		if *in.Read {
+			marked, readErr := markConversationRead(ctx, q, &next, in)
+			if readErr != nil {
+				return application.ConversationResult{}, readErr
+			}
+			changed = changed || marked
+		}
+	}
 	if changed {
 		if err = writeConversationDecision(ctx, q, conversation, next, in.RevisionID, in.CreatedAt); err != nil {
 			return application.ConversationResult{}, err
@@ -59,6 +70,23 @@ func (s *Store) UpdateConversationPreferences(ctx context.Context, in applicatio
 		return application.ConversationResult{}, err
 	}
 	return application.ConversationResult{Conversation: conversation}, nil
+}
+
+func markConversationRead(ctx context.Context, q *dbgen.Queries, next *domain.Conversation, in application.ConversationPreferencesMutation) (bool, error) {
+	state, err := readState(ctx, q, *next)
+	if err != nil {
+		return false, err
+	}
+	ids, err := insertAllMessageReads(ctx, q, next.ID, in.ReadRevisionID)
+	if err != nil {
+		return false, err
+	}
+	if len(ids) == 0 && next.UnreadCount == 0 && !next.UnreadMention {
+		return false, nil
+	}
+	next.UnreadCount, next.UnreadMention = 0, false
+	_, err = writeReadRevision(ctx, q, state, in.ReadRevisionID, in.CreatedAt, next.UnreadCount, ids)
+	return true, err
 }
 
 func applyConversationPreferences(current domain.Conversation, in application.ConversationPreferencesMutation) (domain.Conversation, bool) {

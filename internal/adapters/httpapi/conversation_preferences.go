@@ -17,6 +17,7 @@ func (s *Server) UpdateConversationPreferences(ctx context.Context, r engineapi.
 		ExpectedRevisionID: domain.ID(r.Body.ExpectedRevisionId),
 		Archived:           r.Body.Archived,
 		Favorite:           r.Body.Favorite,
+		Read:               r.Body.Read,
 		AcceptRequest:      r.Body.AcceptRequest != nil,
 	})
 	if err != nil {

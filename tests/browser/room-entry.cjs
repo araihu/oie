@@ -531,9 +531,11 @@ async function waitFor(predicate) {
     const dismissRoomConfirmations = async () => {
       const toasts = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Alteração confirmada.'});
       while (await toasts.first().isVisible()) {
-        const count = await toasts.count();
-        await toasts.first().getByRole('button',{name:'Fechar',exact:true}).press('Enter');
-        await waitFor(async () => (await toasts.count()) < count);
+        const toast = await toasts.first().elementHandle();
+        // The room dialog traps keyboard focus, and a new confirmation can
+        // arrive before the dismissed toast finishes its transition.
+        await toast.$eval('button[aria-label="Fechar"]', button => button.click());
+        await toast.waitForElementState('hidden');
       }
     };
     const image = roomPanel.locator('.oie-room-management-avatar [data-avatar-ready=true]');

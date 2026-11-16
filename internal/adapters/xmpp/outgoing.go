@@ -45,6 +45,7 @@ type outboundMessage struct {
 	Fallback   *outboundFallbackElement   `xml:",omitempty"`
 	Correction *outboundCorrectionElement `xml:",omitempty"`
 	Reactions  *outboundReactions         `xml:",omitempty"`
+	ChatState  *chatState                 `xml:",omitempty"`
 	Store      *storeHint                 `xml:",omitempty"`
 }
 
