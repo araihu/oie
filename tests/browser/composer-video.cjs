@@ -92,7 +92,7 @@ async function waitForRecordingTime(page, minimumSeconds) {
   }, minimumSeconds);
 }
 
-async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
+async function verifyAudioCapture(page, locale, useTone, interruption = '') {
   const copy = locale === 'pt-BR' ? {
     record:'Gravar áudio', waiting:'Abrindo microfone…', stop:'Parar gravação', recording:'Gravando áudio…', cancel:'Cancelar',
   } : {
@@ -106,10 +106,10 @@ async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
   const composer = page.locator('#message-composer');
   const geometry = await composer.boundingBox();
   if (useTone) await installMicrophoneTone(page);
-  await page.evaluate(endOnStop => {
+  await page.evaluate(interruption => {
     const getUserMedia = navigator.mediaDevices.getUserMedia;
     const Recorder = MediaRecorder;
-    let releaseStart, microphoneTrack;
+    let releaseStart, microphoneTrack, microphoneRecorder;
     const started = new Promise(resolve => { releaseStart = resolve; });
     window.startAudioTestRecorder = releaseStart;
     window.audioTestRecorderCalls = 0;
@@ -121,12 +121,13 @@ async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
         };
       }
       start(...args) {
+        microphoneRecorder = this;
         window.audioTestRecorderCalls++;
         return super.start(...args);
       }
       stop() {
         super.stop();
-        if (!endOnStop) return;
+        if (interruption !== 'during-stop') return;
         // Simulate the device ending the track before the recorder dispatches its final data.
         microphoneTrack.stop();
         microphoneTrack.dispatchEvent(new Event('ended'));
@@ -141,6 +142,18 @@ async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
       window.unmuteAudioTestTrack = () => {
         muted = false;
         track.dispatchEvent(new Event('unmute'));
+      };
+      window.interruptAudioTestTrack = () => {
+        if (interruption === 'mute') {
+          muted = true;
+          track.enabled = false;
+          track.dispatchEvent(new Event('mute'));
+        } else if (interruption === 'recorder-stop') {
+          microphoneRecorder.stop();
+        } else {
+          track.stop();
+          track.dispatchEvent(new Event('ended'));
+        }
       };
       window.cleanupAudioTest = () => {
         navigator.mediaDevices.getUserMedia = getUserMedia;
@@ -160,7 +173,7 @@ async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
       window.audioTestFrame = requestAnimationFrame(sample);
     }
     window.audioTestFrame = requestAnimationFrame(sample);
-  },endOnStop);
+  },interruption);
   await record.click();
   const waiting = audio.getByText(copy.waiting, {exact:true});
   await waiting.waitFor();
@@ -182,17 +195,22 @@ async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
   assert(await time.isVisible());
   assert.deepEqual(await audio.boundingBox(),geometry);
   await page.waitForFunction(() => {
-    const canvas = document.querySelector('[data-record-audio-wave] > canvas');
+    const host = document.querySelector('[data-record-audio-wave]').firstElementChild;
+    const canvas = host?.shadowRoot?.querySelector('canvas');
     if (!canvas?.width || !canvas?.height) return false;
-    const pixels = canvas.getContext('2d').getImageData(0,Math.floor(canvas.height / 3),canvas.width,1).data;
+    // The silent baseline is two CSS pixels high. Check above it for microphone signal.
+    const row = Math.floor(canvas.height / 2 - 2 * devicePixelRatio);
+    const pixels = canvas.getContext('2d').getImageData(0,row,canvas.width,1).data;
     return pixels.some((value,index) => index % 4 === 3 && value > 0);
   });
-  if (endOnStop) {
+  if (interruption) {
     await waitForRecordingTime(page, 1);
     const staged = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
-    await stop.click();
-    assert((await staged).ok(),'stopping keeps the recording when the device ends the track');
+    if (interruption === 'during-stop') await stop.click();
+    else await page.evaluate(() => window.interruptAudioTestTrack());
+    assert((await staged).ok(), 'microphone interruption keeps the recorded audio');
     await audio.locator('[data-record-audio-play]').waitFor();
+    assert(!await dot.isVisible());
   }
   await audio.getByRole('button',{name:copy.cancel,exact:true}).click();
   await audio.waitFor({state:'hidden'});
@@ -204,6 +222,33 @@ async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
   });
   for (const frame of frames) assert(frame.every((value,index) => Math.abs(value-frames[0][index]) <= 1),
     JSON.stringify({locale,expected:frames[0],frame}));
+}
+
+async function verifyCaptureWithoutWaveform(page, href) {
+  await page.goto(href);
+  await installMicrophoneTone(page);
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async () => window.microphoneTone.stream;
+    window.AudioContext = class extends AudioContext {
+      createAnalyser() { throw Error('Fixture analyser unavailable'); }
+    };
+  });
+  await page.getByRole('button', {name:'Record audio',exact:true}).click();
+  await waitForRecordingTime(page, 1);
+  const panel = page.locator('[data-record-audio]');
+  assert.equal(await panel.locator('[data-record-audio-wave] canvas').count(), 0);
+  const staged = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
+  await page.getByRole('button', {name:'Stop recording',exact:true}).click();
+  assert((await staged).ok());
+  await panel.getByRole('button', {name:'Play recording',exact:true}).click();
+  await page.waitForFunction(() => document.querySelector('[data-record-audio] audio').currentTime > 0);
+  assert(await page.evaluate(async () => {
+    const media = document.querySelector('[data-record-audio] audio');
+    const decoded = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await (await fetch(media.src)).arrayBuffer());
+    await window.microphoneTone.context.close();
+    return window.microphoneTone.stream.getAudioTracks()[0].readyState === 'ended' &&
+      decoded.getChannelData(0).some(sample => Math.abs(sample) > .1);
+  }), 'recording survives a waveform failure with audible samples and releases the microphone');
 }
 
 async function pauseAfterPlaybackBegins(audio, container, control) {
@@ -572,11 +617,19 @@ async function launch() {
         await draftPage.close();
       }
     }
-    {
+    for (const interruption of ['during-stop', 'disconnect', 'mute', 'recorder-stop']) {
       const page = await browser.newPage({locale:'pt-BR',viewport:{width:320,height:720}});
       try {
         await page.goto(base + '/?chat=' + direct + '&lang=pt-BR');
-        await verifyAudioCapture(page, 'pt-BR', useWebKit, true);
+        await verifyAudioCapture(page, 'pt-BR', useWebKit, interruption);
+      } finally {
+        await page.close();
+      }
+    }
+    {
+      const page = await browser.newPage({locale:'en',viewport:{width:390,height:844}});
+      try {
+        await verifyCaptureWithoutWaveform(page, base + '/?chat=' + direct + '&lang=en');
       } finally {
         await page.close();
       }

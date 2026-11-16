@@ -62,7 +62,12 @@ The audio recorder and player use WaveSurfer.js 8.1.0 under BSD-3-Clause.
 The license is included alongside the assets in `internal/adapters/web/wavesurfer`
 and served at `/ui/wavesurfer/LICENSE`. The manifest in that directory pins the
 npm archive and the bundled ESM files. The corresponding source archive includes
-the upstream TypeScript source.
+the upstream TypeScript source and the Oiê patch `record.patch`.
+
+To rebuild the Record module, apply that patch to the upstream 8.1.0 source
+with `git apply --unidiff-zero /path/to/record.patch`. Install the upstream
+dependencies with `yarn install --frozen-lockfile --ignore-scripts` and run
+`yarn build`. Copy `dist/plugins/record.esm.js` to the bundled `record.mjs`.
 
 ## Unicode emoji data
 

@@ -11,7 +11,9 @@
     },
     "record.mjs": {
       "path": "package/dist/plugins/record.esm.js",
-      "sha256": "b1e7a0a78e88c339b39184e5c3816d4863dedab350b425ad64a4d343441a76e2"
+      "sha256": "5772579dc31ca549715ead4fabd994d04a594c95c4a818f4f977f0fb98db4641",
+      "upstreamSHA256": "b1e7a0a78e88c339b39184e5c3816d4863dedab350b425ad64a4d343441a76e2",
+      "patch": "record.patch"
     },
     "LICENSE": {
       "path": "package/LICENSE",

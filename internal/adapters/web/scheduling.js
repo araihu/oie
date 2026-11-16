@@ -411,7 +411,7 @@ window.OieRuntime.register('scheduling', life => {
     ];
     const audioFormat = navigator.mediaDevices?.getUserMedia &&
       audioFormats.find(([type]) => window.MediaRecorder?.isTypeSupported(type));
-    let recording, audioPreview;
+    let recording, audioPreview, recordingModules;
     const recordingDraft = () => [...pending.values(), ...files].find(file => file.recordedAudio);
     const initialDraft = snapshot();
     files = initialDraft.files || [];
@@ -501,6 +501,10 @@ window.OieRuntime.register('scheduling', life => {
     function syncRecordButton() {
       if (life.signal.aborted) return;
       const enabled = canRecord();
+      if (enabled && !recording && !recordingModules) {
+        // Have both modules ready when the Record gesture opens the audio context.
+        void loadRecordingModules().catch(() => {});
+      }
       if (recording && !enabled) {
         cancelRecording();
         return;
@@ -512,7 +516,7 @@ window.OieRuntime.register('scheduling', life => {
       recordIcon.hidden = mode !== recordLabel;
       stopIcon.hidden = !started;
       if (composer.hasAttribute('data-waiting-recording-upload') ||
-          (recording && (!started || recording.recorder.state !== 'recording'))) primary.setAttribute('aria-disabled', 'true');
+          (recording && (!started || recording.keep || !recording.plugin.isRecording()))) primary.setAttribute('aria-disabled', 'true');
       else primary.removeAttribute('aria-disabled');
       if (mode || [recordLabel, stopLabel].includes(primary.getAttribute('aria-label'))) {
         primary.setAttribute('aria-label', mode || sendLabel);
@@ -522,72 +526,8 @@ window.OieRuntime.register('scheduling', life => {
 
     function showAudioTime(seconds) {
       const total = Math.floor(Number.isFinite(seconds) ? seconds : 0);
-      recordTime.textContent = Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
-    }
-
-    function prepareRecordingWave(take) {
-      try {
-        // WebKit needs the audio context resumed within the Record button gesture.
-        take.audioContext = new AudioContext();
-        void take.audioContext.resume().catch(() => {});
-      } catch {
-        // Recording and the elapsed time remain available if the waveform cannot be drawn.
-      }
-    }
-
-    function monitorRecording(take) {
-      const context = take.audioContext;
-      if (!context) return;
-      const canvas = document.createElement('canvas');
-      const paint = canvas.getContext('2d');
-      if (!paint) return;
-
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 1024;
-      const source = context.createMediaStreamSource(take.stream);
-      source.connect(analyser);
-      if (context.state !== 'running') void context.resume().catch(() => {});
-      const samples = new Float32Array(analyser.fftSize);
-      const color = getComputedStyle(recordWave).color;
-      let peaks = new Float32Array(0);
-      let width = 0, height = 0, frame, lastSample = -Infinity;
-      const resize = new ResizeObserver(([entry]) => {
-        ({width, height} = entry.contentRect);
-        const scale = devicePixelRatio || 1;
-        canvas.width = Math.round(width * scale);
-        canvas.height = Math.round(height * scale);
-        paint.setTransform(scale, 0, 0, scale, 0, 0);
-        const next = new Float32Array(Math.floor(width / 4));
-        const visible = peaks.subarray(Math.max(0, peaks.length - next.length));
-        next.set(visible, next.length - visible.length);
-        peaks = next;
-      });
-      function draw(now) {
-        frame = requestAnimationFrame(draw);
-        if (!peaks.length || now - lastSample < 33) return;
-        lastSample = now;
-        analyser.getFloatTimeDomainData(samples);
-        let peak = 0;
-        for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
-        peaks.copyWithin(0, 1);
-        peaks[peaks.length - 1] = peak;
-        paint.clearRect(0, 0, width, height);
-        paint.fillStyle = color;
-        for (let index = 0; index < peaks.length; index++) {
-          const bar = Math.max(2, Math.min(height, Math.sqrt(peaks[index]) * height));
-          paint.fillRect(width - (peaks.length - index) * 4, (height - bar) / 2, 2, bar);
-        }
-      }
-      canvas.setAttribute('aria-hidden', 'true');
-      recordWave.append(canvas);
-      resize.observe(recordWave);
-      frame = requestAnimationFrame(draw);
-      take.stopWave = () => {
-        cancelAnimationFrame(frame);
-        resize.disconnect();
-        source.disconnect();
-        canvas.remove();
-      };
+      const time = Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
+      if (recordTime.textContent !== time) recordTime.textContent = time;
     }
 
     function closeAudioPreview() {
@@ -661,7 +601,8 @@ window.OieRuntime.register('scheduling', life => {
         preview.wave = WaveSurfer.create({container: recordWave, media: document.createElement('audio'),
           waveColor: colors.color, progressColor: colors.getPropertyValue('--oie-accent').trim(),
           height: 20, normalize: true, barWidth: 2, barGap: 2, barRadius: 2, barMinHeight: 2, cursorWidth: 0});
-        preview.wave.replacePeaks(peaks, duration);
+        await preview.wave.load('', peaks, duration);
+        if (audioPreview !== preview) return;
         preview.wave.setMediaElement(recordMedia);
         recordWave.setAttribute('role', 'slider');
         recordWave.tabIndex = 0;
@@ -707,7 +648,8 @@ window.OieRuntime.register('scheduling', life => {
       if (!recordMedia.hasAttribute('src')) recordMedia.src = preview.source;
       if (preview.waveUnavailable) showNativeAudioPreview();
       const source = recordMedia.src;
-      void recordMedia.play().catch(error => {
+      const player = preview.wave?.getMediaElement() === recordMedia ? preview.wave : recordMedia;
+      void player.play().catch(error => {
         if (audioPreview !== preview || recordMedia.src !== source || error.name === 'AbortError') return;
         if (error.name === 'NotAllowedError') {
           preview.playRequested = false;
@@ -740,7 +682,7 @@ window.OieRuntime.register('scheduling', life => {
         recordMedia.pause();
         return;
       }
-      const capturing = recording?.started && recording.recorder.state === 'recording' && !recording.track.muted;
+      const capturing = recording?.started && recording.plugin.isRecording() && !recording.keep;
       const waiting = !!recording && !capturing && !recording.keep;
       recordPanel.toggleAttribute('data-capturing', !!capturing);
       recordStatus.classList.toggle('sr-only', !waiting);
@@ -774,10 +716,8 @@ window.OieRuntime.register('scheduling', life => {
       if (recording !== take) return;
       recording = null;
       take.controller.abort();
-      take.stream?.getTracks().forEach(track => track.stop());
-      clearInterval(take.timer);
-      take.stopWave?.();
-      if (take.audioContext) void take.audioContext.close().catch(() => {});
+      clearTimeout(take.micTimeout);
+      take.wave?.destroy();
       composer.removeAttribute('data-capturing-audio');
     }
 
@@ -789,90 +729,98 @@ window.OieRuntime.register('scheduling', life => {
       input.focus({preventScroll: true});
     }
 
+    function loadRecordingModules() {
+      recordingModules ??= Promise.all([
+        import('/ui/wavesurfer/player.mjs'),
+        import('/ui/wavesurfer/record.mjs'),
+      ]).catch(error => {
+        recordingModules = null;
+        throw error;
+      });
+      return recordingModules;
+    }
+
+    function keepRecording(take) {
+      take.keep = true;
+      take.plugin.stopRecording();
+      renderAudio();
+      syncRecordButton();
+    }
+
     async function startRecording() {
-      const take = recording = {chunks: [], size: 0, keep: false, controller: new AbortController()};
-      const failRecording = () => {
+      const take = recording = {size: 0, keep: false, controller: new AbortController()};
+      const failRecording = (message = recordPanel.dataset.failed) => {
         if (recording !== take) return;
         cancelRecording();
-        errorToast(recordPanel.dataset.failed);
+        errorToast(message);
       };
       composer.setAttribute('data-capturing-audio', '');
       showAudioTime(0);
       syncPending();
       try {
-        const microphone = navigator.mediaDevices.getUserMedia({audio: true});
-        prepareRecordingWave(take);
-        take.stream = await microphone;
-        if (recording !== take) {
-          take.stream.getTracks().forEach(track => track.stop());
-          return;
-        }
-        if (!canRecord()) {
-          cancelRecording();
-          return;
-        }
-        const track = take.track = take.stream.getAudioTracks()[0];
-        if (!track || track.readyState !== 'live') {
-          failRecording();
-          return;
-        }
+        const [{default: WaveSurfer}, {default: RecordPlugin}] = await loadRecordingModules();
+        if (recording !== take) return;
         const [mimeType, extension] = audioFormat;
-        const recorder = take.recorder = new MediaRecorder(take.stream, {mimeType});
-        recorder.onstart = () => {
-          if (recording !== take) return;
+        const wave = take.wave = WaveSurfer.create({container: recordWave,
+          waveColor: getComputedStyle(recordWave).color, height: 20, interact: false,
+          barWidth: 2, barGap: 2, barRadius: 2, barHeight: 1.5, barMinHeight: 2, cursorWidth: 0});
+        const plugin = take.plugin = wave.registerPlugin(RecordPlugin.create({
+          mimeType, renderRecordedAudio: false, scrollingWaveform: true, mediaRecorderTimeslice: 1000,
+        }));
+        plugin.on('record-start', () => {
           take.started = true;
-          const start = performance.now();
-          take.timer = setInterval(() => showAudioTime((performance.now() - start) / 1000), 200);
           renderAudio();
           syncRecordButton();
-          try {
-            monitorRecording(take);
-          } catch {
-            // Waveform rendering is optional when Web Audio is unavailable.
-          }
-        };
-        recorder.ondataavailable = ({data}) => {
-          if (recording !== take || !data.size) return;
+        });
+        plugin.on('record-progress', milliseconds => showAudioTime(milliseconds / 1000));
+        plugin.on('record-data-available', data => {
           take.size += data.size;
-          if (take.size > maxFileSize) {
-            cancelRecording();
-            errorToast(labels.limit);
-            return;
-          }
-          take.chunks.push(data);
-        };
-        recorder.onstop = () => {
+          if (take.size > maxFileSize) failRecording(labels.limit);
+        });
+        plugin.on('record-error', () => failRecording());
+        plugin.on('record-ended-externally', () => {
+          take.keep = true;
+          renderAudio();
+          syncRecordButton();
+        });
+        plugin.on('record-end', blob => {
           if (recording !== take) return;
-          if (take.keep && take.size && canRecord()) {
+          if (blob.size > maxFileSize) {
+            failRecording(labels.limit);
+          } else if (blob.size && canRecord()) {
             finishRecording(take);
-            const file = new File(take.chunks, recordPanel.dataset.filename + '.' + extension, {type: mimeType.split(';')[0]});
+            const file = new File([blob], recordPanel.dataset.filename + '.' + extension, {
+              type: (blob.type || mimeType).split(';')[0],
+            });
             addFiles([file], true);
             recordRemove.focus({preventScroll: true});
           } else {
             failRecording();
           }
-        };
-        recorder.onerror = failRecording;
-        const microphoneReady = () => {
-          if (recording !== take) return;
-          if (!take.started && !track.muted && recorder.state === 'inactive') {
-            try {
-              recorder.start(1000);
-            } catch {
-              failRecording();
-              return;
-            }
-          }
-          renderAudio();
-        };
+        });
+
+        const stream = await plugin.startMic();
+        if (recording !== take) return;
+        const track = stream.getAudioTracks()[0];
+        if (!canRecord() || !track || track.readyState !== 'live') {
+          failRecording();
+          return;
+        }
         const options = {signal: take.controller.signal};
-        track.addEventListener('mute', renderAudio, options);
-        track.addEventListener('unmute', microphoneReady, options);
-        track.addEventListener('ended', () => {
-          // Stop can precede the recorder's final data and stop events.
-          if (!take.keep) failRecording();
+        const startWhenReady = () => {
+          if (track.muted || track.readyState !== 'live' || plugin.isActive()) return;
+          clearTimeout(take.micTimeout);
+          void plugin.startRecording().catch(() => failRecording());
+        };
+        track.addEventListener('unmute', startWhenReady, options);
+        track.addEventListener('mute', () => {
+          if (plugin.isRecording() && !take.keep) keepRecording(take);
         }, options);
-        microphoneReady();
+        track.addEventListener('ended', () => {
+          if (!take.started && !take.keep) failRecording();
+        }, options);
+        if (track.muted) take.micTimeout = setTimeout(failRecording, 5000);
+        startWhenReady();
       } catch {
         failRecording();
       }
@@ -884,12 +832,8 @@ window.OieRuntime.register('scheduling', life => {
       event.stopImmediatePropagation();
       if (!recording) {
         void startRecording();
-      } else if (recording.started && recording.recorder.state === 'recording' && !recording.keep) {
-        recording.keep = true;
-        recording.recorder.stop();
-        clearInterval(recording.timer);
-        renderAudio();
-        syncRecordButton();
+      } else if (recording.started && recording.plugin.isRecording() && !recording.keep) {
+        keepRecording(recording);
       }
     }, true);
     life.on(input, 'input', syncRecordButton);
@@ -924,7 +868,8 @@ window.OieRuntime.register('scheduling', life => {
       if (!preview || preview.failed) return;
       if (preview.playRequested || !recordMedia.paused) {
         preview.playRequested = false;
-        recordMedia.pause();
+        const player = preview.wave?.getMediaElement() === recordMedia ? preview.wave : recordMedia;
+        player.pause();
         updateAudioPlayer();
         return;
       }

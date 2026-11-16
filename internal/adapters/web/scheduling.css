@@ -448,11 +448,6 @@
   block-size: 1.25rem;
   color: var(--oie-muted);
 }
-[data-record-audio-wave] > canvas {
-  display: block;
-  inline-size: 100%;
-  block-size: 100%;
-}
 [data-record-audio-wave][role="slider"] { cursor: pointer; }
 
 .oie-audio-recording-dot {
