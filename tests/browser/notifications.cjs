@@ -688,21 +688,29 @@ async function run() {
     await settings(nativePage);
     await nativePage.locator('[data-notification-tone-file]').setInputFiles(file);
     await until(async () => (await nativePage.locator('[data-notification-tone-name]').textContent()) === file.name, 'native tone saved');
-    await nativePage.locator('label:has(#notification-sound)').click();
+    const nativeSound = nativePage.locator('[data-notification-sound]');
+    assert(await nativeSound.isChecked());
+    await nativeSound.press('Space');
+    await until(() => nativePage.evaluate(() => localStorage.getItem('oie.notifications.sound') === '0'), 'native sound preference saved');
+    const soundsBeforeNativeMute = await nativePage.evaluate(() => window.nativeSounds.length);
     push();
     await pause(350);
-    assert.equal(await nativePage.evaluate(() => window.nativeSounds.length), 1, 'native playback respects the sound preference');
+    assert.equal(await nativePage.evaluate(() => window.nativeSounds.length), soundsBeforeNativeMute, 'native playback respects the sound preference');
     await nativePage.locator('[data-notification-preview]').click();
-    await until(() => nativePage.evaluate(() => window.nativeSounds.length === 2), 'the custom tone previews natively even with alerts muted');
-    const encodedTone = await nativePage.evaluate(() => window.nativeSounds[1]);
+    await until(() => nativePage.evaluate(count => window.nativeSounds.length === count + 1, soundsBeforeNativeMute), 'the custom tone previews natively even with alerts muted');
+    const encodedTone = await nativePage.evaluate(index => window.nativeSounds[index], soundsBeforeNativeMute);
     const nativeWav = Buffer.from(encodedTone, 'base64');
     assert.equal(nativeWav.toString('ascii', 0, 4), 'RIFF');
     assert.equal(nativeWav.readUInt32LE(24), 24000);
     assert.equal(nativeWav.length, 96044);
-    await nativePage.locator('label:has(#notification-sound)').click();
+    assert(!(await nativeSound.isChecked()));
+    await nativeSound.press('Space');
+    await until(() => nativePage.evaluate(() => localStorage.getItem('oie.notifications.sound') === '1'), 'native sound preference restored');
     await nativePage.evaluate(() => { window.nativeWindowHidden = true; });
     push();
-    await until(() => nativePage.evaluate(wav => window.nativeSounds[2] === wav, encodedTone), 'the hidden native window plays the selected tone');
+    await until(() => nativePage.evaluate(({index,wav}) => window.nativeSounds[index] === wav, {
+      index: soundsBeforeNativeMute + 1, wav: encodedTone,
+    }), 'the hidden native window plays the selected tone');
     await nativeProfile.close();
 
     const dndProfile = await browser.newContext();
