@@ -794,12 +794,17 @@ window.OieRuntime.register('live', life => {
     if(focusMessage(reply.dataset.replyTarget)){event.preventDefault();event.stopPropagation();}
   },true);
   life.on(document,'click',event=>{
-    if(event.target.closest('[data-jump-latest]')){
+    const jump=event.target.closest('[data-jump-latest]');
+    if(jump){
       const url=new URL(location.href);
-      if(window.OieTimeline?.liveAttached===false){
+      if(window.OieTimeline?.needsLatestPage()){
         for(const key of ['message','timelineCursor','timelineDirection'])url.searchParams.delete(key);
         window.OieNavigation.go(url,{latest:true});
-      }else scrollLatest();
+      }else{
+        const restoreFocus=jump===document.activeElement;
+        scrollLatest();
+        if(restoreFocus&&jump.hidden)document.getElementById('message-timeline')?.focus({preventScroll:true});
+      }
     }
   });
   localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else window.OieTimeline?.syncJump();
@@ -901,7 +906,9 @@ window.OieRuntime.register('live', life => {
     const refreshQuery=new URLSearchParams(requestedSearch);
     // Keep a source link addressable after scrolling to the live timeline.
     if(window.OieTimeline?.liveAttached&&body.dataset.contextMissing!=='true'){
-      for(const key of ['message','timelineCursor','timelineDirection'])refreshQuery.delete(key);
+      // A retired source clears the mounted identity, so revalidate its URL.
+      if(body.dataset.focusMessage)refreshQuery.delete('message');
+      for(const key of ['timelineCursor','timelineDirection'])refreshQuery.delete(key);
     }
     if(!refreshQuery.has('chat')&&list){
       if(body.dataset.conversationId)refreshQuery.set('chat',body.dataset.conversationId);
@@ -933,6 +940,10 @@ window.OieRuntime.register('live', life => {
         return;
       }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
+      if(refreshQuery.has('message')&&body.dataset.contextMissing!=='true'&&!body.dataset.focusMessage&&canonicalID(regions.dataset.focusMessage)){
+        body.dataset.focusMessage=regions.dataset.focusMessage;
+        if(window.OieTimeline?.liveAttached)refreshAgain=true;
+      }
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
       readAvatars(page);
       const room=document.querySelector('#room-session-status'),nextRoom=page.querySelector('#live-room-session #room-session-status');

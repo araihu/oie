@@ -8,6 +8,7 @@ window.OieRuntime.register('timeline',life=>{
  const labels=document.getElementById('oie-live-copy')?.dataset;
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
  let unseenLiveMessages=false;
+ let sourceSelected=!!document.body.dataset.focusMessage;
  let measuredScrollTop=root.scrollTop;
  let correctedScrollTop;
  let exhaustedArchiveEdge='';
@@ -65,18 +66,25 @@ window.OieRuntime.register('timeline',life=>{
   anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;
   follow=liveAttached&&atBottom();
  }
+ const needsLatestPage=()=>!liveAttached||newer&&!!failed;
+ const activeSource=()=>sourceSelected?document.body.dataset.focusMessage:'';
+ function setSource(id){
+  sourceSelected=!!id;
+  document.body.dataset.focusMessage=id;
+ }
  function syncJump(){
   const bottom=atBottom();
   if(bottom&&!newer){
    unseenLiveMessages=false;
    if(!liveAttached&&!focusPending&&root.clientHeight>0&&document.body.dataset.contextMissing!=='true'){
     liveAttached=true;
+    sourceSelected=false;
     follow=true;
     document.dispatchEvent(new Event('oie:refresh-request'));
    }
   }
   if(!jump)return;
-  jump.hidden=liveAttached?bottom||!unseenLiveMessages:bottom&&!newer;
+  jump.hidden=needsLatestPage()?bottom&&!newer:bottom||!unseenLiveMessages;
   const label=liveAttached?labels?.newMessages:labels?.latest;
   if(label&&jump.textContent!==label)jump.textContent=label;
  }
@@ -183,7 +191,7 @@ window.OieRuntime.register('timeline',life=>{
     return previous&&movedRelease(previous,item);
    });
    if(relocated.length){
-    const focused=relocated.find(item=>document.body.dataset.focusMessage===item.id||before.find(previous=>previous.id===item.id)?.node.contains(document.activeElement));
+    const focused=relocated.find(item=>activeSource()===item.id||before.find(previous=>previous.id===item.id)?.node.contains(document.activeElement));
     if(focused||before.length===relocated.length){nextRequest={mode:'context',direction,target:(focused||relocated[0]).id};return}
     if(before.some(item=>relocated.some(next=>next.id===item.id)&&interactionProtected(item.node))){failed='paused';return}
     const retired=new Set(relocated.filter(item=>tuple(item,lower)<0||tuple(item,upper)>0).map(item=>item.id));
@@ -200,11 +208,11 @@ window.OieRuntime.register('timeline',life=>{
    if(mode==='context'){
     if(!page.entries.some(item=>item.id===page.data.canonicalCursor))throw Error('context_target');
     const selection=getSelection(),locked=rows().some(row=>!!row.querySelector('[aria-expanded="true"]')||[...row.querySelectorAll('video,audio')].some(media=>!media.paused&&!media.ended)||selection&&!selection.isCollapsed&&(row.contains(selection.anchorNode)||row.contains(selection.focusNode)));if(locked){failed='paused';return}
-    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';rememberLatest(page);liveAttached=false;document.body.dataset.focusMessage=page.data.canonicalCursor;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:focusOptions.focus!==false}}));capture();return true}return false;
+    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';rememberLatest(page);liveAttached=false;setSource(page.data.canonicalCursor);document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:focusOptions.focus!==false}}));capture();return true}return false;
    }
    const far=aliases.filter(plan=>!before.some(item=>item.id===plan.record.id)&&(tuple(plan.record,before[0])<0||tuple(plan.record,before.at(-1))>0));
    if(far.length){
-    const focused=far.find(plan=>document.body.dataset.focusMessage===plan.previous||before.find(item=>item.id===plan.previous)?.node.contains(document.activeElement));
+    const focused=far.find(plan=>activeSource()===plan.previous||before.find(item=>item.id===plan.previous)?.node.contains(document.activeElement));
     if(focused||before.length===far.length){nextRequest={mode:'context',direction, target:(focused||far[0]).previous};return}
     if(far.some(plan=>{const item=before.find(value=>value.id===plan.previous);return item&&interactionProtected(item.node)})){failed='paused';return}
     capture();const retired=new Set(far.map(plan=>plan.previous));if(anchor&&retired.has(anchor.id)){const survivor=before.find(item=>!retired.has(item.id));anchor=survivor?{id:survivor.id,top:survivor.node.getBoundingClientRect().top}:null}
@@ -217,14 +225,14 @@ window.OieRuntime.register('timeline',life=>{
      if(page.entries.some(item=>item.id===id))throw Error('hidden_boundary');
      retired.add(id);
     }
-    if(retired.has(document.body.dataset.focusMessage))document.body.dataset.focusMessage='';
+    if(retired.has(document.body.dataset.focusMessage))setSource('');
    }
    const active=document.activeElement,focusInTimeline=before.some(item=>item.node.contains(active));
    if(merge(page,{direction:mode==='page'?direction:'update',authoritative:mode==='window',starGeneration,aliases,retired})){
     if(mode==='page'){if(direction==='older')older=page.data.hasOlder==='true';else{newer=page.data.hasNewer==='true';rememberLatest(page,page.data.newest||page.data.canonicalCursor)}}
     for(const item of before)if(retired.has(item.id))rememberHidden(item.id,item.node.dataset.messageRevision);
     const focused=document.body.dataset.focusMessage;
-    if(mode==='window'&&page.data.complete==='true'&&before.some(item=>item.id===focused)&&!current().some(item=>item.id===focused))document.body.dataset.focusMessage='';
+    if(mode==='window'&&page.data.complete==='true'&&before.some(item=>item.id===focused)&&!current().some(item=>item.id===focused))setSource('');
     if(focusInTimeline&&!active.isConnected&&!root.contains(document.activeElement))root.focus({preventScroll:true});
     if(retired.size){
      if(!current().length){liveAttached=true;document.dispatchEvent(new Event('oie:refresh-request'))}
@@ -235,7 +243,7 @@ window.OieRuntime.register('timeline',life=>{
   finally{clearTimeout(timer);if(!disposed){busy=false;controls();observe();if(nextRequest&&!focusPending){life.timeout(()=>request(nextRequest.mode,nextRequest.direction,true,nextRequest.target||''),0)}else retryRefresh()}}
  }
  function retryRefresh(){
-  if(refreshAgain&&!failed&&!focusPending){refreshAgain=false;life.timeout(()=>refresh(refreshPage,refreshStartedAt),100)}
+  if(refreshAgain&&!focusPending){refreshAgain=false;life.timeout(()=>refresh(refreshPage,refreshStartedAt),100)}
  }
  // An already mounted immediate send can be scheduled or cancelled by a second
  // client. Check the current read model before removing it for an SSE update.
@@ -250,7 +258,7 @@ window.OieRuntime.register('timeline',life=>{
    rememberHidden(id,revision);
    if(busy){epoch++;controller?.abort()}
    const focused=row.contains(document.activeElement);
-   if(document.body.dataset.focusMessage===id)document.body.dataset.focusMessage='';
+   if(document.body.dataset.focusMessage===id)setSource('');
    merge({entries:[],scope:document},{retired:new Set([id])});
    if(!current().length)liveAttached=true;
    if(focused)root.focus({preventScroll:true});
@@ -265,9 +273,9 @@ window.OieRuntime.register('timeline',life=>{
   while(expired.size>1000)expired.delete(expired.values().next().value);
   if(busy){epoch++;controller?.abort()}
   refreshAgain=false;
+  if(retired.has(document.body.dataset.focusMessage))setSource('');
   const before=current();
   if(!before.some(item=>retired.has(item.id)))return;
-  if(retired.has(document.body.dataset.focusMessage))document.body.dataset.focusMessage='';
   const focused=before.some(item=>retired.has(item.id)&&item.node.contains(document.activeElement));
   merge({entries:[],scope:document},{retired});
   if(!current().length)liveAttached=true;
@@ -283,7 +291,7 @@ window.OieRuntime.register('timeline',life=>{
   // A moved release beyond this window must enter by ordinary pagination so
   // it cannot skip intervening messages or bridge an anchored history window.
   const retired=new Set(overlap.filter(item=>movedRelease(mounted.get(item.id),item)&&(tuple(item,before[0])<0||tuple(item,before.at(-1))>0)).map(item=>item.id));
-  const focused=before.find(item=>retired.has(item.id)&&(document.body.dataset.focusMessage===item.id||item.node.contains(document.activeElement)));
+  const focused=before.find(item=>retired.has(item.id)&&(activeSource()===item.id||item.node.contains(document.activeElement)));
   if(focused||!liveAttached&&retired.size===before.length){request('context','',true,(focused||before[0]).id);return}
   if(overlap.length)merge({...snapshot,entries:overlap.filter(item=>!retired.has(item.id))},{direction:'update',retired});
   if(liveAttached&&!current().length&&snapshot.entries.length){older=snapshot.data.hasOlder==='true';newer=snapshot.data.hasNewer==='true';merge(snapshot,{direction:'newer'});controls();return}
@@ -293,7 +301,7 @@ window.OieRuntime.register('timeline',life=>{
    if(newest&&tuple(newest,before.at(-1))>0){
     unseenLiveMessages=true;
     newer=true;
-    request('page','newer');
+    if(failed)controls();else request('page','newer');
     return;
    }
   }
@@ -312,12 +320,12 @@ window.OieRuntime.register('timeline',life=>{
   if(disposed||generation!==focusEpoch)return false;
   const row=rows().find(item=>item.dataset.messageId===id);
   let found=false;
-  if(row){document.body.dataset.focusMessage=id;liveAttached=false;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id,focus:options.focus!==false}}));controls();found=true}
+  if(row){setSource(id);liveAttached=false;document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id,focus:options.focus!==false}}));controls();found=true}
   else found=await request('context','',true,id,options)===true;
   if(generation!==focusEpoch||disposed)return false;
   focusPending=false;controls();observe();retryRefresh();return found;
  }
- const api={refresh,focus,cancelFocus,atBottom,scrollLatest,syncJump,hideScheduled,expire,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
+ const api={refresh,focus,cancelFocus,atBottom,scrollLatest,syncJump,hideScheduled,expire,latestReadTarget,needsLatestPage,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(correctAfterLayout);
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);
@@ -343,9 +351,12 @@ window.OieRuntime.register('timeline',life=>{
   const page=parse(root,50);if(!page)return;
   anchor=null;failed='';refreshAgain=false;refreshPage=null;
   older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=true;
+  sourceSelected=false;
   latestSnapshot=null;rememberLatest(page);
   hooks(event.detail.page||document,event.detail.generation,performance.now());
   scrollLatest();controls();observe();
+  // Arrivals can outpace the latest fragment while it is in flight.
+  document.dispatchEvent(new Event('oie:refresh-request'));
  });
  life.on(document,'oie:timeline-snapshot',event=>refresh(event.detail.page,event.detail.startedAt));
  life.on(document,'oie:actions-refreshed',()=>{if(!busy&&!failed)observe()});
