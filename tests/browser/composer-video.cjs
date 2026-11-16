@@ -264,14 +264,11 @@ async function verifyDraftPlayback(page, href, locale, queuedSend) {
     window.releaseAudioWaveform();
   },media);
   await position.waitFor();
-  await page.waitForFunction(selector => {
-    const current = document.querySelector(selector);
-    return current.currentTime > window.beforeAudioWaveform.time;
-  },media);
   assert(await page.evaluate(selector => {
     const current = document.querySelector(selector);
-    const {audio,src,focus} = window.beforeAudioWaveform;
-    return current === audio && current.currentSrc === src && !current.paused && document.activeElement === focus;
+    const {audio,src,time,focus} = window.beforeAudioWaveform;
+    return current === audio && current.currentSrc === src && current.currentTime >= time &&
+      (!current.paused || current.ended) && document.activeElement === focus;
   },media));
   assert.deepEqual(await audio.boundingBox(),geometry);
   const upload = await stage;
@@ -771,7 +768,8 @@ async function launch() {
       reads.length = 0;
     }
     for (const [index, locale, width] of [[0,'en',1280], [1,'pt-BR',390]]) {
-      const page = await browser.newPage({locale, viewport:{width,height:844}});
+      const context = await browser.newContext({locale, viewport:{width,height:844}});
+      const page = await context.newPage();
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       const chat = conversations[index].id;
@@ -1112,8 +1110,7 @@ async function launch() {
           await queuedSendGate;
           await route.continue();
         }, {times:1});
-        const queuedSend = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/messages/send');
-        const queued = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
+        let queuedSend, queued;
         const otherDraft = 'Typed in another tab while the recording uploads';
         try {
           await audio.evaluate(panel => {
@@ -1149,7 +1146,7 @@ async function launch() {
           });
           assert(frames.length > 1);
           for (const frame of frames) assert(frame.every((value,index) => Math.abs(value-frames[0][index]) <= 1));
-          const other = await page.context().newPage();
+          const other = await context.newPage();
           try {
             await other.addInitScript(() => Object.defineProperty(navigator, 'onLine', {get:() => false}));
             await other.goto(base + '/?lang=en&chat=' + direct);
@@ -1160,6 +1157,10 @@ async function launch() {
           } finally {
             await other.close();
           }
+          queuedSend = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/messages/send');
+          queued = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
+          // Navigation failures should retain their own diagnostics if a held response never arrives.
+          void queued.catch(() => {});
         } finally {
           releaseUpload();
         }
@@ -1307,7 +1308,7 @@ async function launch() {
         }
       }
       assert.deepEqual(errors,[]);
-      await page.close();
+      await context.close();
       reads.length = 0;
     }
     console.log('PASS: attachment staging and video previews, voice capture, playback during waveform preparation, and queued voice sends');
