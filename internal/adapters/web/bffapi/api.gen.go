@@ -1145,10 +1145,15 @@ type ReadDiagnosticsLogParamsXOieDiagnostics string
 
 // SetDesktopEngineModeFormdataBody defines parameters for SetDesktopEngineMode.
 type SetDesktopEngineModeFormdataBody struct {
-	// ApiKey Optional hosted engine key. Only accepted for an HTTPS origin. Omit to keep the key already saved for this address.
+	// ApiKey Optional hosted engine key. Only accepted for an HTTPS origin and with its matching apiKeyAddress. Omit to use the key already saved for this origin.
 	//
 	// Example: oie_example_access_key
 	ApiKey *string `form:"apiKey,omitempty" json:"apiKey,omitempty"`
+
+	// ApiKeyAddress Exact engine address at the time the key was entered.
+	//
+	// Example: https://oie.example.com
+	ApiKeyAddress *string `form:"apiKeyAddress,omitempty" json:"apiKeyAddress,omitempty"`
 
 	// Csrf CSRF token from the settings form.
 	//

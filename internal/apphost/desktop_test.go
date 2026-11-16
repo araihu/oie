@@ -209,27 +209,47 @@ func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 
 func TestDesktopKeyStaysAtSelectedOrigin(t *testing.T) {
 	const token = "example-desktop-key"
-	selected := DesktopEngine{URL: "https://oie.example.test", APIKey: token}
-	edit, err := desktopKeyEditor(selected)
+	for _, tc := range []struct {
+		selected, target string
+		sameOrigin       bool
+	}{
+		{"https://oie.example.test", "https://OIE.example.test:443", true},
+		{"https://oie.example.test", "https://oie.example.test:8443", false},
+		{"https://oie.example.test", "http://oie.example.test", false},
+		{"https://oie.example.test", "https://remote.example.test", false},
+		{"https://σ.example.test", "https://σ.example.test:443", true},
+		{"https://σ.example.test", "https://ς.example.test", false},
+		{"https://[fe80::1%25eth0]", "https://[fe80::1%25ETH0]", false},
+	} {
+		t.Run(tc.selected+" to "+tc.target, func(t *testing.T) {
+			first, second := desktopKeyOrigin(tc.selected), desktopKeyOrigin(tc.target)
+			if first == "" || (first == second) != tc.sameOrigin {
+				t.Fatal("incorrect origin comparison for reusing the saved key")
+			}
+			edit, err := desktopKeyEditor(DesktopEngine{URL: tc.selected, APIKey: token})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodGet, tc.target+"/api/v1/engine", nil)
+			if err := edit(t.Context(), r); err != nil {
+				t.Fatal(err)
+			}
+			header := r.Header.Get("Authorization")
+			if tc.sameOrigin && header != "Bearer "+token || !tc.sameOrigin && header != "" {
+				t.Fatal("incorrect authorization for the outbound request")
+			}
+		})
+	}
+	edit, err := desktopKeyEditor(DesktopEngine{URL: "https://oie.example.test", APIKey: token})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ url, authorization string }{
-		{"https://oie.example.test/api/v1/engine", "Bearer " + token},
-		{"https://oie.example.test:8443/api/v1/engine", ""},
-		{"http://oie.example.test/api/v1/engine", ""},
-		{"https://remote.example.test/api/v1/engine", ""},
-	} {
-		r := httptest.NewRequest(http.MethodGet, tc.url, nil)
-		if err := edit(t.Context(), r); err != nil {
-			t.Fatal(err)
-		}
-		if got := r.Header.Get("Authorization"); got != tc.authorization {
-			t.Fatalf("unexpected authorization at %s", r.URL.Host)
-		}
+	r := httptest.NewRequest(http.MethodGet, "https://oie.example.test/api/v1/engine", nil)
+	r.Host = "other.example.test"
+	if err := edit(t.Context(), r); err != nil || r.Header.Get("Authorization") != "" {
+		t.Fatal("sent a key with another HTTP authority")
 	}
-	selected.URL = "http://oie.example.test"
-	if _, err := desktopKeyEditor(selected); err == nil {
+	if _, err := desktopKeyEditor(DesktopEngine{URL: "http://oie.example.test", APIKey: token}); err == nil {
 		t.Fatal("accepted an access key over HTTP")
 	}
 }

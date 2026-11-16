@@ -27,12 +27,25 @@ window.OieRuntime.register('actions', life => {
 (() => {
   'use strict';
 
+  function clearMismatchedKey(form) {
+    const {url, apiKey, apiKeyAddress} = form.elements;
+    if (apiKeyAddress.value !== url.value) {
+      apiKey.value = '';
+      apiKeyAddress.value = '';
+    }
+  }
+
   document.addEventListener('input', event => {
-    const address = event.target;
-    if (address.form?.id !== 'engine-mode-form' || address.name !== 'url') return;
-    const key = address.form.elements.apiKey;
-    const normalized = value => value.trim().replace(/\/$/, '').toLowerCase();
-    key.placeholder = normalized(address.value) === normalized(address.defaultValue) ? key.dataset.savedPlaceholder : '';
+    const input = event.target;
+    const form = input.form;
+    if (form?.id !== 'engine-mode-form') return;
+    if (input.name === 'apiKey') {
+      form.elements.apiKeyAddress.value = input.value ? form.elements.url.value : '';
+    } else if (input.name === 'url') {
+      clearMismatchedKey(form);
+      const key = form.elements.apiKey;
+      key.placeholder = input.value === input.defaultValue ? key.dataset.savedPlaceholder : '';
+    }
   });
 
   document.addEventListener('submit', async event => {
@@ -46,6 +59,7 @@ window.OieRuntime.register('actions', life => {
     const modes = [...form.querySelectorAll('input[name=mode]')];
     const button = form.querySelector('button[type=submit]');
     const status = form.querySelector('[data-engine-connecting]');
+    clearMismatchedKey(form);
     const body = new URLSearchParams(new FormData(form));
     form.setAttribute('aria-busy', 'true');
     button.setAttribute('aria-disabled', 'true');
@@ -133,9 +147,15 @@ window.OieRuntime.register('access-keys', life => {
     form.removeAttribute('aria-busy');
   }
 
-  life.on(window, 'drawer:close', event => {
-    if (event.detail?.id === 'access-keys') clear();
-  });
+  for (const type of ['drawer:close', 'drawer:close-request']) {
+    life.on(window, type, event => {
+      if (event.detail?.id !== 'access-keys') return;
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) clear();
+      });
+    });
+  }
+  life.on(window, 'pagehide', clear);
   life.cleanup(clear);
   life.on(form, 'submit', async event => {
     event.preventDefault();

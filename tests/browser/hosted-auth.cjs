@@ -66,8 +66,14 @@ async function create(api, endpoint, sequence, data) {
     });
     assert.equal(keyCheck.status(), 200);
     assert.equal((await keyCheck.json()).id, engine.id);
-    await keyDrawer.getByRole('button', {name: 'Back to settings', exact: true}).click();
+    await page.keyboard.press('Escape');
+    await keyDrawer.waitFor({state: 'hidden'});
     assert.equal(await page.locator('#created-access-key').inputValue(), '');
+    await page.locator('[data-navigation-settings]:visible').click();
+    await access.click();
+    await keyDrawer.waitFor();
+    assert.equal(await generatedKey.isVisible(), false);
+    await keyDrawer.getByRole('button', {name: 'Back to settings', exact: true}).click();
 
     const staleCheck = Promise.withResolvers();
     const releaseCheck = Promise.withResolvers();

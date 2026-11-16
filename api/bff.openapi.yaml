@@ -197,9 +197,14 @@ paths:
                 apiKey:
                   type: string
                   format: password
-                  description: Optional hosted engine key. Only accepted for an HTTPS origin. Omit to keep the key already saved for this address.
+                  description: Optional hosted engine key. Only accepted for an HTTPS origin and with its matching apiKeyAddress. Omit to use the key already saved for this origin.
                   maxLength: 512
                   example: oie_example_access_key
+                apiKeyAddress:
+                  type: string
+                  description: Exact engine address at the time the key was entered.
+                  maxLength: 2048
+                  example: https://oie.example.com
                 selection:
                   type: string
                   description: Current selection token from the settings form.

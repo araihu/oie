@@ -11,6 +11,7 @@ templ engineModeSettings(v view) {
 		<form id="engine-mode-form" class="oie-engine-mode" action="/ui/engine-mode" method="post" novalidate data-failed={ v.Text.EngineModeUnavailable }>
 			<input type="hidden" name="csrf" value={ v.CSRF }/>
 			<input type="hidden" name="selection" value={ v.EngineMode.selection }/>
+			<input type="hidden" name="apiKeyAddress"/>
 			<fieldset class="grid gap-3">
 				<div role="radiogroup" aria-label={ v.Text.EngineMode }>
 					@radio.RadioBar() {

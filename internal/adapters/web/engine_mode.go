@@ -107,9 +107,10 @@ func (s *Server) setEngineMode(w http.ResponseWriter, r *http.Request) {
 	switch bffapi.SetDesktopEngineModeFormdataBodyMode(r.PostForm.Get("mode")) {
 	case bffapi.SetDesktopEngineModeFormdataBodyModeLocal:
 	case bffapi.SetDesktopEngineModeFormdataBodyModeRemote:
-		address = strings.TrimSpace(r.PostForm.Get("url"))
+		rawAddress := r.PostForm.Get("url")
+		address = strings.TrimSpace(rawAddress)
 		key = strings.TrimSpace(r.PostForm.Get("apiKey"))
-		if len(key) > 512 {
+		if len(key) > 512 || (key != "" && r.PostForm.Get("apiKeyAddress") != rawAddress) {
 			http.Error(w, text.EngineModeAuthentication, http.StatusBadRequest)
 			return
 		}

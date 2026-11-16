@@ -125,7 +125,9 @@ still requires a bearer key. See the [internal OpenAPI contract](../api/probe.op
 
 The desktop saves the connection in a private file in its profile after
 verifying access to the server. The key is only sent to the selected HTTPS
-origin. To replace it, enter a new key for the same address. Use the host's
+origin. If you change the address after pasting a key, paste the key for
+the final address. To replace a saved key, enter a new key for the same
+address. Use the host's
 `key-list` and `key-revoke` commands to identify and revoke an old key.
 
 ## Create and revoke API keys

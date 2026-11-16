@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -95,21 +96,46 @@ func validDesktopKey(token string) bool {
 	return len(token) <= 4096 && !strings.ContainsFunc(token, func(r rune) bool { return r < 0x21 || r > 0x7e })
 }
 
+// desktopHTTPSOrigin only folds ASCII DNS names. Non-ASCII hosts and IPv6
+// zone identifiers must match exactly before a credential can be reused.
+func desktopHTTPSOrigin(u *url.URL) string {
+	host := u.Hostname()
+	ipLiteral := strings.Contains(host, ":")
+	if u.Scheme != "https" || host == "" || u.User != nil || strings.HasPrefix(u.Host, "[") != ipLiteral {
+		return ""
+	}
+	if !ipLiteral && !strings.ContainsFunc(host, func(r rune) bool { return r > 127 }) {
+		host = strings.ToLower(host)
+	}
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	return net.JoinHostPort(host, port)
+}
+
+func desktopKeyOrigin(address string) string {
+	u, err := url.Parse(address)
+	if err != nil || (u.Path != "" && u.Path != "/") || u.RawPath != "" || u.ForceQuery ||
+		u.RawQuery != "" || strings.Contains(address, "#") {
+		return ""
+	}
+	return desktopHTTPSOrigin(u)
+}
+
 func desktopKeyEditor(selection DesktopEngine) (engineapi.RequestEditorFn, error) {
 	if selection.APIKey == "" {
 		return nil, nil
 	}
-	origin, err := url.Parse(selection.URL)
-	if err != nil || origin.Scheme != "https" || origin.Hostname() == "" || origin.User != nil ||
-		(origin.Path != "" && origin.Path != "/") || origin.RawPath != "" || origin.ForceQuery ||
-		origin.RawQuery != "" || strings.Contains(selection.URL, "#") {
+	origin := desktopKeyOrigin(selection.URL)
+	if origin == "" {
 		return nil, web.ErrEngineModeKeyHTTPS
 	}
 	if !validDesktopKey(selection.APIKey) {
 		return nil, web.ErrEngineModeAuthentication
 	}
 	return func(_ context.Context, request *http.Request) error {
-		if request.URL.Scheme == "https" && strings.EqualFold(request.URL.Host, origin.Host) {
+		if desktopHTTPSOrigin(request.URL) == origin && (request.Host == "" || request.Host == request.URL.Host) {
 			request.Header.Set("Authorization", "Bearer "+selection.APIKey)
 		}
 		return nil
@@ -204,8 +230,10 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, sel
 		}
 		return nil
 	}
-	if selection.APIKey == "" && strings.EqualFold(strings.TrimSuffix(selection.URL, "/"), strings.TrimSuffix(previous.selection.URL, "/")) {
-		selection.APIKey = previous.selection.APIKey
+	if selection.APIKey == "" && previous.selection.APIKey != "" {
+		if origin := desktopKeyOrigin(selection.URL); origin != "" && origin == desktopKeyOrigin(previous.selection.URL) {
+			selection.APIKey = previous.selection.APIKey
+		}
 	}
 	next, err := d.prepare(ctx, selection, true, rand.Text())
 	if err != nil {
