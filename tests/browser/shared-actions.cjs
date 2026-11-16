@@ -5,7 +5,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0;j<8;j++)n=(n>>>1)^((n&1)?0xedb88320:0)}return(n^0xffffffff)>>>0};const chunk=(name,data)=>{const size=Buffer.alloc(4),sum=Buffer.alloc(4),kind=Buffer.from(name);size.writeUInt32BE(data.length);sum.writeUInt32BE(crc(Buffer.concat([kind,data])));return Buffer.concat([size,kind,data,sum])};const h=Buffer.alloc(13);h.writeUInt32BE(32,0);h.writeUInt32BE(32,4);h[8]=8;h[9]=6;const pixels=Buffer.alloc(32*129);for(let y=0;y<32;y++)for(let x=0;x<32;x++)Buffer.from([30,130,180,255]).copy(pixels,y*129+1+x*4);return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',h),chunk('IDAT',deflateSync(pixels)),chunk('IEND',Buffer.alloc(0))])}
 (async()=>{
  const engine=id(1),account=id(2),chat=id(3),revision=id(4),bytes=png(),hash=createHash('sha256').update(bytes).digest('hex'),streams=new Set();
- const state={ensures:0,polls:0,media:0,seq:0,ready:false};
+ const state={ensures:0,registrations:0,polls:0,media:0,seq:0,ready:false};
+ let acknowledgeRegistration;
  const kinds=['image','image','video','document','audio','link','document'];
  const items=kinds.map((kind,n)=>{
   const ext=kind==='image'?'.png':kind==='video'?'.webm':kind==='audio'?'.mp3':kind==='document'?n===6?'.docx':'.txt':'';
@@ -28,6 +29,12 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
  const conversation={id:chat,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Fixture chat',lastMessage:'Fixture',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false};
  const api=http.createServer(async (req,res)=>{
   const u=new URL(req.url,'http://fixture'),send=(status,value)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value))};
+  if(req.method==='POST'&&u.pathname===`/api/v1/previews/${items[0].preview.id}/download`){
+   assert.match(req.headers['x-oie-download-device'],/^[0-9a-f-]{36}$/);
+   state.registrations++;
+   if(state.registrationPending)await state.registrationPending;
+   return send(200,items[0].preview);
+  }
   if(req.method==='POST'&&u.pathname===`/api/v1/previews/${items[1].preview.id}/download`){state.ensures++;items[1].preview.downloadState='queued';return send(202,items[1].preview)}
   const starSource=messages.find(message=>u.pathname===`/api/v1/messages/${message.id}/star`);
   if(starSource){
@@ -178,7 +185,15 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   }finally{await touch.close()}
 
   await open(0);assert.equal(state.ensures,0);const before=state.media;await menu(0).getByRole('menuitem',{name:'Copy link',exact:true}).click();await until(async()=>await page.evaluate(()=>copied.length)===1,'URL copied');assert.equal(await page.evaluate(()=>copied[0]),items[0].url);assert.equal(state.media,before);await until(async()=>card(0).locator('[data-shared-menu-trigger]').evaluate(n=>n===document.activeElement),'menu focus restored');
-  await open(0);const saved=page.waitForEvent('download');await menu(0).getByRole('menuitem',{name:'Download',exact:true}).click();const download=await saved;assert.deepEqual(await fs.readFile(await download.path()),bytes);assert.equal(state.ensures,0);
+  await open(0);
+  state.registrationPending=new Promise(resolve=>{acknowledgeRegistration=resolve});
+  const saved=page.waitForEvent('download'),beforeSave=state.media;
+  await menu(0).getByRole('menuitem',{name:'Download',exact:true}).click();
+  await until(()=>state.registrations===1,'ready image registration');
+  assert.equal(state.media,beforeSave,'saving waits until the device registration succeeds');
+  acknowledgeRegistration();state.registrationPending=null;
+  const download=await saved;
+  assert.deepEqual(await fs.readFile(await download.path()),bytes);assert.equal(state.ensures,0);
   await open(1);const queued=page.waitForEvent('download');await menu(1).getByRole('menuitem',{name:'Download',exact:true}).click();await until(()=>state.ensures===1&&state.polls>0,'queued image polling');state.ready=true;const original=await queued;assert.deepEqual(await fs.readFile(await original.path()),bytes);assert.equal(state.ensures,1);
   await open(4);assert.equal(await menu(4).getByRole('menuitem',{name:'Download',exact:true}).count(),0);await page.keyboard.press('Escape');
   await open(2);const video=page.waitForEvent('download');await menu(2).getByRole('menuitem',{name:'Download',exact:true}).click();assert.equal((await video).suggestedFilename(),items[2].fileName);

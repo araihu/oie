@@ -31,7 +31,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(m=>m.id===parts[4]);return message?send(200,message):send(404,{status:404})}
   const chat=chats.find(c=>c.id===parts[4]);
   if(chat&&parts.length===5)return send(200,chat);
-  if(chat&&parts[5]==='mention-candidates'){state.reads++;if(state.delay)await new Promise(r=>setTimeout(r,state.delay));return state.fail?send(503,{status:503}):send(200,{conversationId:chat.id,accountId:account,state:state.partial?'partial':'known',truncated:state.partial,bareNicknameSpans:state.legacy?undefined:true,items:candidates})}
+  if(chat&&parts[5]==='mention-candidates'){state.reads++;if(state.candidateGate)await state.candidateGate;else if(state.delay)await new Promise(r=>setTimeout(r,state.delay));return state.fail?send(503,{status:503}):send(200,{conversationId:chat.id,accountId:account,state:state.partial?'partial':'known',truncated:state.partial,bareNicknameSpans:state.legacy?undefined:true,items:candidates})}
   if(chat&&parts[5]==='room-session')return send(200,{conversationId:chat.id,accountId:account,state:'joined',nickname:'me',active:true,intentId:id(8),intentRevisionId:id(9),updatedAt:'2026-11-09T12:00:00Z'});
   if(chat&&parts[5]==='messages'){
    if(req.method==='POST'){state.posts++;let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw),key=req.headers['idempotency-key'];if(receipts.has(key)){assert.deepEqual(body,receipts.get(key).body);return send(200,receipts.get(key).message)}
@@ -53,10 +53,27 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF ready');
   const delayed=await browser.newContext({viewport:{width:390,height:900},locale:'en'}),delayedPage=await delayed.newPage();delayedPage.on('pageerror',e=>errors.push(e.message));
-  state.delay=250;await delayedPage.goto(url());const delayedInput=delayedPage.locator('#message-composer'),delayedMenu=delayedPage.locator('#oie-mention-picker');let reads=state.reads;
-  await delayedInput.fill('@an');await until(()=>state.reads>reads,'delayed mention lookup started');await delayedInput.press('Tab');await new Promise(r=>setTimeout(r,400));assert(await delayedMenu.isHidden(),'a delayed lookup must not reopen the menu after Tab');assert(await delayedInput.evaluate(e=>document.activeElement!==e));
-  await delayedPage.reload();reads=state.reads;await delayedInput.fill('@an');await until(()=>state.reads>reads,'second delayed lookup started');await delayedPage.locator('#chat-header').click({position:{x:5,y:5}});await new Promise(r=>setTimeout(r,400));assert(await delayedMenu.isHidden(),'a delayed lookup must not reopen the menu after an outside click');
-  await delayedInput.click();await until(async()=>await delayedPage.locator('[data-mention-option]').count()===1&&await delayedMenu.isVisible(),'explicit return to the composer restores suggestions');await delayedInput.press('Escape');assert(await delayedMenu.isHidden());await delayed.close();state.delay=0;
+  await delayedPage.goto(url());const delayedInput=delayedPage.locator('#message-composer'),delayedMenu=delayedPage.locator('#oie-mention-picker');
+  async function dismissDuringLookup(dismiss) {
+   let release;
+   state.candidateGate=new Promise(resolve=>{release=resolve});
+   const reads=state.reads;
+   try {
+    await delayedInput.fill('@an');
+    await until(()=>state.reads>reads,'delayed mention lookup started');
+    await dismiss();
+   } finally {
+    state.candidateGate=null;
+    release();
+   }
+   await new Promise(resolve=>setTimeout(resolve,400));
+  }
+  await dismissDuringLookup(()=>delayedInput.press('Tab'));
+  assert(await delayedMenu.isHidden(),'a delayed lookup must not reopen the menu after Tab');assert(await delayedInput.evaluate(e=>document.activeElement!==e));
+  await delayedPage.reload();
+  await dismissDuringLookup(()=>delayedPage.locator('#chat-header').click({position:{x:5,y:5}}));
+  assert(await delayedMenu.isHidden(),'a delayed lookup must not reopen the menu after an outside click');
+  await delayedInput.click();await until(async()=>await delayedPage.locator('[data-mention-option]').count()===1&&await delayedMenu.isVisible(),'explicit return to the composer restores suggestions');await delayedInput.press('Escape');assert(await delayedMenu.isHidden());await delayed.close();
   findings.push('Delayed candidate responses respect Tab, outside dismissal and explicit return to the composer');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url());await until(async()=>await page.locator('#message-composer').isEnabled(),'room composer ready');
   const input=page.locator('#message-composer'),menu=page.locator('#oie-mention-picker'),options=page.locator('[data-mention-option]'),metadata=()=>page.locator('input[name=mentions]').inputValue().then(JSON.parse);

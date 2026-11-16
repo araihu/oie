@@ -26,6 +26,9 @@ func (s *Server) GetConversationReadState(ctx context.Context, r engineapi.GetCo
 		return nil, err
 	}
 	out := readState(state)
+	if state.FirstUnreadMessageID != "" {
+		out.FirstUnreadMessageId = new(string(state.FirstUnreadMessageID))
+	}
 	out.CanMarkLatestRead = new(true)
 	return engineapi.GetConversationReadState200JSONResponse(out), nil
 }

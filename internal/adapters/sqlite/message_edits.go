@@ -131,7 +131,7 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 	if err != nil {
 		return out, err
 	}
-	if (c.Kind != "direct" && c.Kind != "room") || len(original.Mentions) > 0 || len(m.Mentions) > 0 || len(m.MediaThumbnails) > 0 || len(m.Attachments) > 0 {
+	if (c.Kind != "direct" && c.Kind != "room") || len(original.Mentions) > 0 || len(m.Mentions) > 0 || len(m.MediaThumbnails) > 0 || len(m.FileDigests) > 0 || len(m.AudioURLs) > 0 || len(m.FileReferences) > 0 || len(m.Attachments) > 0 {
 		return deny("unsupported_payload")
 	}
 	if active, err := q.GetActiveMessageEdit(ctx, string(m.ID)); err == nil && active.ID != string(ignore) {

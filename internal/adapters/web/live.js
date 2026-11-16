@@ -824,7 +824,11 @@ window.OieRuntime.register('live', life => {
       }
     }
   });
-  localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else window.OieTimeline?.syncJump();
+  localizeTimes();
+  const firstUnread=body.dataset.firstUnread&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(body.dataset.firstUnread)}"]`);
+  if(firstUnread)firstUnread.scrollIntoView({block:'start',behavior:'instant'});
+  else if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();
+  window.OieTimeline?.syncJump();
 
   life.on(scheduleRetry,'click',()=>composer.requestSubmit());
   function applyScheduleEditor(editor, nextKey = editor.dataset.operationKey) {

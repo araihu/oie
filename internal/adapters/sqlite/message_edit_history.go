@@ -93,6 +93,9 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 		item := domain.MessageEditHistoryItem{RevisionID: domain.ID(source.RevisionID), SourceMessageID: domain.ID(source.SourceID), CreatedAt: at.UTC(), OriginalText: text, Sender: content.Sender, ParentRevisionIDs: []domain.ID{}}
 		if page.Retraction != nil {
 			item.Attachments = content.Attachments
+			if len(item.Attachments) == 0 {
+				item.AttachmentLinks = application.MessageSharedReferences(domain.Message{FileReferences: content.FileReferences, AudioURLs: content.AudioURLs})
+			}
 		}
 		nodes[item.SourceMessageID] = &historyNode{item: item, source: content}
 	}

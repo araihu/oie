@@ -74,6 +74,13 @@ templ messageHistoryPage(v view, h historyPageView) {
 								<div class="oie-plain-fallback">{ item.OriginalText }</div>
 							}
 							@outgoingAttachments(v,engineapi.Message{ConversationId:h.Page.ConversationId, Attachments:item.Attachments})
+							if h.Page.Retraction != nil && item.AttachmentLinks != nil {
+								for _, file := range *item.AttachmentLinks {
+									if address := safePreviewURL(file.Url); address != "" {
+										<p><a href={ templ.URL(address) } target="_blank" rel="noopener noreferrer">{ file.FileName }</a></p>
+									}
+								}
+							}
 						}
 					</li>
 				}

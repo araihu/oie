@@ -110,6 +110,7 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 	v.TimelineOlder, v.TimelineNewer = v.ContextHasOlder, v.ContextHasNewer
 	v.setTimelineMessages(source.Context.Items, nil)
 	v.applySourceMessageMetadata(source)
+	s.loadMessageAudio(ctx, v)
 	v.formatTimelineMessages(ctx)
 	v.CompactSource = true
 	return true

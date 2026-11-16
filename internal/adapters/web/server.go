@@ -73,16 +73,17 @@ var presentationTimeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	createHostedKey   func(*http.Request, string) (string, error)
-	devBuildID        string
-	engineEditors     []engineapi.RequestEditorFn
-	client            *engineapi.ClientWithResponses
-	archiveClient     *engineapi.ClientWithResponses
-	streamClient      *engineapi.Client
-	catalogs          map[string]copy
-	engineMode        *engineMode
-	diagnostics       *diagnosticsView
-	engineUnavailable bool
+	createHostedKey     func(*http.Request, string) (string, error)
+	devBuildID          string
+	engineEditors       []engineapi.RequestEditorFn
+	client              *engineapi.ClientWithResponses
+	archiveClient       *engineapi.ClientWithResponses
+	streamClient        *engineapi.Client
+	catalogs            map[string]copy
+	engineMode          *engineMode
+	diagnostics         *diagnosticsView
+	engineUnavailable   bool
+	fixedDownloadDevice string
 }
 
 func New(engineURL string, options ...Option) (*Server, error) {
@@ -243,6 +244,7 @@ type view struct {
 	Histories                                                                                     map[string]engineapi.HistoryStatus
 	Next                                                                                          string
 	Unavailable, NotFound, Preview, ChatOpen                                                      bool
+	FirstUnread                                                                                   string
 	FocusMessage                                                                                  string
 	ContextHasNewer, ContextHasOlder, ContextMissing                                              bool
 	TimelineOlder, TimelineNewer, TimelineComplete                                                bool
@@ -259,6 +261,7 @@ type view struct {
 	Stars                                                                                         map[string]engineapi.MessageStar
 	PreviewsKnown                                                                                 bool
 	MessagePreviews                                                                               map[string][]engineapi.MessagePreview
+	MessageAudio                                                                                  map[string][]engineapi.SharedContentItem
 	MessageVideos                                                                                 map[string][]engineapi.SharedContentItem
 	EngineID, EventCursor, CSRF, ErrorMessage, FormTarget                                         string
 	Values                                                                                        map[string]string
@@ -517,6 +520,8 @@ type copy struct {
 	SharedImage                                                                                                                                                                                              string
 	SharedAudio                                                                                                                                                                                              string
 	SharedVideo                                                                                                                                                                                              string
+	DownloadRetentionTitle, DownloadRetentionPeriod, KeepDownloads, DownloadRetentionDays, RemoveDownloads, RemoveDownloadsConfirm, DownloadsRemoved, DownloadRetentionSaved, DownloadRetentionUnavailable   string
+	AudioUnavailable, FileIntegrityMismatch                                                                                                                                                                  string
 	SharedDocument                                                                                                                                                                                           string
 	SharedLink                                                                                                                                                                                               string
 	CapabilityPresenceNote                                                                                                                                                                                   string
@@ -815,6 +820,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.notificationContext(w, r)
 		return
 	}
+	if r.URL.Path == downloadRetentionPath {
+		s.downloadRetention(w, r)
+		return
+	}
 	if r.URL.Path == retentionPath {
 		s.retention(w, r)
 		return
@@ -985,7 +994,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/media/") {
-		cachehttp.PrivateImmutable.Wrap(http.HandlerFunc(s.mediaImage)).ServeHTTP(w, r)
+		handler := http.Handler(http.HandlerFunc(s.mediaImage))
+		if r.URL.Query().Get("original") == "1" || r.URL.Query().Has("download") {
+			handler = cachehttp.PrivateRevalidate.Wrap(handler)
+		} else {
+			handler = cachehttp.PrivateImmutable.Wrap(handler)
+		}
+		handler.ServeHTTP(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/ui/api/v1/shared-content/") && strings.HasSuffix(r.URL.Path, "/thumbnail") {
@@ -1020,6 +1035,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Background reads inherit the URL's presentation preferences. They can
 	// finish after a settings change and must not overwrite the new cookies.
 	if r.URL.Path == "/" || r.URL.Path == "/search" {
+		s.downloadDevice(w, r)
 		savePreference(w, r, "lang", v.Locale)
 		savePreference(w, r, "theme", v.Theme)
 	}
@@ -1332,6 +1348,10 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		contextLimit = sourceContextPageSize
 	}
 	items, usedContext := s.contextMessages(ctx, v, v.Selected.AccountId, contextLimit)
+	if !usedContext && v.FocusMessage == "" && v.TimelineCursor == "" && !v.Preview && c.UnreadCount > 0 &&
+		r.URL.Path != "/ui/refresh" && r.Header.Get("X-Oie-Fragment") != "timeline" {
+		items, usedContext = s.unreadContext(ctx, v, c.AccountId)
+	}
 	if v.Unavailable {
 		return
 	}
@@ -1447,8 +1467,8 @@ func (v view) timelineVersion() string {
 	out.WriteString(v.ChatID)
 	for _, m := range v.Messages {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
-		videos, _ := json.Marshal(v.messageVideos(m.Id))
-		_, _ = fmt.Fprintf(&out, "video:%x;", sha256.Sum256(videos))
+		media, _ := json.Marshal([]any{v.messageVideos(m.Id), v.MessageAudio[m.Id]})
+		_, _ = fmt.Fprintf(&out, "media:%x;", sha256.Sum256(media))
 		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, m.MentionsYou, m.Moderation, m.Retraction, m.CanRetract, v.Reactions[m.Id]})
 		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}

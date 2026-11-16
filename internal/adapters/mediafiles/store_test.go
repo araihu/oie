@@ -8,10 +8,31 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/araihu/oie/internal/application"
 )
+
+func TestReconcileDownloadsRemovesUnreferencedAndPartialFiles(t *testing.T) {
+	dir := t.TempDir()
+	keep, orphan := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	for _, name := range []string{keep, orphan, ".part-interrupted", "unmanaged"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := NewDownloads(dir).Reconcile(t.Context(), []string{keep}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].Name() != keep || entries[1].Name() != "unmanaged" {
+		t.Fatalf("unexpected files after reconciliation: %v", entries)
+	}
+}
 
 func TestRetainedOriginalAndNormalizedThumbnail(t *testing.T) {
 	dir := t.TempDir()

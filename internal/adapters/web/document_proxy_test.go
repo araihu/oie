@@ -20,6 +20,10 @@ func TestDocumentProxyStreamsSelectedOriginalWithoutInterpretingText(t *testing.
 				if kind == "application/pdf" {
 					body = "%PDF-1.7\noriginal bytes"
 				}
+				var wantQuery, wantDevice string
+				if download {
+					wantQuery, wantDevice = "download=true", testAccount
+				}
 				var streams atomic.Int32
 				backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.URL.Path == "/api/v1/engine" {
@@ -28,7 +32,7 @@ func TestDocumentProxyStreamsSelectedOriginalWithoutInterpretingText(t *testing.
 						return
 					}
 					streams.Add(1)
-					if r.URL.Path != videoEnginePath || r.URL.RawQuery != "" || r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "" {
+					if r.URL.Path != videoEnginePath || r.URL.RawQuery != wantQuery || r.Header.Get("X-Oie-Download-Device") != wantDevice || r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "" {
 						t.Error("noncanonical stream request or browser credentials forwarded", r.URL)
 					}
 					w.Header().Set("Content-Type", kind)
@@ -47,7 +51,7 @@ func TestDocumentProxyStreamsSelectedOriginalWithoutInterpretingText(t *testing.
 					target += "&download=1"
 				}
 				r := httptest.NewRequest(http.MethodGet, target, nil)
-				r.Header.Set("Cookie", "browser=private")
+				r.Header.Set("Cookie", "browser=private; "+downloadDeviceCookie+"="+testAccount)
 				r.Header.Set("Authorization", "Bearer private")
 				w := httptest.NewRecorder()
 				ui.ServeHTTP(w, r)

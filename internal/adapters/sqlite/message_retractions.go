@@ -92,7 +92,7 @@ func hydrateMessageWithdrawal(ctx context.Context, q *dbgen.Queries, m *domain.M
 			return err
 		}
 	}
-	m.Retraction = &domain.MessageRetraction{At: at, OriginalAvailable: m.OriginalText != "" || len(m.Attachments) != 0}
+	m.Retraction = &domain.MessageRetraction{At: at, OriginalAvailable: m.OriginalText != "" || len(m.Attachments) != 0 || len(m.FileReferences) != 0 || len(m.AudioURLs) != 0}
 	return nil
 }
 

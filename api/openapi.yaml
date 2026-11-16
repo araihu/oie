@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.36.0
+  version: 0.37.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -295,7 +295,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [media, links, documents, video]
+          enum: [media, links, documents, video, audio]
           default: media
       - name: accountId
         description: Restrict to one owning account. Omit both account filters to list all accounts.
@@ -442,11 +442,88 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/downloads/{deviceId}/retention:
+    parameters:
+    - name: deviceId
+      in: path
+      required: true
+      description: Stable device identifier.
+      schema:
+        $ref: '#/components/schemas/ID'
+    get:
+      tags: [SharedContent]
+      operationId: getDownloadRetention
+      summary: Read downloaded-file retention for a device
+      responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '200':
+          description: Device retention settings and retained download count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadRetention'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      tags: [SharedContent]
+      operationId: setDownloadRetention
+      summary: Update downloaded-file retention for a device
+      description: Applies the selected age to existing and future retained originals for the specified device.
+      requestBody:
+        description: New retention period in days for this device.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetDownloadRetention'
+      responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '200':
+          description: Updated device retention.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadRetention'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '413':
+          description: Retention request body exceeds the allowed size.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '415':
+          description: Retention request requires JSON.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      tags: [SharedContent]
+      operationId: clearDeviceDownloads
+      summary: Remove originals retained for this device
+      responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '200':
+          description: Device retention settings after removing its downloads.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadRetention'
+        '400':
+          $ref: '#/components/responses/Invalid'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/shared-content/{itemId}/content:
     get:
       tags: [SharedContent]
       operationId: getSharedContentMedia
-      summary: Stream a retained video or supported document reference
+      summary: Read a retained audio, video or document reference
       description: >-
         Reads the current retained canonical source before opening its URL through the engine's
         public-network policy. Never redirects the browser to the provider. Supports one byte
@@ -457,9 +534,9 @@ paths:
         as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's
         text/markdown, text/csv, application/json, text/json, application/xml or text/xml.
         HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete
-        size is required. This is explicit on-demand streaming, not a retained download: no
-        full-file hash, sender verification, offline availability or transfer state is implied.
-        Playback requires explicit activation. A preview client may request only a bounded byte range and
+        size is required. Full downloads report a SHA-256 fingerprint and whether a supported
+        sender digest was verified. Partial playback and preview requests have no integrity result.
+        Audio and video playback require explicit activation. A preview client may request only a bounded byte range and
         must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges
         are invalid. JSON, XML and Markdown are returned as plain text, never active markup.
       parameters:
@@ -467,6 +544,16 @@ paths:
         in: path
         required: true
         description: Current supported catalog item UUID, never an arbitrary provider URL.
+        schema:
+          $ref: '#/components/schemas/ID'
+      - name: download
+        in: query
+        description: Complete the download and calculate its integrity before delivering any bytes.
+        schema:
+          type: boolean
+      - name: X-Oie-Download-Device
+        in: header
+        description: Device scope for durable retention of an explicit download.
         schema:
           $ref: '#/components/schemas/ID'
       - name: Range
@@ -487,6 +574,16 @@ paths:
         '200':
           description: Complete media/document response; the provider may have ignored Range.
           headers:
+            X-Oie-SHA256:
+              description: Lowercase SHA-256 fingerprint of all original bytes when verified or downloaded.
+              schema:
+                type: string
+                pattern: ^[0-9a-f]{64}$
+            X-Oie-Integrity:
+              description: Provenance of the complete download fingerprint.
+              schema:
+                type: string
+                enum: [computed_only, sender_verified]
             Accept-Ranges:
               description: Byte-range capability for this source.
               schema:
@@ -520,6 +617,34 @@ paths:
                 type: string
                 format: binary
             application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            audio/flac:
+              schema:
+                type: string
+                format: binary
+            audio/aac:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
               schema:
                 type: string
                 format: binary
@@ -575,6 +700,34 @@ paths:
                 type: string
                 format: binary
             application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            audio/flac:
+              schema:
+                type: string
+                format: binary
+            audio/aac:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
               schema:
                 type: string
                 format: binary
@@ -649,6 +802,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '502':
           description: Provider response or range metadata is invalid, unavailable, or truncated.
+          headers:
+            X-Oie-Integrity:
+              description: Present when the complete file differs from the advertised digest.
+              schema:
+                type: string
+                enum: [mismatch]
           content:
             application/problem+json:
               schema:
@@ -1184,14 +1343,18 @@ paths:
       description: 'Explicitly requests the original for a kind=image reference. This ensure operation is safe to
         retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can
         be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained.
-        The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not
-        support this operation.'
+        Supported sender digests are checked before retaining an original. Link cards do not support this operation.'
       parameters:
       - name: previewId
         in: path
         required: true
         description: Stable entity UUID.
         schema: *id001
+      - name: X-Oie-Download-Device
+        in: header
+        description: Device scope for retaining this original.
+        schema:
+          $ref: '#/components/schemas/ID'
       responses:
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
@@ -3674,12 +3837,23 @@ paths:
       summary: Read retained bytes of an outgoing attachment
       description: >-
         Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
+      parameters:
+        - name: Range
+          in: header
+          description: Optional byte range for playback and seeking.
+          schema: {type: string}
       responses:
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Retained attachment bytes
           headers:
+            Accept-Ranges:
+              description: Byte-range support for the staged file.
+              schema: {type: string}
+            X-Oie-Attachment-Type:
+              description: Staged attachment media type supplied by the uploader.
+              schema: {type: string}
             Content-Disposition:
               description: Attachment disposition with the original filename.
               required: true
@@ -3687,10 +3861,39 @@ paths:
           content:
             application/octet-stream:
               schema: {type: string, format: binary}
+        '206':
+          description: Requested staged attachment bytes.
+          headers:
+            Accept-Ranges:
+              description: Byte-range support for the staged file.
+              schema: {type: string}
+            Content-Range:
+              description: Selected bytes and the full file size.
+              schema: {type: string}
+            X-Oie-Attachment-Type:
+              description: Staged attachment media type supplied by the uploader.
+              schema: {type: string}
+            Content-Disposition:
+              description: Attachment disposition with the original filename.
+              schema: {type: string}
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+            multipart/byteranges:
+              schema: {type: string, format: binary}
         '400':
           $ref: '#/components/responses/Invalid'
         '404':
           $ref: '#/components/responses/NotFound'
+        '416':
+          description: The specified byte range is invalid or outside the file.
+          headers:
+            Content-Range:
+              description: Total file size when the range is outside the file.
+              schema: {type: string}
+          content:
+            text/plain:
+              schema: {type: string}
         '503':
           $ref: '#/components/responses/Unavailable'
   /api/v1/scheduled-messages:
@@ -4003,6 +4206,10 @@ components:
         unreadCount:
           type: integer
           minimum: 0
+        firstUnreadMessageId:
+          allOf:
+          - $ref: '#/components/schemas/ID'
+          description: Earliest retained unread message in timeline order on GET responses, when present.
         canMarkLatestRead:
           type: boolean
           description: Advertises support for the If-Match latest-timeline read on GET responses.
@@ -4215,6 +4422,7 @@ components:
           - 0.34.0
           - 0.35.0
           - 0.36.0
+          - 0.37.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -4854,7 +5062,11 @@ components:
           type: string
           enum:
           - computed_only
-          description: No expected sender digest was supplied for this URL reference.
+          description: The original was fingerprinted locally. A verified sender digest is indicated by verifiedAlgorithm.
+        verifiedAlgorithm:
+          type: string
+          enum: [sha-256, sha-512]
+          description: Supported sender digest algorithm verified for this original.
       example: &id002
         id: 019a5df0-0000-7000-8000-000000000001
         revisionId: 019a5df0-0000-7000-8000-000000000001
@@ -5161,6 +5373,34 @@ components:
           description: Opaque cursor for the next matching page, absent at the end.
         metadataIndexing:
           $ref: '#/components/schemas/SharedContentIndexing'
+    DownloadRetention:
+      type: object
+      description: Per-device original download retention and current count.
+      additionalProperties: false
+      required: [days, count]
+      properties:
+        days:
+          type: integer
+          minimum: 0
+          maximum: 3650
+          description: Age in days before expiry, or zero to keep until explicit deletion.
+        count:
+          type: integer
+          minimum: 0
+          description: Number of complete original downloads retained for this device.
+      example: {days: 0, count: 3}
+    SetDownloadRetention:
+      type: object
+      description: Changes the retention period and applies it to existing downloads.
+      additionalProperties: false
+      required: [days]
+      properties:
+        days:
+          type: integer
+          minimum: 0
+          maximum: 3650
+          description: Age in days before expiry, or zero to keep until explicit deletion.
+      example: {days: 30}
     SharedContentItem:
       type: object
       description: One shared URL reference with its exact retained source message and current owning labels.
@@ -6085,6 +6325,12 @@ components:
           description: Local files retained with this explicitly revealed version.
           items:
             $ref: '#/components/schemas/StagedAttachment'
+        attachmentLinks:
+          type: array
+          maxItems: 32
+          description: Provider file links retained with this explicitly revealed version.
+          items:
+            $ref: '#/components/schemas/MessageHistoryAttachmentLink'
         sender:
           $ref: '#/components/schemas/Sender'
         isCurrent:
@@ -6102,6 +6348,20 @@ components:
           items:
             $ref: '#/components/schemas/ID'
           example: []
+    MessageHistoryAttachmentLink:
+      type: object
+      additionalProperties: false
+      required: [fileName, url]
+      properties:
+        fileName:
+          type: string
+          maxLength: 300
+          example: recording.ogg
+        url:
+          type: string
+          format: uri
+          maxLength: 4096
+          example: https://files.example.test/recording
     MessageEditHistoryPage:
       type: object
       description: A bounded page from an exact snapshot of one canonical message's observed content history.
@@ -6366,6 +6626,22 @@ components:
           description: Source revision explicitly required when the reply was scheduled or the current quote was replaced. Omitted when the caller supplied no review precondition for the current quote.
         expectedReplyExcerptSha256:
           $ref: '#/components/schemas/ReplyExcerptSHA256'
+        audioAttachmentUrls:
+          type: array
+          maxItems: 32
+          description: Current message audio attachment links advertised by the sender.
+          items:
+            type: string
+            format: uri
+            maxLength: 4096
+        videoAttachmentUrls:
+          type: array
+          maxItems: 32
+          description: Current message video attachment links advertised by the sender.
+          items:
+            type: string
+            format: uri
+            maxLength: 4096
         originalText:
           type: string
           description: Exact text of the current retained content revision. Validated incoming corrections retain the logical message UUID and original creation time; prior source bodies remain retained. Copying returns this text without removing formatting or compatibility quoting.

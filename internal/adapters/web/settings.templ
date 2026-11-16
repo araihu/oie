@@ -44,6 +44,9 @@ templ settings(v view) {
 			}
 		</footer>
 	}
+	if !v.Preview && v.EngineID != "" {
+		@removeDownloadsDialog(v)
+	}
 	if v.EngineMode != nil {
 		@engineModeSettings(v)
 	}
@@ -158,6 +161,7 @@ templ deviceSettings(v view) {
 		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
 	</div>
 	if !v.Preview && v.EngineID != "" {
+		@downloadRetentionSettings(v)
 		@notificationSettings(v)
 		<section class="oie-settings-section oie-device-retention" aria-labelledby="device-retention-title">
 			<h2 id="device-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>

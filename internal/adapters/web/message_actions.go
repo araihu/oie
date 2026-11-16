@@ -75,8 +75,40 @@ func messageActions(v view, id string) []dropdown.Section {
 		}
 		sections = append(sections, dropdown.Section{Items: items})
 	}
+	if audio := audioDownloadActions(v, id); len(audio) > 0 {
+		sections = append(sections, dropdown.Section{Items: audio})
+	}
 	return sections
 }
+
+func audioDownloadActions(v view, messageID string) []dropdown.Item {
+	var items []dropdown.Item
+	item := func(id, name string) dropdown.Item {
+		return dropdown.Item{ID: "save-audio-" + id, Label: name, Icon: glyph(heroicons.Icon16SolidArrowDownTray), OnClick: "void 0"}
+	}
+	for _, audio := range v.MessageAudio[messageID] {
+		items = append(items, item(audio.Id, v.sharedTitle(audio)))
+	}
+	for _, message := range v.Messages {
+		if message.Id == messageID && message.Attachments != nil {
+			for _, audio := range *message.Attachments {
+				if audioMediaType(audio.MediaType) != "" {
+					items = append(items, item(audio.Id, audio.FileName))
+				}
+			}
+			break
+		}
+	}
+	for i := range items {
+		if len(items) == 1 {
+			items[i].Label = v.Text.SharedDownload
+		} else {
+			items[i].Label = v.Text.SharedDownload + " · " + items[i].Label
+		}
+	}
+	return items
+}
+
 func imageActions(v view, p engineapi.MessagePreview) []dropdown.Section {
 	return []dropdown.Section{{Items: []dropdown.Item{
 		{ID: v.previewControlID("open-preview", p.Id), Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), Label: v.Text.OpenImage, OnClick: "void 0"},

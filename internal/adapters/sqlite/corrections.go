@@ -89,7 +89,7 @@ func maskWithdrawnProjection(ctx context.Context, q *dbgen.Queries, m *domain.Me
 	}
 	if m.IsWithdrawn() {
 		m.OriginalText, m.AttachmentWireText = "", ""
-		m.MediaThumbnails, m.Attachments, m.Mentions = nil, nil, nil
+		m.MediaThumbnails, m.FileDigests, m.AudioURLs, m.FileReferences, m.Attachments, m.Mentions = nil, nil, nil, nil, nil, nil
 		m.Composition, m.OutboundReply, m.Reply, m.ReplyReference = nil, nil, nil, nil
 		m.Edited, m.MentionsYou = false, false
 	}

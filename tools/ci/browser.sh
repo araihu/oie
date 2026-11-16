@@ -88,6 +88,7 @@ integration() {
   run_case chat-info
   run_case fragment-navigation
   run_case timeline-scroll
+  run_case media-unread
   run_case read-state
   run_case notifications
   run_case conversation-navigation

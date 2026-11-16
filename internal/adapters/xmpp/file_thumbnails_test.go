@@ -36,3 +36,31 @@ func TestFileThumbnailsDecodeNamespacesAndUnsupportedSources(t *testing.T) {
 		}
 	}
 }
+
+func TestAdvertisedOriginalDigestsUseOnlyFileMetadataHashes(t *testing.T) {
+	raw := `<message xmlns='jabber:client'>
+		<file-sharing xmlns='urn:xmpp:sfs:0'><file xmlns='urn:xmpp:file:metadata:0'>
+			<media-type>audio/mpeg</media-type>
+			<hash xmlns='urn:xmpp:hashes:2' algo='sha-256'>2XarmwTlNxDAMkvymloX3S5+VbylNrJt/l5QyPa+YoU=</hash>
+			<hash xmlns='urn:xmpp:hashes:2' algo='sha-512'>invalid</hash>
+			<hash xmlns='urn:xmpp:hashes:2' algo='sha-1'>2AfMGH8O7UNPTvUVAM9aK13mpCY=</hash>
+			<thumbnail xmlns='urn:xmpp:thumbs:1'><hash xmlns='urn:xmpp:hashes:2' algo='sha-256'>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</hash></thumbnail>
+		</file><sources><url-data xmlns='http://jabber.org/protocol/url-data' target='https://files.example/voice'/></sources></file-sharing>
+	</message>`
+	var archive archiveMessage
+	if err := xml.Unmarshal([]byte(raw), &archive); err != nil {
+		t.Fatal(err)
+	}
+	meta := archive.fileSharingMetadata
+	digests := decodeFileDigests(meta)
+	if len(digests) != 1 || digests[0].URL != "https://files.example/voice" || !digests[0].Valid() || digests[0].Algorithm != "sha-256" {
+		t.Fatal(digests)
+	}
+	urls := decodeAudioURLs(meta)
+	if len(urls) != 1 || urls[0] != digests[0].URL || attachmentBodyFallback("", meta) != urls[0] {
+		t.Fatal(urls)
+	}
+	if attachmentBodyFallback("caption", meta) != "caption" {
+		t.Fatal("an explicit wire caption was changed")
+	}
+}

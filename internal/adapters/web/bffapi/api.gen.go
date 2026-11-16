@@ -417,6 +417,24 @@ func (e GetBrowserMessageSenderParamsLang) Valid() bool {
 	}
 }
 
+// Defines values for ChangeBrowserDownloadRetentionFormdataBodyAction.
+const (
+	Clear ChangeBrowserDownloadRetentionFormdataBodyAction = "clear"
+	Save  ChangeBrowserDownloadRetentionFormdataBodyAction = "save"
+)
+
+// Valid indicates whether the value is a known member of the ChangeBrowserDownloadRetentionFormdataBodyAction enum.
+func (e ChangeBrowserDownloadRetentionFormdataBodyAction) Valid() bool {
+	switch e {
+	case Clear:
+		return true
+	case Save:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrowserSharedMediaParamsDownload.
 const (
 	GetBrowserSharedMediaParamsDownloadN1 GetBrowserSharedMediaParamsDownload = "1"
@@ -1436,12 +1454,39 @@ type GetBrowserMessageSenderParams struct {
 // GetBrowserMessageSenderParamsLang defines parameters for GetBrowserMessageSender.
 type GetBrowserMessageSenderParamsLang string
 
+// GetBrowserDownloadRetentionParams defines parameters for GetBrowserDownloadRetention.
+type GetBrowserDownloadRetentionParams struct {
+	// XOieEngineID Selected engine identity.
+	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
+}
+
+// ChangeBrowserDownloadRetentionFormdataBody defines parameters for ChangeBrowserDownloadRetention.
+type ChangeBrowserDownloadRetentionFormdataBody struct {
+	// Action Example: save
+	Action ChangeBrowserDownloadRetentionFormdataBodyAction `form:"action" json:"action"`
+
+	// Days Example: 30
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
+}
+
+// ChangeBrowserDownloadRetentionParams defines parameters for ChangeBrowserDownloadRetention.
+type ChangeBrowserDownloadRetentionParams struct {
+	// XCSRFToken Browser CSRF token.
+	XCSRFToken string `json:"X-CSRF-Token"`
+
+	// XOieEngineID Selected engine identity.
+	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
+}
+
+// ChangeBrowserDownloadRetentionFormdataBodyAction defines parameters for ChangeBrowserDownloadRetention.
+type ChangeBrowserDownloadRetentionFormdataBodyAction string
+
 // GetBrowserSharedMediaParams defines parameters for GetBrowserSharedMedia.
 type GetBrowserSharedMediaParams struct {
 	// EngineId Expected engine identity.
 	EngineId *openapi_types.UUID `form:"engineId,omitempty" json:"engineId,omitempty"`
 
-	// Download Save the original file.
+	// Download Verify and save the complete original file.
 	Download *GetBrowserSharedMediaParamsDownload `form:"download,omitempty" json:"download,omitempty"`
 
 	// Preview Requires engineId and excludes download. Returns at most the first 5 MiB of video.
@@ -1507,6 +1552,9 @@ type RequestBrowserRoomArchiveJSONRequestBody = externalRef0.RoomArchiveRequest
 
 // SetBrowserRoomArchiveModeJSONRequestBody defines body for SetBrowserRoomArchiveMode for application/json ContentType.
 type SetBrowserRoomArchiveModeJSONRequestBody = externalRef0.SetRoomArchiveMode
+
+// ChangeBrowserDownloadRetentionFormdataRequestBody defines body for ChangeBrowserDownloadRetention for application/x-www-form-urlencoded ContentType.
+type ChangeBrowserDownloadRetentionFormdataRequestBody ChangeBrowserDownloadRetentionFormdataBody
 
 // AsConversationPreferenceIntent0 returns the union data inside the ConversationPreferenceIntent as a ConversationPreferenceIntent0
 func (t ConversationPreferenceIntent) AsConversationPreferenceIntent0() (ConversationPreferenceIntent0, error) {

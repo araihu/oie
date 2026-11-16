@@ -52,6 +52,8 @@ func (f *streamedFixture) Open(_ context.Context, _ string, r application.MediaR
 	mimeType := "video/mp4"
 	if r.Format == "pdf" {
 		mimeType = "application/pdf"
+	} else if r.Format == "audio" {
+		mimeType = "audio/mpeg"
 	} else if r.Format != "" && r.Format != "video" {
 		mimeType = "text/plain"
 	}

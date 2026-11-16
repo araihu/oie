@@ -36,6 +36,13 @@ func (s *Server) GetMessageEditHistory(ctx context.Context, r engineapi.GetMessa
 			}
 			version.Attachments = &files
 		}
+		if len(item.AttachmentLinks) > 0 {
+			links := make([]engineapi.MessageHistoryAttachmentLink, 0, len(item.AttachmentLinks))
+			for _, file := range item.AttachmentLinks {
+				links = append(links, engineapi.MessageHistoryAttachmentLink{FileName: file.FileName, Url: file.URL})
+			}
+			version.AttachmentLinks = &links
+		}
 		out.Items = append(out.Items, version)
 	}
 	if page.NextCursor != "" {

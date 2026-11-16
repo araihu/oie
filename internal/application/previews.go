@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -17,10 +18,12 @@ import (
 type PreviewSource struct {
 	ID, AccountID, ConversationID domain.ID
 	Text                          string
+	AudioURLs                     []string
+	FileReferences                []domain.SharedReference
 }
 
 func previewSource(m domain.Message) PreviewSource {
-	return PreviewSource{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, Text: domain.DisplayBody(m)}
+	return PreviewSource{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, Text: domain.DisplayBody(m), AudioURLs: m.AudioURLs, FileReferences: m.FileReferences}
 }
 
 // PreviewRepository owns derived cache records and reads their message sources.
@@ -170,11 +173,21 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 	}
 	out := []domain.MessagePreview{}
 	for _, source := range sources {
-		for _, address := range previewURLs(source.Text) {
-			if knownNonPreviewFile(address) {
+		addresses := previewURLs(source.Text)
+		files := make(map[string]domain.SharedReference, len(source.FileReferences))
+		for _, file := range source.FileReferences {
+			files[file.URL] = file
+			if file.Kind == "image" && !slices.Contains(addresses, file.URL) {
+				addresses = append(addresses, file.URL)
+			}
+		}
+		for _, address := range addresses {
+			file := files[address]
+			if (file.Kind != "" && file.Kind != "image") || slices.Contains(source.AudioURLs, address) ||
+				(file.Kind == "" && knownNonPreviewFile(address)) {
 				continue
 			}
-			p, err := e.ensureMessagePreview(ctx, r, source, address)
+			p, err := e.ensureMessagePreview(ctx, r, source, address, file)
 			if err != nil {
 				return nil, err
 			}
@@ -192,10 +205,7 @@ func knownNonPreviewFile(address string) bool {
 	}
 	return false
 }
-func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, source PreviewSource, address string) (domain.MessagePreview, error) {
-	if knownNonPreviewFile(address) {
-		return domain.MessagePreview{}, ErrInvalid
-	}
+func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, source PreviewSource, address string, file domain.SharedReference) (domain.MessagePreview, error) {
 	id, err := e.newID()
 	if err != nil {
 		return domain.MessagePreview{}, err
@@ -207,10 +217,13 @@ func (e *Engine) ensureMessagePreview(ctx context.Context, r PreviewRepository, 
 	p := domain.MessagePreview{ID: id, RevisionID: rev, AccountID: source.AccountID, ConversationID: source.ConversationID, MessageID: source.ID, URL: address, PreviewVersion: previewRendererVersion, Kind: "link", State: "queued", DownloadState: "not_downloaded", UpdatedAt: e.now().UTC()}
 	u, _ := url.Parse(address)
 	ext := strings.ToLower(path.Ext(u.Path))
-	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
+	if file.Kind == "image" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
 		p.Kind = "image"
 		p.State = "ready"
 		p.Title = path.Base(u.Path)
+		if file.FileName != "" {
+			p.Title = file.FileName
+		}
 		if title := []rune(p.Title); len(title) > 300 {
 			p.Title = string(title[:300])
 		}
@@ -308,6 +321,15 @@ func (e *Engine) RefreshPreview(ctx context.Context, id domain.ID) (domain.Messa
 }
 
 func (e *Engine) DownloadPreview(ctx context.Context, id domain.ID) (domain.MessagePreview, error) {
+	return e.DownloadPreviewForDevice(ctx, id, "")
+}
+
+func (e *Engine) DownloadPreviewForDevice(ctx context.Context, id, device domain.ID) (domain.MessagePreview, error) {
+	if device != "" && !validID(device) {
+		return domain.MessagePreview{}, ErrInvalid
+	}
+	e.downloadMu.Lock()
+	defer e.downloadMu.Unlock()
 	r, err := e.previewRepo()
 	if err != nil {
 		return domain.MessagePreview{}, err
@@ -320,8 +342,20 @@ func (e *Engine) DownloadPreview(ctx context.Context, id domain.ID) (domain.Mess
 		if err != nil {
 			return p, err
 		}
-		if p.Kind != "image" || knownNonPreviewFile(p.URL) {
+		if p.Kind != "image" {
 			return p, ErrInvalid
+		}
+		if repo, ok := e.repo.(DownloadRepository); ok {
+			download := domain.Download{DeviceID: device, SourceID: p.ID, Kind: "image", DownloadedAt: e.now().UTC()}
+			if p.DownloadState == "ready" {
+				download.Hash, download.MimeType, download.Size = p.FileHash, p.FileMimeType, p.FileSize
+				download.VerifiedAlgorithm = p.VerifiedAlgorithm
+			}
+			if err := repo.SaveDownload(ctx, download); err != nil {
+				return p, err
+			}
+		} else if device != "" {
+			return p, ErrProtocolUnavailable
 		}
 		if p.DownloadState == "ready" || p.DownloadState == "queued" || p.DownloadState == "downloading" {
 			return p, nil
@@ -374,7 +408,7 @@ func previewFailureCode(err error) string {
 	var f PreviewFailure
 	if errors.As(err, &f) {
 		switch f.Code {
-		case "blocked", "not_found", "too_large", "unsupported", "fetch_failed":
+		case "blocked", "not_found", "too_large", "unsupported", "fetch_failed", "integrity_mismatch":
 			return f.Code
 		}
 	}
@@ -443,7 +477,7 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 	if p.Kind == "video" {
 		return e.processVideoThumbnail(ctx, r, p)
 	}
-	if knownNonPreviewFile(p.URL) {
+	if p.Kind != "image" && knownNonPreviewFile(p.URL) {
 		old := p.RevisionID
 		var err error
 		p.RevisionID, err = e.newID()
@@ -478,6 +512,32 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 	var image, favicon []byte
 	if original {
 		image, fetchErr = e.previewFetcher.Image(ctx, p.URL)
+		e.downloadMu.Lock()
+		defer e.downloadMu.Unlock()
+		current, err := r.Preview(ctx, p.ID)
+		if errors.Is(err, ErrNotFound) || err == nil && current.RevisionID != old {
+			return ErrStateConflict
+		}
+		if err != nil {
+			return err
+		}
+		source, err := e.Message(ctx, p.MessageID)
+		if errors.Is(err, ErrNotFound) {
+			return ErrStateConflict
+		}
+		if err != nil {
+			return err
+		}
+		digests := fileDigests(source, p.URL)
+		p.VerifiedAlgorithm = ""
+		if fetchErr == nil && len(digests) > 0 {
+			hashes := newDownloadHashes()
+			_, _ = hashes.Write(image)
+			p.VerifiedAlgorithm, fetchErr = hashes.verify(digests)
+			if fetchErr != nil {
+				fetchErr = PreviewFailure{Code: "integrity_mismatch"}
+			}
+		}
 		if fetchErr == nil {
 			var file domain.MediaFile
 			file, fetchErr = e.mediaFiles.Put(ctx, image, true)
@@ -527,6 +587,10 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	if !original {
+		e.downloadMu.Lock()
+		defer e.downloadMu.Unlock()
+	}
 	if fetchErr == nil && len(image) > 0 {
 		thumb, err := e.mediaFiles.Thumbnail(ctx, image)
 		if err == nil {
@@ -556,6 +620,7 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 		}
 		if original {
 			p.DownloadState = "failed"
+			p.FileHash, p.FileMimeType, p.VerifiedAlgorithm, p.FileSize = "", "", "", 0
 		} else {
 			p.State = "unavailable"
 		}
@@ -569,6 +634,9 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 		return err
 	}
 	p.UpdatedAt = e.now().UTC()
+	if repo, ok := e.repo.(DownloadRepository); ok && original {
+		return repo.SaveDownloadedPreview(ctx, p, old, p.UpdatedAt)
+	}
 	return r.SavePreview(ctx, p, old)
 }
 
@@ -576,7 +644,7 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	done := make(chan error, 5)
+	done := make(chan error, 6)
 	workers := 2
 	if repo, ok := e.repo.(retentionRepository); ok {
 		workers++
@@ -593,6 +661,10 @@ func (e *Engine) Run(ctx context.Context) error {
 	if e.previewFetcher != nil && e.mediaFiles != nil {
 		workers++
 		go func() { done <- e.runPreviews(ctx) }()
+	}
+	if repo, ok := e.repo.(DownloadRepository); ok && e.downloadFiles != nil {
+		workers++
+		go func() { done <- e.runDownloadRetention(ctx, repo) }()
 	}
 	var result error
 	for i := 0; i < workers; i++ {

@@ -88,6 +88,14 @@ func (r sharedMediaResponse) VisitGetSharedContentMediaResponse(w http.ResponseW
 	defer func() { _ = r.read.Body.Close() }()
 	w.Header().Set("Content-Type", r.read.MediaType)
 	w.Header().Set("Content-Length", strconv.FormatInt(r.read.Length, 10))
+	if r.read.SHA256 != "" {
+		integrity := "computed_only"
+		if r.read.VerifiedAlgorithm != "" {
+			integrity = "sender_verified"
+		}
+		w.Header().Set("X-Oie-SHA256", r.read.SHA256)
+		w.Header().Set("X-Oie-Integrity", integrity)
+	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	name := strings.Map(func(r rune) rune {
@@ -131,6 +139,10 @@ func (s *Server) GetSharedContentMedia(ctx context.Context, r engineapi.GetShare
 	request, err := parseMediaRequest(r.Params)
 	if err != nil {
 		return nil, err
+	}
+	request.Download = r.Params.Download != nil && *r.Params.Download
+	if r.Params.XOieDownloadDevice != nil {
+		request.DeviceID = domain.ID(*r.Params.XOieDownloadDevice)
 	}
 	read, err := s.engine.SharedContentMedia(ctx, domain.ID(r.ItemId), request)
 	if err != nil {

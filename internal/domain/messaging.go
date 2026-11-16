@@ -62,6 +62,9 @@ type Message struct {
 	Attachments                               []StagedAttachment   `json:",omitempty"`
 	Mentions                                  []MessageMention     `json:",omitempty"`
 	MentionsYou                               bool                 `json:",omitempty"`
+	FileReferences                            []SharedReference    `json:",omitempty"`
+	AudioURLs                                 []string             `json:",omitempty"`
+	FileDigests                               []FileDigest         `json:",omitempty"`
 	MediaThumbnails                           []MediaThumbnail     `json:",omitempty"`
 	Edited                                    bool                 `json:",omitempty"`
 	EditedAt                                  time.Time            `json:",omitempty"`

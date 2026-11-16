@@ -8,6 +8,7 @@ type MessageEditHistoryItem struct {
 	CreatedAt                   time.Time
 	OriginalText                string
 	Attachments                 []StagedAttachment
+	AttachmentLinks             []SharedReference
 	Sender                      Sender
 	IsCurrent, IsOriginal       bool
 	ParentRevisionIDs           []ID

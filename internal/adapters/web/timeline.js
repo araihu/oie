@@ -84,11 +84,12 @@ window.OieRuntime.register('timeline',life=>{
    }
   }
   if(!jump)return;
-  jump.hidden=needsLatestPage()?bottom&&!newer:bottom||!unseenLiveMessages;
-  const label=liveAttached?labels?.newMessages:labels?.latest;
+  const unreadAnchor=!!document.body.dataset.firstUnread;
+  jump.hidden=needsLatestPage()?bottom&&!newer:bottom||!unseenLiveMessages&&!unreadAnchor;
+  const label=liveAttached&&!unreadAnchor?labels?.newMessages:labels?.latest;
   if(label&&jump.textContent!==label)jump.textContent=label;
  }
- function scrollLatest(){root.scrollTop=root.scrollHeight;capture();syncJump()}
+ function scrollLatest(){if(!newer)delete document.body.dataset.firstUnread;root.scrollTop=root.scrollHeight;capture();syncJump()}
  function correct(){
   if(disposed||!root.isConnected)return;
   const previousTop=root.scrollTop;
@@ -358,6 +359,7 @@ window.OieRuntime.register('timeline',life=>{
   lastTop=top;
   correctedScrollTop=undefined;
   if(!corrected){capture();if(movedUp)loadArchiveAtTop()}
+  if(!newer&&atBottom())delete document.body.dataset.firstUnread;
   syncJump();
  });
  life.on(root,'wheel',event=>{if(event.deltaY<0)loadArchiveAtTop()},{passive:true});

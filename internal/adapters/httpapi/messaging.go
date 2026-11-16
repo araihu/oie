@@ -46,6 +46,18 @@ func message(m domain.Message) engineapi.Message {
 	if m.Retraction != nil {
 		out.Retraction = &engineapi.MessageRetraction{At: m.Retraction.At, OriginalAvailable: m.Retraction.OriginalAvailable}
 	}
+	if len(m.AudioURLs) > 0 {
+		out.AudioAttachmentUrls = &m.AudioURLs
+	}
+	var videoURLs []string
+	for _, file := range m.FileReferences {
+		if file.Kind == "video" {
+			videoURLs = append(videoURLs, file.URL)
+		}
+	}
+	if len(videoURLs) > 0 {
+		out.VideoAttachmentUrls = &videoURLs
+	}
 	if m.Moderation != nil {
 		out.Moderation = &engineapi.MessageModeration{At: m.Moderation.At, Reason: optionalRoomText(m.Moderation.Reason)}
 	}

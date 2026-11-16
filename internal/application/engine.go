@@ -110,6 +110,8 @@ type Engine struct {
 	avatarFiles       AvatarFiles
 	previewFetcher    PreviewFetcher
 	mediaReader       MediaReader
+	downloadFiles     DownloadFiles
+	downloadMu        sync.Mutex
 	mediaFiles        MediaFiles
 	previewWork       chan struct{}
 	draftPreviewSlots chan struct{}

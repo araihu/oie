@@ -20,6 +20,7 @@ func TestRetractionHidesContentUntilExplicitlyRequested(t *testing.T) {
 		t.Fatal(err)
 	}
 	const wireID, secret = "wire-id", "telescope https://example.test/telescope.pdf"
+	const recordingURL, recordingName = "https://example.test/voice", "recording.ogg"
 	const author = "bob@localhost"
 	scope := "xmpp:correct:sender:" + author
 	at := time.Now().UTC()
@@ -39,7 +40,9 @@ func TestRetractionHidesContentUntilExplicitlyRequested(t *testing.T) {
 		err = e.Receive(ctx, application.Incoming{
 			AccountID: conversation.AccountID, Kind: "direct", Address: conversation.Address, CreatedAt: at,
 			OriginalText: secret, ProviderID: wireID,
-			Correction: &domain.MessageCorrection{Scope: scope, Author: author, ID: wireID},
+			FileReferences: []domain.SharedReference{{Kind: "audio", URL: recordingURL, FileName: recordingName}},
+			AudioURLs:      []string{recordingURL},
+			Correction:     &domain.MessageCorrection{Scope: scope, Author: author, ID: wireID},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -64,7 +67,7 @@ func TestRetractionHidesContentUntilExplicitlyRequested(t *testing.T) {
 		t.Fatalf("retraction crossed a conversation: %+v, %v", messages, err)
 	}
 	projected, err := client.GetMessageWithResponse(ctx, string(m.ID))
-	if err != nil || projected.JSON200 == nil || projected.JSON200.Retraction == nil || projected.JSON200.OriginalText != "" {
+	if err != nil || projected.JSON200 == nil || projected.JSON200.Retraction == nil || projected.JSON200.OriginalText != "" || projected.JSON200.AudioAttachmentUrls != nil {
 		t.Fatalf("retracted timeline projection: %+v, %v", projected, err)
 	}
 	revealed, err := client.GetRetractedOriginalWithResponse(ctx, string(m.ID))
@@ -79,6 +82,9 @@ func TestRetractionHidesContentUntilExplicitlyRequested(t *testing.T) {
 	history, err := client.GetMessageEditHistoryWithResponse(ctx, string(m.ID), &engineapi.GetMessageEditHistoryParams{IncludeRetracted: &include})
 	if err != nil || history.JSON200 == nil || history.JSON200.Retraction == nil || len(history.JSON200.Items) != 1 || history.JSON200.Items[0].OriginalText != secret {
 		t.Fatalf("retained revision and retraction status: %+v, %v", history, err)
+	}
+	if links := history.JSON200.Items[0].AttachmentLinks; links == nil || len(*links) != 1 || (*links)[0].Url != recordingURL || (*links)[0].FileName != recordingName {
+		t.Fatalf("retained structured attachment links: %+v", links)
 	}
 	conversation := string(c.ID)
 	for _, includeEditHistory := range []bool{false, true} {

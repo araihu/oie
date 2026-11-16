@@ -1,0 +1,17 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+)
+
+templ audioPlayer(v view, id, filename, source, download string) {
+	<section class="oie-audio-card" data-audio-error={v.Text.AudioUnavailable} data-audio-id={id} data-audio-filename={filename} data-audio-download={download} data-audio-download-failed={v.Text.SharedActionFailed}>
+		<strong title={filename}>{filename}</strong>
+		<div class="oie-audio-controls">
+			<audio src={templ.URL(source)} controls controlslist="nodownload" preload="none" data-audio-player tabindex="0" aria-label={v.Text.SharedAudio+" · "+filename}></audio>
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-audio-retry": "", "hidden": true, "aria-label": v.Text.Retry+" · "+filename})) {
+				{v.Text.Retry}
+			}
+		</div>
+	</section>
+}

@@ -34,21 +34,22 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.endsWith('/avatars'))return send(200,{items:[]});
   if(u.pathname==='/api/v1/shared-content'){
    const held=state.heldCatalog;if(held&&u.searchParams.get('type')===held.type){held.started();await held.wait}
-   const video=u.searchParams.get('type')==='video';state.catalogReads.push(Object.fromEntries(u.searchParams));assert.equal(u.searchParams.get('limit'),video?'100':'50');if(state.mode==='unavailable')return send(503,{status:503});if(u.searchParams.get('cursor')&&!['page-2'].includes(u.searchParams.get('cursor')))return send(400,{status:400});
-   const belongs=(item,type)=>type==='video'?item.kind==='video':type==='links'?item.kind==='link':type==='documents'?item.kind==='document':['image','audio','video'].includes(item.kind);
+   const type=u.searchParams.get('type'),limit=['video','audio'].includes(type)?100:50;
+   state.catalogReads.push(Object.fromEntries(u.searchParams));assert.equal(u.searchParams.get('limit'),String(limit));if(state.mode==='unavailable')return send(503,{status:503});if(u.searchParams.get('cursor')&&!['page-2'].includes(u.searchParams.get('cursor')))return send(400,{status:400});
+   const belongs=(item,type)=>['video','audio'].includes(type)?item.kind===type:type==='links'?item.kind==='link':type==='documents'?item.kind==='document':['image','audio','video'].includes(item.kind);
    const account=u.searchParams.get('accountId'),accounts=u.searchParams.getAll('accountIds');
    const conversation=u.searchParams.get('conversationId'),q=u.searchParams.get('q');
    const ids=u.searchParams.getAll('messageId');if(ids.length){assert(conversation);assert(ids.length<=100)}
    const scoped=items.filter(item=>(!account||item.message.accountId===account)&&(!accounts.length||accounts.includes(item.message.accountId))&&
     (!conversation||item.message.conversationId===conversation)&&(!ids.length||ids.includes(item.message.id))&&
     (!q||[item.url,item.fileName,item.message.originalText,item.preview?.title,item.preview?.description,item.message.sender.displayName,item.conversationTitle,item.accountLabel].join(' ').toLocaleLowerCase().includes(q.toLocaleLowerCase())));
-   const selected=scoped.filter(item=>belongs(item,u.searchParams.get('type')));
+   const selected=scoped.filter(item=>belongs(item,type));
    selected.sort((a,b)=>Date.parse(b.message.createdAt)-Date.parse(a.message.createdAt)||b.id.localeCompare(a.id));
-   const start=u.searchParams.get('cursor')?50:0,page=selected.slice(start,start+50);
+   const start=u.searchParams.get('cursor')?limit:0,page=selected.slice(start,start+limit);
    const firstPageCounts=u.searchParams.get('includeFirstPageCounts')==='true'?
     Object.fromEntries(['media','links','documents'].map(type=>[type,Math.min(50,scoped.filter(item=>belongs(item,type)).length)])):undefined;
    if(state.mode==='foreign'&&page.length)return send(200,{items:[{...page[0],message:{...page[0].message,accountId:id(99)}}],indexing:{state:'complete',indexedMessages:600,totalMessages:600}});
-   return send(200,{items:page,firstPageCounts,nextCursor:selected.length>start+50?'page-2':undefined,indexing:{state:state.pending?'pending':'complete',indexedMessages:state.pending?250:600,totalMessages:600}});
+   return send(200,{items:page,firstPageCounts,nextCursor:selected.length>start+limit?'page-2':undefined,indexing:{state:state.pending?'pending':'complete',indexedMessages:state.pending?250:600,totalMessages:600}});
   }
   if(u.pathname==='/api/v1/starred-messages'){
    const q=u.searchParams.get('q');

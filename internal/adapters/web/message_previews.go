@@ -97,6 +97,8 @@ func (v view) previewStatus(p engineapi.MessagePreview) string {
 }
 func (v view) previewFailure(code string) string {
 	switch code {
+	case "integrity_mismatch":
+		return v.Text.FileIntegrityMismatch
 	case "blocked":
 		return v.Text.ImageBlocked
 	case "not_found":
