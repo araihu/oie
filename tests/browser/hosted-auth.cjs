@@ -79,7 +79,7 @@ async function create(api, endpoint, sequence, data) {
     }, {times: 1});
     await page.goto(url + workspace);
     assert.equal(await withDeadline(staleCheck.promise, 'pre-logout session check'), 204);
-    await page.evaluate(() => window.OieEvents.stop());
+    await page.evaluate(() => window.OieEvents.suspend());
     const composer = page.locator('#message-composer');
     await composer.waitFor();
     const settings = await context.newPage();
@@ -169,7 +169,7 @@ async function create(api, endpoint, sequence, data) {
           });
         });
       }
-      window.OieEvents.stop();
+      window.OieEvents.suspend();
     }), 'notification worker activation');
     const worker = context.serviceWorkers().find(worker => new URL(worker.url()).searchParams.get('hosted') === '1');
     assert(worker, 'hosted notification worker is active');

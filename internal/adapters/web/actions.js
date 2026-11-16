@@ -60,7 +60,7 @@ window.OieRuntime.register('actions', life => {
       });
       if (response.status === 204) {
         key.value = '';
-        window.OieEvents?.stop();
+        window.OieEvents?.suspend();
         location.replace('/');
         return;
       }

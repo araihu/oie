@@ -12,7 +12,7 @@
 
   function returnToEmptyApp(confirmed = false) {
     window.OieRuntime?.stop();
-    window.OieEvents?.stop();
+    window.OieEvents?.suspend();
     window.OieInbox?.clear();
     for (const name of ['localStorage', 'sessionStorage']) {
       try {
