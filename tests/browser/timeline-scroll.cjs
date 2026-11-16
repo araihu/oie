@@ -67,7 +67,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
   localStorage.setItem('oie.device.auto-image-downloads.v1','false');
   localStorage.setItem('oie.device.auto-video-previews.v1','false');
   window.timelineToken=Math.random();
- });await context.route('**/*',route=>{const url=new URL(route.request().url());if(['http:','https:'].includes(url.protocol)&&url.origin!==base){external.push(url.href);route.abort()}else route.continue()});const page=await context.newPage(),reads=[];let documents=0;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.resourceType()==='document')documents++;const url=new URL(request.url());if(url.pathname==='/ui/timeline')reads.push(Object.fromEntries(url.searchParams))});debugPage=page;await page.goto(base+'/?'+new URLSearchParams({chat,lang:config.locale||'en',theme:config.theme||'dark',...params}));await until(async()=>await page.locator('#message-timeline > [data-message-id]').count()===50,'initial bounded50');return{context,page,reads,documents:()=>documents,token:await page.evaluate(()=>window.timelineToken)}};
+ });await context.route('**/*',route=>{const url=new URL(route.request().url());if(['http:','https:'].includes(url.protocol)&&url.origin!==base){external.push(url.href);route.abort()}else route.continue()});const page=await context.newPage(),reads=[];let documents=0;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.resourceType()==='document')documents++;const url=new URL(request.url());if(url.pathname==='/ui/timeline')reads.push(Object.fromEntries(url.searchParams))});debugPage=page;await page.goto(base+'/?'+new URLSearchParams({chat,lang:config.locale||'en',theme:config.theme||'dark',...params}));await until(async()=>await page.locator('#message-timeline > [data-message-id]').count()===(config.count??50),'initial bounded page');return{context,page,reads,documents:()=>documents,token:await page.evaluate(()=>window.timelineToken)}};
  const rows=page=>page.locator('#message-timeline > [data-message-id]'),timeline=page=>page.locator('#message-timeline'),edge=(page,direction)=>page.locator(`[data-timeline-edge="${direction}"]`);
  const snapshot=async page=>{const actual=await rows(page).evaluateAll(nodes=>nodes.map(node=>({id:node.dataset.messageId,ms:Number(node.dataset.createdMs),account:node.dataset.messageAccount,conversation:node.dataset.messageConversation}))),order=new Map(logical().map((message,index)=>[message.id,index])),indices=actual.map(row=>order.get(row.id));assert(actual.length<=200,'timeline exceeded200 rows');assert.equal(new Set(actual.map(row=>row.id)).size,actual.length);for(let n=0;n<actual.length;n++){assert.notEqual(indices[n],undefined);assert.equal(actual[n].ms,positionTime(locate(actual[n].id)));assert.equal(actual[n].account,account);assert.equal(actual[n].conversation,chat);if(n)assert.equal(indices[n],indices[n-1]+1,'timeline has an ordering gap')}return{ids:actual.map(row=>row.id),indices,min:indices[0],max:indices.at(-1),count:actual.length}};
  const anchor=page=>timeline(page).evaluate(root=>{const bounds=root.getBoundingClientRect(),row=[...root.querySelectorAll(':scope > [data-message-id]')].find(row=>row.getBoundingClientRect().bottom>bounds.top+2);return{id:row.dataset.messageId,y:row.getBoundingClientRect().top}});
@@ -278,6 +278,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     try{
      await until(()=>held,'incoming page is pending');
      if(moveWhileLoading){
+      assert(await atBottom());
+      assert(await page.locator('[data-jump-latest]').isHidden(),'a pending live page must not show the jump button at the bottom');
       await fromBottom(400);
       await sampleLiveFrames();
      }
@@ -335,6 +337,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
    await until(async()=>await rows(page).last().getAttribute('data-message-id')===outgoing.id&&await timeline(page).getAttribute('data-timeline-busy')==='false'&&!await page.evaluate(()=>window.OieTimeline.hasNewer),'own canonical message completes newer-page recovery');
    await until(async()=>await timeline(page).evaluate(root=>root.scrollHeight-root.scrollTop-root.clientHeight<3),'own send stays at latest');
    assert.equal(await page.locator('[data-jump-latest]').isVisible(),false,'own send at latest must not leave a false new-message notice');
+   assert.equal(app.documents(),1);await context.close();
+   app=await open({message:outgoing.id},{width,touch:mobile,locale:mobile?'pt-BR':'en',count:25});({page,context}=app);
+   await until(atBottom,'opening the newest source reaches the bottom');
+   assert(await page.locator('[data-jump-latest]').isHidden(),'the newest source needs no jump at the bottom');
+   assert(await rows(page).last().evaluate(row=>document.activeElement===row));
+   await waitForTail(queueIncoming(9900000,'Incoming while at the newest source'));
+   assert(await atBottom());
+   assert(await page.locator('[data-jump-latest]').isHidden());
+   assert.equal(new URL(page.url()).searchParams.get('message'),outgoing.id);
    assert.equal(app.documents(),1);await context.close();
   }
   findings.push('Desktop and mobile live messages preserve the visible row while reading, including scrolling away during a pending response. The bottom and explicit jumps follow new messages. Own sends follow the canonical message and clear the transient newer-page indicator.');

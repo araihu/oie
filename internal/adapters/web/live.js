@@ -750,7 +750,7 @@ window.OieRuntime.register('live', life => {
   }
   life.on(document,'oie:time-zone',()=>{
     const timeline=document.querySelector('#message-timeline');
-    const follow=window.OieTimeline?.atBottom()&&!pinned();
+    const follow=window.OieTimeline?.atBottom()&&window.OieTimeline.liveAttached;
     const viewport=timeline?.getBoundingClientRect();
     const row=viewport&&[...timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')]
       .find(node=>node.getBoundingClientRect().bottom>viewport.top);
@@ -760,12 +760,9 @@ window.OieRuntime.register('live', life => {
     else if(row)timeline.scrollTop+=row.getBoundingClientRect().top-top;
   },{capture:true});
   let highlightedMessage='',highlightTimer;
-  function pinned(){const timeline=window.OieTimeline;return !!body.dataset.focusMessage||!!(timeline?.hasNewer&&!timeline.liveAttached);}
-  function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}
   function scrollLatest() {
     if(window.OieTimeline)window.OieTimeline.scrollLatest();
     else{const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;}
-    showJump(pinned());
   }
   function focusMessage(id,focus=true){
     const timeline=document.querySelector('#message-timeline'),row=timeline?.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
@@ -786,14 +783,13 @@ window.OieRuntime.register('live', life => {
   life.on(document,'click',event=>{
     if(event.target.closest('[data-jump-latest]')){
       const url=new URL(location.href);
-      if(pinned()||url.searchParams.has('message')||url.searchParams.has('timelineCursor')){
+      if(window.OieTimeline?.liveAttached===false){
         for(const key of ['message','timelineCursor','timelineDirection'])url.searchParams.delete(key);
         window.OieNavigation.go(url,{latest:true});
       }else scrollLatest();
     }
   });
-  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(window.OieTimeline?.atBottom())showJump(pinned());});
-  localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
+  localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else window.OieTimeline?.syncJump();
 
   life.on(scheduleRetry,'click',()=>composer.requestSubmit());
   function applyScheduleEditor(editor, nextKey = editor.dataset.operationKey) {
@@ -890,6 +886,10 @@ window.OieRuntime.register('live', life => {
     const inboxGeneration = inbox.generation;
     const requestedSearch=location.search;
     const refreshQuery=new URLSearchParams(requestedSearch);
+    // Keep a source link addressable after scrolling to the live timeline.
+    if(window.OieTimeline?.liveAttached&&body.dataset.contextMissing!=='true'){
+      for(const key of ['message','timelineCursor','timelineDirection'])refreshQuery.delete(key);
+    }
     if(!refreshQuery.has('chat')&&list){
       if(body.dataset.conversationId)refreshQuery.set('chat',body.dataset.conversationId);
       if(!body.dataset.conversationId||document.querySelector('#conversation-pane[data-open-chat="false"]'))refreshQuery.set('inbox','1');
@@ -921,7 +921,6 @@ window.OieRuntime.register('live', life => {
       }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
-      if(pinned())showJump(true);
       readAvatars(page);
       const room=document.querySelector('#room-session-status'),nextRoom=page.querySelector('#live-room-session #room-session-status');
       if(room&&nextRoom){
@@ -1134,7 +1133,7 @@ window.OieRuntime.register('live', life => {
     }
     retireAcceptedBubbles();scrollLatest();timeline.focus({preventScroll:true});
   });
-  life.on(document,'oie:timeline-focus',event=>{focusMessage(event.detail.id,event.detail.focus!==false);showJump(true);});
+  life.on(document,'oie:timeline-focus',event=>focusMessage(event.detail.id,event.detail.focus!==false));
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
   life.on(document,'oie:room-management-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});

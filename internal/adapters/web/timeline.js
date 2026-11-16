@@ -4,7 +4,10 @@ window.OieRuntime.register('timeline',life=>{
  const uuid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value||''),tuple=(a,b)=>a.ms===b.ms?(a.id>b.id?1:a.id<b.id?-1:0):a.ms>b.ms?1:-1;
  const rows=()=>[...root.querySelectorAll(':scope>[data-message-id][data-message-source]')];
  const identity={engine:document.body.dataset.engineId,account:document.body.dataset.accountId,conversation:document.body.dataset.conversationId};
+ const jump=document.querySelector('[data-jump-latest]');
+ const labels=document.getElementById('oie-live-copy')?.dataset;
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
+ let unseenLiveMessages=false;
  let exhaustedArchiveEdge='';
  let latestSnapshot=null;
  const hiddenChecks=new Set(),hiddenRevisions=new Map(),expired=new Set();
@@ -53,13 +56,26 @@ window.OieRuntime.register('timeline',life=>{
  function setFeedback(direction,state=''){
   const control=edge(direction);if(!control)return;control.dataset.state=state;const status=control.querySelector('[data-timeline-status]'),button=control.querySelector('[data-timeline-load]');status.textContent=state==='loading'?control.dataset.loading:state==='failed'?control.dataset.failed:state==='paused'?control.dataset.paused:'';status.setAttribute('role',state==='failed'?'alert':'status');button.hidden=!(direction==='older'?older||remoteOlder():newer)&&!state;button.setAttribute('aria-disabled',String(busy));const boundary=direction==='older'?current()[0]:current().at(-1);if(boundary){const href=new URL(button.href,location.href);if(href.origin===location.origin&&href.pathname==='/'){href.searchParams.set('timelineCursor',boundary.id);href.searchParams.set('timelineDirection',direction);button.href=href.pathname+href.search}}if(state==='failed'||state==='paused')button.textContent=control.dataset.retry;
  }
- function controls(){capture();setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');root.dataset.timelineBusy=String(busy);root.dataset.timelineOlder=String(older);root.dataset.timelineNewer=String(newer);const jump=document.querySelector('[data-jump-latest]');if(jump&&(newer||document.body.dataset.focusMessage))jump.hidden=false;correct()}
+ function controls(){capture();setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');root.dataset.timelineBusy=String(busy);root.dataset.timelineOlder=String(older);root.dataset.timelineNewer=String(newer);correct()}
  function capture(){const viewport=root.getBoundingClientRect(),item=rows().find(row=>row.getBoundingClientRect().bottom>viewport.top);anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;follow=liveAttached&&atBottom()}
- function scrollLatest(){root.scrollTop=root.scrollHeight;capture()}
+ function syncJump(){
+  const bottom=atBottom();
+  if(bottom&&!newer){
+   unseenLiveMessages=false;
+   if(!liveAttached&&!focusPending&&root.clientHeight>0&&document.body.dataset.contextMissing!=='true'){
+    liveAttached=true;
+    follow=true;
+    document.dispatchEvent(new Event('oie:refresh-request'));
+   }
+  }
+  if(!jump)return;
+  jump.hidden=liveAttached?bottom||!unseenLiveMessages:bottom&&!newer;
+  const label=liveAttached?labels?.newMessages:labels?.latest;
+  if(label&&jump.textContent!==label)jump.textContent=label;
+ }
+ function scrollLatest(){root.scrollTop=root.scrollHeight;capture();syncJump()}
  function correct(){if(disposed||!root.isConnected)return;restoring=true;if(follow)root.scrollTop=root.scrollHeight;else if(anchor){const node=rows().find(row=>row.dataset.messageId===anchor.id);if(node)root.scrollTop+=node.getBoundingClientRect().top-anchor.top}
-  // A completed tail page can leave scrollTop unchanged. Clear its transient
-  // notice here instead of waiting for a scroll event that may never fire.
-  const jump=document.querySelector('[data-jump-latest]');if(jump){if(newer||document.body.dataset.focusMessage)jump.hidden=false;else if(atBottom())jump.hidden=true}
+  syncJump();
   life.raf(()=>{restoring=false})}
  function hooks(page,generation,startedAt){document.dispatchEvent(new CustomEvent('oie:timeline-content',{detail:{page,startedAt}}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation}}));document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent('oie:actions-refreshed'))}
  function movedRelease(previous,item){
@@ -182,7 +198,7 @@ window.OieRuntime.register('timeline',life=>{
    }
    const active=document.activeElement,focusInTimeline=before.some(item=>item.node.contains(active));
    if(merge(page,{direction:mode==='page'?direction:'update',authoritative:mode==='window',starGeneration,aliases,retired})){
-    if(mode==='page'){if(direction==='older')older=page.data.hasOlder==='true';else{newer=page.data.hasNewer==='true';rememberLatest(page,page.data.newest||page.data.canonicalCursor);if(!newer&&!window.document.body.dataset.focusMessage)liveAttached=true}}
+    if(mode==='page'){if(direction==='older')older=page.data.hasOlder==='true';else{newer=page.data.hasNewer==='true';rememberLatest(page,page.data.newest||page.data.canonicalCursor)}}
     for(const item of before)if(retired.has(item.id))rememberHidden(item.id,item.node.dataset.messageRevision);
     const focused=document.body.dataset.focusMessage;
     if(mode==='window'&&page.data.complete==='true'&&before.some(item=>item.id===focused)&&!current().some(item=>item.id===focused))document.body.dataset.focusMessage='';
@@ -249,7 +265,15 @@ window.OieRuntime.register('timeline',life=>{
   if(overlap.length)merge({...snapshot,entries:overlap.filter(item=>!retired.has(item.id))},{direction:'update',retired});
   if(liveAttached&&!current().length&&snapshot.entries.length){older=snapshot.data.hasOlder==='true';newer=snapshot.data.hasNewer==='true';merge(snapshot,{direction:'newer'});controls();return}
   const completeCoverage=before.every(item=>snapshot.entries.some(value=>value.id===item.id));
-  if(liveAttached&&!document.body.dataset.focusMessage){const newest=snapshot.entries.at(-1);if(newest&&tuple(newest,before.at(-1))>0){newer=true;request('page','newer');return}}
+  if(liveAttached){
+   const newest=snapshot.entries.at(-1);
+   if(newest&&tuple(newest,before.at(-1))>0){
+    unseenLiveMessages=true;
+    newer=true;
+    request('page','newer');
+    return;
+   }
+  }
   if(!completeCoverage&&!failed)request('window','older');controls();
  }
  let initial;try{initial=parse(root,50)}catch{return}if(!initial)return;older=initial.data.hasOlder==='true';newer=initial.data.hasNewer==='true';liveAttached=!newer&&!document.body.dataset.focusMessage;
@@ -270,7 +294,7 @@ window.OieRuntime.register('timeline',life=>{
   if(generation!==focusEpoch||disposed)return false;
   focusPending=false;controls();observe();retryRefresh();return found;
  }
- const api={refresh,focus,cancelFocus,atBottom,scrollLatest,hideScheduled,expire,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
+ const api={refresh,focus,cancelFocus,atBottom,scrollLatest,syncJump,hideScheduled,expire,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
  if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);
@@ -282,6 +306,7 @@ window.OieRuntime.register('timeline',life=>{
   const movedUp=root.scrollTop<lastTop;
   lastTop=root.scrollTop;
   if(!restoring){capture();if(movedUp)loadArchiveAtTop()}
+  syncJump();
  });
  life.on(root,'wheel',event=>{if(event.deltaY<0)loadArchiveAtTop()},{passive:true});
  life.on(root,'touchend',loadArchiveAtTop,{passive:true});
