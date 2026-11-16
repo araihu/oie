@@ -273,7 +273,7 @@ jobs:
     with:
       version: ${{ needs.tag.outputs.version }}
 
-  publish-apt:
+  publish-linux-repositories:
     if: ${{ !cancelled() && needs.publish.result == 'success' }}
     needs: [tag, publish]
     runs-on: ubuntu-24.04
@@ -282,7 +282,7 @@ jobs:
     steps:
       # Pages can keep serving an earlier deployment when a tag reuses its SHA.
       # Dispatch on the default branch from CI to deploy outside the tag event.
-      - name: Start APT publication on the default branch
+      - name: Start Linux package publication on the default branch
         env:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
