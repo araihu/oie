@@ -134,6 +134,24 @@ type ConversationRevision struct {
 	CreatedAt string
 }
 
+type DirectFactRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
+}
+
+type DirectSentRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
+}
+
 type DiscardedMessageReference struct {
 	AccountID string
 	Address   string
@@ -468,6 +486,15 @@ type RoomReactionPrivacy struct {
 	Public       int64
 	IdentityMode string
 	Epoch        int64
+}
+
+type RoomRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
 }
 
 type SharedCatalogCount struct {

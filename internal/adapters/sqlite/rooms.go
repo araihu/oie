@@ -234,7 +234,12 @@ func (s *Store) ReplayAcceptedMessage(ctx context.Context, id domain.ID, fingerp
 }
 
 func (s *Store) ReplayMessageMutation(ctx context.Context, id domain.ID, kind, fingerprint string) (*domain.Message, error) {
-	row, err := s.queries.GetOperation(ctx, string(id))
+	tx, q, err := beginRead(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	row, err := q.GetOperation(ctx, string(id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -244,17 +249,11 @@ func (s *Store) ReplayMessageMutation(ctx context.Context, id domain.ID, kind, f
 	if row.Kind != kind || row.Fingerprint != fingerprint {
 		return nil, application.ErrIdempotencyConflict
 	}
-	if row.Result == "null" {
-		return nil, application.ErrNotFound
-	}
-	var result domain.Message
-	if err = json.Unmarshal([]byte(row.Result), &result); err != nil {
+	result, err := readMessageReceipt(ctx, q, row.Result)
+	if err != nil {
 		return nil, err
 	}
-	if err = hydrateReply(ctx, s.queries, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return &result, tx.Commit()
 }
 
 // ClaimRoomMessage makes the desired-room cutoff and outbox claim one write

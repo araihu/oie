@@ -154,6 +154,8 @@ const messages = [source, message(12, 'Message with a rejected destination')];
           await route.abort();
         };
         await open(source);
+        const directDescription = await checkbox(direct).evaluate(input => document.getElementById(input.getAttribute('aria-describedby')).textContent);
+        assert(directDescription.includes(direct.address), 'direct destination exposes its address alongside the account');
         await choose(alpha);
         const drop = '**/ui/messages/forward';
         await page.route(drop, loseResponse);
