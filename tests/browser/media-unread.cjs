@@ -25,7 +25,7 @@ const chats = [chat, other].map((value, index) => ({
   updatedAt: timestamp, unreadCount: index ? 0 : messages.length - 20, archived: false, favorite: false,
 }));
 const policies = new Map(), files = new Set();
-const state = {reads: 0, failMedia: false, holdContext: null};
+const state = {reads: 0, failMedia: false, holdContext: null, firstUnread: first.id};
 const wav = Buffer.alloc(44 + 16000 * 2 * 2);
 wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
 wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
@@ -55,7 +55,7 @@ const api = http.createServer(async (request, response) => {
     const base = '/api/v1/conversations/' + entry.id;
     if (endpoint === base) return send(200, entry);
     if (endpoint === base + '/details') return send(200, {conversationId: entry.id, accountId: account, kind: 'direct', address: entry.address, state: 'known', accountConnection: connection, checkedAt: timestamp, participants: {scope: 'peer', state: 'unknown', items: []}, features: []});
-    if (endpoint === base + '/read-state' && request.method === 'GET') return send(200, {conversationId: entry.id, accountId: account, unreadCount: entry.unreadCount, ...(entry.unreadCount ? {firstUnreadMessageId: first.id} : {})});
+    if (endpoint === base + '/read-state' && request.method === 'GET') return send(200, {conversationId: entry.id, accountId: account, unreadCount: entry.unreadCount, ...(entry.unreadCount ? {firstUnreadMessageId: state.firstUnread} : {})});
     if (endpoint === base + '/messages') {
       const collection = entry.id === chat ? messages : [];
       const limit = Number(url.searchParams.get('limit') || 50), initial = Math.max(0, collection.length - limit);
@@ -215,6 +215,15 @@ async function test(base) {
       await page.locator('[data-message-id="' + newest.id + '"]').waitFor();
       assert.equal(await page.locator('[data-message-id="' + first.id + '"]').count(), 0);
       assert(!new URL(page.url()).searchParams.has('message'));
+      state.firstUnread = messages[94].id;
+      await page.goto(new URL('/?chat=' + chat + '&lang=' + lang, base).href);
+      state.firstUnread = first.id;
+      const jump = page.locator('[data-jump-latest]');
+      await jump.waitFor({state:'visible'});
+      assert.equal(await page.locator('#message-timeline').getAttribute('data-timeline-newer'), 'false');
+      await jump.click();
+      await jump.waitFor({state:'hidden'});
+      await page.waitForFunction(() => window.OieTimeline?.atBottom());
       await page.goto(new URL('/?chat=' + chat + '&message=' + messages[74].id + '&lang=' + lang, base).href);
       const explicit = page.locator('[data-message-id="' + messages[74].id + '"]');
       await explicit.waitFor();

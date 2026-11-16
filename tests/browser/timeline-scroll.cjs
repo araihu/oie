@@ -67,7 +67,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
   localStorage.setItem('oie.device.auto-image-downloads.v1','false');
   localStorage.setItem('oie.device.auto-video-previews.v1','false');
   window.timelineToken=Math.random();
- });await context.route('**/*',route=>{const url=new URL(route.request().url());if(['http:','https:'].includes(url.protocol)&&url.origin!==base){external.push(url.href);route.abort()}else route.continue()});const page=await context.newPage(),reads=[];let documents=0;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.resourceType()==='document')documents++;const url=new URL(request.url());if(url.pathname==='/ui/timeline')reads.push(Object.fromEntries(url.searchParams))});debugPage=page;await page.goto(base+'/?'+new URLSearchParams({chat,lang:config.locale||'en',theme:config.theme||'dark',...params}));await until(async()=>await page.locator('#message-timeline > [data-message-id]').count()===50,'initial bounded50');return{context,page,reads,documents:()=>documents,token:await page.evaluate(()=>window.timelineToken)}};
+ });await context.route('**/*',route=>{const url=new URL(route.request().url());if(['http:','https:'].includes(url.protocol)&&url.origin!==base){external.push(url.href);route.abort()}else route.continue()});const page=await context.newPage(),reads=[];let documents=0;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.resourceType()==='document')documents++;const url=new URL(request.url());if(url.pathname==='/ui/timeline')reads.push(Object.fromEntries(url.searchParams))});debugPage=page;await page.goto(base+'/?'+new URLSearchParams({chat,lang:config.locale||'en',theme:config.theme||'dark',...params}));await until(async()=>await page.locator('#message-timeline > [data-message-id]').count()===(config.count??50),'initial bounded page');return{context,page,reads,documents:()=>documents,token:await page.evaluate(()=>window.timelineToken)}};
  const rows=page=>page.locator('#message-timeline > [data-message-id]'),timeline=page=>page.locator('#message-timeline'),edge=(page,direction)=>page.locator(`[data-timeline-edge="${direction}"]`);
  const snapshot=async page=>{const actual=await rows(page).evaluateAll(nodes=>nodes.map(node=>({id:node.dataset.messageId,ms:Number(node.dataset.createdMs),account:node.dataset.messageAccount,conversation:node.dataset.messageConversation}))),order=new Map(logical().map((message,index)=>[message.id,index])),indices=actual.map(row=>order.get(row.id));assert(actual.length<=200,'timeline exceeded200 rows');assert.equal(new Set(actual.map(row=>row.id)).size,actual.length);for(let n=0;n<actual.length;n++){assert.notEqual(indices[n],undefined);assert.equal(actual[n].ms,positionTime(locate(actual[n].id)));assert.equal(actual[n].account,account);assert.equal(actual[n].conversation,chat);if(n)assert.equal(indices[n],indices[n-1]+1,'timeline has an ordering gap')}return{ids:actual.map(row=>row.id),indices,min:indices[0],max:indices.at(-1),count:actual.length}};
  const anchor=page=>timeline(page).evaluate(root=>{const bounds=root.getBoundingClientRect(),row=[...root.querySelectorAll(':scope > [data-message-id]')].find(row=>row.getBoundingClientRect().bottom>bounds.top+2);return{id:row.dataset.messageId,y:row.getBoundingClientRect().top}});
@@ -247,12 +247,60 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     root.dispatchEvent(new Event('scroll'));
    },distance);
    const atBottom=()=>timeline(page).evaluate(root=>Math.abs(root.scrollHeight-root.clientHeight-root.scrollTop)<=1);
-   const queueIncoming=(suffix,text)=>{
-    const message={...messages.at(-1),id:id(suffix+width),revisionId:id(suffix+10000+width),sender:{id:id(9),displayName:'Bob'},originalText:text,createdAt:new Date(Date.parse(messages.at(-1).createdAt)+100).toISOString(),isOwn:false,sendState:'received'};
+   const afterRefresh=await timeline(page).evaluate(root=>{
+    const originalDivider=root.querySelector('.oie-day-divider');
+    const snapshot=document.createElement('div');
+    const copy=root.cloneNode(true);
+    copy.id='live-timeline';
+    snapshot.append(copy);
+    window.OieTimeline.refresh(snapshot);
+    root.scrollTop=root.scrollHeight-root.clientHeight-30;
+    root.dispatchEvent(new Event('scroll'));
+    return new Promise(resolve=>requestAnimationFrame(()=>resolve({
+     gap:root.scrollHeight-root.clientHeight-root.scrollTop,
+     sameDivider:root.querySelector('.oie-day-divider')===originalDivider,
+    })));
+   });
+   assert(Math.abs(afterRefresh.gap-30)<=1,'a scroll made during refresh preserves the reading position');
+   assert(afterRefresh.sameDivider,'a refresh leaves the existing day divider mounted');
+   const gapAfterPreviews=await timeline(page).evaluate(root=>new Promise(resolve=>{
+    document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:document.createElement('div')}));
+    requestAnimationFrame(()=>resolve(root.scrollHeight-root.clientHeight-root.scrollTop));
+   }));
+   assert(Math.abs(gapAfterPreviews-30)<=1,'a preview refresh keeps its distance from the latest message');
+   for(const initialGap of [0,250]){
+    await fromBottom(initialGap);
+    const finalGap=await timeline(page).evaluate(root=>{
+     const snapshot=document.createElement('div');
+     const copy=root.cloneNode(true);
+     copy.id='live-timeline';
+     snapshot.append(copy);
+     return new Promise(resolve=>{
+      // Native scroll notifications can arrive after an already queued correction.
+      requestAnimationFrame(()=>{root.scrollTop=root.scrollHeight-root.clientHeight-500});
+      window.OieTimeline.refresh(snapshot);
+      requestAnimationFrame(()=>resolve(root.scrollHeight-root.clientHeight-root.scrollTop));
+     });
+    });
+    assert(Math.abs(finalGap-500)<=1,`refresh must preserve a scroll before its event arrives (started ${initialGap}px from the bottom, ended ${finalGap}px away)`);
+   }
+   const queueIncoming=(suffix,text,sender='Bob')=>{
+    const message={...messages.at(-1),id:id(suffix+width),revisionId:id(suffix+10000+width),sender:{id:id(sender==='Bob'?9:8),displayName:sender},originalText:text,createdAt:new Date(Date.parse(messages.at(-1).createdAt)+100).toISOString(),isOwn:false,sendState:'received'};
     positions.set(message.id,messages.length);messages.push(message);emit('message.created');
     return message.id;
    };
    const waitForTail=messageID=>until(async()=>await rows(page).last().getAttribute('data-message-id')===messageID&&await timeline(page).getAttribute('data-timeline-busy')==='false','incoming message finishes the live page');
+   const watchArrival=async messageID=>{
+    await page.evaluate(messageID=>{
+     function received(event){
+      if(!event.detail.querySelector(`#live-timeline [data-message-id="${CSS.escape(messageID)}"]`))return;
+      window.arrivalSeen=messageID;
+      document.removeEventListener('oie:previews-refresh',received);
+     }
+     document.addEventListener('oie:previews-refresh',received);
+    },messageID);
+    return ()=>page.waitForFunction(messageID=>window.arrivalSeen===messageID,messageID);
+   };
    const sampleLiveFrames=()=>timeline(page).evaluate(root=>{
     const rect=node=>{const {x,y,width,height}=node.getBoundingClientRect();return [x,y,width,height]};
     const row=[...root.querySelectorAll(':scope > [data-message-id]')].find(row=>row.getBoundingClientRect().bottom>root.getBoundingClientRect().top);
@@ -263,6 +311,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     }
     window.liveFrames=frames;sample();
    });
+   const assertStableFrames=async(label)=>{
+    const frames=await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{cancelAnimationFrame(window.liveFrame);resolve(window.liveFrames)})));
+    assert(frames.length>1,label+' samples painted frames');
+    for(const frame of frames)assert(frame.every((value,index)=>Math.abs(value-frames[0][index])<=1),JSON.stringify({label,expected:frames[0],actual:frame}));
+   };
    for(const moveWhileLoading of [false,true]){
     await composer.evaluate(input=>input.focus({preventScroll:true}));
     await fromBottom(moveWhileLoading?0:30);
@@ -278,6 +331,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     try{
      await until(()=>held,'incoming page is pending');
      if(moveWhileLoading){
+      assert(await atBottom());
+      assert(await page.locator('[data-jump-latest]').isHidden(),'a pending live page must not show the jump button at the bottom');
       await fromBottom(400);
       await sampleLiveFrames();
      }
@@ -285,20 +340,117 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     }finally{releasePage()}
     await waitForTail(incoming);
-    const frames=await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{cancelAnimationFrame(window.liveFrame);resolve(window.liveFrames)})));
-    for(const frame of frames)assert(frame.every((value,index)=>Math.abs(value-frames[0][index])<=1),JSON.stringify({moveWhileLoading,expected:frames[0],actual:frame}));
+    await assertStableFrames('delayed incoming page, moveWhileLoading='+moveWhileLoading);
     assert(await newMessages.isVisible());
     assert.equal(await composer.inputValue(),draft);
     assert(await composer.evaluate(input=>document.activeElement===input));
     await page.unroute('**/ui/timeline?*',holdPage);
-    await newMessages.click();
+    await newMessages.focus();
+    await newMessages.press('Enter');
     await until(atBottom,'new messages shortcut reaches the bottom');
     await newMessages.waitFor({state:'hidden'});
+    assert(await timeline(page).evaluate(root=>document.activeElement===root),'keyboard jump leaves focus at the timeline');
    }
-   const followed=queueIncoming(9800000,'Incoming at the bottom');
+   const bounds=await timeline(page).boundingBox();
+   await composer.evaluate(input=>input.focus({preventScroll:true}));
+   await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);
+   const scrollTop=()=>timeline(page).evaluate(root=>root.scrollTop);
+   for(let batch=0;batch<3;batch++){
+    const previousTop=await scrollTop();
+    await page.mouse.wheel(0,-320);
+    await until(async()=>await scrollTop()<=previousTop-300,'wheel moves up through the history');
+    await sampleLiveFrames();
+    queueIncoming(9500000+batch*10,'A new message while scrolling');
+    queueIncoming(9500001+batch*10,'Another message in the same burst','Rita');
+    const last=queueIncoming(9500002+batch*10,'Last message in the burst');
+    await waitForTail(last);
+    await assertStableFrames('incoming burst '+batch);
+    assert(await newMessages.isVisible());
+   }
+
+   state.hold=true;
+   try{
+    await page.mouse.wheel(0,-10000);
+    await until(()=>state.pending.length===1,'older page is pending during wheel navigation');
+    await sampleLiveFrames();
+    const refreshed=page.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+    queueIncoming(9510000,'First arrival during older paging');
+    const last=queueIncoming(9510001,'Second arrival during older paging','Rita');
+    assert.equal(await (await refreshed).finished(),null);
+    release();
+    await waitForTail(last);
+    await assertStableFrames('older page and incoming messages');
+   }finally{release()}
+   assert(await newMessages.isVisible());
+   assert.equal(await composer.inputValue(),draft);
+   assert(await composer.evaluate(input=>document.activeElement===input));
+
+   await page.mouse.wheel(0,100000);
+   await until(atBottom,'manually scrolling down reaches the latest message');
+   await newMessages.waitFor({state:'hidden'});
+   let followed;
+   for(let n=0;n<55;n++)followed=queueIncoming(9800000+n,'Incoming burst at the bottom');
    await waitForTail(followed);
    assert(await atBottom());
    assert(await newMessages.isHidden());
+
+   const roomForMessages=200-await rows(page).count();
+   for(let n=0;n<roomForMessages;n++)followed=queueIncoming(9520000+n,'Incoming message before the window is full');
+   await waitForTail(followed);
+   assert.equal(await rows(page).count(),200);
+   await timeline(page).evaluate(root=>{root.scrollTop=180;root.dispatchEvent(new Event('scroll'));});
+   const pausedIncoming=queueIncoming(9530000,'Arrival while the oldest rows are visible');
+   await until(async()=>await edge(page,'newer').getAttribute('data-state')==='paused','newer page pauses at capacity');
+   await newMessages.waitFor();
+   await fromBottom(0);
+   assert(await newMessages.isVisible(),'the notice stays available at a stale bottom');
+   let sendLatest,capturedLatest=false;
+   const latestGate=new Promise(resolve=>sendLatest=resolve),jumpURL=page.url();
+   const holdLatest=async route=>{
+    if(route.request().headers()['x-oie-fragment']!=='timeline'){await route.continue();return}
+    const response=await route.fetch();
+    assert((await response.text()).includes(pausedIncoming));
+    capturedLatest=true;
+    await latestGate;
+    await route.fulfill({response});
+   };
+   await page.route(jumpURL,holdLatest);
+   const arrivalDuringJump=id(9530010+width);
+   try{
+    await newMessages.click();
+    await until(()=>capturedLatest,'latest fragment has been fetched before the next arrival');
+    const arrived=await watchArrival(arrivalDuringJump);
+    queueIncoming(9530010,'Arrival while the latest fragment is held');
+    await arrived();
+    await composer.fill(draft+' while jumping');
+   }finally{sendLatest()}
+   await waitForTail(arrivalDuringJump);
+   await page.unroute(jumpURL,holdLatest);
+   assert(await atBottom());
+   assert(await newMessages.isHidden());
+   assert.equal(await composer.inputValue(),draft+' while jumping');
+   assert(await composer.evaluate(input=>document.activeElement===input),'a delayed jump preserves focus after returning to the composer');
+   await composer.fill(draft);
+
+   state.hold=true;state.mode='failure';
+   const afterOlderFailure=id(9540000+width);
+   try{
+    await boundary(page,'older');
+    await until(()=>state.pending.length===1,'older request is pending before the arrival');
+    const arrived=await watchArrival(afterOlderFailure);
+    queueIncoming(9540000,'Arrival before an older page fails');
+    await arrived();
+    release();
+    await until(async()=>await edge(page,'older').getAttribute('data-state')==='failed','older request fails after the arrival');
+   }finally{release();state.mode='normal'}
+   await newMessages.waitFor();
+   await newMessages.focus();
+   await newMessages.press('Enter');
+   await waitForTail(afterOlderFailure);
+   assert(await atBottom());
+   assert(await newMessages.isHidden());
+   assert(await timeline(page).evaluate(root=>document.activeElement===root),'keyboard recovery leaves focus at the timeline');
+
    await fromBottom(400);
    let releaseIncoming,heldIncoming=false,conversationRequests=0;
    const incomingGate=new Promise(resolve=>releaseIncoming=resolve);
@@ -336,8 +488,59 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
    await until(async()=>await timeline(page).evaluate(root=>root.scrollHeight-root.scrollTop-root.clientHeight<3),'own send stays at latest');
    assert.equal(await page.locator('[data-jump-latest]').isVisible(),false,'own send at latest must not leave a false new-message notice');
    assert.equal(app.documents(),1);await context.close();
+   app=await open({message:outgoing.id},{width,touch:mobile,locale:mobile?'pt-BR':'en',count:25});({page,context}=app);
+   await until(atBottom,'opening the newest source reaches the bottom');
+   assert(await page.locator('[data-jump-latest]').isHidden(),'the newest source needs no jump at the bottom');
+   assert(await rows(page).last().evaluate(row=>document.activeElement===row));
+   await waitForTail(queueIncoming(9900000,'Incoming while at the newest source'));
+   assert(await atBottom());
+   assert(await page.locator('[data-jump-latest]').isHidden());
+   assert.equal(new URL(page.url()).searchParams.get('message'),outgoing.id);
+   assert.equal(app.documents(),1);await context.close();
   }
-  findings.push('Desktop and mobile live messages preserve the visible row while reading, including scrolling away during a pending response. The bottom and explicit jumps follow new messages. Own sends follow the canonical message and clear the transient newer-page indicator.');
+  for(const leaveLive of [false,true]){
+   const sourceMessage=messages.at(leaveLive?-60:-20);
+   state.edits.set(sourceMessage.id,{isOwn:true,sendState:'queued'});
+   app=await open({message:sourceMessage.id},{count:leaveLive?50:44});({page,context}=app);
+   await boundary(page,'newer');
+   if(leaveLive){
+    await until(async()=>await rows(page).last().getAttribute('data-message-id')===messages.at(-1).id,'source context loads the newest rows');
+    await boundary(page,'newer');
+   }
+   await until(()=>page.evaluate(()=>window.OieTimeline.liveAttached),'scrolling to the end leaves the source context');
+   if(leaveLive){
+    for(let n=0;n<3;n++)await pageOnce(page,'older');
+    assert(!await page.evaluate(()=>window.OieTimeline.liveAttached),'older paging detaches from the live tail');
+   }
+   const sourceRow=timeline(page).locator('[data-message-id="'+sourceMessage.id+'"]');
+   assert.equal(await sourceRow.count(),1,'the old source remains mounted');
+   await page.locator('#message-composer').fill(draft);
+   await timeline(page).evaluate((root,leaveLive)=>{
+    root.scrollTop=leaveLive?300:root.scrollHeight-root.clientHeight-1200;
+    root.dispatchEvent(new Event('scroll'));
+   },leaveLive);
+   const originalPosition=await anchor(page),sourceURL=page.url();
+   state.edits.set(sourceMessage.id,{isOwn:true,sendState:'submitted',revisionId:id(9700010),timelineAt:new Date(positionTime(messages.at(-1))+100).toISOString()});
+   emit('conversation.updated');
+   if(leaveLive)await sourceRow.waitFor({state:'detached'});
+   else await until(async()=>await rows(page).last().getAttribute('data-message-id')===sourceMessage.id,'released source rejoins the live tail');
+   assert(!app.reads.some(read=>read.mode==='context'),'an old source link does not refocus a released message');
+   assert.deepEqual(await anchor(page),originalPosition);
+   assert(await page.locator('#message-composer').evaluate(input=>document.activeElement===input));
+   assert.equal(await page.locator('#message-composer').inputValue(),draft);
+   assert.equal(page.url(),sourceURL);
+   if(!leaveLive){
+    state.hidden.add(sourceMessage.id);
+    emit('conversation.history_pruned',{historyPruned:{conversationId:chat,messageIds:[sourceMessage.id]}});
+    await page.locator('#context-notice [data-return-latest]').waitFor();
+    assert.match(await page.locator('#context-notice').textContent(),/Original message unavailable/);
+    assert.equal(await sourceRow.count(),0);
+    assert.equal(page.url(),sourceURL);
+    state.hidden.delete(sourceMessage.id);
+   }
+   await context.close();state.edits.delete(sourceMessage.id);
+  }
+  findings.push('Desktop and mobile preserve the visible row during preview refreshes, scroll events delivered after refresh, three bursts while scrolling up, and arrivals during delayed older paging. Returning manually or with the shortcut resumes following, including a burst of 55 messages across pages. Own sends follow the canonical message and clear the transient newer-page indicator.');
   app=await open({message:target.id},{locale:'pt-BR',width:390,touch:true,theme:'light'});({page,context}=app);await snapshot(page);await pageOnce(page,'older');await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await page.screenshot({path:path.join(__dirname,'artifacts','timeline-scroll-mobile.png')});await context.close();assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await fs.writeFile(path.join(__dirname,'artifacts','timeline-scroll-report.json'),JSON.stringify({findings,retainedMessages:messages.length,engineReads:state.reads.length,contextReads:state.contexts.length,mediaReads:state.videoReads,pageErrors:errors,unexpectedMutations:state.writes,externalBrowserRequests:external},null,2));console.log('PASS: bounded bidirectional retained timeline, exact-ms ordering, viewport anchoring, protected media, historical SSE, source context, retries/abort and mobile accessibility');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Timeline failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,rows:{count:document.querySelectorAll('#message-timeline > [data-message-id]').length,edges:[...document.querySelectorAll('#message-timeline > [data-message-id]')].filter((row,index,rows)=>index<3||index>=rows.length-3).map(row=>({id:row.dataset.messageId,ms:row.dataset.createdMs}))},edges:[...document.querySelectorAll('[data-timeline-edge]')].map(edge=>({...edge.dataset,text:edge.innerText})),envelope:document.querySelector('template[data-timeline-page]')?.outerHTML,focus:document.activeElement?.outerHTML.slice(0,300)})).catch(()=>({unavailable:true}))),JSON.stringify({mode:state.mode,reads:state.reads.slice(-12),contexts:state.contexts.slice(-4),pending:state.pending.map(value=>value.cursor),aborted:state.aborted,errors}));throw error}finally{release();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

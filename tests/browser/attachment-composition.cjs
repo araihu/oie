@@ -208,7 +208,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         (await window.axe.run('[data-composer-attachments]', {runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v => v.id));
       assert.deepEqual(violations, []);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-      const focusedMessage = (await retained()).items[0].id;
+      const focusedMessage = (await retained()).items.at(-1).id;
       const contextURL = new URL(page.url());
       contextURL.searchParams.set('message', focusedMessage);
       await page.goto(contextURL.href);

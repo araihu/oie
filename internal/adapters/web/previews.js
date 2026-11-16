@@ -131,10 +131,6 @@ window.OieRuntime.register('previews', life => {
   });
   function synchronize(root) {
     if(!root||life.signal.aborted)return;
-    const timeline=document.querySelector('#message-timeline');
-    const follow=timeline&&!document.body.dataset.focusMessage&&timeline.scrollHeight-timeline.scrollTop-timeline.clientHeight<60;
-    const anchor=timeline&&[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);
-    const anchorTop=anchor?.getBoundingClientRect().top;
     for(const fresh of root.querySelectorAll('#live-timeline [data-message-presentation]')) {
       const id=fresh.closest('[data-message-id]')?.dataset.messageId;
       const current=id&&document.querySelector(`[data-message-id="${CSS.escape(id)}"] [data-message-presentation]`);
@@ -170,13 +166,6 @@ window.OieRuntime.register('previews', life => {
       for(const scope of findAll(fresh.dataset.previewId))apply(scope,fresh.dataset);
     }
     document.dispatchEvent(new CustomEvent('oie:actions-refreshed'));
-    // Alpine applies text/visibility changes in its next microtask. Preserve the
-    // visible message after those updates, including newly appended link cards.
-    life.raf(()=>{
-      if(!timeline)return;
-      if(follow)timeline.scrollTop=timeline.scrollHeight;
-      else if(anchor?.isConnected)timeline.scrollTop+=anchor.getBoundingClientRect().top-anchorTop;
-    });
   }
   life.on(document,'oie:previews-refresh',event=>{synchronize(event.detail);trackImages();});
   life.on(document,'oie:forward-content',trackImages);
