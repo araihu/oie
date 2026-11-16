@@ -142,8 +142,8 @@ func roomReactionActor(account domain.ID, room, occupant string) string {
 // The caller holds e.mu for a consistent room and connection snapshot.
 func roomReactionSupport(e *entry, room string, incoming bool) (slot *roomSlot, semianonymous, occupantVerified bool) {
 	slot = e.rooms[room]
-	if e.state.State != "connected" && !(incoming && e.replaying) ||
-		e.session == nil || slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.leaving {
+	active := e.state.State == "connected" || incoming && e.replaying
+	if !active || e.session == nil || slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.leaving {
 		return nil, false, false
 	}
 	e.historyMu.Lock()

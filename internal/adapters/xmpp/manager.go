@@ -838,15 +838,12 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 	limited := &boundedTokens{reader: t, remaining: 1 << 20}
 	decoder := xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), limited))
 	decode := func(v any) (bool, error) {
-		err := decoder.Decode(v)
-		switch {
-		case err == nil:
-			return true, nil
-		default:
+		if err := decoder.Decode(v); err != nil {
 			// Serve drains and acknowledges malformed or oversized stanzas.
 			// Transport and application failures can still trigger resumption.
 			return false, limited.readError
 		}
+		return true, nil
 	}
 	if start.Name.Space != "jabber:client" {
 		return nil
