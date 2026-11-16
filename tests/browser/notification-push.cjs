@@ -208,6 +208,17 @@ async function check() {
     assert.equal(await completeInWorker(fixedID(11)), false);
     assert.equal(await worker.evaluate(() => self.foregroundDisplays), 1);
 
+    const hiddenMessage = fixedID(14);
+    await worker.evaluate(() => {
+      const get = self.clients.get.bind(self.clients);
+      let reads = 0;
+      self.clients.get = id => ++reads === 1 ? get(id) : Promise.resolve({visibilityState: 'hidden'});
+    });
+    assert.equal((await foreground(hiddenMessage)).status(), 204);
+    assert.equal(await completeInWorker(hiddenMessage), false);
+    assert.equal(await worker.evaluate(() => self.foregroundDisplays), 1);
+    await worker.evaluate(() => { delete self.clients.get; });
+
     const failedMessage = fixedID(12);
     await worker.evaluate(() => {
       self.registration.showNotification = async () => { throw Error('Platform refused to show the alert'); };
