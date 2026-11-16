@@ -993,8 +993,7 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
   :root[data-oie-keyboard] #register-account-form {padding-bottom:0}
 }
 
-.oie-device-downloads fieldset{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;border:0;padding:0}
-.oie-device-downloads fieldset>label{flex-basis:100%}
+.oie-device-downloads fieldset{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;border:0;padding:0}
 .oie-download-select{color:inherit;background:var(--oie-panel);border:1px solid var(--oie-line);border-radius:.375rem;padding:.375rem}
 .oie-download-feedback{min-height:1.4em;margin:0}
 

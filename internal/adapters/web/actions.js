@@ -359,53 +359,64 @@ window.OieRuntime.register('download-retention', life => {
   const select = form.querySelector('select');
   const status = section.querySelector('[role="status"]');
   const dialog = document.getElementById('remove-device-downloads-dialog');
-  const save = form.querySelector('[data-save-download-retention]');
   const remove = form.querySelector('[data-remove-device-downloads]');
   const confirm = dialog.querySelector('[data-confirm-remove-downloads]');
   const headers = {'X-Oie-Engine-ID':engine};
   let busy = false;
+  let confirmedDays = select.value;
+  let queuedDays;
 
-  async function update(action) {
+  async function update(action, days = confirmedDays) {
     if (busy) return;
     busy = true;
     form.setAttribute('aria-busy', 'true');
-    for (const button of [save, remove, confirm]) button.setAttribute('aria-disabled', 'true');
-    select.disabled = true;
+    for (const button of [remove, confirm]) button.setAttribute('aria-disabled', 'true');
+    if (action) status.textContent = '';
     const options = {credentials:'same-origin', cache:'no-store', headers};
     if (action) {
       options.method = 'POST';
-      options.body = new URLSearchParams({action, days:select.value});
+      options.body = new URLSearchParams({action, days});
       options.headers = {...headers, 'X-CSRF-Token':document.querySelector('meta[name="oie-csrf"]').content};
     }
+    let applied = false;
     try {
       const response = await life.fetch(downloadRetention, options);
       if (!response.ok) throw Error('retention_unavailable');
       const policy = await response.json();
       if (life.signal.aborted) return;
       if (!Number.isInteger(policy.days) || policy.days < 0 || policy.days > 3650) throw Error('retention_unavailable');
-      const days = String(policy.days);
-      if (![...select.options].some(option => option.value === days)) select.add(new Option(daysLabel.replace('{days}', days), days));
-      select.value = days;
-      fields.disabled = false;
+      confirmedDays = String(policy.days);
+      if (![...select.options].some(option => option.value === confirmedDays)) {
+        select.add(new Option(daysLabel.replace('{days}', confirmedDays), confirmedDays));
+      }
+      applied = true;
       status.textContent = action === 'clear' ? cleared : action === 'save' ? saved : '';
       if (action) document.dispatchEvent(new Event('oie:refresh-request'));
     } catch {
+      if (!life.signal.aborted) status.textContent = failed;
+    } finally {
+      busy = false;
       if (!life.signal.aborted) {
         fields.disabled = false;
-        status.textContent = failed;
-      }
-    } finally {
-      if (!life.signal.aborted) {
         form.removeAttribute('aria-busy');
-        for (const button of [save, remove, confirm]) button.removeAttribute('aria-disabled');
-        select.disabled = false;
+        for (const button of [remove, confirm]) button.removeAttribute('aria-disabled');
+        const next = queuedDays;
+        queuedDays = undefined;
+        if (next !== undefined && (!applied || next !== confirmedDays)) {
+          void update('save', next);
+        } else {
+          select.value = confirmedDays;
+        }
       }
-      busy = false;
     }
   }
 
   life.on(window, 'drawer:open', event => { if (event.detail?.id === 'settings') update(); });
-  life.on(save, 'click', () => update('save'));
+  life.on(select, 'change', () => {
+    const days = select.value;
+    if (busy) queuedDays = days;
+    else void update('save', days);
+  });
   const modal = type => window.dispatchEvent(new CustomEvent('modal:'+type, {detail:{id:dialog.id}}));
   life.on(remove, 'click', () => { if (!busy) modal('open'); });
   life.on(confirm, 'click', () => {

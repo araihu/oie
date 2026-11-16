@@ -202,10 +202,59 @@ async function test(base) {
       await page.getByRole('tab', {name: lang === 'en' ? 'This device' : 'Este dispositivo', exact: true}).click();
       const settings = page.locator('[data-download-retention]');
       const days = settings.locator('select');
+      const feedback = settings.getByRole('status');
+      const retentionRoute = '**/ui/settings/download-retention';
+      const requestedPeriods = [];
+      const releaseSave = Promise.withResolvers();
+      const firstSave = page.waitForRequest(request =>
+        request.url().endsWith('/ui/settings/download-retention') && request.method() === 'POST');
+      await page.route(retentionRoute, async route => {
+        const request = route.request();
+        if (request.method() === 'POST') {
+          requestedPeriods.push(new URLSearchParams(request.postData()).get('days'));
+          if (requestedPeriods.length === 1) await releaseSave.promise;
+        }
+        await route.continue();
+      });
+      await days.selectOption('7');
+      await firstSave;
+      await days.focus();
+      const remove = settings.locator('[data-remove-device-downloads]');
+      const before = await remove.boundingBox();
+      await days.selectOption('90');
       await days.selectOption('30');
-      await settings.locator('[data-save-download-retention]').click();
-      await settings.getByRole('status').getByText(lang === 'en' ? 'Download preference saved.' : 'Preferência de downloads salva.').waitFor();
+      assert(await days.evaluate(input => document.activeElement === input));
+      assert.deepEqual(requestedPeriods, ['7']);
+      const paintShifts = await remove.evaluate((element, origin) => new Promise(resolve => {
+        const shifts = [];
+        const sample = () => {
+          const rect = element.getBoundingClientRect();
+          shifts.push(Math.max(...['x', 'y', 'width', 'height'].map(key => Math.abs(rect[key] - origin[key]))));
+          if (shifts.length === 10) resolve(shifts);
+          else requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      }), before);
+      assert(paintShifts.every(shift => shift <= 1), JSON.stringify(paintShifts));
+      const latest = page.waitForResponse(response =>
+        response.url().endsWith('/ui/settings/download-retention') &&
+        new URLSearchParams(response.request().postData()).get('days') === '30' && response.ok());
+      releaseSave.resolve();
+      assert.equal((await (await latest).json()).days, 30);
+      assert.deepEqual(requestedPeriods, ['7', '30']);
+      const saved = lang === 'en' ? 'Download preference saved.' : 'Preferência de downloads salva.';
+      await feedback.getByText(saved).waitFor();
       assert.equal(await days.inputValue(), '30');
+
+      await page.route(retentionRoute, route => route.fulfill({status: 503}), {times: 1});
+      await days.selectOption('90');
+      await feedback.getByText(lang === 'en' ? 'Could not update downloaded files.' : 'Não foi possível atualizar os arquivos baixados.').waitFor();
+      assert.equal(await days.inputValue(), '30');
+      assert(await days.evaluate(input => document.activeElement === input));
+      await days.selectOption('90');
+      await feedback.getByText(saved).waitFor();
+      assert.equal(await days.inputValue(), '90');
+      await page.unroute(retentionRoute);
       await settings.locator('[data-remove-device-downloads]').click();
       await page.locator('#remove-device-downloads-dialog [data-confirm-remove-downloads]').click();
       await settings.getByRole('status').getByText(lang === 'en' ? 'Downloaded files removed.' : 'Arquivos baixados excluídos.').waitFor();

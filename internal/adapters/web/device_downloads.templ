@@ -18,7 +18,6 @@ templ downloadRetentionSettings(v view) {
 					<option value="30">{downloadDaysLabel(v.Text.DownloadRetentionDays, "30")}</option>
 					<option value="90">{downloadDaysLabel(v.Text.DownloadRetentionDays, "90")}</option>
 				</select>
-				@button.Button(button.WithType("button"), button.WithSize(button.SizeSmall), button.WithAttrs(templ.Attributes{"data-save-download-retention":""})){ {v.Text.RetentionSave} }
 				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-remove-device-downloads": "", "aria-haspopup": "dialog"})){ {v.Text.RemoveDownloads} }
 			</fieldset>
 		</div>
