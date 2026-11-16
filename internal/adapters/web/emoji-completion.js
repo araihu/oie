@@ -76,12 +76,6 @@
       } catch { storageDenied = true; }
     }
     const languagePicker = document.getElementById('emoji-shortcut-languages');
-    const languageOptions = languagePicker?.querySelector('[role=listbox]');
-    languageOptions?.setAttribute('aria-multiselectable', 'true');
-    // The option carries selection semantics. The checkbox is its visual indicator.
-    for (const indicator of languageOptions?.querySelectorAll('input[type=checkbox]') ?? []) {
-      indicator.inert = true;
-    }
     const form = document.getElementById('send-message-form');
     function applyPreference() {
       if (storageDenied) {

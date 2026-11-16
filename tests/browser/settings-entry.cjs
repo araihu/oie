@@ -28,7 +28,12 @@ const id='019a5df0-0000-7000-8000-000000000001';
   for(const width of [390,1440])for(const locale of ['en','pt-BR'])for(const section of ['chats','media','archived','favorites']){
    const context=await browser.newContext({viewport:{width,height:900},locale,hasTouch:width===390,reducedMotion:'reduce'});
    const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
-   await page.goto(`${base}/?section=${section}&lang=${locale}`);await page.waitForFunction(()=>window.OieRuntime?.generation>0);
+   const response=await page.goto(`${base}/?section=${section}&lang=${locale}`);
+   if(section==='chats'){
+    const renderedListbox=(await response.text()).match(/<ul\b[^>]*\bid="emoji-shortcut-languages-options"[^>]*>/)?.[0] ?? '';
+    assert.match(renderedListbox,/\baria-multiselectable="true"/,'the HTML response exposes multi-select before JavaScript runs');
+   }
+   await page.waitForFunction(()=>window.OieRuntime?.generation>0);
    assert.equal(await page.locator('[data-shared-settings],[data-footer-settings]').count(),0,'no duplicate settings shortcuts');
    if(width===390){assert.equal(await page.locator('[data-navigation-settings]:visible').count(),0);await page.getByRole('button',{name:locale==='en'?'Open navigation':'Abrir navegação',exact:true}).click();}
    const entry=page.locator('[data-navigation-settings]:visible');await entry.waitFor({state:'visible'});assert.equal(await entry.count(),1);
@@ -54,6 +59,11 @@ const id='019a5df0-0000-7000-8000-000000000001';
     assert.equal(await composition.getAttribute('aria-selected'),'true');
     const languages=dialog.getByRole('combobox',{name:pt?'Idiomas dos atalhos de emoji':'Emoji shortcut languages'});
     await languages.click();
+    const languageOptions=dialog.getByRole('listbox');
+    await languageOptions.waitFor({state:'visible'});
+    assert.equal(await languageOptions.getAttribute('aria-multiselectable'),'true');
+    assert.equal(await languageOptions.locator('input[type=checkbox]').count(),2);
+    assert.equal(await languageOptions.getByRole('checkbox').count(),0);
     const search=dialog.getByRole('textbox',{name:pt?'Buscar idiomas':'Search languages'});
     await search.fill('Portugu');
     assert.deepEqual(await audit(),[]);
