@@ -18,6 +18,7 @@ permissions:
 jobs:
   dagger:
     name: Dagger (${{ matrix.mode }})
+    if: github.event_name != 'push' || vars.OIE_REQUIRED_PR_CI != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -72,7 +73,7 @@ jobs:
 
   required:
     name: Required CI
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (github.event_name != 'push' || vars.OIE_REQUIRED_PR_CI != 'true') }}
     needs: [dagger, image-smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
