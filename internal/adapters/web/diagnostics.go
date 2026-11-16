@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/diagnostics"
 )
 
@@ -30,6 +31,7 @@ const (
 	DiagnosticsKeyRequired DiagnosticsAccess = iota
 	DiagnosticsLoopback
 	DiagnosticsNative
+	DiagnosticsAuthenticated // Mounted behind the hosted session or API key guard.
 )
 
 type diagnosticsView struct {
@@ -40,6 +42,7 @@ type diagnosticsView struct {
 	access        DiagnosticsAccess
 	remote        *url.URL
 	remoteClient  *http.Client
+	remoteEditors []engineapi.RequestEditorFn
 }
 
 func WithDiagnostics(logger *diagnostics.Logger, key string, access DiagnosticsAccess) Option {
@@ -75,6 +78,7 @@ func WithRemoteDiagnostics(engine string) Option {
 			return
 		}
 		s.diagnostics.remote = target.JoinPath(DiagnosticsPath)
+		s.diagnostics.remoteEditors = s.engineEditors
 		s.diagnostics.remoteClient = &http.Client{
 			Timeout:       5 * time.Second,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
@@ -97,7 +101,7 @@ func (d *diagnosticsView) authorized(r *http.Request) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
 		return false
 	}
-	if d.access == DiagnosticsNative {
+	if d.access == DiagnosticsNative || d.access == DiagnosticsAuthenticated {
 		return true
 	}
 	if d.keyConfigured {
@@ -182,6 +186,11 @@ func (d *diagnosticsView) readRemote(r *http.Request, hours int) ([]byte, bool, 
 	}
 	request.Header.Set(diagnosticsMarker, "1")
 	request.Header.Set(diagnosticsKey, r.Header.Get(diagnosticsKey))
+	for _, editor := range d.remoteEditors {
+		if err := editor(request.Context(), request); err != nil {
+			return nil, false, http.StatusServiceUnavailable
+		}
+	}
 	response, err := d.remoteClient.Do(request)
 	if err != nil {
 		return nil, false, http.StatusServiceUnavailable

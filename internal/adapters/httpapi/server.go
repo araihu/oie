@@ -38,6 +38,9 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 		return nil, err
 	}
 	schema.Servers = nil
+	// The listener authenticates hosted requests before they reach this adapter.
+	// The same engine contract also serves private BFF and local engine calls.
+	schema.Security = nil
 	router, err := legacy.NewRouter(schema)
 	if err != nil {
 		return nil, err
@@ -227,22 +230,23 @@ func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 var problemTitles = map[string]string{
-	"invalid_request":       "Invalid request",
-	"not_found":             "Not Found",
-	"idempotency_conflict":  "Idempotency key conflict",
-	"account_exists":        "Account already exists",
-	"invalid_cursor":        "Invalid event cursor",
-	"history_changed":       "History changed",
-	"unavailable":           "Service Unavailable",
-	"state_conflict":        "State conflict",
-	"protocol_unavailable":  "Protocol unavailable",
-	"media_blocked":         "Media access blocked",
-	"media_fetch_failed":    "Media fetch failed",
-	"media_too_large":       "Media too large",
-	"media_unsupported":     "Unsupported media",
-	"range_not_satisfiable": "Range not satisfiable",
-	"media_busy":            "Media service busy",
-	"media_timeout":         "Media request timed out",
+	"authentication_required": "Authentication required",
+	"invalid_request":         "Invalid request",
+	"not_found":               "Not Found",
+	"idempotency_conflict":    "Idempotency key conflict",
+	"account_exists":          "Account already exists",
+	"invalid_cursor":          "Invalid event cursor",
+	"history_changed":         "History changed",
+	"unavailable":             "Service Unavailable",
+	"state_conflict":          "State conflict",
+	"protocol_unavailable":    "Protocol unavailable",
+	"media_blocked":           "Media access blocked",
+	"media_fetch_failed":      "Media fetch failed",
+	"media_too_large":         "Media too large",
+	"media_unsupported":       "Unsupported media",
+	"range_not_satisfiable":   "Range not satisfiable",
+	"media_busy":              "Media service busy",
+	"media_timeout":           "Media request timed out",
 }
 
 const problemDocumentationURL = "https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md"
@@ -252,6 +256,17 @@ func newProblem(status int, code string) engineapi.Problem {
 		Type: "urn:oie:problem:" + code, Title: problemTitles[code],
 		Status: status, Code: engineapi.ProblemCode(code),
 	}
+}
+
+// WriteAuthenticationRequired rejects a missing or invalid hosted API key.
+func WriteAuthenticationRequired(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWW-Authenticate", "Bearer")
+	writeProblem(w, r, http.StatusUnauthorized, "authentication_required")
+}
+
+// WriteUnavailable reports a failure at the hosted API boundary.
+func WriteUnavailable(w http.ResponseWriter, r *http.Request) {
+	writeProblem(w, r, http.StatusServiceUnavailable, "unavailable")
 }
 
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, code string) {

@@ -312,6 +312,7 @@ func (r runner) browsers(ctx context.Context, mode string, source *dagger.Direct
 		WithWorkdir("/src/tests/browser").
 		WithFile("package.json", source.File("tests/browser/package.json")).
 		WithFile("package-lock.json", source.File("tests/browser/package-lock.json")).
+		WithExec([]string{"sh", "-ec", "apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*"}).
 		WithExec([]string{"npm", "ci"}).WithExec([]string{"npx", "playwright", "install", "--with-deps", "chromium"})
 	browser, err := r.stage(ctx, "browser-setup", setup)
 	if err != nil {

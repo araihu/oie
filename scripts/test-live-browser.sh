@@ -20,7 +20,7 @@ if [ ! -f "$cert" ]; then
   docker compose cp xmpp:/var/lib/prosody/certs/localhost.crt "$tmp/localhost.crt"
   cert="$tmp/localhost.crt"
 fi
-bin/oie --role hosted --listen 127.0.0.1:18086 --data-dir "$tmp/engine" --xmpp-ca-file "$cert" > "$tmp/engine.log" 2>&1 &
+bin/oie --role local --listen 127.0.0.1:18086 --data-dir "$tmp/engine" --xmpp-ca-file "$cert" > "$tmp/engine.log" 2>&1 &
 api_pid=$!
 bin/oie --role bff --listen 127.0.0.1:18087 --engine-url http://127.0.0.1:18086 > "$tmp/web.log" 2>&1 &
 web_pid=$!

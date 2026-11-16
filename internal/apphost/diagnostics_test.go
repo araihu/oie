@@ -2,6 +2,7 @@ package apphost
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -12,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/hostauth"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web"
 	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/google/uuid"
 )
@@ -38,7 +41,27 @@ func checkEngineLogPrivacy(t *testing.T, mode diagnostics.Mode, debug bool) {
 	t.Cleanup(func() { _ = logOutput.Close() })
 	logger := diagnostics.New(logDir, logOutput, mode, debug)
 	const key = "private-diagnostics-key-sentinel"
-	server := testServer(t, Config{Role: string(mode), Listen: "127.0.0.1:0", DataDir: dir, Diagnostics: logger, DiagnosticsKey: key})
+	cfg := Config{Role: string(mode), Listen: "127.0.0.1:0", DataDir: dir}
+	var bearer string
+	if mode == diagnostics.Hosted {
+		cfg = hostedConfig(t, dir, false)
+		_, bearer, err = hostauth.NewStore(dir).CreateKey(t.Context(), "diagnostics fixture", time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg.Diagnostics, cfg.DiagnosticsKey = logger, key
+	server := testServer(t, cfg)
+	base := server.URL()
+	if bearer != "" {
+		front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Host = "oie.example.test"
+			r.Header.Set("X-Forwarded-Proto", "https")
+			server.server.Handler.ServeHTTP(w, r)
+		}))
+		t.Cleanup(front.Close)
+		base = front.URL
+	}
 
 	// Supply real account and chat data to the same API served in both modes.
 	const jid = "private-jid@example.invalid"
@@ -46,7 +69,15 @@ func checkEngineLogPrivacy(t *testing.T, mode diagnostics.Mode, debug bool) {
 	const label = "private-name-sentinel"
 	const password = "private-password-sentinel"
 	const message = "message-content-sentinel https://private.example/secret.pdf?token=private-query-sentinel"
-	client := engineClient(t, server)
+	client, err := engineapi.NewClientWithResponses(base, engineapi.WithRequestEditorFn(func(_ context.Context, r *http.Request) error {
+		if bearer != "" {
+			r.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx := t.Context()
 	newKey := func() string { return uuid.Must(uuid.NewV7()).String() }
 	account, err := client.RegisterAccountWithResponse(ctx, &engineapi.RegisterAccountParams{IdempotencyKey: newKey()}, engineapi.RegisterAccountJSONRequestBody{
@@ -92,13 +123,16 @@ func checkEngineLogPrivacy(t *testing.T, mode diagnostics.Mode, debug bool) {
 	if !bytes.Contains(snapshot, []byte(diagnostics.XMPPConnectFailed)) {
 		t.Fatal("connection failure did not leave diagnostic evidence", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL()+"/ui/diagnostics/log?hours=24", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+web.DiagnosticsPath+"?hours=24", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("X-Oie-Diagnostics", "1")
 	req.Header.Set("X-Oie-Diagnostics-Key", key)
 	req.Header.Set("Authorization", "Bearer private-auth-header-sentinel")
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
 	req.Header.Set("Cookie", "oie_session=private-cookie-sentinel")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -123,7 +157,7 @@ func checkEngineLogPrivacy(t *testing.T, mode diagnostics.Mode, debug bool) {
 			"private-profile-sentinel", endpoint, account.JSON201.Id, conversation.JSON201.Id, accepted.JSON202.Id,
 			"private-auth-header-sentinel", "private-cookie-sentinel",
 		} {
-			if bytes.Contains(sink, []byte(secret)) {
+			if bytes.Contains(sink, []byte(secret)) || (bearer != "" && bytes.Contains(sink, []byte(bearer))) {
 				t.Fatal("private fixture data reached a diagnostic sink")
 			}
 		}
@@ -134,7 +168,7 @@ func TestDesktopDiagnosticsSurvivesEmbeddedStartupFailure(t *testing.T) {
 	dir := t.TempDir()
 	testServer(t, Config{Role: "local", Listen: "127.0.0.1:0", DataDir: dir})
 	logger := diagnostics.New(filepath.Join(t.TempDir(), "diagnostics"), nil, diagnostics.Desktop, false)
-	desktop, err := StartDesktop(t.Context(), dir, "", "", logger, func(string) error { return nil })
+	desktop, err := StartDesktop(t.Context(), dir, "", DesktopEngine{}, "", logger, func(DesktopEngine) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,15 +187,15 @@ func TestDesktopDiagnosticsSurvivesEmbeddedStartupFailure(t *testing.T) {
 	}
 }
 
-func TestDesktopCanReadHostedDataOnlyDiagnostics(t *testing.T) {
+func TestDesktopCanReadLegacyDataOnlyDiagnostics(t *testing.T) {
 	const key = "private-hosted-access-key"
 	dir := t.TempDir()
 	logger := diagnostics.New(filepath.Join(dir, "diagnostics"), nil, diagnostics.Hosted, false)
 	engine := testServer(t, Config{
-		Role: "hosted", DataOnly: true, Listen: "127.0.0.1:0", DataDir: dir, Diagnostics: logger, DiagnosticsKey: key,
+		Role: "local", DataOnly: true, Listen: "127.0.0.1:0", DataDir: dir, Diagnostics: logger, DiagnosticsKey: key,
 	})
 	local := diagnostics.New(filepath.Join(t.TempDir(), "diagnostics"), nil, diagnostics.Desktop, false)
-	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", engine.URL(), local, func(string) error { return nil })
+	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", DesktopEngine{URL: engine.URL()}, "", local, func(DesktopEngine) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,5 +212,33 @@ func TestDesktopCanReadHostedDataOnlyDiagnostics(t *testing.T) {
 	desktop.ServeHTTP(allowed, request)
 	if allowed.Code != 200 || !diagnostics.ValidSnapshot(allowed.Body.String()) || !strings.Contains(allowed.Body.String(), string(diagnostics.Ready)) {
 		t.Fatalf("hosted data-only log unavailable in desktop: %d", allowed.Code)
+	}
+}
+
+func TestHostedDiagnosticsRequiresOwnerCredentials(t *testing.T) {
+	for _, dataOnly := range []bool{false, true} {
+		dir := t.TempDir()
+		cfg := hostedConfig(t, dir, dataOnly)
+		cfg.Diagnostics = diagnostics.New(filepath.Join(dir, "diagnostics"), nil, diagnostics.Hosted, false)
+		cfg.DiagnosticsKey = "legacy-diagnostics-test-key"
+		s := testServer(t, cfg)
+
+		req := hostedRequest(http.MethodGet, web.DiagnosticsPath, "", nil)
+		req.Header.Set("X-Oie-Diagnostics", "1")
+		req.Header.Set("X-Oie-Diagnostics-Key", cfg.DiagnosticsKey)
+		if w := hostedResponse(s, req); w.Code != http.StatusUnauthorized || strings.Contains(w.Body.String(), string(diagnostics.Ready)) {
+			t.Fatalf("legacy diagnostics key exposed hosted logs: %d %s", w.Code, w.Body)
+		}
+
+		_, key, err := hostauth.NewStore(dir).CreateKey(t.Context(), "fixture", time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req = hostedRequest(http.MethodGet, web.DiagnosticsPath, key, nil)
+		req.Header.Set("X-Oie-Diagnostics", "1")
+		if w := hostedResponse(s, req); w.Code != http.StatusOK || !diagnostics.ValidSnapshot(w.Body.String()) ||
+			!strings.Contains(w.Body.String(), string(diagnostics.Ready)) || strings.Contains(w.Body.String(), key) {
+			t.Fatalf("authenticated read of hosted diagnostics failed: %d %s", w.Code, w.Body)
+		}
 	}
 }

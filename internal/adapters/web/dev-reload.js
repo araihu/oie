@@ -9,7 +9,7 @@
   const controller=new AbortController();request=controller;
   const timeout=setTimeout(()=>controller.abort(),3000);
   try{
-   const response=await fetch('/ui/dev/build',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:controller.signal});
+   const response=await window.OieRuntime.request('/ui/dev/build',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:controller.signal});
    if(!response.ok)return;
    const value=await response.json();
    if(!stopped&&!controller.signal.aborted&&typeof value.buildId==='string'&&value.buildId.length>0&&value.buildId.length<=128&&value.buildId!==build){reloading=true;location.reload()}

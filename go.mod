@@ -7,6 +7,7 @@ require (
 	github.com/araihu/goshtoso v0.6.3
 	github.com/araihu/margo v0.0.36
 	github.com/blevesearch/bleve/v2 v2.6.1
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/gofrs/flock v0.13.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
@@ -17,6 +18,7 @@ require (
 	github.com/wailsapp/wails/v3 v3.1.0
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/text v0.43.0
 	mellium.im/sasl v0.3.2
 	mellium.im/xmlstream v0.15.4
@@ -52,6 +54,7 @@ require (
 	github.com/dlclark/regexp2/v2 v2.12.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

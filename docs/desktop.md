@@ -103,11 +103,18 @@ conversations if it responds. The selection persists for this desktop profile.
 If the remote address stops responding, open the same settings to update it
 or return to **Local**.
 
-Remote mode leaves your local accounts and history on this device. The hosted
-engine owns its accounts and history and keeps running when you switch back or
-quit Oiê. Each engine keeps its own drafts on the desktop. The remote API
-currently has open access, so keep it on a trusted private network or use a
-private tunnel. [OAuth/OIDC support is in B18.](oie-spec.md#16-backlog-and-later-runtime-options)
+For an authenticated hosted engine, open its website and sign in with OIDC.
+In **Settings → General → Access keys**, name the key for this device and
+choose **Create access key**, then **Copy key**. In the desktop app, open
+**Settings → General → Engine → Remote**, enter the HTTPS address and paste
+the key before selecting **Save**. Oiê checks the key with the server
+before saving the connection in the desktop profile. To replace an expired
+key, create a fresh one and paste it in the same settings.
+
+Remote mode shows the hosted engine's accounts and conversations. Use
+**Local** to return to this device's accounts and history. The hosted engine
+keeps running when you switch or quit. For an engine without its own
+authentication, use a trusted private network or tunnel.
 
 For an engine listening on its server's loopback port, forward the port over
 SSH.

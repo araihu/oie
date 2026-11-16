@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: helm-release-${{ github.ref }}
@@ -50,15 +51,28 @@ jobs:
         run: |
           set -euo pipefail
           version=${TAG#helm-v}
+          timestamp=$(git show -s --format=%cI HEAD)
           stage=$(mktemp -d)
           cp -R charts/oie "$stage/oie"
           cp LICENSE "$stage/oie/LICENSE"
+          find "$stage/oie" -type f -exec touch -d "$timestamp" {} +
           helm package "$stage/oie" --destination "$stage"
           cd "$stage"
           package="oie-$version.tgz"
+          touch -d "$timestamp" "$package"
+          registry="oci://ghcr.io/araihu/charts"
+          registry_config="$stage/registry.json"
+          printf '%s' "$GH_TOKEN" |
+            helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin --registry-config "$registry_config"
+          helm push "$package" "$registry" --registry-config "$registry_config"
+          mkdir verify
+          helm pull "$registry/oie" --version "$version" --destination verify --registry-config "$registry_config"
+          cmp "$package" "verify/$package"
+          helm registry logout ghcr.io --registry-config "$registry_config"
           sha256sum "$package" > SHA256SUMS
           printf 'Helm chart %s for Oiê. See the [chart configuration and installation guide](https://github.com/%s/tree/%s/charts/oie).\n' \
             "$version" "$GITHUB_REPOSITORY" "$TAG" > notes.md
+          printf '\n`helm upgrade --install oie %s/oie --version %s`\n' "$registry" "$version" >> notes.md
           # Keep chart-only releases out of the application's Latest channel.
           gh release create "$TAG" "$package" SHA256SUMS --repo "$GITHUB_REPOSITORY" \
             --verify-tag --prerelease --latest=false --title "Oiê Helm chart $version" --notes-file notes.md

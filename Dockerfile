@@ -48,5 +48,5 @@ COPY --from=build --chown=65532:65532 /runtime/data/ /data/
 USER 65532:65532
 EXPOSE 8080
 VOLUME ["/data"]
+ENV OIE_LISTEN=0.0.0.0:8080 OIE_DATA_DIR=/data
 ENTRYPOINT ["/oie"]
-CMD ["--listen", "0.0.0.0:8080", "--data-dir", "/data"]
