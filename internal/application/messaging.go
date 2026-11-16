@@ -642,6 +642,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 	if err = r.ReceiveMessage(ctx, c, m, ids[5]); err != nil {
 		return err
 	}
+	e.notifyEvents()
 	if edits, ok := e.repo.(MessageEditRepository); ok && in.IsOwn && in.Correction != nil {
 		return edits.ObserveMessageEdit(ctx, a.ID, in.ProviderID, *in.Correction, in.OriginalText, ids[5], now)
 	}
