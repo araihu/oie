@@ -14,7 +14,7 @@ the application core.
 
 | Operation | Behavior |
 | --- | --- |
-| PUT /api/v1/accounts/{accountId}/connection | Save write-only password and optional TCP endpoint, then asynchronously connect. Repeating unchanged configuration keeps the existing session. |
+| PUT /api/v1/accounts/{accountId}/connection | Save write-only password and optional TCP endpoint, then asynchronously connect. Repeating unchanged configuration keeps a running session or retry loop. It starts a new attempt if the worker stopped. |
 | GET /api/v1/accounts/{accountId}/connection | Read not_connected, connecting, connected, or error and a stable error code. No credential readback. |
 | DELETE /api/v1/accounts/{accountId}/connection | Disconnect and disable automatic connection. Retain metadata, history, credentials, and pending sends. |
 | POST /api/v1/conversations | Open/find a canonical direct peer within an account. Does not add a roster contact or presence subscription. |
@@ -72,13 +72,26 @@ still O04 work.
 the application protocol port. It normalizes bare JIDs, negotiates STARTTLS,
 verifies the account domain, authenticates with supported SCRAM or TLS-protected
 PLAIN, binds an account-specific resource, announces presence, receives direct text,
-and responds to XMPP ping. It never disables certificate verification.
+and handles XMPP ping in both directions. After roughly 25–30 seconds without
+upstream reads, a client-to-server ping verifies the stream. A 10-second probe
+deadline closes the socket so the account worker can reconnect even if TCP
+stayed established. An IQ error reply still demonstrates a responding stream.
+TLS certificate verification is always required.
 
 An optional endpoint overrides TCP dialing; omitted endpoints use XMPP discovery.
 System trust is used normally. `--xmpp-ca-file` adds an explicitly trusted private
-or development certificate. Transient stream failures reconnect with backoff from
-one to thirty seconds; authentication/TLS failures stop automatic attempts until
-configuration is corrected or the engine restarts with corrected trust/configuration.
+or development certificate. Transient failures, including SASL
+`temporary-auth-failure`, reconnect with jittered exponential backoff capped at
+30 seconds. A brief login followed by another drop continues the backoff.
+Credential rejection and TLS verification failure stop automatic attempts.
+After repair, submitting the same connection settings restarts the stopped
+worker. Explicit disconnect persists across engine restart.
+
+The adapter rebinds and reannounces presence on reconnect. It resumes archive
+recovery and active room intents using their existing checkpoints and revisions.
+XEP-0198 acknowledgements and resumption require stream-layer support in the
+XMPP client. A completed socket write remains `submitted`; the outbox retains
+`unknown` for ambiguous writes and only retries known-unsent work automatically.
 New registrations canonicalize bare JIDs before account matching. Earlier foundation metadata is retained without rewriting account identities; aliases/matching for imported or independently ingested identities remain O04 work.
 Outgoing text is capped at 16,384 Unicode characters by the API. Incoming stanzas have a separate 1 MiB parsing bound; a larger valid incoming body is not silently subjected to the smaller outgoing composer limit.
 Basic direct-text capability is reported only when connected. This is not a claim

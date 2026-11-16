@@ -425,13 +425,15 @@ not supply that file. The [Ubuntu WebKit development package](https://packages.u
 also depends on libsoup development files; the command above lists both
 explicitly to match the errors observed during installation.
 
-Install for the current user:
+Check out the release you want to install. Run `go install` from that checkout
+so Go uses the XMPP fork pinned by the project:
 
 ```sh
+git clone --branch v0.0.1-rc.25 https://github.com/araihu/oie.git
+cd oie
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
-  GONOPROXY=github.com/araihu/oie \
-  go install -tags production github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3
+  go install -tags production ./cmd/oie-desktop
 ```
 
 Do not run `go install` with `sudo`. The application and its data belong to
@@ -480,14 +482,15 @@ go version
 Install for the current user with matching compilation and linker targets:
 
 ```sh
+git clone --branch v0.0.1-rc.25 https://github.com/araihu/oie.git
+cd oie
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
-  GONOPROXY=github.com/araihu/oie \
   MACOSX_DEPLOYMENT_TARGET=13.0 \
   CGO_CFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   CGO_LDFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   go install -tags production -ldflags='-extldflags=-mmacosx-version-min=13.0' \
-  github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3
+  ./cmd/oie-desktop
 ```
 
 These flags avoid the observed mismatch between macOS compilation targets and
@@ -564,10 +567,9 @@ quit first. For an existing hosted engine, see **Settings → General → Engine
 
 Updates are manual. Quit the app, choose a published version and run the saved
 installer again with the same prefix. It stages replacements and restores the
-previous installation on a detected update failure. Source installations can
-repeat their `go install` command with the desired tag. Repeating the same
-version reinstalls it; it does not select newer application code. Both methods
-preserve the separate profile.
+previous installation on a detected update failure. For a source installation,
+check out the desired release tag and rerun `go install` from that checkout.
+Both methods preserve the separate profile.
 
 When startup needs to upgrade an existing SQLite database, Oiê saves a copy
 under `private/migration-backups/` in the profile first. The filename starts with
@@ -624,7 +626,7 @@ The Makefile uses the `server` tag for headless checks, so native install
 commands explicitly clear `GOFLAGS` and use `-tags production`. The pinned
 prerelease tag is intentional so the example selects a repeatable version.
 
-For a release, verify a complete remote `go install` on both targets, native
+For a release, verify `go install` from the release checkout on both targets, native
 runtime behavior and installation from a clean machine. A successful
 `go list -m` only proves module resolution. See
 [desktop verification](desktop.md#verification) for existing native coverage and

@@ -8,6 +8,7 @@ window.OieRuntime.register('live', life => {
   const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet || !message; } };
   const errorToast = message => { if (message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message}})); };
   const mock = body.dataset.mock === 'true';
+  const recoveringView = document.getElementById('oie-route')?.hasAttribute('data-engine-unavailable');
   const events = window.OieEvents, inbox = window.OieInbox;
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content || '';
   let accountRenameEpoch = 0;
@@ -880,6 +881,10 @@ window.OieRuntime.register('live', life => {
       if (body.dataset.engineId && regions.dataset.engineId !== body.dataset.engineId) {
         engineChanged(); return;
       }
+      if (recoveringView && regions.dataset.engineId) {
+        await window.OieNavigation.go(location.href,{history:true,workspace:'oie-app',noInboxReuse:true});
+        return;
+      }
       body.dataset.contextNewer=regions.dataset.contextNewer||'false';body.dataset.contextMissing=regions.dataset.contextMissing||'false';
       const contextNotice=document.querySelector('#context-notice'),newNotice=page.querySelector('#live-context-notice');if(contextNotice&&newNotice&&contextNotice.innerHTML!==newNotice.innerHTML)mutateDOM(contextNotice,newNotice.innerHTML);
       if(pinned())showJump(true);
@@ -1328,7 +1333,6 @@ window.OieRuntime.register('live', life => {
       if (refreshAgain) { refreshAgain=false;scheduleRefresh(); }
     }
   });
-  function retryPending() { if (composer && journal?.pending && composer.dataset.busy !== 'true' && !stopped && navigator.onLine) composer.requestSubmit(); }
   function engineChanged(notify = true) {
     if (stopped) return;
     stopped = true; events.markReplaced();
@@ -1413,7 +1417,7 @@ window.OieRuntime.register('live', life => {
     for (const type of events.eventTypes) {
       life.on(events.target,type,event=>{if(!stopped)(handlers[type]||scheduleRefresh)(event.detail);});
     }
-    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();retryPending();}});
+    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();}});
     life.on(events.target,'error',()=>{if(!stopped)announce(text('liveRetry'));});
     life.on(events.target,'engine-changed',()=>engineChanged());
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
@@ -1424,18 +1428,23 @@ window.OieRuntime.register('live', life => {
       if((mountedList&&(!inbox.current(mountedList)||
         (body.dataset.eventCursor&&mountedList.dataset.inboxCursor!==body.dataset.eventCursor&&
           events.latest(mountedList.dataset.inboxCursor)!==body.dataset.eventCursor)))||
-        events.latest(body.dataset.eventCursor)!==body.dataset.eventCursor)scheduleRefresh();
-      retryPending();
+        events.latest(body.dataset.eventCursor)!==body.dataset.eventCursor||journal?.pending)scheduleRefresh();
     }else announce(text('liveConnecting'),true);
   }
   // Bounded recovery polling also covers a proxy that buffers or disables SSE.
   function recoverLive(){
     if(mock||stopped)return;
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
-    scheduleRefresh();retryPending();
+    scheduleRefresh();
   }
   life.interval(() => { if (!document.hidden) recoverLive(); },15000);
-  life.on(window,'online', () => {inbox.invalidate();recoverLive();});
+  function wakeLive(online){
+    if(mock||stopped)return;
+    inbox.invalidate();events.wake(online);recoverLive();
+  }
+  life.on(window,'online',()=>wakeLive(true));
+  life.on(document,'visibilitychange',()=>{if(!document.hidden)wakeLive();});
+  if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
     const show = () => {

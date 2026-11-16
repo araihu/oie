@@ -95,10 +95,17 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 		defer close(instance.done)
 		err := engine.Run(ctx)
 		if ctx.Err() == nil {
-			h.failures <- err
+			h.reportFailure(err)
 		}
 	}()
 	return instance, nil
+}
+
+func (h *engineHost) reportFailure(err error) {
+	select {
+	case h.failures <- err:
+	default:
+	}
 }
 
 func (h *engineHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +134,7 @@ func (h *engineHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	instance.handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-func (h *engineHost) reset(expected domain.ID) error {
+func (h *engineHost) reset(expected domain.ID) (err error) {
 	h.mu.Lock()
 	current := h.instance
 	if current == nil || current.id != expected {
@@ -141,6 +148,13 @@ func (h *engineHost) reset(expected domain.ID) error {
 	}
 	h.instance = nil
 	h.mu.Unlock()
+	defer func() {
+		if err != nil && h.cfg.engineOnly {
+			// A failed reset leaves the desktop listener without an engine.
+			// Let the supervisor stop it so the desktop can reopen the profile.
+			h.reportFailure(err)
+		}
+	}()
 
 	current.close()
 	if err := h.store.Reset(context.WithoutCancel(h.ctx), id); err != nil {
