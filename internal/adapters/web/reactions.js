@@ -305,7 +305,9 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   buttons[(current+buttons.length+(event.key==='ArrowRight'?1:-1))%buttons.length].focus({preventScroll:true});
  });
  function cancelPreparation(){preparing?.abort();preparing=null}
+ let choosingWithPointer=false;
  life.on(document,'keydown',event=>{
+  choosingWithPointer=false;
   if(event.key!=='Escape')return;
   cancelPreparation();
   if(quick.hidden||more.getAttribute('aria-expanded')==='true')return;
@@ -313,12 +315,14 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   close();
  });
  life.on(document,'pointerdown',event=>{
+  choosingWithPointer=quick.contains(event.target)&&!!event.target.closest('[data-reaction-quick-emoji],[data-reaction-more]');
   if(quick.contains(event.target)||opener?.contains(event.target))return;
   cancelPreparation();
   close(false);
  },{capture:true});
  life.on(document,'focusin',event=>{
-  if(!quick.hidden&&!quick.contains(event.target)&&event.target!==opener)close(false);
+  // WebKit can focus the workspace before sending the button's touch click.
+  if(!choosingWithPointer&&!quick.hidden&&!quick.contains(event.target)&&event.target!==opener)close(false);
  });
  life.on(document,'scroll',event=>{if(!quick.contains(event.target))positionQuick()},{capture:true,passive:true});
  life.on(window,'resize',positionQuick);
@@ -345,10 +349,11 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   if(!gesture||gesture.id!==event.pointerId)return;const candidate=gesture;cancelGesture();if(candidate.held||!candidate.source.isConnected)return;const now=performance.now();if(now-candidate.time>450){lastTap=null;return}
   if(lastTap&&lastTap.source===candidate.source&&now-lastTap.time<=320&&Math.hypot(candidate.x-lastTap.x,candidate.y-lastTap.y)<=24){event.preventDefault();lastTap=null;suppressClick={source:candidate.source,until:now+700};close(false);void prepare(candidate.source.dataset.messageBubble,candidate.source)}else lastTap={...candidate,time:now}
  },{passive:false});
- life.on(document,'pointercancel',()=>{cancelGesture();cancelPrimary();lastTap=null},{passive:true});
+ life.on(document,'pointercancel',()=>{choosingWithPointer=false;cancelGesture();cancelPrimary();lastTap=null},{passive:true});
  life.on(document,'scroll',()=>{cancelGesture();cancelPrimary();lastTap=null},{capture:true,passive:true});
  life.on(document,'contextmenu',event=>{if(gesture&&gesture.source.contains(event.target)){event.preventDefault();gesture.held=true;clearTimeout(gesture.timer);lastTap=null;suppressClick={source:gesture.source,until:performance.now()+900};openMessageMenu(gesture.source)}else if(suppressClick&&performance.now()<suppressClick.until&&suppressClick.source.contains(event.target))event.preventDefault()});
  life.on(window,'click',event=>{
+  choosingWithPointer=false;
   if(suppressClick&&performance.now()<suppressClick.until&&suppressClick.source.contains(event.target)&&event.isTrusted){event.preventDefault();event.stopImmediatePropagation();suppressClick=null;return}
   const primary=event.target.closest('[data-preview-expand],[data-document-open]');if(event.isTrusted&&primary&&lastTap?.primary===primary&&performance.now()-lastTap.time<250){event.preventDefault();event.stopImmediatePropagation();cancelPrimary();const next={primary,timer:0};delayedPrimary=next;next.timer=life.timeout(()=>{if(delayedPrimary!==next)return;delayedPrimary=null;lastTap=null;if(primary.isConnected&&!primary.disabled)primary.click()},320)}
  },{capture:true});

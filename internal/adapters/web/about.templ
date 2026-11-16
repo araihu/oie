@@ -6,7 +6,7 @@ import (
 )
 
 templ about(v view) {
-	@drawer.Drawer(drawer.Config{ID: "about", Title: v.Text.About}) {
+	@workspaceDrawer(drawer.Config{ID: "about", Title: v.Text.About}) {
 		<div class="oie-about">
 			@settingsSubpageBack("about", v.Text.BackToSettings)
 			<div class="oie-about-brand">

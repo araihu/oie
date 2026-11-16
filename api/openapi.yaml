@@ -1768,8 +1768,9 @@ paths:
       - Accounts
       summary: Configure and connect an account
       description: Persists write-only credentials before starting an asynchronous TLS/SASL connection. Transient
-        network failures reconnect with bounded backoff; invalid credentials or TLS verification failures require
-        corrected configuration. Ordinary engine restart reloads enabled configurations.
+        network or authentication service failures reconnect with bounded backoff. A stopped connection can be
+        retried with the same settings once the underlying problem is resolved. An unchanged configuration leaves
+        a running connection or retry loop in place. Ordinary engine restart reloads enabled configurations.
       responses:
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
@@ -5009,8 +5010,9 @@ components:
         updatedAt: '2026-11-07T12:00:00Z'
     ConfigureConnection:
       type: object
-      description: Desired enabled connection. Repeating unchanged configuration does not create another session.
-        Credentials are kept in private engine-local files and are excluded from reads/events.
+      description: Desired enabled connection. Repeating unchanged configuration preserves a running connection or
+        retry loop and starts a new attempt if the worker stopped. Credentials are kept in private engine-local files
+        and are excluded from reads/events.
       additionalProperties: false
       required:
       - password

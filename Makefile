@@ -5,8 +5,8 @@ GOFLAGS ?= -tags=server
 export GOFLAGS
 COMPOSE ?= docker compose
 CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
-VACUUM ?= env GOWORK=off $(GO) tool -modfile=tools/vacuum/go.mod vacuum
-GOLANGCI_LINT ?= $(CODEGEN) golangci-lint
+VACUUM ?= python3 tools/ci/linter.py vacuum
+GOLANGCI_LINT ?= python3 tools/ci/linter.py golangci-lint
 CLI_GENERATOR = GOWORK=off $(GO) -C tools run ./cmd/generate-oiectl
 GO_TEST_EXEC = $(if $(OIE_GO_TEST_EXEC),-exec "$(OIE_GO_TEST_EXEC)")
 

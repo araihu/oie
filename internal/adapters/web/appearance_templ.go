@@ -25,6 +25,7 @@ func appearanceOption(v view, value, label string, symbol icon.Symbol) radio.Con
 		Label:        label,
 		LabelLeading: glyph(symbol),
 		Segmented:    true,
+		RootClass:    "oie-appearance-option",
 		Checked:      v.Theme == value || value == "system" && v.Theme == "",
 		Alpine:       &radio.AlpineConfig{Model: "appearance"},
 		HTMX:         &radio.HTMXConfig{Get: "/?lang=" + v.Locale + "&theme=" + value, Target: "#appearance-settings", Swap: "outerHTML show:none", PushURL: false},
@@ -56,7 +57,7 @@ func appearanceSettings(v view) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Theme).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 27, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 28, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -69,7 +70,7 @@ func appearanceSettings(v view) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Appearance)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 28, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 29, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
@@ -82,7 +83,7 @@ func appearanceSettings(v view) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.Appearance).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 29, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 30, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -95,7 +96,7 @@ func appearanceSettings(v view) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression("{ appearance: " + strconv.Quote(v.Theme) + " }").Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 29, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/appearance.templ`, Line: 30, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {

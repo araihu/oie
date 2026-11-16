@@ -221,6 +221,36 @@ paths:
         '409': {description: The engine selection has changed.}
         '500': {description: The preference could not be saved.}
         '503': {description: The selected engine is unavailable.}
+  /ui/events:
+    get:
+      tags: [Conversations]
+      operationId: streamWorkspaceEvents
+      summary: Subscribe to live workspace updates
+      description: >-
+        Relays engine events with their original IDs. An ID-less oie.live event
+        marks the replay boundary for notifications, oie.heartbeat reports
+        upstream activity, and oie.reset supplies the current engine ID and
+        cursor when the requested cursor is rejected. An idle upstream stream
+        is closed so the client can reconnect from the last received ID.
+      parameters:
+      - name: cursor
+        in: query
+        description: Engine cursor from the rendered view or last received event.
+        schema: {type: string}
+      - name: Last-Event-ID
+        in: header
+        description: Last received event ID. Takes precedence over the query cursor.
+        schema: {type: string}
+      responses:
+        '200':
+          description: Uncached SSE stream of workspace events or a cursor reset.
+          content:
+            text/event-stream:
+              schema: {type: string}
+        '503':
+          description: The engine event stream is temporarily unavailable.
+        default:
+          description: The corresponding error status from the engine event endpoint.
   /ui/refresh:
     get:
       tags: [Conversations]

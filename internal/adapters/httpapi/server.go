@@ -489,12 +489,12 @@ func (s stream) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	control := http.NewResponseController(w)
 	write := func(text string) bool {
 		_ = control.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
 		if _, err := fmt.Fprint(w, text); err != nil {
 			return false
 		}
 		return control.Flush() == nil
 	}
-	defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
 	if !write(": connected\n\n") {
 		return nil
 	}

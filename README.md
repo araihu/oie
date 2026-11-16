@@ -9,10 +9,10 @@ provenance are documented in [Branding](docs/branding.md).
 The alpha targets one owner with multiple protocol accounts. Device sync remains
 planned.
 
-The current release candidate is **v0.0.1-rc.24**. Desktop downloads include
+The current release candidate is **v0.0.1-rc.26**. Desktop downloads include
 corresponding source archives and updated third-party license notices.
-See the [release notes](docs/releases/v0.0.1-rc.24.md) and
-[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.24).
+See the [release notes](docs/releases/v0.0.1-rc.26.md) and
+[GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.26).
 
 - [Desktop installation on macOS and Linux](docs/installation.md#desktop-installation-on-macos-and-linux)
 - [Live browser setup and development accounts](docs/live-preview.md)
@@ -233,9 +233,9 @@ make test-race
 make test-live-browser # real UI + engine + Prosody; browser dependencies required
 ```
 
-Build/generation tools are pinned in the `tools` module; root go.mod contains
-application dependencies. Vacuum stays isolated under `tools/vacuum` so its templ
-dependency cannot change the application generator/runtime graph. SQL queries are
+Go generation tools are pinned in the `tools` module. Vacuum and golangci-lint
+use the checksum-verified releases pinned in [tools/ci/linters.json](tools/ci/linters.json).
+SQL queries are
 generated with sqlc; golang-migrate applies embedded migrations on startup and
 preserves the earlier foundation database. One process owns each engine data
 directory. No sibling checkout or local module replacement is required.

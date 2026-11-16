@@ -12,7 +12,7 @@ volume to retain accounts, SQLite history, and media across container updates.
 docker run -d --name oie \
   --publish 127.0.0.1:8080:8080 \
   --volume oie-data:/data \
-  ghcr.io/araihu/oie:v0.0.1-rc.24
+  ghcr.io/araihu/oie:v0.0.1-rc.26
 ```
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
@@ -29,7 +29,7 @@ CI builds and tests both architectures on pull requests and pushes to
 `main`. When both container tests pass on `main`, CI publishes
 `sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
-`v0.0.1-rc.24` publish a versioned image after the corresponding source is available on GitHub
+`v0.0.1-rc.26` publish a versioned image after the corresponding source is available on GitHub
 Releases. The image carries its source URL and checksum in `/licenses/SOURCE.txt`. `:latest` follows the highest
 canonical application version by SemVer, including prereleases. Use the
 published digest from the workflow summary to pin an exact image.
@@ -38,11 +38,11 @@ published digest from the workflow summary to pin an exact image.
 
 The [Oiê chart](../charts/oie) runs the engine and browser interface together.
 Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. Install
-the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.3):
+the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.5):
 
 ```sh
 helm upgrade --install oie \
-  https://github.com/araihu/oie/releases/download/helm-v0.2.3/oie-0.2.3.tgz \
+  https://github.com/araihu/oie/releases/download/helm-v0.2.5/oie-0.2.5.tgz \
   --namespace oie --create-namespace --wait --timeout 10m
 kubectl --namespace oie port-forward service/oie 8080:80
 ```
@@ -54,7 +54,7 @@ have a writable claim in the namespace, set `persistence.existingClaim` to
 its name. Use one Oiê instance per claim.
 
 The chart version and the application image version follow separate release
-cycles. Chart `0.2.3` uses image `v0.0.1-rc.24` by default. To update, use
+cycles. Chart `0.2.5` uses image `v0.0.1-rc.26` by default. To update, use
 the URL for a newer chart archive or set `image.tag` to a published version.
 An update that changes the pod briefly
 interrupts access while Kubernetes replaces it. Uninstalling the release
@@ -84,11 +84,11 @@ one application. In **Settings → General → Engine**, keep **Local** to run
 the engine on this device or choose **Remote** to use a hosted engine.
 Add an existing XMPP account after launching.
 
-The current release candidate is **v0.0.1-rc.24**. See the
-[release notes](releases/v0.0.1-rc.24.md) for changes since rc.23.
+The current release candidate is **v0.0.1-rc.26**. See the
+[release notes](releases/v0.0.1-rc.26.md) for changes since rc.25.
 
 Download packages and the installer from
-[v0.0.1-rc.24 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.24).
+[v0.0.1-rc.26 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.26).
 Source installation from the same immutable tag remains available.
 
 ## Install a release package
@@ -111,8 +111,8 @@ Save the release installer, then run it as your current user:
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output oie-install.sh \
-  https://github.com/araihu/oie/releases/download/v0.0.1-rc.24/install.sh &&
-sh ./oie-install.sh --version v0.0.1-rc.24
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.26/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.26
 ```
 
 You can inspect `oie-install.sh` before running the second command. Do not use
@@ -132,7 +132,7 @@ prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
 For example:
 
 ```sh
-sh ./oie-install.sh --version v0.0.1-rc.24 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --version v0.0.1-rc.26 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
@@ -140,14 +140,14 @@ The release assets are:
 
 | Asset | Contents |
 | --- | --- |
-| `oie_v0.0.1-rc.24_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
-| `oie_v0.0.1-rc.24_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
-| `oie_v0.0.1-rc.24_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
+| `oie_v0.0.1-rc.26_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.26_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.26_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
 | `install.sh` | Per-user installer for both targets |
 | `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
 | `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
 
-Both archives are built from the immutable `v0.0.1-rc.24` tag. The receipt
+Both archives are built from the immutable `v0.0.1-rc.26` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
 
@@ -431,13 +431,15 @@ not supply that file. The [Ubuntu WebKit development package](https://packages.u
 also depends on libsoup development files; the command above lists both
 explicitly to match the errors observed during installation.
 
-Install for the current user:
+Check out the release you want to install. Run `go install` from that checkout
+so Go uses the XMPP fork pinned by the project:
 
 ```sh
+git clone --branch v0.0.1-rc.25 https://github.com/araihu/oie.git
+cd oie
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
-  GONOPROXY=github.com/araihu/oie \
-  go install -tags production github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3
+  go install -tags production ./cmd/oie-desktop
 ```
 
 Do not run `go install` with `sudo`. The application and its data belong to
@@ -486,14 +488,15 @@ go version
 Install for the current user with matching compilation and linker targets:
 
 ```sh
+git clone --branch v0.0.1-rc.25 https://github.com/araihu/oie.git
+cd oie
 mkdir -p "$HOME/.local/bin"
 GOBIN="$HOME/.local/bin" GOFLAGS= GOWORK=off CGO_ENABLED=1 \
-  GONOPROXY=github.com/araihu/oie \
   MACOSX_DEPLOYMENT_TARGET=13.0 \
   CGO_CFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   CGO_LDFLAGS="-O2 -g -mmacosx-version-min=13.0" \
   go install -tags production -ldflags='-extldflags=-mmacosx-version-min=13.0' \
-  github.com/araihu/oie/cmd/oie-desktop@v0.0.1-rc.3
+  ./cmd/oie-desktop
 ```
 
 These flags avoid the observed mismatch between macOS compilation targets and
@@ -570,10 +573,9 @@ quit first. For an existing hosted engine, see **Settings → General → Engine
 
 Updates are manual. Quit the app, choose a published version and run the saved
 installer again with the same prefix. It stages replacements and restores the
-previous installation on a detected update failure. Source installations can
-repeat their `go install` command with the desired tag. Repeating the same
-version reinstalls it; it does not select newer application code. Both methods
-preserve the separate profile.
+previous installation on a detected update failure. For a source installation,
+check out the desired release tag and rerun `go install` from that checkout.
+Both methods preserve the separate profile.
 
 When startup needs to upgrade an existing SQLite database, Oiê saves a copy
 under `private/migration-backups/` in the profile first. The filename starts with
@@ -630,7 +632,7 @@ The Makefile uses the `server` tag for headless checks, so native install
 commands explicitly clear `GOFLAGS` and use `-tags production`. The pinned
 prerelease tag is intentional so the example selects a repeatable version.
 
-For a release, verify a complete remote `go install` on both targets, native
+For a release, verify `go install` from the release checkout on both targets, native
 runtime behavior and installation from a clean machine. A successful
 `go list -m` only proves module resolution. See
 [desktop verification](desktop.md#verification) for existing native coverage and

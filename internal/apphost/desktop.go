@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web"
@@ -24,6 +25,7 @@ type DesktopEngine struct {
 
 type desktopTarget struct {
 	selection DesktopEngine
+	token     string
 	ctx       context.Context
 	cancel    context.CancelFunc
 	ui        http.Handler
@@ -56,16 +58,17 @@ func StartDesktop(ctx context.Context, dataDir, xmppCAFile string, selection Des
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, diagnostics: logger}
-	target, err := d.prepare(ctx, selection, false)
+	token := rand.Text()
+	target, err := d.prepare(ctx, selection, false, token)
 	if err != nil && !errors.Is(err, web.ErrEngineModeKeyHTTPS) && ctx.Err() == nil && logger != nil {
 		logger.Record(diagnostics.DesktopFailed, 0, 0)
-		target, err = d.recovery(selection)
+		target, err = d.recovery(selection, token)
 	}
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	d.active.Store(target)
+	d.activate(target)
 	return d, nil
 }
 
@@ -113,13 +116,13 @@ func desktopKeyEditor(selection DesktopEngine) (engineapi.RequestEditorFn, error
 	}, nil
 }
 
-func (d *Desktop) prepare(ctx context.Context, selection DesktopEngine, probe bool) (_ *desktopTarget, err error) {
+func (d *Desktop) prepare(ctx context.Context, selection DesktopEngine, probe bool, token string) (_ *desktopTarget, err error) {
 	editor, err := desktopKeyEditor(selection)
 	if err != nil {
 		return nil, err
 	}
 	targetCtx, cancel := context.WithCancel(d.ctx)
-	target := &desktopTarget{ctx: targetCtx, cancel: cancel, selection: selection}
+	target := &desktopTarget{ctx: targetCtx, cancel: cancel, selection: selection, token: token}
 	defer func() {
 		if err != nil {
 			target.stop()
@@ -167,15 +170,15 @@ func (d *Desktop) options(target *desktopTarget) []web.Option {
 	return []web.Option{
 		web.WithDiagnostics(d.diagnostics, "", web.DiagnosticsNative),
 		web.WithRemoteDiagnostics(selection.URL),
-		web.WithEngineMode(rand.Text(), selection.URL, selection.APIKey != "", func(ctx context.Context, address, key string) error {
+		web.WithEngineMode(target.token, selection.URL, selection.APIKey != "", func(ctx context.Context, address, key string) error {
 			return d.selectEngine(ctx, target, DesktopEngine{URL: address, APIKey: key})
 		}),
 	}
 }
 
-func (d *Desktop) recovery(selection DesktopEngine) (*desktopTarget, error) {
+func (d *Desktop) recovery(selection DesktopEngine, token string) (*desktopTarget, error) {
 	ctx, cancel := context.WithCancel(d.ctx)
-	target := &desktopTarget{ctx: ctx, cancel: cancel, selection: selection}
+	target := &desktopTarget{ctx: ctx, cancel: cancel, selection: selection, token: token}
 	options := append(d.options(target), web.WithUnavailableEngine())
 	ui, err := web.New("http://127.0.0.1", options...)
 	if err != nil {
@@ -204,7 +207,7 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, sel
 	if selection.APIKey == "" && strings.EqualFold(strings.TrimSuffix(selection.URL, "/"), strings.TrimSuffix(previous.selection.URL, "/")) {
 		selection.APIKey = previous.selection.APIKey
 	}
-	next, err := d.prepare(ctx, selection, true)
+	next, err := d.prepare(ctx, selection, true, rand.Text())
 	if err != nil {
 		d.diagnostics.Record(diagnostics.EngineSwitchError, 0, 0)
 		return err
@@ -218,7 +221,7 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, sel
 		d.diagnostics.Record(diagnostics.PreferencesFailed, 0, 0)
 		return errors.Join(web.ErrEngineModeSave, err)
 	}
-	d.active.Store(next)
+	d.activate(next)
 	previous.stop()
 	event := diagnostics.EngineRemote
 	if selection.URL == "" {
@@ -226,6 +229,69 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, sel
 	}
 	d.diagnostics.Record(event, 0, 0)
 	return nil
+}
+
+// activate is called with mu held once the Desktop is serving requests.
+func (d *Desktop) activate(target *desktopTarget) {
+	d.active.Store(target)
+	if target.selection.URL == "" {
+		go d.recoverLocal(target)
+	}
+}
+
+func (d *Desktop) recoverLocal(target *desktopTarget) {
+	const maxDelay = 30 * time.Second
+	var delay time.Duration
+	for target.ctx.Err() == nil {
+		if target.engine != nil {
+			started := time.Now()
+			select {
+			case <-target.ctx.Done():
+				return
+			case <-target.engine.stopped:
+			}
+			if target.ctx.Err() != nil || d.active.Load() != target {
+				return
+			}
+			if time.Since(started) >= maxDelay {
+				delay = 0
+			}
+			d.diagnostics.Record(diagnostics.DesktopFailed, 0, 0)
+		}
+		for target.ctx.Err() == nil {
+			if delay > 0 {
+				timer := time.NewTimer(delay)
+				select {
+				case <-target.ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+			}
+			delay = min(max(time.Second, delay*2), maxDelay)
+			d.mu.Lock()
+			if d.active.Load() != target || target.ctx.Err() != nil {
+				d.mu.Unlock()
+				return
+			}
+			next, err := d.prepare(target.ctx, target.selection, false, target.token)
+			if err != nil {
+				d.mu.Unlock()
+				continue
+			}
+			if target.ctx.Err() != nil {
+				next.stop()
+				d.mu.Unlock()
+				return
+			}
+			// Keep supervising the selection across short-lived replacements.
+			d.active.Store(next)
+			target.stop()
+			target = next
+			d.mu.Unlock()
+			break
+		}
+	}
 }
 
 func (target *desktopTarget) stop() {

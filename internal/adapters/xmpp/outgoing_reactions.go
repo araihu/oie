@@ -140,7 +140,7 @@ func (m *Manager) PrepareReaction(ctx context.Context, a domain.Account, c domai
 }
 
 func ownRoomReactionActor(e *entry, room string) (*roomSlot, string) {
-	slot, semianonymous, occupantVerified := roomReactionSupport(e, room)
+	slot, semianonymous, occupantVerified := roomReactionSupport(e, room, false)
 	if slot == nil {
 		return nil, ""
 	}
@@ -276,6 +276,9 @@ func sendFrozenReaction(ctx context.Context, e *entry, session *mx.Session, raw 
 		err = writer.Flush()
 	}
 	if err != nil {
+		if definitivelyUnsent(session.StreamManagement().Enabled, err) {
+			return application.NotSent
+		}
 		_ = raw.Close()
 		return application.Unknown
 	}

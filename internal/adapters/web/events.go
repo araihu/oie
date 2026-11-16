@@ -2,13 +2,19 @@ package web
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+// The upstream engine emits an SSE heartbeat every 15 seconds when idle.
+const engineEventIdleTimeout = 35 * time.Second
 
 // events preserves structured engine event IDs. It has no total client timeout;
 // upstream response headers, downstream writes, and cancellation remain bounded.
@@ -19,65 +25,84 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	// A reconnect still feeds replayed events to the UI, but only events
 	// after this snapshot can alert. The marker has no SSE ID of its own.
-	snapshot, snapshotErr := s.client.GetEngineWithResponse(r.Context())
-	liveCursor := ""
-	if snapshotErr == nil && snapshot.JSON200 != nil {
-		liveCursor = snapshot.JSON200.EventCursor
+	_, liveCursor, ok := s.eventSnapshot(r.Context())
+	if !ok {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
 	if cursor == "" {
-		if liveCursor == "" {
-			w.WriteHeader(503)
-			return
-		}
 		cursor = liveCursor
 	}
-	response, err := s.streamClient.StreamEvents(r.Context(), &engineapi.StreamEventsParams{LastEventID: &cursor})
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	response, err := s.streamClient.StreamEvents(ctx, &engineapi.StreamEventsParams{LastEventID: &cursor})
 	if err != nil {
-		w.WriteHeader(503)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == 409 {
-		snapshot, err := s.client.GetEngineWithResponse(r.Context())
-		if err != nil || snapshot.JSON200 == nil {
-			w.WriteHeader(503)
+	write := func(text string, flush bool) bool {
+		control := http.NewResponseController(w)
+		_ = control.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
+		if _, err := fmt.Fprint(w, text); err != nil {
+			return false
+		}
+		return !flush || control.Flush() == nil
+	}
+	if response.StatusCode == http.StatusConflict {
+		engineID, cursor, ok := s.eventSnapshot(r.Context())
+		if !ok {
+			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		data, _ := json.Marshal(map[string]string{"engineId": snapshot.JSON200.Id, "cursor": snapshot.JSON200.EventCursor})
-		_, _ = fmt.Fprintf(w, "event: oie.reset\ndata: %s\n\n", data)
-		_ = http.NewResponseController(w).Flush()
+		setEventStreamHeaders(w)
+		data, _ := json.Marshal(map[string]string{"engineId": engineID, "cursor": cursor})
+		write(fmt.Sprintf("event: oie.reset\ndata: %s\n\n", data), true)
 		return
 	}
-	if response.StatusCode != 200 {
+	if response.StatusCode != http.StatusOK {
 		w.WriteHeader(response.StatusCode)
 		return
 	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no")
-	control := http.NewResponseController(w)
-	_ = control.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	setEventStreamHeaders(w)
 	data, _ := json.Marshal(liveCursor)
-	if _, err = fmt.Fprintf(w, ": connected\n\nevent: oie.live\ndata: %s\n\n", data); err != nil {
+	if !write(fmt.Sprintf(": connected\n\nevent: oie.live\ndata: %s\n\n", data), true) {
 		return
 	}
-	if control.Flush() != nil {
-		return
-	}
-	defer func() { _ = control.SetWriteDeadline(time.Time{}) }()
+	idle := time.AfterFunc(engineEventIdleTimeout, cancel)
+	defer idle.Stop()
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 4096), 8<<20)
 	for scanner.Scan() {
-		_ = control.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if _, err = fmt.Fprintln(w, scanner.Text()); err != nil {
+		line := scanner.Text()
+		if line == ": heartbeat" {
+			line = "event: oie.heartbeat\ndata: {}"
+		}
+		if line == "" {
+			idle.Reset(engineEventIdleTimeout)
+		}
+		if !write(line+"\n", line == "") {
 			return
 		}
-		if scanner.Text() == "" {
-			if control.Flush() != nil {
-				return
-			}
-		}
 	}
+}
+
+// A missing or inconsistent snapshot cannot establish the boundary between
+// replayed events and events that can produce notifications.
+func (s *Server) eventSnapshot(ctx context.Context) (engineID, cursor string, ok bool) {
+	snapshot, err := s.client.GetEngineWithResponse(ctx)
+	if err != nil || snapshot.JSON200 == nil {
+		return "", "", false
+	}
+	engineID, cursor = snapshot.JSON200.Id, snapshot.JSON200.EventCursor
+	id, digits, valid := strings.Cut(cursor, ":")
+	seq, err := strconv.ParseInt(digits, 10, 64)
+	return engineID, cursor, valid && id != "" && id == engineID && err == nil && seq >= 0 && strconv.FormatInt(seq, 10) == digits
+}
+
+func setEventStreamHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
 }

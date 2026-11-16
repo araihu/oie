@@ -189,7 +189,7 @@ func (m *Manager) joinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		e.mu.Unlock()
 		return snapshot, nil
 	}
-	if connected && session != nil && existing != nil && existing.snapshot.Nickname == nickname && existing.session == session && sameRoomEntry(existing, creationName, intentRevision) && (existing.snapshot.State == "joining" || existing.snapshot.State == "joined") {
+	if connected && session != nil && existing != nil && !existing.leaving && existing.snapshot.Nickname == nickname && existing.session == session && sameRoomEntry(existing, creationName, intentRevision) && (existing.snapshot.State == "joining" || existing.snapshot.State == "joined") {
 		existing.snapshot.IntentRevisionID = intentRevision
 		existing.snapshot.UpdatedAt = time.Now().UTC()
 		snapshot := existing.snapshot
@@ -268,7 +268,7 @@ func (m *Manager) joinRoom(ctx context.Context, a domain.Account, c domain.Conve
 		e.mu.Unlock()
 		return snapshot, nil
 	}
-	if old != nil && old.session == s && old.snapshot.Nickname == nickname && sameRoomEntry(old, creationName, intentRevision) && (old.snapshot.State == "joining" || old.snapshot.State == "joined") {
+	if old != nil && !old.leaving && old.session == s && old.snapshot.Nickname == nickname && sameRoomEntry(old, creationName, intentRevision) && (old.snapshot.State == "joining" || old.snapshot.State == "joined") {
 		old.snapshot.IntentRevisionID = intentRevision
 		old.snapshot.UpdatedAt = time.Now().UTC()
 		snapshot := old.snapshot
@@ -326,6 +326,8 @@ func (m *Manager) LeaveRoom(ctx context.Context, a domain.Account, c domain.Conv
 	}
 	e.roomNotifyMu.Lock()
 	defer e.roomNotifyMu.Unlock()
+	e.sendMu.Lock()
+	defer e.sendMu.Unlock()
 	e.mu.Lock()
 	slot := e.rooms[c.Address]
 	if slot == nil {
@@ -336,39 +338,50 @@ func (m *Manager) LeaveRoom(ctx context.Context, a domain.Account, c domain.Conv
 		e.mu.Unlock()
 		return domain.RoomSession{}, application.ErrInvalid
 	}
-	s := e.session
-	raw := e.raw
+	session, raw := e.session, e.raw
 	nickname := slot.snapshot.Nickname
-	wasJoined := slot.snapshot.State == "joined" || slot.snapshot.State == "joining"
-	advanceRoomPresenceLocked(e, c.Address)
-	if err := m.setRoomReactionPrivacy(ctx, e, c.Address, "", false); err != nil {
-		e.mu.Unlock()
-		return domain.RoomSession{}, err
+	occupied := (slot.snapshot.State == "joined" || slot.snapshot.State == "joining") &&
+		slot.session != nil && (slot.session == session || slot.session == e.suspended)
+	if !slot.leaving {
+		advanceRoomPresenceLocked(e, c.Address)
+		if err := m.setRoomReactionPrivacy(ctx, e, c.Address, "", false); err != nil {
+			e.mu.Unlock()
+			return domain.RoomSession{}, err
+		}
 	}
-	slot.snapshot = roomSnapshot(c, "not_joined", nickname, "", intentRevision)
 	slot.leaving = true
 	slot.requestID = ""
-	snapshot := slot.snapshot
+	if occupied && (session == nil || raw == nil || slot.session != session || e.state.State != "connected") {
+		// The server may retain this occupant while the stream is suspended.
+		// Keep the observation so the persisted leave intent is retried after resume.
+		e.mu.Unlock()
+		return roomSnapshot(c, "not_joined", nickname, "not_connected", intentRevision), nil
+	}
 	e.mu.Unlock()
-	if s != nil && wasJoined {
-		occupant, _ := room.WithResource(nickname)
-		e.sendMu.Lock()
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			deadline = time.Now().Add(10 * time.Second)
+
+	if occupied {
+		occupant, err := room.WithResource(nickname)
+		if err != nil {
+			return domain.RoomSession{}, err
 		}
-		if raw != nil {
-			_ = raw.SetWriteDeadline(deadline)
-		}
-		err = s.Send(ctx, stanza.Presence{To: occupant, Type: stanza.UnavailablePresence}.Wrap(nil))
-		if raw != nil {
-			_ = raw.SetWriteDeadline(time.Time{})
-		}
-		e.sendMu.Unlock()
-		if err != nil && raw != nil {
-			_ = raw.Close()
+		attempt, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		err = session.Send(attempt, stanza.Presence{To: occupant, Type: stanza.UnavailablePresence}.Wrap(nil))
+		if err != nil {
+			// An unavailable presence already admitted to the SM queue is replayed
+			// by that stream. A fresh stream starts without the old membership.
+			if !errors.Is(err, mx.ErrStreamManagementOutcomeUnknown) {
+				if !errors.Is(err, mx.ErrStreamManagementQueueFull) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					_ = raw.Close()
+				}
+				return domain.RoomSession{}, err
+			}
 		}
 	}
+	e.mu.Lock()
+	slot.snapshot = roomSnapshot(c, "not_joined", nickname, "", intentRevision)
+	snapshot := slot.snapshot
+	e.mu.Unlock()
 	m.notifyRoom(ctx, e, slot, snapshot)
 	return snapshot, nil
 }
@@ -401,7 +414,7 @@ func (m *Manager) RoomSession(ctx context.Context, a domain.Account, c domain.Co
 		e.mu.Unlock()
 		return snapshot, nil
 	}
-	timedout := slot.snapshot.State == "joining" && time.Now().After(slot.joinDeadline)
+	timedout := slot.snapshot.State == "joining" && !slot.leaving && time.Now().After(slot.joinDeadline)
 	if timedout {
 		slot.snapshot = roomSnapshot(c, "failed", slot.snapshot.Nickname, "timeout", slot.snapshot.IntentRevisionID)
 		slot.snapshot.Revoked = slot.creationName != nil
@@ -455,7 +468,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	}
 	// A room must send its self-join confirmation before live removal. While a
 	// new join is pending, an old unavailable echo cannot revoke the new intent.
-	if p.Type == stanza.UnavailablePresence && slot.snapshot.State == "joining" && !confirmedRemoval {
+	if p.Type == stanza.UnavailablePresence && slot.snapshot.State == "joining" && !confirmedRemoval && !slot.leaving {
 		e.mu.Unlock()
 		return true, nil
 	}
@@ -463,7 +476,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		observeRoomManagement(slot, p, true)
 	}
 	if p.Type == stanza.ErrorPresence {
-		if slot.snapshot.State != "joining" {
+		if slot.snapshot.State != "joining" || slot.leaving {
 			e.mu.Unlock()
 			return true, nil
 		}
@@ -613,7 +626,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	address := msg.From.Bare().String()
 	e.mu.RLock()
 	slot := e.rooms[address]
-	if slot == nil || slot.session != e.session || slot.snapshot.State != "joined" {
+	if slot == nil || slot.session != e.session || slot.snapshot.State != "joined" || slot.leaving {
 		e.mu.RUnlock()
 		return nil
 	}

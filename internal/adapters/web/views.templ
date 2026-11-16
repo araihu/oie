@@ -29,6 +29,7 @@ import (
 selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"strconv"
+	"strings"
 )
 
 func navigation(v view, id string) sidebar.Config {
@@ -69,7 +70,7 @@ templ navigationControl(v view) {
 		@glyph(heroicons.Icon16SolidBars3)
 	}
 	<div class="oie-mobile-nav">
-		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, Trigger: glyph(heroicons.Icon16SolidBars3)})
+		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, TriggerClass: "oie-mobile-nav-trigger", PanelClass: "oie-mobile-nav-panel", Trigger: glyph(heroicons.Icon16SolidBars3)})
 	</div>
 }
 
@@ -90,7 +91,7 @@ templ page(v view) {
 	<html lang={ v.Locale } data-theme="goshtoso" data-mode={ v.Theme } class={ templ.KV("dark", v.Theme == "dark") }>
 		<head>
 			<meta charset="utf-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 			<title>{v.Text.AppName}</title>
 			<link rel="icon" type="image/svg+xml" href={templ.URL(brandURL("favicon.svg"))}/>
 <link rel="icon" type="image/png" sizes="32x32" href={templ.URL(brandURL("favicon-32.png"))}/>
@@ -98,7 +99,7 @@ templ page(v view) {
 <link rel="apple-touch-icon" sizes="180x180" href={templ.URL(brandURL("apple-touch-icon-180.png"))}/>
 <link rel="manifest" href={templ.SafeURL("/manifest.webmanifest?lang="+v.Locale)}/>
 <meta name="theme-color" content="#6092ab"/>
-			<script src="/ui/runtime.js"></script><script src="/ui/inbox-cache.js"></script><script src="/ui/event-stream.js"></script><script src="/ui/presentation-time.js" defer></script>
+			<script src="/ui/runtime.js"></script><script src="/ui/viewport.js" defer></script><script src="/ui/inbox-cache.js"></script><script src="/ui/event-stream.js"></script><script src="/ui/presentation-time.js" defer></script>
 <script src="/ui/theme.js"></script>
 <script src="/ui/sidebar.js"></script>
 <script src="/ui/formatting.js"></script>
@@ -175,7 +176,7 @@ templ sourceRouteFragment(v view) {
 }
 
 templ routeContent(v view) {
-<div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)}>
+<div id="oie-route" class="oie-route" data-open-chat={strconv.FormatBool(v.ChatOpen)} data-engine-unavailable?={v.Unavailable}>
 if !v.CompactSource {
 <div data-route-shared-copy>
 @liveCopy(v)
@@ -538,7 +539,7 @@ if v.composeAllowed() {
 @attachmentMenu(v)
 }
 <div class="oie-composer-field">
-@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;padding-inline-end:2.75rem;field-sizing:content;min-height:var(--oie-composer-control-size,2.75rem);line-height:1.25rem;padding-block:calc((var(--oie-composer-control-size,2.75rem) - 1.25rem - 2px)/2);max-height:min(12rem,30dvh);overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
+@textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Placeholder:v.Text.Message,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;field-sizing:content;min-height:var(--oie-composer-control-size,2.75rem);line-height:1.25rem;padding-block:calc((var(--oie-composer-control-size,2.75rem) - 1.25rem - 2px)/2);max-height:min(12rem,calc(var(--oie-workspace-height,100dvh) * .3));overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-edit-cancel"),button.WithAttrs(templ.Attributes{"data-edit-cancel":"","hidden":true,"aria-label":v.Text.CancelEdit,"title":v.Text.CancelEdit})){@glyph(heroicons.Icon16SolidXMark)}
 </div>
 @mentionPicker(v)
@@ -563,8 +564,14 @@ templ composerSendButton(v view,live bool) {
 }
 func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{return v.field("operationKey")};return newOperationKey()}
 
+// Keep Goshtoso's drawers, including their focus and dismissal behavior.
+func workspaceDrawer(config drawer.Config) templ.Component {
+ config.PanelClass = strings.TrimSpace("oie-drawer " + config.PanelClass)
+ return drawer.Drawer(config)
+}
+
 templ accounts(v view){
-@drawer.Drawer(drawer.Config{ID:"accounts",Title:v.accountDrawerTitle(),PanelClass:v.accountDrawerClass()}){
+@workspaceDrawer(drawer.Config{ID:"accounts",Title:v.accountDrawerTitle(),PanelClass:v.accountDrawerClass()}){
 @accountWorkspace(v)
 }
 }
@@ -808,7 +815,7 @@ func accountOptions(v view,all bool)[]selectfield.Option{
  for _,a:=range v.Accounts{out=append(out,selectfield.Option{Value:a.Id,Label:a.Label+" · "+a.Address,Selected:selected==a.Id})};return out
 }
 templ newConversation(v view){
-@drawer.Drawer(drawer.Config{ID:"newchat",Title:v.Text.DirectConversation}){
+@workspaceDrawer(drawer.Config{ID:"newchat",Title:v.Text.DirectConversation}){
 <div class="oie-settings">
 if len(v.Accounts)==0 {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.NoChatsBody})
@@ -914,7 +921,7 @@ if v.Unavailable {
 </div>
 }else if len(v.Accounts)==0 {
 <div class="oie-list-state">
-@emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Action:emptyAccountAction(v)})
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.AddAccountHelp,Action:emptyAccountAction(v)})
 </div>
 }else if len(v.Chats)==0 {
 <div class="oie-list-state">

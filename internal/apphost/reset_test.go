@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/google/uuid"
 )
 
@@ -124,5 +125,42 @@ func TestResetInvalidConfirmationAtEngine(t *testing.T) {
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusBadRequest || engineIdentity(t, engine) != id {
 		t.Fatalf("invalid confirmation was not rejected: %d", res.StatusCode)
+	}
+}
+
+func TestDesktopEngineReportsFailedReset(t *testing.T) {
+	dir := t.TempDir()
+	id, err := newID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := sqlite.Open(t.Context(), dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	engine, err := newEngineHost(t.Context(), Config{Role: "local", DataDir: dir, engineOnly: true}, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if engine.instance != nil {
+			engine.instance.close()
+		}
+	})
+	// An existing marker prevents this reset from starting.
+	if err := os.Mkdir(filepath.Join(dir, ".reset-pending"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.reset(id); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("reset error = %v, want marker conflict", err)
+	}
+	select {
+	case err := <-engine.failures:
+		if !errors.Is(err, os.ErrExist) {
+			t.Fatalf("supervisor error = %v, want marker conflict", err)
+		}
+	default:
+		t.Fatal("failed reset did not wake the desktop engine supervisor")
 	}
 }

@@ -225,7 +225,7 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 		}
 		seen <- r.Header.Get("Last-Event-ID")
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = io.WriteString(w, ": upstream\n\n")
+		_, _ = io.WriteString(w, ": upstream\n\n: heartbeat\n\n")
 		w.(http.Flusher).Flush()
 		select {
 		case <-r.Context().Done():
@@ -251,8 +251,39 @@ func TestLiveSSEForwardsCursorAndOutlivesOrdinaryClientTimeout(t *testing.T) {
 		t.Fatalf("reconnect cursor lost: %s", got)
 	}
 	data, err := io.ReadAll(response.Body)
-	if err != nil || !strings.HasPrefix(string(data), ": connected\n\nevent: oie.live\ndata: \""+testEngine+":1\"\n\n") || !strings.Contains(string(data), "message.created") {
+	if err != nil || !strings.HasPrefix(string(data), ": connected\n\nevent: oie.live\ndata: \""+testEngine+":1\"\n\n") ||
+		!strings.Contains(string(data), "event: oie.heartbeat\ndata: {}\n\nid: "+testEngine+":2\n") || !strings.Contains(string(data), "message.created") {
 		t.Fatalf("stream ended at normal timeout: %s %v", data, err)
+	}
+}
+
+func TestLiveSSERetriesWhenReplayBoundaryUnavailable(t *testing.T) {
+	for _, replayCursor := range []string{"", testAccount + ":3", testEngine + ":03"} {
+		t.Run(replayCursor, func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/engine" {
+					t.Error("opened upstream stream without a valid replay boundary")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				if replayCursor == "" {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]string{"id": testEngine, "eventCursor": replayCursor})
+			}))
+			t.Cleanup(backend.Close)
+			ui, err := New(backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			ui.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ui/events?cursor="+testEngine+":1", nil))
+			if response.Code != http.StatusServiceUnavailable {
+				t.Fatalf("stream status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+			}
+		})
 	}
 }
 
