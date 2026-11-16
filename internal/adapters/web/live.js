@@ -736,17 +736,30 @@ window.OieRuntime.register('live', life => {
   function localizeTimes(root=document) {
     window.OieTime.localize(root);
     const timeline=root.querySelector('#message-timeline');if(!timeline)return;
-    for(const divider of timeline.querySelectorAll('.oie-day-divider'))divider.remove();
+    const obsolete=new Set(timeline.querySelectorAll(':scope > .oie-day-divider'));
     const key=date=>window.OieTime.dateKey(date,'day');
     const today=key(new Date());let previous='';
     for(const row of timeline.querySelectorAll(':scope>[data-message-id],:scope>[data-pending-send]')){
       const date=new Date(row.dataset.createdAt);if(Number.isNaN(date.getTime()))continue;
       const current=key(date);if(current===previous)continue;previous=current;
-      const divider=document.createElement('div');divider.className='oie-day-divider';
-      const time=document.createElement('time');time.dateTime=row.dataset.createdAt;time.dataset.day='true';
-      time.textContent=current===today?text('today'):window.OieTime.format(date,{dateStyle:'medium'});
-      divider.append(time);row.before(divider);
+      let divider=row.previousElementSibling;
+      const mounted=obsolete.delete(divider);
+      if(!mounted){
+        divider=document.createElement('div');
+        divider.className='oie-day-divider';
+      }
+      let time=divider.querySelector('time');
+      if(!time){
+        time=document.createElement('time');
+        time.dataset.day='true';
+        divider.replaceChildren(time);
+      }
+      if(time.dateTime!==row.dataset.createdAt)time.dateTime=row.dataset.createdAt;
+      const label=current===today?text('today'):window.OieTime.format(date,{dateStyle:'medium'});
+      if(time.textContent!==label)time.textContent=label;
+      if(!mounted)row.before(divider);
     }
+    for(const divider of obsolete)divider.remove();
   }
   life.on(document,'oie:time-zone',()=>{
     const timeline=document.querySelector('#message-timeline');

@@ -8,6 +8,7 @@ window.OieRuntime.register('timeline',life=>{
  const labels=document.getElementById('oie-live-copy')?.dataset;
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
  let unseenLiveMessages=false;
+ let measuredScrollTop=root.scrollTop;
  let correctedScrollTop;
  let exhaustedArchiveEdge='';
  let latestSnapshot=null;
@@ -58,7 +59,12 @@ window.OieRuntime.register('timeline',life=>{
   const control=edge(direction);if(!control)return;control.dataset.state=state;const status=control.querySelector('[data-timeline-status]'),button=control.querySelector('[data-timeline-load]');status.textContent=state==='loading'?control.dataset.loading:state==='failed'?control.dataset.failed:state==='paused'?control.dataset.paused:'';status.setAttribute('role',state==='failed'?'alert':'status');button.hidden=!(direction==='older'?older||remoteOlder():newer)&&!state;button.setAttribute('aria-disabled',String(busy));const boundary=direction==='older'?current()[0]:current().at(-1);if(boundary){const href=new URL(button.href,location.href);if(href.origin===location.origin&&href.pathname==='/'){href.searchParams.set('timelineCursor',boundary.id);href.searchParams.set('timelineDirection',direction);button.href=href.pathname+href.search}}if(state==='failed'||state==='paused')button.textContent=control.dataset.retry;
  }
  function controls(){capture();setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');root.dataset.timelineBusy=String(busy);root.dataset.timelineOlder=String(older);root.dataset.timelineNewer=String(newer);correct()}
- function capture(){const viewport=root.getBoundingClientRect(),item=rows().find(row=>row.getBoundingClientRect().bottom>viewport.top);anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;follow=liveAttached&&atBottom()}
+ function capture(){
+  measuredScrollTop=root.scrollTop;
+  const viewport=root.getBoundingClientRect(),item=rows().find(row=>row.getBoundingClientRect().bottom>viewport.top);
+  anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;
+  follow=liveAttached&&atBottom();
+ }
  function syncJump(){
   const bottom=atBottom();
   if(bottom&&!newer){
@@ -83,8 +89,16 @@ window.OieRuntime.register('timeline',life=>{
    const node=rows().find(row=>row.dataset.messageId===anchor.id);
    if(node)root.scrollTop+=node.getBoundingClientRect().top-anchor.top;
   }
-  if(root.scrollTop!==previousTop)correctedScrollTop=root.scrollTop;
+  measuredScrollTop=root.scrollTop;
+  if(measuredScrollTop!==previousTop)correctedScrollTop=measuredScrollTop;
   syncJump();
+ }
+ function correctAfterLayout(){
+  // A scroll can reach the viewport before its event. Layout can also clamp
+  // the previous position when the available scroll range shrinks.
+  const expectedTop=Math.min(measuredScrollTop,Math.max(0,root.scrollHeight-root.clientHeight));
+  if(Math.abs(root.scrollTop-expectedTop)>1)capture();
+  correct();
  }
  function hooks(page,generation,startedAt){document.dispatchEvent(new CustomEvent('oie:timeline-content',{detail:{page,startedAt}}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation}}));document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent('oie:actions-refreshed'))}
  function movedRelease(previous,item){
@@ -124,7 +138,7 @@ window.OieRuntime.register('timeline',life=>{
   };
   if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();avatarGroups();
   if(trimmed.length){if(direction==='older'){newer=true;liveAttached=false}else older=true}
-  for(const plan of aliases){if(anchor?.id===plan.previous)anchor.id=plan.record.id;if(document.body.dataset.focusMessage===plan.previous)document.body.dataset.focusMessage=plan.record.id;document.dispatchEvent(new CustomEvent('oie:timeline-alias',{detail:{requested:plan.previous,canonical:plan.record.id}}))}hooks(page.scope,starGeneration,page.startedAt);correct();life.raf(correct);observe();return true;
+  for(const plan of aliases){if(anchor?.id===plan.previous)anchor.id=plan.record.id;if(document.body.dataset.focusMessage===plan.previous)document.body.dataset.focusMessage=plan.record.id;document.dispatchEvent(new CustomEvent('oie:timeline-alias',{detail:{requested:plan.previous,canonical:plan.record.id}}))}hooks(page.scope,starGeneration,page.startedAt);correct();life.raf(correctAfterLayout);observe();return true;
  }
  function observe(){
   observer?.disconnect();resizer?.disconnect();
@@ -305,7 +319,7 @@ window.OieRuntime.register('timeline',life=>{
  }
  const api={refresh,focus,cancelFocus,atBottom,scrollLatest,syncJump,hideScheduled,expire,latestReadTarget,get hasNewer(){return newer},get liveAttached(){return liveAttached},get size(){return rows().length}};window.OieTimeline=api;
  if(typeof IntersectionObserver==='function')observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const direction=entry.target.dataset.timelineEdge;if(direction==='older'&&older||direction==='newer'&&newer){request('page',direction);break}}},{root,rootMargin:'70px 0px'});
- if(typeof ResizeObserver==='function')resizer=new ResizeObserver(()=>correct());
+ if(typeof ResizeObserver==='function')resizer=new ResizeObserver(correctAfterLayout);
  life.on(document,'click',event=>{const button=event.target.closest('[data-timeline-load]');if(button&&root.contains(button)&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();event.stopPropagation();request(failed?retryMode:'page',button.dataset.timelineLoad,true,failed?retryTarget:'')}},true);
  function loadArchiveAtTop(){
   if(root.scrollTop<=70&&!older&&remoteOlder()&&current().length)request('page','older');
