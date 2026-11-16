@@ -2,6 +2,7 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/modal"
 	"github.com/araihu/goshtoso/expressions"
 )
@@ -18,7 +19,10 @@ templ downloadRetentionSettings(v view) {
 					<option value="30">{downloadDaysLabel(v.Text.DownloadRetentionDays, "30")}</option>
 					<option value="90">{downloadDaysLabel(v.Text.DownloadRetentionDays, "90")}</option>
 				</select>
-				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-remove-device-downloads": "", "aria-haspopup": "dialog"})){ {v.Text.RemoveDownloads} }
+				@button.Button(button.WithType("button"), button.WithTone(button.ToneWarning), button.WithAttrs(templ.Attributes{"data-remove-device-downloads": "", "aria-haspopup": "dialog"})) {
+					@glyph(heroicons.Icon16SolidTrash)
+					<span>{ v.Text.RemoveDownloads }</span>
+				}
 			</fieldset>
 		</div>
 		<p role="status" class="oie-download-feedback"></p>
