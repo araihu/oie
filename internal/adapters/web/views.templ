@@ -1172,7 +1172,7 @@ for _,item:=range v.messageVideos(m.Id) {
 }
 </div>
 for _,item:=range v.MessageAudio[m.Id] {
-@audioPlayer(v,v.sharedTitle(item),documentSource(v,item),documentSource(v,item)+"&download=1")
+@audioPlayer(v,item.Id,v.sharedTitle(item),documentSource(v,item),documentSource(v,item)+"&download=1")
 }
 
 }

@@ -19,7 +19,7 @@ window.OieRuntime.register('actions', life => {
  // Public Dropdown item IDs are application hooks. Escape uses its supported
  // keyboard lifecycle to dismiss and restore focus after native actions.
  life.on(document,'click',event=>{
-  const item=event.target.closest('[id^="copy-message-"],[id^="reply-message-"],[id^="star-message-"],[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"],[id^="refresh-preview-"]');
+  const item=event.target.closest('[id^="copy-message-"],[id^="reply-message-"],[id^="star-message-"],[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"],[id^="refresh-preview-"],[id^="save-audio-"]');
   if(item&&!item.disabled)item.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
  },true);
 });
@@ -124,6 +124,29 @@ window.OieRuntime.register('audio', life => {
   life.on(document, 'error', event => {
     if (event.target.matches?.('[data-audio-player]')) recover(event.target);
   }, true);
+
+  life.on(document, 'click', async event => {
+    const action = event.target.closest('[id^="save-audio-"]');
+    if (!action || action.disabled) return;
+    const id = action.id.slice('save-audio-'.length);
+    const card = document.querySelector(`[data-audio-id="${CSS.escape(id)}"]`);
+    if (!card?.dataset.audioDownload) return;
+    const address = card.dataset.audioDownload, name = card.dataset.audioFilename;
+    try {
+      if (window.OieDesktop?.saveFile) {
+        await window.OieDesktop.saveFile(address, name);
+      } else {
+        const link = document.createElement('a');
+        link.href = address;
+        link.download = name;
+        document.body.append(link);
+        link.click();
+        link.remove();
+      }
+    } catch {
+      if (!life.signal.aborted) window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioDownloadFailed}}));
+    }
+  });
 
   life.on(document, 'click', event => {
     const play = event.target.closest('[data-audio-play]');

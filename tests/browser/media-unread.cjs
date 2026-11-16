@@ -152,8 +152,12 @@ async function test(base) {
       assert(state.reads > previous);
       assert.deepEqual(await rect(), before, 'loading and playing do not move the composer');
 
+      assert.equal(await timeline.locator('.oie-audio-card a[download]').count(), 0);
+      const audioRow = timeline.locator('[data-message-id="' + audioMessage.id + '"]');
+      const messageMenu = audioRow.locator('[data-message-menu-trigger]');
+      await messageMenu.click();
       const downloadEvent = page.waitForEvent('download');
-      await timeline.locator('.oie-audio-card a[download]').click();
+      await page.getByRole('menuitem', {name: lang === 'en' ? 'Download' : 'Baixar', exact: true}).click();
       const download = await downloadEvent;
       assert.equal(download.suggestedFilename(), 'roteiro.wav');
       assert.equal(await download.failure(), null);

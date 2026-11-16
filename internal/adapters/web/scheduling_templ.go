@@ -2277,7 +2277,7 @@ func outgoingAttachments(v view, m engineapi.Message) templ.Component {
 			}
 			for _, a := range *m.Attachments {
 				if audioMediaType(a.MediaType) != "" {
-					templ_7745c5c3_Err = audioPlayer(v, a.FileName, v.stagedAttachmentHref(m.ConversationId, a.Id, false), v.stagedAttachmentHref(m.ConversationId, a.Id, true)).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = audioPlayer(v, a.Id, a.FileName, v.stagedAttachmentHref(m.ConversationId, a.Id, false), v.stagedAttachmentHref(m.ConversationId, a.Id, true)).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

@@ -365,7 +365,7 @@ templ outgoingAttachments(v view,m engineapi.Message) {
 		<div class="oie-message-attachments" data-message-attachments>
 			for _, a := range *m.Attachments {
 				if audioMediaType(a.MediaType) != "" {
-					@audioPlayer(v,a.FileName,v.stagedAttachmentHref(m.ConversationId,a.Id,false),v.stagedAttachmentHref(m.ConversationId,a.Id,true))
+					@audioPlayer(v,a.Id,a.FileName,v.stagedAttachmentHref(m.ConversationId,a.Id,false),v.stagedAttachmentHref(m.ConversationId,a.Id,true))
 				} else {
 				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
 					if rasterAttachment(a.MediaType) {

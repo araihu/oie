@@ -8423,7 +8423,7 @@ func messageBody(v view, m messageView) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		for _, item := range v.MessageAudio[m.Id] {
-			templ_7745c5c3_Err = audioPlayer(v, v.sharedTitle(item), documentSource(v, item), documentSource(v, item)+"&download=1").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = audioPlayer(v, item.Id, v.sharedTitle(item), documentSource(v, item), documentSource(v, item)+"&download=1").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
