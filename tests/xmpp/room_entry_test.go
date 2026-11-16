@@ -131,7 +131,20 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatalf("room %s: wanted %s, got %+v", conversation, state, latest)
 		return latest
 	}
+	waitListStatus := func(account, conversation domain.ID, status string) {
+		t.Helper()
+		eventually(t, func() bool {
+			chats, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: account, Kind: "room", Limit: 10})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return slices.ContainsFunc(chats, func(c domain.Conversation) bool {
+				return c.ID == conversation && c.RoomSession != nil && c.RoomSession.DisplayStatus() == status
+			})
+		})
+	}
 	failed := waitRoom(absent.Conversation.ID, "failed")
+	waitListStatus(bob, absent.Conversation.ID, "unavailable")
 	if failed.LastErrorCode != "room_not_found" {
 		t.Fatalf("wrong failure: %+v", failed)
 	}
@@ -387,10 +400,12 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitRoom(joinedBob.Conversation.ID, "joined")
+	waitListStatus(bob, joinedBob.Conversation.ID, "joined")
 	if _, err := engine.Disconnect(ctx, bob); err != nil {
 		t.Fatal(err)
 	}
 	waitRoom(joinedBob.Conversation.ID, "not_joined")
+	waitListStatus(bob, joinedBob.Conversation.ID, "disconnected")
 	if _, err := engine.ConfigureConnection(ctx, bob, application.ConnectionInput{Password: "bob-local-only", Endpoint: xmppEndpoint()}); err != nil {
 		t.Fatal(err)
 	}
@@ -466,6 +481,7 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatalf("destruction notice should preserve the other participant's chat: %+v %v", participant, err)
 	}
 
+	waitListStatus(bob, joinedBob.Conversation.ID, "destroyed")
 	if preview, err = engine.PreviewRoom(ctx, bob, address, false); err != nil || preview.State == "known" {
 		t.Fatalf("server room still answers discovery after confirmed deletion: %+v %v", preview, err)
 	}

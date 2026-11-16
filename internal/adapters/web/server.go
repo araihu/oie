@@ -621,6 +621,7 @@ type copy struct {
 	RoomInvitation, ViewRoom, RoomAddressConflict, ConversationChanged                                                                                                   string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
 	RoomInvalidService, RoomCreationUnavailable, RemoveFromChats, RoomRemoveWarning, DirectRemoveWarning, RemoveFromChatsUnavailable, RemoveFromChatsConflict            string
+	RoomStatusJoining, RoomStatusDisconnected, RoomStatusDestroyed, RoomStatusAccessDenied, RoomStatusUnavailable                                                        string
 	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
@@ -1405,7 +1406,8 @@ func (v view) headerVersion() string {
 	if v.Selected == nil {
 		return ""
 	}
-	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
+	status, _ := v.roomStatusPresentation(v.selectedRoomStatus())
+	return v.Selected.Id + v.Selected.RevisionId + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

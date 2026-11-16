@@ -21,6 +21,12 @@ type RoomProtocol interface {
 	LeaveRoom(context.Context, domain.Account, domain.Conversation, domain.ID) (domain.RoomSession, error)
 	RoomSession(context.Context, domain.Account, domain.Conversation) (domain.RoomSession, error)
 }
+
+// RoomSnapshotProvider reads live room state without I/O or notifications.
+type RoomSnapshotProvider interface {
+	RoomSnapshot(domain.Conversation) domain.RoomSession
+}
+
 type InvitedRoomProtocol interface {
 	JoinInvitedRoom(context.Context, domain.Account, domain.Conversation, string, string, domain.ID) (domain.RoomSession, error)
 }
@@ -88,6 +94,10 @@ func (e *Engine) RoomSession(ctx context.Context, id domain.ID) (domain.RoomSess
 	if err != nil {
 		return result, err
 	}
+	return resolveRoomSession(c, result, observed, ok)
+}
+
+func resolveRoomSession(c domain.Conversation, result, observed domain.RoomSession, supported bool) (domain.RoomSession, error) {
 	result.AccountID = c.AccountID
 	result.ConversationID = c.ID
 	if result.State == "" {
@@ -96,16 +106,16 @@ func (e *Engine) RoomSession(ctx context.Context, id domain.ID) (domain.RoomSess
 	if result.UpdatedAt.IsZero() {
 		result.UpdatedAt = c.UpdatedAt
 	}
-	if !ok {
+	if !result.Active && result.LastErrorCode == "room_destroyed" {
+		return result, nil
+	}
+	if !supported {
 		result.State = "failed"
 		result.LastErrorCode = "unsupported"
 		return result, nil
 	}
-	if observed.AccountID != a.ID || observed.ConversationID != c.ID {
+	if observed.AccountID != c.AccountID || observed.ConversationID != c.ID {
 		return result, ErrProtocolUnavailable
-	}
-	if !result.Active && result.LastErrorCode == "room_destroyed" {
-		return result, nil
 	}
 	if observed.LastErrorCode == "not_connected" {
 		if result.LastErrorCode == "" || result.LastErrorCode == "not_connected" {

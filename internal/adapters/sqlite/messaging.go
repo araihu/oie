@@ -161,6 +161,17 @@ func (s *Store) Conversations(ctx context.Context, in application.ConversationQu
 			count := int(row.LatestMessagePageCount)
 			c.LatestMessagePageCount = &count
 		}
+		if c.Kind == "room" {
+			c.RoomSession = &domain.RoomSession{
+				IntentRevisionID: domain.ID(row.RoomIntentRevision),
+				Active:           row.RoomIntentActive == 1,
+				LastErrorCode:    row.RoomIntentError,
+				CreationName:     row.RoomIntentCreationName,
+			}
+			if row.RoomIntentError != "" {
+				c.RoomSession.State = "failed"
+			}
+		}
 		out = append(out, c)
 	}
 	return out, nil

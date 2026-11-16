@@ -34,6 +34,10 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 	if c.UnreadMention {
 		out.UnreadMention = &c.UnreadMention
 	}
+	if c.RoomSession != nil {
+		status := engineapi.RoomStatus(c.RoomSession.DisplayStatus())
+		out.RoomStatus = &status
+	}
 	return out
 }
 func message(m domain.Message) engineapi.Message {

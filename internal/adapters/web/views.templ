@@ -398,17 +398,25 @@ templ conversationRow(v view, c engineapi.Conversation) {
 	{{ attrs := navigationAttrs("conversation-pane", "conversation", "outerHTML settle:0ms show:none") }}
 	{{ attrs["data-conversation-id"] = c.Id }}
 	{{ attrs["aria-current"] = strconv.FormatBool(v.ChatID == c.Id) }}
+	{{ roomLabel, roomIndicator := v.roomStatusPresentation(c.RoomStatus) }}
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}
 		if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
 			data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
 		}
 	>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
-			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar"},true)
+			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar",Status:roomIndicator},true)
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
 					<span>{ v.requestLabel(c) }</span>
+					if roomLabel != "" && c.Request == nil {
+						if roomIndicator == avatar.StatusSuccess {
+							<span class="sr-only" data-room-status-label>{ roomLabel }</span>
+						} else {
+							<span class="oie-row-room-status" data-room-status-label title={ roomLabel }>{ roomLabel }</span>
+						}
+					}
 					if c.Kind=="room" {
 						<span class="oie-row-mention-slot">
 							if c.UnreadMention!=nil && *c.UnreadMention {
@@ -432,6 +440,7 @@ if len(v.Accounts)>1 {
 }
 
 templ chatHeader(v view) {
+	{{ roomLabel, roomIndicator := v.roomStatusPresentation(v.selectedRoomStatus()) }}
 	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
 @conversationPreferenceData(v)
 if v.requestKind()=="" {
@@ -441,7 +450,7 @@ if v.requestKind()=="" {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
 		<div class="oie-chat-avatar">
-			@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS})
+			@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS, Status: roomIndicator})
 			if v.requestKind()=="" {
 				@button.Button(
 					button.WithType("button"),
@@ -452,7 +461,14 @@ if v.requestKind()=="" {
 				) {}
 			}
 		</div>
-		<div class="oie-chat-identity"><h2>{ v.Selected.Title }</h2><p>{v.accountLabel(v.Selected.AccountId)} · {v.connectionLabel(v.Selected.AccountId)}</p></div>
+		<div class="oie-chat-identity">
+			<h2>{ v.Selected.Title }</h2>
+			if roomLabel != "" && v.requestKind() == "" {
+				<p title={ roomLabel }><span data-room-status-label>{ roomLabel }</span> · { v.accountLabel(v.Selected.AccountId) }</p>
+			} else {
+				<p>{ v.accountLabel(v.Selected.AccountId) } · { v.connectionLabel(v.Selected.AccountId) }</p>
+			}
+		</div>
 if v.requestKind()=="" {
 {{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{ID:"chat-conversation-details",Label:v.Text.Details,Icon:glyph(heroicons.Icon16SolidInformationCircle),OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
 if v.conversationSchedulesAvailable() {

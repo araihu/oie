@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -64,6 +65,42 @@ func (v view) canJoinRoom() bool {
 
 func (v view) canLeaveRoom() bool {
 	return v.RoomSession != nil && v.RoomSession.Active && v.messagingImplemented("room_messaging")
+}
+
+func (v view) selectedRoomStatus() *engineapi.RoomStatus {
+	if v.Selected == nil || v.Selected.Kind != "room" {
+		return nil
+	}
+	if v.RoomSession != nil && v.RoomSession.Status != nil {
+		return v.RoomSession.Status
+	}
+	return v.Selected.RoomStatus
+}
+
+func (v view) roomStatusPresentation(status *engineapi.RoomStatus) (string, avatar.Status) {
+	if status == nil {
+		return "", ""
+	}
+	switch *status {
+	case engineapi.RoomStatusJoined:
+		return v.Text.RoomJoined, avatar.StatusSuccess
+	case engineapi.RoomStatusJoining:
+		return v.Text.RoomStatusJoining, avatar.StatusInfo
+	case engineapi.RoomStatusCreating:
+		return v.Text.RoomCreating, avatar.StatusInfo
+	case engineapi.RoomStatusNotJoined:
+		return v.Text.RoomNotJoined, avatar.StatusOffline
+	case engineapi.RoomStatusDisconnected:
+		return v.Text.RoomStatusDisconnected, avatar.StatusOffline
+	case engineapi.RoomStatusDestroyed:
+		return v.Text.RoomStatusDestroyed, avatar.StatusDanger
+	case engineapi.RoomStatusAccessDenied:
+		return v.Text.RoomStatusAccessDenied, avatar.StatusDanger
+	case engineapi.RoomStatusUnavailable:
+		return v.Text.RoomStatusUnavailable, avatar.StatusWarning
+	default:
+		return "", ""
+	}
 }
 
 func (v view) roomLabel() string {

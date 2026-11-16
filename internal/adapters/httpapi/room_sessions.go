@@ -10,6 +10,10 @@ import (
 
 func roomSession(value domain.RoomSession) engineapi.RoomSession {
 	out := engineapi.RoomSession{AccountId: string(value.AccountID), ConversationId: string(value.ConversationID), Active: value.Active, State: engineapi.RoomSessionState(value.State), UpdatedAt: value.UpdatedAt}
+	if value.State != "" {
+		status := engineapi.RoomStatus(value.DisplayStatus())
+		out.Status = &status
+	}
 	if value.IntentID != "" {
 		id := string(value.IntentID)
 		out.IntentId = &id

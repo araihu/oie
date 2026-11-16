@@ -5057,6 +5057,10 @@ components:
         address:
           type: string
           description: Canonical peer address.
+        roomStatus:
+          allOf:
+          - $ref: '#/components/schemas/RoomStatus'
+          description: Current room status when available in the conversation list.
         title:
           type: string
           description: Display title; initially the peer address.
@@ -6165,6 +6169,10 @@ components:
       example:
         address: garden@rooms.example.org
         action: join
+    RoomStatus:
+      type: string
+      description: Account-scoped room status as observed by this engine.
+      enum: [joined, joining, creating, not_joined, disconnected, destroyed, access_denied, unavailable]
     RoomSession:
       type: object
       additionalProperties: false
@@ -6185,6 +6193,8 @@ components:
         state:
           type: string
           enum: [not_joined, joining, joined, failed]
+        status:
+          $ref: '#/components/schemas/RoomStatus'
         nickname:
           type: string
           maxLength: 100

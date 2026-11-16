@@ -23,7 +23,11 @@ SELECT sqlc.embed(conversations), CAST(CASE
         AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
         ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC
         LIMIT sqlc.arg(message_page_limit)
-    )) END AS INTEGER) AS latest_message_page_count
+    )) END AS INTEGER) AS latest_message_page_count,
+    CAST(COALESCE(ri.revision_id, '') AS TEXT) AS room_intent_revision,
+    CAST(COALESCE(ri.active, 0) AS INTEGER) AS room_intent_active,
+    CAST(COALESCE(ri.last_error_code, '') AS TEXT) AS room_intent_error,
+    ri.creation_name AS room_intent_creation_name
 FROM conversations
 JOIN (
     SELECT c.id FROM conversations AS c
@@ -38,6 +42,7 @@ JOIN (
     AND (CAST(sqlc.arg(query) AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(sqlc.arg(query) AS TEXT)))>0)
     ORDER BY c.activity_sequence DESC LIMIT sqlc.arg(page_limit)
 ) AS conversation_page ON conversation_page.id=conversations.id
+LEFT JOIN room_intents AS ri ON ri.conversation_id=conversations.id
 ORDER BY conversations.activity_sequence DESC;
 -- name: InsertMessage :exec
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms) VALUES(?,?,?,?,?,?,?,?,?);

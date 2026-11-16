@@ -373,6 +373,25 @@ func (m *Manager) LeaveRoom(ctx context.Context, a domain.Account, c domain.Conv
 	m.notifyRoom(ctx, e, slot, snapshot)
 	return snapshot, nil
 }
+func (m *Manager) RoomSnapshot(c domain.Conversation) domain.RoomSession {
+	m.mu.RLock()
+	e := m.entries[c.AccountID]
+	m.mu.RUnlock()
+	if e == nil {
+		return roomSnapshot(c, "not_joined", "", "not_connected")
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.session == nil || e.state.State != "connected" {
+		return roomSnapshot(c, "not_joined", "", "not_connected")
+	}
+	slot := e.rooms[c.Address]
+	if slot == nil || slot.conversation.ID != c.ID || slot.session != e.session {
+		return roomSnapshot(c, "not_joined", "", "")
+	}
+	return slot.snapshot
+}
+
 func (m *Manager) RoomSession(ctx context.Context, a domain.Account, c domain.Conversation) (domain.RoomSession, error) {
 	e, _, err := m.roomEntry(a, c)
 	if err != nil {

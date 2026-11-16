@@ -108,6 +108,33 @@ async function until(test, label) {
     await page.locator('.oie-room-management-tabs').waitFor();
     assert.equal(await page.locator('#room-destroy-open').count(), 0, 'a participant cannot delete the server room');
 
+    const participant = await browser.newPage({viewport:{width:1025, height:1108}, locale:'pt-BR'});
+    participant.on('pageerror', err => pageErrors.push(err.message));
+    const participantURL = base + '/?lang=pt-BR&theme=dark&account=' + bob + '&chat=' + bobRoom.id;
+    const statusLabel = participant.locator('#chat-header [data-room-status-label]');
+    const roomRow = participant.locator('[data-conversation-row="' + bobRoom.id + '"]');
+    await participant.goto(participantURL);
+    await statusLabel.getByText('Na sala', {exact:true}).waitFor();
+    await roomRow.locator('[data-room-status-label]').getByText('Na sala', {exact:true}).waitFor({state:'attached'});
+    const layoutSelectors = ['[data-conversation-row="' + bobRoom.id + '"]', '#chat-header', '#message-composer'];
+    const sampleLayout = await participant.evaluateHandle(selectors => {
+      const samples = [];
+      let frame;
+      const sample = () => {
+        samples.push(selectors.map(selector => {
+          const rect = document.querySelector(selector)?.getBoundingClientRect();
+          return rect && [rect.y, rect.height];
+        }));
+        frame = requestAnimationFrame(sample);
+      };
+      sample();
+      return () => {cancelAnimationFrame(frame); return samples;};
+    }, layoutSelectors);
+    await participant.route('**/ui/refresh?*', async route => {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await route.continue();
+    });
+
     await page.setViewportSize({width:1440, height:900});
     await page.goto(base + '/?lang=pt-BR&account=' + alice + '&chat=' + room);
     await menu().click();
@@ -144,8 +171,29 @@ async function until(test, label) {
     for (const archived of [false, true]) {
       assert(!(await chats(alice, archived)).some(c => c.id === room), 'confirmed deletion removes the room from the owner’s lists');
     }
-    assert((await chats(bob)).some(c => c.id === bobRoom.id), 'the other participant keeps their local conversation');
+    assert((await chats(bob)).some(c => c.id === bobRoom.id && c.roomStatus === 'destroyed'), 'the other participant keeps the deleted room');
+    await statusLabel.getByText('Sala excluída', {exact:true}).waitFor();
+    await roomRow.locator('[data-room-status-label]').getByText('Sala excluída', {exact:true}).waitFor();
+    assert.equal(await participant.locator('#chat-header .oie-chat-avatar .bg-danger').count(), 1);
+    assert.equal(await roomRow.locator('.oie-avatar-initials .bg-danger').count(), 1);
+    assert.equal(participant.url(), participantURL, 'the participant stays in their conversation');
+    await participant.evaluate(() => new Promise(requestAnimationFrame));
+    const samples = await sampleLayout.evaluate(stop => stop());
+    assert(samples.length > 1);
+    for (const sample of samples) {
+      sample.forEach((box, i) => {
+        assert(box && box.every((value, axis) => Math.abs(value - samples[0][i][axis]) <= 1),
+          'the status update moved ' + layoutSelectors[i]);
+      });
+    }
+    if (artifacts) {
+      await roomRow.screenshot({path:artifacts + '/estado-sala-excluida.png'});
+      await participant.screenshot({path:artifacts + '/estado-sala-excluida-original.png'});
+    }
+    await participant.setViewportSize({width:390, height:844});
+    await statusLabel.getByText('Sala excluída', {exact:true}).waitFor();
+    assert(await statusLabel.isVisible());
     assert.deepEqual(pageErrors, []);
-    console.log('PASS: delayed invalid creation, form correction, local removal, and owner deletion with live XMPP');
+    console.log('PASS: delayed invalid creation, form correction, local removal, owner deletion, and live room status with XMPP');
   } finally { await browser.close(); }
 })().catch(err => {console.error(err); process.exitCode=1;});
