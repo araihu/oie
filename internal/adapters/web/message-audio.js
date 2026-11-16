@@ -25,7 +25,7 @@ window.OieRuntime.register('message-audio', life => {
       card.setAttribute('data-waveform-player', '');
       media.removeAttribute('src');
       media.removeAttribute('controls');
-      // Start with a fresh element so WaveSurfer cannot auto-load the old currentSrc.
+      // Discard the server-rendered element's resource selection before preloading a blob.
       media.replaceWith(media.cloneNode(false));
       for (const control of card.querySelectorAll('[data-message-audio-play], [data-message-audio-wave], .oie-message-audio-time')) {
         control.hidden = false;
@@ -41,11 +41,11 @@ window.OieRuntime.register('message-audio', life => {
 
   function update(player) {
     const {card, media, button, wave, shape} = player;
-    const playing = !media.paused && !media.ended;
+    const playing = player.playRequested || (!media.paused && !media.ended);
     button.setAttribute('aria-label', (playing ? card.dataset.audioPauseLabel : card.dataset.audioPlayLabel) + ' · ' + card.closest('[data-audio-id]').dataset.audioFilename);
     button.querySelector('[data-record-play-icon]').hidden = playing;
     button.querySelector('[data-record-pause-icon]').hidden = !playing;
-    const duration = wave?.getDuration() || media.duration;
+    const duration = wave?.getDuration() || player.duration || media.duration;
     if (!Number.isFinite(duration)) return;
     card.querySelector('[data-message-audio-time]').textContent = clock(duration);
     if (shape.matches('[role="slider"]')) {
@@ -67,6 +67,7 @@ window.OieRuntime.register('message-audio', life => {
     players.delete(player.card);
     if (active === player) active = null;
     const {card, media, button, shape} = player;
+    player.playRequested = false;
     player.controller.abort();
     player.wave?.destroy();
     const focused = card.isConnected && (document.activeElement === media || document.activeElement === shape);
@@ -75,12 +76,9 @@ window.OieRuntime.register('message-audio', life => {
     media.removeAttribute('controls');
     media.preload = 'none';
     media.load();
-    // Media currentSrc may still contain the URL that was just cleared.
-    media.replaceWith(media.cloneNode(false));
     player.wave = null;
     if (player.url) URL.revokeObjectURL(player.url);
     card.removeAttribute('aria-busy');
-    button.removeAttribute('aria-disabled');
     button.hidden = shape.hidden = false;
     for (const name of ['role', 'tabindex', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext']) {
       shape.removeAttribute(name);
@@ -131,72 +129,119 @@ window.OieRuntime.register('message-audio', life => {
 
   function useNativeControls(player) {
     const focused = document.activeElement === player.button;
-    if (player.media.src !== player.nativeSource) player.media.src = player.nativeSource;
     player.media.controls = true;
     player.button.hidden = player.shape.hidden = true;
     if (focused) player.media.focus({preventScroll: true});
   }
 
   async function play(player) {
-    if (player.nativeSource && !player.media.controls) useNativeControls(player);
+    player.playRequested = true;
+    update(player);
+    if (player.recovering) return;
+    const {card, media, source} = player;
+    if (!media.hasAttribute('src')) media.src = source;
+    const attemptedSource = media.src;
+    if (player.waveUnavailable && !media.controls) useNativeControls(player);
+    if (media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) status(card, card.dataset.audioLoading);
     try {
-      await player.media.play();
+      await media.play();
     } catch (error) {
-      if (active !== player || error.name === 'NotAllowedError' || error.name === 'AbortError') return;
-      showUnavailable(player.card);
+      if (active !== player || media.src !== attemptedSource || error.name === 'AbortError') return;
+      if (error.name === 'NotAllowedError') {
+        player.playRequested = false;
+        update(player);
+        return;
+      }
+      void playbackError(player);
+    } finally {
+      if (current(player) && active === player && media.src === attemptedSource && !player.recovering) status(card);
+    }
+  }
+
+  async function playbackError(player) {
+    if (!current(player) || player.recovering) return;
+    const {media, source} = player;
+    if (media.src === source) {
+      const position = media.currentTime;
+      // A provider or WebView can reject the native range probe while the
+      // bounded waveform request succeeds. Reuse those bytes for playback.
+      player.recovering = true;
+      await player.buffered.catch(() => {});
+      if (!current(player)) return;
+      player.recovering = false;
+      if (player.url) {
+        media.preload = 'metadata';
+        media.src = player.url;
+        // A seek before metadata sets the new resource's playback start position.
+        if (position > 0) media.currentTime = position;
+        if (active === player && player.playRequested) void play(player);
+        return;
+      }
+    }
+    const requested = active === player;
+    release(player);
+    if (requested) showUnavailable(player.card);
+  }
+
+  async function preloadBlob(player) {
+    const {card, media, source, controller} = player;
+    const fetchTimeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const blob = await fetchAudio(source, card.dataset.audioType, controller.signal);
+      if (!blob || !current(player)) return null;
+      player.url = URL.createObjectURL(blob);
+      // Reuse the fetched bytes when playback has yet to select a source.
+      if (!media.hasAttribute('src')) {
+        media.preload = 'metadata';
+        media.src = player.url;
+      }
+      return blob;
+    } finally {
+      clearTimeout(fetchTimeout);
     }
   }
 
   async function prepare(player) {
-    const {card, media, shape, button, source} = player;
+    const {card, media, shape, controller} = player;
     card.setAttribute('aria-busy', 'true');
-    const fetchTimeout = setTimeout(() => player.controller.abort(), 20000);
     try {
-      const blob = await fetchAudio(source, card.dataset.audioType, player.controller.signal);
-      clearTimeout(fetchTimeout);
+      const blob = await player.buffered;
       if (!current(player)) return;
-      if (blob) {
-        const {audioDuration, waveformDurationLimit} = await import('/ui/audio-duration.js');
-        const duration = await audioDuration(blob, player.controller.signal);
-        if (!current(player)) return;
-        try {
-          if (!Number.isFinite(duration) || duration <= 0 || duration > waveformDurationLimit) throw Error('waveform unavailable');
-          const {default: WaveSurfer} = await import('/ui/wavesurfer/player.mjs');
-          if (!current(player)) return;
-          const colors = getComputedStyle(shape);
-          player.wave = WaveSurfer.create({container: shape, media, waveColor: colors.color,
-            progressColor: colors.getPropertyValue('--oie-accent-text').trim(), height: 24, normalize: true, barWidth: 2, barGap: 2, barRadius: 2, cursorWidth: 0});
-          await player.wave.loadBlob(blob, undefined, duration);
-          if (!current(player)) return;
-          shape.tabIndex = 0;
-          shape.setAttribute('role', 'slider');
-          shape.setAttribute('aria-label', card.dataset.audioPositionLabel);
-          shape.setAttribute('aria-valuemin', '0');
-        } catch (error) {
-          if (!current(player)) return;
-          if (media.error) throw error;
-          player.wave?.destroy();
-          player.wave = null;
-          player.url = URL.createObjectURL(blob);
-          player.nativeSource = player.url;
-          media.preload = 'metadata';
-          media.src = player.nativeSource;
-        }
-      } else {
-        player.nativeSource = source;
-      }
+      if (!blob) throw Error('waveform unavailable');
+      const {audioDuration, audioPeaks, waveformDurationLimit} = await import('/ui/audio-duration.js');
+      const mediaDuration = media.duration;
+      const duration = Number.isFinite(mediaDuration) && mediaDuration > 0
+        ? mediaDuration : await audioDuration(blob, controller.signal);
+      if (!current(player)) return;
+      player.duration = duration;
+      if (!Number.isFinite(duration) || duration <= 0 || duration > waveformDurationLimit) throw Error('waveform unavailable');
+      const [{default: WaveSurfer}, peaks] = await Promise.all([
+        import('/ui/wavesurfer/player.mjs'), audioPeaks(blob, controller.signal),
+      ]);
+      if (!current(player)) return;
+      const colors = getComputedStyle(shape);
+      // Initializing with a blank element prevents WaveSurfer from fetching the
+      // playback URL or replacing the audio that is already playing.
+      player.wave = WaveSurfer.create({container: shape, media: document.createElement('audio'), waveColor: colors.color,
+        progressColor: colors.getPropertyValue('--oie-accent-text').trim(), height: 24, normalize: true,
+        barWidth: 2, barGap: 2, barRadius: 2, barMinHeight: 2, cursorWidth: 0});
+      player.wave.replacePeaks(peaks, duration);
+      player.wave.setMediaElement(media);
+      shape.tabIndex = 0;
+      shape.setAttribute('role', 'slider');
+      shape.setAttribute('aria-label', card.dataset.audioPositionLabel);
+      shape.setAttribute('aria-valuemin', '0');
+      // Draw the current position even if playback paused while decoding.
+      media.dispatchEvent(new Event('timeupdate'));
     } catch {
-      // The waveform request can fail even when native streaming works.
-      player.nativeSource = source;
+      player.wave?.destroy();
+      player.wave = null;
+      player.waveUnavailable = true;
+      if (current(player) && active === player) useNativeControls(player);
     } finally {
-      clearTimeout(fetchTimeout);
-      player.loading = false;
       if (current(player)) {
         card.removeAttribute('aria-busy');
-        button.removeAttribute('aria-disabled');
-        status(card);
         update(player);
-        if (active === player) void play(player);
       }
     }
   }
@@ -204,20 +249,21 @@ window.OieRuntime.register('message-audio', life => {
   function loadPlayer(card) {
     if (players.has(card)) return players.get(card);
     const source = new URL(card.dataset.audioSource, location.href);
-    if (source.origin !== location.origin || !/^\/ui\/(?:scheduling\/file|shared-content\/[a-f0-9-]+\/content)$/.test(source.pathname)) return;
+    if (source.protocol !== location.protocol || source.host !== location.host ||
+        !/^\/ui\/(?:scheduling\/file|shared-content\/[a-f0-9-]+\/content)$/.test(source.pathname)) return;
     const player = {
-      card, source: source.href, loading: true, controller: new AbortController(),
+      card, source: source.href, controller: new AbortController(),
       media: card.querySelector('audio'),
       shape: card.querySelector('[data-message-audio-wave]'),
       button: card.querySelector('[data-message-audio-play]'),
     };
     players.set(card, player);
+    player.buffered = preloadBlob(player);
     player.preparation = prepare(player);
     return player;
   }
 
-  // Keep automatic waveform decoding serial. An explicit play action can
-  // start immediately even if a different visible waveform is loading.
+  // Keep automatic waveform decoding serial.
   function prefetchNext() {
     if (prefetching || life.signal.aborted) return;
     for (const card of waiting) {
@@ -237,30 +283,29 @@ window.OieRuntime.register('message-audio', life => {
     const previous = active;
     active = player;
     if (!previous || previous === player) return;
+    previous.playRequested = false;
     previous.media.pause();
-    previous.button.removeAttribute('aria-disabled');
     status(previous.card);
     if (!visible.has(previous.card)) release(previous);
+    else update(previous);
   }
 
   life.on(app, 'click', event => {
     const button = event.target.closest('[data-message-audio-play]');
     const card = button?.closest(selector);
-    if (!card || button.getAttribute('aria-disabled') === 'true') return;
+    if (!card) return;
     waiting.delete(card);
     const player = loadPlayer(card);
     if (!player) return;
-    if (active === player && !player.media.paused) {
+    if (active === player && (player.playRequested || !player.media.paused)) {
+      player.playRequested = false;
       player.media.pause();
+      status(card);
+      update(player);
       return;
     }
     selectPlayer(player);
-    if (player.loading) {
-      button.setAttribute('aria-disabled', 'true');
-      status(card, card.dataset.audioLoading);
-    } else {
-      void play(player);
-    }
+    void play(player);
   });
 
   life.on(app, 'keydown', event => {
@@ -280,17 +325,18 @@ window.OieRuntime.register('message-audio', life => {
       if (event.type === 'play' && event.target.matches?.('[data-audio-player]') && !event.target.paused) {
         selectPlayer(player);
       }
-      if (event.target === player?.media) update(player);
+      if (event.target !== player?.media) return;
+      if (event.type === 'play' && !player.media.paused) player.playRequested = true;
+      if (event.type === 'ended' || (event.type === 'pause' && player.media.paused && !player.media.error)) {
+        player.playRequested = false;
+      }
+      update(player);
     }, true);
   }
   life.on(app, 'error', event => {
     if (!event.target.matches?.('audio')) return;
     const player = players.get(event.target.closest(selector));
-    if (event.target === player?.media && !player.loading) {
-      const requested = active === player;
-      release(player);
-      if (requested) showUnavailable(player.card);
-    }
+    if (event.target === player?.media) void playbackError(player);
   }, true);
 
   const visibility = new IntersectionObserver(entries => {
