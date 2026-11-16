@@ -217,7 +217,7 @@
       const sound = currentSound();
       if (!sound.load) {
         const bytes = sound.wav ? Promise.resolve(sound.wav.slice(0)) :
-          fetch('/ui/notification.wav').then(response => {
+          window.OieRuntime.request('/ui/notification.wav').then(response => {
             if (!response.ok) throw Error('Notification sound unavailable');
             return response.arrayBuffer();
           });
@@ -262,7 +262,8 @@
 
   function notificationWorker() {
     if (!worker) {
-      worker = navigator.serviceWorker.register('/ui/notification-worker.js').then(registration => {
+      const script = window.OieHostedSession ? '/ui/notification-worker.js?hosted=1' : '/ui/notification-worker.js';
+      worker = navigator.serviceWorker.register(script).then(registration => {
         if (registration.active) return registration;
         const candidate = registration.installing || registration.waiting;
         if (!candidate) throw Error('No notification worker');
@@ -341,7 +342,7 @@
     }
     const key = params.toString();
     if (!pendingContexts.has(key)) {
-      pendingContexts.set(key, fetch('/ui/notification-context?' + key)
+      pendingContexts.set(key, window.OieRuntime.request('/ui/notification-context?' + key)
         .then(response => response.ok ? response.json() : null)
         .finally(() => pendingContexts.delete(key)));
     }

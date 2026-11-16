@@ -14,6 +14,7 @@ actions:
         type-prefix: 'urn:oie:problem:'
         documentation-base: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md
         titles:
+          authentication_required: Authentication required
           invalid_request: Invalid request
           not_found: Not Found
           idempotency_conflict: Idempotency key conflict

@@ -18,7 +18,7 @@ store/application imports. No SDK, extra module, daemon or transport is required
 
 | Concern | Current contract / bounded correction | Exceptions / practical limits |
 | --- | --- | --- |
-| Resource ownership | `/api/v1` is engine JSON/bytes/SSE; browser adapters live under `/ui/api/v1` | BFF headers/cookies/CSRF are presentation guards, not engine authentication |
+| Resource ownership | `/api/v1` is engine JSON/bytes/SSE; browser adapters live under `/ui/api/v1` | Hosted browser sessions and API bearer keys protect their respective routes |
 | Safe reads | GET queries observations or retained content; incidental cache/index enrichment is permitted | Shared catalog/preview reads can schedule bounded enrichment; no send, star, read-mark or room-intent mutation. Original bytes require explicit content GET |
 | Acceptance | 201 creates; 200 reads/completes/replays; 202 persists or accepts asynchronous intent | Acceptance is distinct from connection, protocol submission and recipient delivery. Poll the returned resource; use bounded waits, initially 250 ms, with backoff |
 | Locations | Resource creation/async responses identify a pollable resource with Location | Operation lookup identifies acceptance; GET resource returns current state, which can differ from receipt snapshot |
@@ -32,7 +32,7 @@ store/application imports. No SDK, extra module, daemon or transport is required
 | Streams | Current SSE uses no-cache; clients should consume without persistent caching. Structured UTF-8 SSE, engine:sequence IDs; bounded DB batches, heartbeat, write deadline and cancellation | Snapshot cursor before reading snapshots, then subscribe/replay and deduplicate applied IDs. No retention expiry now; future gaps must return explicit reset/conflict, never skip silently |
 | Pagination | Bounded stable source ordering; cursor belongs to documented engine/filter/snapshot scope | Conversation activity can move between pages; resnapshot/deduplicate on live changes. Edit-history pages reject changed snapshots |
 | Operations | CLI results/bytes go to stdout, sanitized diagnostics to stderr; exits 2 input, 3 transport/deadline/cancellation, 4 HTTP | SSE is consumed incrementally by default. Timeout/cancellation returns 3 even after partial output. Persist only fully applied SSE IDs. No implicit reconnect/retry |
-| Exposure | Default loopback listener; preserve existing explicitly configured hosted scope | Application authentication remains deferred. No external listener or arbitrary quota is introduced by this proof |
+| Exposure | Local default is loopback. Hosted deployments require HTTPS and credentials | See [hosted access](hosted-auth.md) |
 
 **RECOMMENDED:** `/api/v1` identifies the wire-contract major; OpenAPI
 `info.version` and runtime `apiVersion` identify a contract revision. The app's
@@ -58,7 +58,7 @@ HTTP preconditions for JSON mutations, request correlation headers, measured
 rate limits and event/receipt retention. These are not prerequisites for CLI
 operation. Current no-expiry receipts must not acquire undocumented expiry.
 
-**BACKLOG / OUTSIDE THIS MILESTONE:** application authentication, TUI, WASM,
+**BACKLOG / OUTSIDE THIS MILESTONE:** TUI, WASM,
 public SDK, new transport, schedules, sync and outgoing attachments. Existing
 restrictions on corrections, rooms and reaction identity remain in force.
 

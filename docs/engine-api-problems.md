@@ -8,6 +8,12 @@ Send `Prefer: oie-problem-documentation` to include the URL as
 `documentation` in the JSON body. The link can change independently of the
 problem's identity. Use `type` to identify the problem in client code.
 
+## authentication_required
+
+**Authentication required · HTTP 401.** Set `OIECTL_TOKEN` to a current key for
+the hosted engine. Other API clients can send it as an HTTP bearer credential.
+See [key creation and revocation](hosted-auth.md#create-and-revoke-api-keys).
+
 ## invalid_request
 
 **Invalid request · HTTP 400, 405, 413, 415.** Check the required path, query,

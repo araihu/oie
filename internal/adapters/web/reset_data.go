@@ -46,7 +46,7 @@ func (s *Server) resetData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, name := range []string{csrfCookie, "oie_lang", "oie_theme"} {
-		http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1, HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1, HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode})
 	}
 	w.Header().Set("Clear-Site-Data", `"cache"`)
 	w.WriteHeader(http.StatusNoContent)

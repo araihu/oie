@@ -1,11 +1,16 @@
 # Oiê Helm chart
 
-See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.5/docs/installation.md#run-on-kubernetes-with-helm)
+See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.6/docs/installation.md#run-on-kubernetes-with-helm)
 for installation and access via `kubectl port-forward`.
 
-Chart releases use their own version. Chart `0.2.5` defaults to the Oiê image
-`v0.0.1-rc.26`. Download the packaged chart and its checksum from
-[Helm chart 0.2.5](https://github.com/araihu/oie/releases/tag/helm-v0.2.5).
+Chart releases use their own version. Chart `0.2.6` defaults to the Oiê image
+`v0.0.1-rc.27`. Install it from GHCR or download the archive and checksum
+from [Helm chart 0.2.6](https://github.com/araihu/oie/releases/tag/helm-v0.2.6).
+
+```sh
+helm upgrade --install oie oci://ghcr.io/araihu/charts/oie --version 0.2.6 \
+  --namespace oie --create-namespace --wait --timeout 10m
+```
 
 | Setting | Default | Use |
 | --- | --- | --- |
@@ -19,7 +24,7 @@ Chart releases use their own version. Chart `0.2.5` defaults to the Oiê image
 | `persistence.storageClass` | Cluster default | Set a class name or use `""` for a volume without a storage class. |
 | `persistence.accessMode` | `ReadWriteOnce` | Use `ReadWriteOncePod` if your cluster and CSI driver support it. |
 | `persistence.size` | `10Gi` | Set the capacity requested for a new claim. Expansion depends on the StorageClass. |
-| `diagnostics.existingSecret` | Empty | Enable the in-app Diagnostics viewer with an existing Secret in the release namespace. |
+| `diagnostics.existingSecret` | Empty | Use an existing Secret for Diagnostics behind an external authentication proxy. |
 | `diagnostics.secretKey` | `key` | Name of the Secret entry containing the diagnostics access key. |
 | `resources` | `{}` | Set CPU and memory requests or limits for the pod. |
 
@@ -29,12 +34,56 @@ uses its own storage class, access mode and capacity.
 
 ## Remote access
 
-Oiê has no built-in login. Before enabling Ingress or HTTPRoute, configure
-your controller or an upstream proxy to require authentication for all paths
-and serve HTTPS.
-Keep the public host in proxied requests and allow server-sent events to stream
-without buffering. Workloads that can reach the Service directly can access
-the instance, so restrict that path in shared clusters.
+Set up a TLS-terminating Ingress or Gateway and register the OIDC callback
+`https://oie.example.com/auth/callback` with your provider. Create the
+release namespace first, then create a Secret from the file containing
+your OIDC client secret.
+
+```sh
+kubectl -n oie create secret generic oie-oidc --from-file=client-secret=./oidc-client-secret
+```
+
+Add the public origin and OIDC settings to your values file.
+
+```yaml
+hosted:
+  enabled: true
+  publicURL: https://oie.example.com
+  trustedTLSProxies: 10.42.0.19/32 # Replace with the gateway's actual private source CIDRs.
+  oidc:
+    issuer: https://id.example.com
+    subject: "OWNER_SUBJECT"
+    clientID: oie
+    clientSecretName: oie-oidc
+    clientSecretKey: client-secret
+```
+
+Helm passes the OIDC and public settings as container environment variables
+and mounts the referenced Secret entry as a read-only file in the Oiê container. Use
+`clientSecretKey` if your Secret has a different key name. Restart the
+StatefulSet after rotating the client secret.
+
+The proxy must preserve the public host, overwrite `X-Forwarded-Proto` with
+`https` for HTTPS traffic, and stream server-sent events without buffering.
+Restrict access to the backend HTTP Service to the trusted proxy network.
+The chart binds the internal HTTP probes on pod port `8081`. Kubernetes
+calls `/readyz` for startup and readiness and `/livez` for liveness. The Service
+and public routes use the application port. Keep the probe port private.
+See the [internal probe OpenAPI contract](../../api/probe.openapi.yaml).
+
+The init container sets the owner on the first start. To change an existing
+owner, use `oie auth recover` and update the Helm values to match. For key
+management and recovery, run the [host commands](../../docs/hosted-auth.md) in the running
+pod as the service user. For example:
+
+```sh
+kubectl -n oie exec statefulset/oie -c oie -- /oie auth key-list --data-dir /data
+```
+
+For an existing external authentication proxy, set
+`externalAuthentication: true` and protect all browser and API routes at
+the proxy. Restrict pod and Service access in shared clusters. For images
+that predate the internal probe listener, use chart `0.2.5`.
 
 ### Ingress
 
@@ -47,8 +96,7 @@ authentication. The Ingress routes the entire host at `/`.
 ### Gateway API
 
 Use a cluster with the Gateway API CRDs serving `gateway.networking.k8s.io/v1`,
-a controller, and an existing Gateway. Configure HTTPS and authentication at
-the Gateway or upstream proxy. Save these values as `gateway-values.yaml`
+a controller, and an existing Gateway. Configure the HTTPS listener on the Gateway and the hosted settings above. Save these values as `gateway-values.yaml`
 and adjust the Gateway reference, listener and hostname for your cluster.
 
 ```yaml
@@ -89,11 +137,13 @@ See [HTTPRoute timeouts](https://gateway-api.sigs.k8s.io/reference/api-types/htt
 
 ## Diagnostics
 
-Set `diagnostics.existingSecret` to a Secret in the release namespace with a
-random diagnostics access key. The chart reads the `key` entry by default. Set
-`diagnostics.secretKey` if the Secret uses a different entry. The hosted viewer
-asks for the access key. Operators can also retrieve
-records with `kubectl logs -n oie statefulset/oie`. The pod retains its
+With `hosted.enabled`, the authenticated owner can open **Settings →
+Diagnostics**. API clients can use an Oiê API key to read the same snapshot.
+Behind an external authenticated proxy, set
+`diagnostics.existingSecret` to a Secret with the legacy access key. The
+entry defaults to `key` and can be changed with `diagnostics.secretKey`.
+
+Operators can also use `kubectl logs -n oie statefulset/oie`. The pod retains
 bounded log files under `/data/diagnostics/` using the configured persistence.
 
 ## Publishing a chart version
@@ -102,4 +152,5 @@ Publish the application image first. Set `appVersion` in `Chart.yaml` to
 the published image tag and increment `version` for the chart release. Push
 a tag of the form `helm-v<version>` matching `version`. The Helm release
 workflow checks that the default image exists for Linux amd64 and arm64,
-then publishes the chart archive and its checksum as GitHub release assets.
+then pushes the OCI chart to `oci://ghcr.io/araihu/charts/oie` and publishes
+the same archive and its checksum as GitHub release assets.

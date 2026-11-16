@@ -1,4 +1,7 @@
 {{- if .Values.httpRoute.enabled }}
+{{- if not (or .Values.hosted.enabled .Values.externalAuthentication) }}
+{{- fail "Configure hosted authentication or set externalAuthentication for an authenticated proxy." }}
+{{- end }}
 {{- if not .Values.httpRoute.parentRefs }}
 {{- fail "Set httpRoute.parentRefs when enabling HTTPRoute." }}
 {{- end }}

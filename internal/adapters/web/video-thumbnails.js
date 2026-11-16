@@ -32,7 +32,7 @@ window.OieRuntime.register('video-thumbnails', life => {
       key: input => input.scope,
       load: async (input, {signal}) => {
         const {boundedVideoBlob, videoFrame} = await import('/ui/video-frames.js');
-        const response = await fetch(input.source + '&preview=1', {signal, cache:'no-store'});
+        const response = await window.OieRuntime.request(input.source + '&preview=1', {signal, cache:'no-store'});
         const type = response.headers.get('Content-Type');
         if (!['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'].includes(type)) {
           await response.body?.cancel();

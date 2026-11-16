@@ -66,7 +66,11 @@
       if (source !== connection) return;
       activity();
     };
-    connection.onerror = () => reconnect(connection);
+    connection.onerror = () => {
+      if (source !== connection) return;
+      window.OieHostedSession?.verify();
+      reconnect(connection);
+    };
     connection.addEventListener('oie.heartbeat', () => {
       if (source !== connection || !connected) return;
       delay = 500;
@@ -149,7 +153,12 @@
     connect();
   }
 
-  window.addEventListener('pagehide', () => { suspended = true; stop(); });
+  function suspend() {
+    suspended = true;
+    stop();
+  }
+
+  window.addEventListener('pagehide', suspend);
   window.addEventListener('pageshow', event => {
     if (!event.persisted) return;
     suspended = false;
@@ -157,5 +166,5 @@
     wake();
   });
 
-  window.OieEvents = {target, sync, stop, wake, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
+  window.OieEvents = {target, sync, stop, wake, suspend, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
 })();
