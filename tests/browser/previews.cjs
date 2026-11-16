@@ -170,8 +170,10 @@ function thumbnail(color,width=8,height=8){
   findings.push('A failed original download reports a localized error and supports a safe retry');
   state.room=true;await page.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await verifyOwn();assert(await page.locator('#message-composer').isDisabled());
   findings.push('Canonical isOwn=true messages align right with primary color in both direct and read-only room views');
-  finish(previews.at(-1));
-  const mobileFrames=[previews[1],previews.at(-1)].map(p=>scope(page,p).locator('.oie-image-frame'));
+  const sentPreview=previews.find(p=>p.messageId===messages[23].id);
+  finish(sentPreview);
+  const mobilePreviews=[previews[1],sentPreview];
+  const mobileFrames=mobilePreviews.map(p=>scope(page,p).locator('.oie-image-frame'));
   const mobileFrameSizes=()=>Promise.all(mobileFrames.map(frame=>frame.evaluate(el=>{
    const image=el.querySelector('img').getBoundingClientRect();
    const previews=el.closest('.oie-message-previews').getBoundingClientRect();
@@ -186,7 +188,15 @@ function thumbnail(color,width=8,height=8){
   await page.goto(`${base}/?account=${account}&chat=${chat}&lang=pt-BR&theme=dark`,{waitUntil:'domcontentloaded'});
   let beforeThumbnails;
   try{
-   for(const frame of mobileFrames)await frame.locator('img').waitFor({state:'visible'});
+   for(const [index,preview] of mobilePreviews.entries()){
+    const row=page.locator(`[data-message-id="${preview.messageId}"] .oie-bubble`);
+    assert.equal(await row.getAttribute('data-mine'),String(index===1));
+   }
+   for(const frame of mobileFrames){
+    const image=frame.locator('img');
+    await image.waitFor({state:'visible'});
+    assert.equal(await image.evaluate(el=>el.naturalWidth),0,'thumbnail response is still delayed');
+   }
    beforeThumbnails=await mobileFrameSizes();
    for(const {offset,width,height} of beforeThumbnails){
     assert(offset<=1&&width>0&&height>0,'image stays within the mobile bubble while loading');
