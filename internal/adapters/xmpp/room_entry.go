@@ -31,6 +31,44 @@ func sameRoomEntry(slot *roomSlot, name *string, revision domain.ID) bool {
 	return slot.creationName != nil && name != nil && slot.snapshot.IntentRevisionID == revision
 }
 
+func (m *Manager) CheckRoomCreation(ctx context.Context, a domain.Account, address string) error {
+	e, room, err := m.roomEntry(a, domain.Conversation{AccountID: a.ID, Address: address, Kind: "room"})
+	if err != nil {
+		return err
+	}
+	if e == nil {
+		return application.ErrRoomCreationUnavailable
+	}
+	e.mu.RLock()
+	session, connected := e.session, e.state.State == "connected"
+	e.mu.RUnlock()
+	if session == nil || !connected {
+		return application.ErrRoomCreationUnavailable
+	}
+
+	lookup, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	info, err := m.queryInfo(lookup, e, session, room.Domain().String())
+	if err != nil {
+		if errors.Is(err, errArchiveCursor) {
+			return application.ErrInvalidRoomService
+		}
+		return application.ErrRoomCreationUnavailable
+	}
+	if !isTextRoom(info) {
+		return application.ErrInvalidRoomService
+	}
+	_, err = m.readHistoryIQ(lookup, e, session, room.String(), stanza.GetIQ, discoInfoQuery)
+	switch {
+	case err == nil:
+		return application.ErrRoomAlreadyExists
+	case errors.Is(err, errArchiveCursor):
+		return nil
+	default:
+		return application.ErrRoomCreationUnavailable
+	}
+}
+
 func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *mx.Session, room jid.JID, create bool) string {
 	revision := currentRoomConfiguration(e, room.String()).revision
 	payload, err := m.readHistoryIQ(ctx, e, session, room.String(), stanza.GetIQ, discoInfoQuery)

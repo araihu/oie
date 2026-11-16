@@ -104,6 +104,9 @@ func (e *Engine) RoomSession(ctx context.Context, id domain.ID) (domain.RoomSess
 	if observed.AccountID != a.ID || observed.ConversationID != c.ID {
 		return result, ErrProtocolUnavailable
 	}
+	if !result.Active && result.LastErrorCode == "room_destroyed" {
+		return result, nil
+	}
 	if observed.LastErrorCode == "not_connected" {
 		if result.LastErrorCode == "" || result.LastErrorCode == "not_connected" {
 			result.State = "not_joined"

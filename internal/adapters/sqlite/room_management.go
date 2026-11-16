@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
@@ -27,7 +28,7 @@ func (s *Store) ClaimRoomManagement(ctx context.Context, op application.Operatio
 	return "", tx.Commit()
 }
 
-func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operation, state, name string, revision domain.ID, affiliation string, target domain.RoomAffiliationTarget) error {
+func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operation, state, name string, revision domain.ID, affiliation string, target domain.RoomAffiliationTarget, destroyedIntent domain.ID) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -37,6 +38,14 @@ func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operati
 		ID: string(op.ID), ResourceID: string(op.ResourceID), Result: jsonText(state),
 	}); err != nil {
 		return err
+	}
+	if state == "confirmed" && destroyedIntent != "" {
+		_, err := revokeRoomIntent(ctx, q, op.ResourceID, destroyedIntent, revision, "room_destroyed", op.CreatedAt)
+		// A destruction notice or an independent leave can already have ended
+		// this intent. Never revoke a newer intent based on an old IQ.
+		if err != nil && !errors.Is(err, application.ErrStateConflict) && !errors.Is(err, application.ErrNotFound) {
+			return err
+		}
 	}
 	if state == "confirmed" && target.Address != "" {
 		if affiliation == "outcast" && target.Nickname != "" {

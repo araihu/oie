@@ -2881,7 +2881,7 @@
           "Conversations"
         ],
         "summary": "Open and request entry to an XMPP room",
-        "description": "Atomically saves the room and its entry intent. Creation requires explicit selection and is confirmed separately through the room session. Repeating the same key cannot reactivate a later leave. Creation uses the service defaults with persistence enabled and an optional room name.",
+        "description": "Atomically saves the room and its entry intent. Creation requires a verified XMPP room service and an unused room address before saving. Creation is confirmed separately through the room session. Repeating the same key cannot reactivate a later leave. Creation uses the service defaults with persistence enabled and an optional room name.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -3477,6 +3477,60 @@
           "rooms"
         ],
         "x-cli-name": "join"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/remove-room": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "post": {
+        "operationId": "removeRoomFromChats",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Remove a saved room from Oiê's chat lists",
+        "description": "Removes the room from the active and archived lists and stops automatic rejoin. Retains stored history and never destroys the room on the XMPP server. Opening the room by address adds it back.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Stable operation UUID for the removal.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Account and conversation revision reviewed before removal.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveRoomFromChats"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Room removed from chat lists, or a replay of that removal."
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
       }
     },
     "/api/v1/conversations/{conversationId}/room-session/leave": {
@@ -6803,6 +6857,15 @@
           "currentRoomSession": {
             "$ref": "#/components/schemas/RoomSession"
           },
+          "roomCreationError": {
+            "type": "string",
+            "enum": [
+              "invalid_service",
+              "verification_unavailable",
+              "already_exists"
+            ],
+            "description": "Why a new room could not be accepted."
+          },
           "roomAddressInUse": {
             "type": "boolean",
             "description": "The address has a direct conversation with retained content that cannot be converted to a room."
@@ -8119,6 +8182,10 @@
           "unreadMention": {
             "type": "boolean",
             "description": "True when an unread incoming room message mentions the owning account by its room nickname. Omitted means false."
+          },
+          "removedFromChats": {
+            "type": "boolean",
+            "description": "The room was removed from chat lists. Retained history remains available."
           },
           "archived": {
             "type": "boolean"
@@ -9721,6 +9788,23 @@
           }
         }
       },
+      "RemoveRoomFromChats": {
+        "description": "The account and the room conversation revision selected for removal.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      },
       "RoomManagementAction": {
         "type": "string",
         "enum": [
@@ -9732,7 +9816,8 @@
           "moderate_message",
           "update_details",
           "set_avatar",
-          "remove_avatar"
+          "remove_avatar",
+          "destroy"
         ],
         "description": "Room-scoped action subject to current provider permissions."
       },
@@ -9922,6 +10007,14 @@
               "unsupported",
               "unknown"
             ]
+          },
+          "creating": {
+            "type": "boolean",
+            "description": "Creation is pending confirmation from the room service."
+          },
+          "destroyed": {
+            "type": "boolean",
+            "description": "The server confirmed the room was deleted."
           },
           "creationError": {
             "type": "string",

@@ -620,6 +620,8 @@ type copy struct {
 	Settings, You, All, Unread, Groups                                                                                                                                   string
 	RoomInvitation, ViewRoom, RoomAddressConflict, ConversationChanged                                                                                                   string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
+	RoomInvalidService, RoomCreationUnavailable, RoomRemoveFromChats, RoomRemoveWarning, RoomRemoveUnavailable, RoomRemoveConflict                                       string
+	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
@@ -1212,7 +1214,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	c := conversation.JSON200
-	if fromCache && ((c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
+	if fromCache && (removedRoom(c) || (c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
 		(c != nil && (c.Archived || v.AccountFilter != "" && c.AccountId != v.AccountFilter ||
 			v.Filter == "unread" && c.UnreadCount == 0 || v.Filter == "favorites" && !c.Favorite ||
 			v.Filter == "groups" && c.Kind != "room"))) {
@@ -1220,6 +1222,10 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		if s.loadInbox(ctx, v, editor) {
 			s.loadConversation(ctx, r, v, paneOnly, editorOnly, infoOnly, editor)
 		}
+		return
+	}
+	if removedRoom(c) {
+		v.NotFound = true
 		return
 	}
 	if c == nil {

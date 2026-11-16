@@ -97,6 +97,28 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 	if !canEditTopic && v.managementTopic() != "" {
 		<p class="oie-details-plain">{ v.managementTopic() }</p>
 	}
+	if slices.Contains(state.Actions, engineapi.Destroy) {
+		@roomDestroyControls(v, *state.Revision)
+	}
+}
+
+templ roomDestroyControls(v view, revision string) {
+	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"id": "room-destroy-open", "data-room-action-open": "", "aria-expanded": "false", "aria-controls": "room-destroy-form"})) {
+		{ v.Text.RoomDestroy }
+	}
+	@form.Form(form.Config{ID: "room-destroy-form", Action: "/ui/rooms/manage", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": "room-destroy-open", "data-room-action-confirmation": "", "hidden": true}}) {
+		@roomManagementFields(v, revision, "destroy", newOperationKey())
+		<p>{ v.Text.RoomDestroyWarning }</p>
+		<div class="oie-room-action-buttons">
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-action-cancel": ""})) {
+				{ v.Text.RoomCancelAction }
+			}
+			@button.Button(button.WithType("submit"), button.WithTone(button.ToneDanger)) {
+				{ v.Text.RoomDestroy }
+			}
+		</div>
+		<div data-form-feedback role="status" aria-live="polite"></div>
+	}
 }
 
 templ roomManagementParticipants(v view, state engineapi.RoomManagement) {

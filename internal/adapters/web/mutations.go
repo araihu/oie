@@ -95,7 +95,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
-	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/join" || r.URL.Path == "/ui/rooms/manage" || r.URL.Path == "/ui/accounts/avatar" || r.URL.Path == "/ui/accounts/label" || r.URL.Path == "/ui/accounts/remove" {
+	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/remove" || r.URL.Path == "/ui/rooms/join" || r.URL.Path == "/ui/rooms/manage" || r.URL.Path == "/ui/accounts/avatar" || r.URL.Path == "/ui/accounts/label" || r.URL.Path == "/ui/accounts/remove" {
 		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 			text = localized
 		}
@@ -154,6 +154,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		status, result = s.updateAccountAvatar(ctx, r, text)
 	case "/ui/rooms/manage":
 		status, result = s.manageRoom(ctx, r, text)
+	case "/ui/rooms/remove":
+		status, result = s.removeRoomFromChats(ctx, r, text)
 	case "/ui/rooms/open":
 		status, result = s.openRoom(ctx, r, text)
 	case "/ui/rooms/join":
@@ -554,7 +556,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

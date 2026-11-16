@@ -74,6 +74,9 @@ func (v view) roomLabel() string {
 	case "joined":
 		return v.Text.RoomJoined
 	case "joining":
+		if v.RoomSession.Creating != nil && *v.RoomSession.Creating {
+			return v.Text.RoomCreating
+		}
 		return v.Text.RoomJoining
 	case "failed":
 		return v.Text.RoomJoinFailed
@@ -84,6 +87,9 @@ func (v view) roomLabel() string {
 func (v view) roomError() string {
 	if v.RoomSession == nil {
 		return ""
+	}
+	if v.RoomSession.Destroyed != nil && *v.RoomSession.Destroyed {
+		return v.Text.RoomDestroyed
 	}
 	if v.RoomSession.CreationError != nil {
 		switch *v.RoomSession.CreationError {

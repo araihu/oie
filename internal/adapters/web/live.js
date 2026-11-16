@@ -1195,7 +1195,11 @@ window.OieRuntime.register('live', life => {
     else buttons.forEach(button => button.disabled = true);
     syncRoomLeave();
     for (const secret of form.querySelectorAll('input[type="password"]')) secret.value = '';
-    feedback(form,sending?'':removingAccount?form.dataset.removing:text('saving'));
+    if (roomEntry) {
+      const submit = form.querySelector('[data-room-entry-label]');
+      if (submit) submit.textContent = submit.dataset.roomEntryLabel;
+    }
+    feedback(form,sending?'':removingAccount?form.dataset.removing:form.dataset.roomEntryChecking||text('saving'));
     pendingRequests++;
     const controller = new AbortController(); const timeout = life.timeout(() => controller.abort(),15000);
     try {
@@ -1287,6 +1291,11 @@ window.OieRuntime.register('live', life => {
             document.dispatchEvent(new CustomEvent('oie:agenda-refresh',{detail:{form}}));
             return;
           }
+        } else if (form.dataset.oieAction === 'remove-room' && result.redirect) {
+          inbox.invalidate();
+          if (window.OieNavigation) window.OieNavigation.go(result.redirect);
+          else location.replace(result.redirect);
+          return;
         } else if (form.dataset.oieAction === 'register' || form.dataset.oieAction === 'open') {
           if (result.redirect) { if(window.OieNavigation)window.OieNavigation.go(result.redirect);else location.assign(result.redirect); return; }
         }

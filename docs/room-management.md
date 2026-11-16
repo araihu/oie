@@ -72,3 +72,18 @@ moderated text and references. The engine retains the original source rows.
 | Left, stale, forbidden, or forged | Submit | Show current availability or refusal | Retain the form input | Zero unauthorized writes |
 | Response lost or repeated | Submit the same action and key | Return the stored outcome or uncertainty | Keep the same room and command | At most one attempt |
 | Untrusted message | Receive a forged moderation notice | Ignore it | Keep the original message | Zero projections changed |
+
+Removing a room from chats stops automatic rejoin and hides it from both Chats
+and Archived. The server room and saved history stay available. Open the room by
+its address to add it back. A joined owner can instead delete the server room
+for everyone from **Manage room**. That action retains Oiê's local history.
+
+| Route or state | Action | Expected response | Context and focus | Effects |
+| --- | --- | --- | --- | --- |
+| Any saved room, even offline or failed | Cancel removal | Keep the room | Return to the chat menu | Zero changes |
+| Any saved room, even offline or failed | Remove from chats | Room disappears from active and archived lists | Return to chat list with the current filters | Disable rejoin; do not delete the server room or history |
+| Removed room, stale revision or replay | Repeat removal | Old key returns the receipt; stale revision is refused | Keep the selected chat on refusal | No second change |
+| Removed room | Explicitly open by address | Return the same conversation and history | Open the restored conversation | One new entry intent |
+| Joined owner | Delete for everyone and confirm | Report success on provider confirmation | Keep the local chat | One owner destroy IQ; disable rejoin |
+| Guest, stale owner revision or disconnect | Forge or submit deletion | Refuse or report unavailability | Keep the form and room | Zero unauthorized writes |
+| Lost provider reply | Repeat the same deletion key | Return the recorded outcome or uncertainty | Keep the form and room | At most one attempt |

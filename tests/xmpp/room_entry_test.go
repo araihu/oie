@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -82,6 +83,16 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	}
 	alice := register("alice@localhost", "alice-local-only")
 	bob := register("bob@localhost", "bob-local-only")
+	invalidKey := id()
+	if _, err := engine.OpenRoom(ctx, invalidKey, alice, "wrong@localhost", "", "Wrong domain", true); !errors.Is(err, application.ErrInvalidRoomService) {
+		t.Fatalf("account domain accepted as a room service: %v", err)
+	}
+	if _, err := engine.Operation(ctx, invalidKey); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("bad service left an accepted operation: %v", err)
+	}
+	if chats, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: alice, Kind: "room", Limit: 10}); err != nil || len(chats) != 0 {
+		t.Fatalf("bad service created a local chat: %+v %v", chats, err)
+	}
 	room, err := jid.Parse("entry-" + string(id()) + "@conference.localhost")
 	if err != nil {
 		t.Fatal(err)
@@ -415,15 +426,38 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if err != nil || current.Active {
 		t.Fatalf("replay reactivated leave: %+v %v", current, err)
 	}
-	if _, err := engine.OpenRoom(ctx, id(), alice, address, "Host", "Replacement", true); err != nil {
-		t.Fatal(err)
+	if _, err := engine.OpenRoom(ctx, id(), alice, address, "Host", "Replacement", true); !errors.Is(err, application.ErrRoomAlreadyExists) {
+		t.Fatalf("existing room was not rejected before saving: %v", err)
 	}
-	if collision := waitRoom(created.Conversation.ID, "failed"); collision.LastErrorCode != "room_exists" || collision.Active {
-		t.Fatalf("existing room was not rejected: %+v", collision)
+	if current, err := engine.RoomSession(ctx, created.Conversation.ID); err != nil || current.Active {
+		t.Fatalf("creation collision reactivated leave: %+v %v", current, err)
 	}
 	preview, err = engine.PreviewRoom(ctx, bob, address, false)
 	if err != nil || preview.Name != "Garden vCard" {
 		t.Fatalf("creation collision changed room: %+v %v", preview, err)
+	}
+
+	manage(joinedBob.Conversation.ID, "destroy", "", "", "denied")
+	testRoomRemoval(t, ctx, engine, joinedBob.Conversation.ID, bob, address)
+	waitRoom(joinedBob.Conversation.ID, "joined")
+	if _, err := engine.OpenRoom(ctx, id(), alice, address, "Host", "", false); err != nil {
+		t.Fatal(err)
+	}
+	waitRoom(created.Conversation.ID, "joined")
+	manage(created.Conversation.ID, "destroy", "", "", "confirmed")
+	for _, conversation := range []domain.ID{created.Conversation.ID, joinedBob.Conversation.ID} {
+		eventually(t, func() bool {
+			session, err := engine.RoomSession(ctx, conversation)
+			return err == nil && !session.Active && session.LastErrorCode == "room_destroyed"
+		})
+	}
+	if preview, err = engine.PreviewRoom(ctx, bob, address, false); err != nil || preview.State == "known" {
+		t.Fatalf("server room still answers discovery after confirmed deletion: %+v %v", preview, err)
+	}
+
+	roomsAfterDeletion, err := engine.DiscoverRooms(ctx, bob, "conference.localhost")
+	if err != nil || roomsAfterDeletion.State != "known" || slices.ContainsFunc(roomsAfterDeletion.Rooms, func(item domain.RoomDirectoryItem) bool { return item.Address == address }) {
+		t.Fatalf("deleted room still in server directory: %+v %v", roomsAfterDeletion, err)
 	}
 
 	invitedAddress := "invited-" + string(id()) + "@conference.localhost"
@@ -473,4 +507,51 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		chat, err := engine.Conversation(ctx, invitation.ID)
 		return err == nil && chat.Request == "" && chat.Archived
 	})
+}
+
+func testRoomRemoval(t *testing.T, ctx context.Context, engine *application.Engine, conversation, account domain.ID, address string) {
+	t.Helper()
+	before, err := engine.Conversation(ctx, conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.UpdateConversationPreferences(ctx, id(), conversation, application.ConversationPreferencesInput{
+		AccountID: account, ExpectedRevisionID: before.RevisionID, Archived: new(true),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := engine.Conversation(ctx, conversation)
+	if err != nil || !archived.Archived {
+		t.Fatalf("archive fixture: %+v %v", archived, err)
+	}
+	if err := engine.RemoveRoomFromChats(ctx, id(), conversation, account, before.RevisionID); !errors.Is(err, application.ErrStateConflict) {
+		t.Fatalf("stale room removal: %v", err)
+	}
+	key := id()
+	if err := engine.RemoveRoomFromChats(ctx, key, conversation, account, archived.RevisionID); err != nil {
+		t.Fatal(err)
+	}
+	for _, onlyArchived := range []bool{false, true} {
+		chats, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: account, Kind: "room", Limit: 10, Archived: onlyArchived})
+		if err != nil || slices.ContainsFunc(chats, func(c domain.Conversation) bool { return c.ID == conversation }) {
+			t.Fatalf("removed room still listed (archived=%v): %+v %v", onlyArchived, chats, err)
+		}
+	}
+	eventually(t, func() bool {
+		session, err := engine.RoomSession(ctx, conversation)
+		return err == nil && !session.Active && session.State == "not_joined"
+	})
+	if preview, err := engine.PreviewRoom(ctx, account, address, false); err != nil || preview.State != "known" {
+		t.Fatalf("local removal changed server room: %+v %v", preview, err)
+	}
+	reopened, err := engine.OpenRoom(ctx, id(), account, address, "Reader", "", false)
+	if err != nil || reopened.Conversation.ID != conversation || reopened.Conversation.RemovedFromChats || reopened.Conversation.Archived {
+		t.Fatalf("explicit entry did not restore the room: %+v %v", reopened, err)
+	}
+	if err := engine.RemoveRoomFromChats(ctx, key, conversation, account, archived.RevisionID); err != nil {
+		t.Fatalf("replay of local removal: %v", err)
+	}
+	if current, err := engine.Conversation(ctx, conversation); err != nil || current.RemovedFromChats {
+		t.Fatalf("old removal hid a reopened chat: %+v %v", current, err)
+	}
 }

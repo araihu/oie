@@ -373,6 +373,7 @@ JOIN (
     WHERE c.activity_sequence < ?3
     AND (CAST(?4 AS TEXT)='' OR c.account_id=CAST(?4 AS TEXT))
     AND (CAST(?5 AS TEXT)='[]' OR c.account_id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
+    AND COALESCE(json_extract(c.payload,'$.RemovedFromChats'),0)=0
     AND c.archived=?6
     AND (CAST(?7 AS INTEGER)=0 OR c.favorite=1)
     AND (CAST(?8 AS INTEGER)=0 OR c.unread_count>0)

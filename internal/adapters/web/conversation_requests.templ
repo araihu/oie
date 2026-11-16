@@ -28,6 +28,11 @@ templ conversationRequestContent(v view) {
  <div class="oie-request-actions" data-request-preferences>
   if v.requestKind()=="room_invitation" {
    @roomSessionStatus(v)
+   if !v.Preview && !removedRoom(v.Selected) {
+    @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('modal:open',{id:'room-removal'})"})){
+     {v.Text.RoomRemoveFromChats}
+    }
+   }
   } else {
    @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest,button.TonePrimary,heroicons.Icon16SolidCheck)
   }

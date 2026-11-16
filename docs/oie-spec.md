@@ -294,6 +294,13 @@ explicit leaves and access revocation take precedence over imported bookmarks.
 The server must still confirm this client's room presence; another client's
 participation does not establish it. See [bookmark autojoin](bookmark-autojoin.md).
 
+**IMPLEMENTATION SCOPE:** verify the destination service and room address before
+saving a creation request. The server's configuration reply confirms creation.
+Removing a room from Chats also removes it from Archived and stops this engine
+from rejoining. It preserves local history and the server room. Joining by
+address adds it back. A joined owner can separately confirm deletion of the room
+on the server using XEP-0045. See [room management](room-management.md).
+
 **OPEN O03:** room creation defaults, protocol-specific leave/rejoin behavior across independent engines, and the exact representation of participants and memberships.
 
 ## 4. Identity, revisions, and merge semantics

@@ -18,6 +18,10 @@ func roomSession(value domain.RoomSession) engineapi.RoomSession {
 		revision := string(value.IntentRevisionID)
 		out.IntentRevisionId = &revision
 	}
+	if value.Active && value.CreationName != nil && value.State != "joined" {
+		creating := true
+		out.Creating = &creating
+	}
 	if value.Nickname != "" {
 		out.Nickname = &value.Nickname
 	}
@@ -25,6 +29,10 @@ func roomSession(value domain.RoomSession) engineapi.RoomSession {
 		code := value.LastErrorCode
 		switch code {
 		case "not_connected", "forbidden", "not_authorized", "nickname_conflict", "registration_required", "room_unavailable", "removed", "timeout", "unsupported", "unknown":
+		case "room_destroyed":
+			destroyed := true
+			out.Destroyed = &destroyed
+			code = "removed"
 		case "room_not_found":
 			code = "room_unavailable"
 		case "invalid_nickname":

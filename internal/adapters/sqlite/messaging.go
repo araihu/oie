@@ -85,6 +85,15 @@ func (s *Store) OpenConversation(ctx context.Context, in application.Conversatio
 				return application.ConversationResult{}, err
 			}
 		}
+		if c.RemovedFromChats {
+			next := c
+			next.RemovedFromChats, next.Archived = false, false
+			if err := writeConversationDecision(ctx, q, c, next, in.Conversation.RevisionID, in.Operation.CreatedAt); err != nil {
+				return application.ConversationResult{}, err
+			}
+			next.RevisionID = in.Conversation.RevisionID
+			c = next
+		}
 		if err := openRoomIntent(ctx, q, c.ID, *in.RoomEntry, in.RoomPassword != ""); err != nil {
 			return application.ConversationResult{}, err
 		}

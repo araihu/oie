@@ -87,3 +87,14 @@ workflow against its own Prosody instance.
 The previous mock preview is still available through `make mock-api` for fixture
 and presentation checks. Mock-only media examples are not claims of implemented
 media transfer, history backfill, receipts, sync, or other alpha/backlog features.
+
+To check room creation and the two room removal actions with a running
+disposable preview that has Alice and Bob connected to development Prosody:
+
+```sh
+OIE_LIVE_URL=http://127.0.0.1:8080 node tests/browser/room-lifecycle.cjs
+```
+
+Set `OIE_ENGINE_URL` separately when the engine and BFF use different ports.
+The check creates and deletes a fixture room and removes a failed entry from
+the preview's chat lists.

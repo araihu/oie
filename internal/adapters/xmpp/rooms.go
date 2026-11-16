@@ -43,6 +43,7 @@ type roomSessionHost interface {
 }
 
 type mucUser struct {
+	Destroy   *struct{}  `xml:"http://jabber.org/protocol/muc#user destroy"`
 	Invites   []struct{} `xml:"http://jabber.org/protocol/muc#user invite"`
 	Passwords []string   `xml:"http://jabber.org/protocol/muc#user password"`
 	Status    []struct {
@@ -500,6 +501,9 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 				}
 			}
 		}
+		if p.MUC != nil && p.MUC.Destroy != nil {
+			code = "room_destroyed"
+		}
 		state := "not_joined"
 		if code != "" {
 			state = "failed"
@@ -514,7 +518,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		if confirmedRemoval && slot.creationName != nil && code == "" {
 			slot.snapshot = roomSnapshot(slot.conversation, "failed", slot.snapshot.Nickname, "creation_failed", slot.snapshot.IntentRevisionID)
 		}
-		slot.snapshot.Revoked = code == "forbidden" || code == "removed" || (confirmedRemoval && slot.creationName != nil)
+		slot.snapshot.Revoked = code == "room_destroyed" || code == "forbidden" || code == "removed" || (confirmedRemoval && slot.creationName != nil)
 		slot.leaving = false
 	} else if self && p.Type == "" && slot.snapshot.State == "joining" && !slot.leaving {
 		if p.ID != "" && slot.requestID != "" && p.ID != slot.requestID {

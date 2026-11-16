@@ -43,7 +43,7 @@ func (e *Engine) RoomParticipants(ctx context.Context, id domain.ID) (domain.Roo
 
 type RoomManagementRepository interface {
 	ClaimRoomManagement(context.Context, Operation, string) (string, error)
-	FinishRoomManagement(context.Context, Operation, string, string, domain.ID, string, domain.RoomAffiliationTarget) error
+	FinishRoomManagement(context.Context, Operation, string, string, domain.ID, string, domain.RoomAffiliationTarget, domain.ID) error
 	RoomBannedNicknames(context.Context, domain.ID) (map[string]string, error)
 }
 
@@ -154,6 +154,8 @@ func roomManagementInput(c domain.RoomManagementCommand) bool {
 		return false
 	}
 	switch c.Action {
+	case "destroy":
+		return c.MessageID == "" && c.Target == "" && c.Value == ""
 	case "rename":
 		return c.MessageID == "" && c.Target == "" && c.Reason == "" && c.Value != "" && validRoomLabel(c.Value)
 	case "topic":
@@ -243,8 +245,12 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 	// uncertain, so replay can never repeat a provider mutation.
 	state = "stale"
 	var target domain.RoomAffiliationTarget
+	var destroyedIntent domain.ID
 	if intent, err := e.roomIntent(ctx, id); err == nil && intent.Active && intent.CreationName == nil {
 		state, target = p.ManageRoom(ctx, a, c, intent.IntentRevisionID, cmd, message)
+		if cmd.Action == "destroy" && state == "confirmed" {
+			destroyedIntent = intent.IntentRevisionID
+		}
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
@@ -256,16 +262,19 @@ func (e *Engine) ManageRoom(ctx context.Context, key, id domain.ID, cmd domain.R
 	if cmd.Action == "update_details" && cmd.Name != nil && (state == "confirmed" || state == "submitted" || state == "name_confirmed") {
 		name = *cmd.Name
 	}
-	if name != "" {
+	if name != "" || destroyedIntent != "" {
 		revision, err = e.newID()
 		if err != nil {
 			return "unknown", nil
 		}
 	}
-	if err := repo.FinishRoomManagement(persist, op, state, name, revision, cmd.Value, target); err != nil {
+	if err := repo.FinishRoomManagement(persist, op, state, name, revision, cmd.Value, target, destroyedIntent); err != nil {
 		return "unknown", nil
 	}
-	if name != "" {
+	if destroyedIntent != "" {
+		e.wakeRooms()
+		e.outgoingWorkCommitted()
+	} else if name != "" {
 		e.notifyEvents()
 	}
 	return state, nil
