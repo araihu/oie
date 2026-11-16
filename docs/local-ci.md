@@ -230,8 +230,10 @@ completion remains unverified. See [outgoing replies](outgoing-replies.md).
 
 The fragment-navigation increment on 2026-11-08 passes native checks and all host browser suites. Dagger completes Go checks/races/builds and isolated XMPP integration, but its browser initialization currently fails expanding the cache argument with `waiting for client session attachables: context deadline exceeded`. A fresh client retry reproduced the failure. Full Dagger completion for this increment is unverified. See [fragment navigation](fragment-navigation.md) for the verified scope.
 
-Keep Oie increments as local commits. Open a pull request when there is a version
-ready for alpha v0.0.1. Existing draft requests remain historical review points.
+During development, run tests for the packages affected by the change. For UI
+work, run the relevant browser script with a disposable fixture. See
+[the fixture preview setup](ui-preview.md) for the mock API and BFF needed by
+the consumer scripts.
 
 Use Go 1.27.4 or newer, Make, Git, Python 3 and Docker on the host. The runner pins Dagger
 v0.21.9. It honors `_EXPERIMENTAL_DAGGER_RUNNER_HOST`; without an override it
@@ -240,16 +242,53 @@ provisions the pinned engine image through Dagger's container driver:
 ```sh
 make ci-check  # Contracts, generation drift, golangci-lint, vet, unit/race tests, builds
 make ci        # Also isolated Prosody integration and all browser workflows
+sh tools/ci/run.sh build                # make check and builds
+sh tools/ci/run.sh race                 # Go race suite
+sh tools/ci/run.sh desktop              # Desktop WebView gate
+sh tools/ci/run.sh browser-consumer     # Browser fixtures with the mock API
+sh tools/ci/run.sh browser-integration  # Protocol tests and browser integration with Prosody
 ```
 
-GitHub Actions runs the same `make ci` command and uploads its stage logs and
-test evidence as `dagger-ci-evidence`, including when tests fail.
-The workflow uses `hostinger-vps-trusted` for allowlisted pushes to `main` and
-`hostinger-vps-pr` for ready pull requests opened by allowlisted actors from
-branches in the same repository. The allowlist comes from the organization
-variable `HOSTINGER_PR_ACTORS_JSON`. Other events, including fork pull requests,
-run on `ubuntu-latest`. The Hostinger runners supply separate Dagger sockets and
-caches for the two lanes.
+Local invocations of `tools/ci/run.sh`, including the Make targets above and
+`make package-linux`, share one lock at `$HOME/.local/state/oie/ci.lock` across the user's Oiê worktrees on
+the same host. When a run is active, the next invocation reports that it is
+waiting. It starts preflight and takes its source snapshot after the active run
+finishes cleanup. Time spent waiting is outside `OIE_CI_TIMEOUT`. Ctrl+C cancels
+the waiting invocation. Keep the lock file in place while any run is active.
+Direct Dagger commands and other projects use their own concurrency.
+
+GitHub Actions runs the five Dagger modes independently on standard
+`ubuntu-24.04` runners and verifies the app image on amd64 and arm64. Each
+Dagger job uploads `dagger-ci-evidence-<mode>` with its own stage logs and
+test evidence, including on failure. Actions jobs bypass the local lock.
+The `Required CI` check aggregates both the Dagger and image smoke jobs.
+New commits on a PR cancel its superseded workflow runs.
+Use `gh pr checks` from the PR branch to find the current run. For a failed
+browser job, start with `browser/consumer.log` or `browser/ci.log` in that
+job's artifact, then reproduce the failed scenario with its fixture.
+
+The `main` branch requires a pull request and the `Required CI` check from
+GitHub Actions. With the repository Actions variable `OIE_REQUIRED_PR_CI` set
+to `true`, pushes to `main` run the image smoke tests and publication. To
+restore Dagger jobs on pushes, unset the variable. Keep the branch rule active
+whenever the variable is set.
+
+### Browser presentation variants
+
+Keep repeated functional steps in representative browser journeys. Exercise
+layout, localization and accessibility on the variants that affect each
+property. Accounts and empty or unavailable states cover every pair of viewport,
+design, color scheme and language in the default matrix. Search keeps all eight
+layout cases and audits a representative subset. The full presentation matrix
+is available through the `full_browser_matrix` input when manually running
+`Engine checks` against a branch.
+
+```sh
+OIE_CI_BROWSER_FULL_MATRIX=1 sh tools/ci/run.sh browser-consumer
+npm --prefix tests/browser run test:accounts -- --full-matrix
+npm --prefix tests/browser run test:states -- --full-matrix
+node tests/browser/message-search.cjs --full-matrix
+```
 
 The Dagger Go graph and shell entrypoint are under `tools/ci`. Dagger dependencies
 remain separate from the root application and generation-tool modules. Images
@@ -294,13 +333,11 @@ edits. It excludes Git internals, data directories, credentials, binaries, brows
 artifacts and dependency directories before invoking Dagger. A source-boundary
 test verifies those exclusions, including an accidentally tracked data file.
 
-Each full Dagger run starts one disposable Prosody service and shares its TLS
-certificate across the protocol smoke check, Go integration tests and live
-browser workflow. The smoke check and Go integration tests run in sequence
-while Playwright setup runs in parallel.
-The browser scenarios run in two containers built from the same Playwright
-setup. Only the group that runs the live browser scenario gets the Prosody
-binding. Each group starts its own browser and application fixtures. The CI
+The browser integration mode starts one disposable Prosody service and shares
+its TLS certificate across the protocol smoke check, Go integration tests and
+live browser workflow. The consumer mode uses its own browser and mock API
+fixtures. A full local Dagger run builds both browser containers from the same
+Playwright setup and runs the groups concurrently. The CI
 artifact keeps the existing reports and screenshots, with per-scenario timings
 in `browser/consumer.log` and `browser/ci.log`.
 The browser evidence records the number of Prosody starts for that run. CI

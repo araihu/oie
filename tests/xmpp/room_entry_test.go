@@ -83,15 +83,16 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	}
 	alice := register("alice@localhost", "alice-local-only")
 	bob := register("bob@localhost", "bob-local-only")
+	const invalidAddress = "wrong@localhost"
 	invalidKey := id()
-	if _, err := engine.OpenRoom(ctx, invalidKey, alice, "wrong@localhost", "", "Wrong domain", true); !errors.Is(err, application.ErrInvalidRoomService) {
+	if _, err := engine.OpenRoom(ctx, invalidKey, alice, invalidAddress, "", "Wrong domain", true); !errors.Is(err, application.ErrInvalidRoomService) {
 		t.Fatalf("account domain accepted as a room service: %v", err)
 	}
 	if _, err := engine.Operation(ctx, invalidKey); !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("bad service left an accepted operation: %v", err)
 	}
-	if chats, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: alice, Kind: "room", Limit: 10}); err != nil || len(chats) != 0 {
-		t.Fatalf("bad service created a local chat: %+v %v", chats, err)
+	if chat, err := store.RestoredRoom(ctx, alice, invalidAddress); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("bad service created a local chat: %+v %v", chat, err)
 	}
 	room, err := jid.Parse("entry-" + string(id()) + "@conference.localhost")
 	if err != nil {
@@ -102,9 +103,8 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 	if err != nil || preview.State != "not_found" {
 		t.Fatalf("preview absent room: %+v %v", preview, err)
 	}
-	rows, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: bob, Kind: "room", Limit: 10})
-	if err != nil || len(rows) != 0 {
-		t.Fatalf("preview saved a room: %+v %v", rows, err)
+	if chat, err := store.RestoredRoom(ctx, bob, address); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("preview saved a room: %+v %v", chat, err)
 	}
 	absent, err := engine.OpenRoom(ctx, id(), bob, address, "Visitor", "", false)
 	if err != nil {

@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { startOie } = require('./fixtures/oie-server.cjs');
+const { resizeVisibleViewport } = require('./fixtures/viewport.cjs');
 
 const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
 
@@ -12,7 +13,7 @@ async function openSettings(page, url, fixture) {
   await footer.getByRole('button', { name: fixture.about, exact: true }).waitFor();
   assert.equal(await settings.getByText(fixture.engineHeading, { exact: true }).count(), 0);
   assert.equal(await settings.getByText(fixture.engineLabel, { exact: true }).count(), 0);
-  await page.setViewportSize({ width: fixture.viewport.width, height: 280 });
+  await resizeVisibleViewport(page, { width: fixture.viewport.width, height: 280 });
   const placement = await footer.evaluate(node => {
     const panel = node.closest('[role="dialog"]');
     const content = panel.querySelector('.oie-settings-scroll');
@@ -25,7 +26,7 @@ async function openSettings(page, url, fixture) {
     };
   });
   assert(placement.scrolled && placement.shift <= 1 && placement.gap <= 1, JSON.stringify(placement));
-  await page.setViewportSize(fixture.viewport);
+  await resizeVisibleViewport(page, fixture.viewport);
 
   const entry = settings.getByRole('button', { name: fixture.destructiveActions, exact: true });
   const actions = page.getByRole('dialog', { name: fixture.destructiveActions, exact: true });

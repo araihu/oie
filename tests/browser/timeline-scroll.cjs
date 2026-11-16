@@ -225,7 +225,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
   assert.equal(queuedWindow.ids[0],queuedEdge.id);
   state.edits.set(queuedEdge.id,{isOwn:true,sendState:'submitted',revisionId:id(9000100),timelineAt:new Date(releaseTime).toISOString()});
   await boundary(page,'older');
-  await until(async()=>await rows(page).count()>=99,'older paging retries from the stable neighbor of a released anchor');
+  await until(async()=>await rows(page).count()>=99&&await edge(page,'older').getAttribute('data-state')!=='loading',
+   'older paging retries from the stable neighbor of a released anchor');
   const afterRelease=await snapshot(page);
   assert.equal(afterRelease.min,queuedWindow.min-50);
   assert(app.reads.some(read=>read.direction==='older'&&read.cursor===queuedEdge.id));

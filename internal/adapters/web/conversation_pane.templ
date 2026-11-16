@@ -49,6 +49,7 @@ if !v.conversationRemoved() {
 				}
 				<div id="context-notice" class="oie-context-notice" role="status">@contextNotice(v)</div>
 <div class="oie-timeline-frame">
+@conversationPreferenceOverlay(v)
 @conversationTimeline(v)
 </div>
 				if !v.conversationRemoved() {

@@ -4,6 +4,7 @@ const http=require('node:http'),path=require('node:path'),fs=require('node:fs/pr
 const {createHash}=require('node:crypto'),{deflateSync}=require('node:zlib');
 const {spawn}=require('node:child_process'),{once}=require('node:events');
 const {chromium}=require('playwright');
+const {resizeVisibleViewport}=require('./fixtures/viewport.cjs');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 function image(){
  const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let i=0;i<8;i++)n=(n>>>1)^((n&1)?0xedb88320:0)}return(n^0xffffffff)>>>0};
@@ -99,7 +100,7 @@ function image(){
    const detail=page.locator('.oie-account-detail'),detailStatus=detail.locator(`[data-account-status="${bob}"]`),connect=detail.locator('[data-connect-account]');await detail.waitFor({state:'visible'});
    assert.equal(await connect.count(),0);assert.equal(await detail.locator('input[name=password],input[name=endpoint]').count(),0);assert.equal(await detail.locator('[id^=connection-status-]').count(),0);assert(await detail.locator('[data-disconnect-account]').isVisible());await placement(bob,detailStatus);
    const footer=detail.locator('footer'),disconnect=footer.locator('[data-disconnect-account] button[type=submit]');
-   await page.setViewportSize({width:config.width,height:245});
+   await resizeVisibleViewport(page,{width:config.width,height:245});
    const layout=await footer.evaluate(node=>{
     const body=node.closest('#accounts-body'),content=body.querySelector('#account-detail-scroll');
     const bottom=node.getBoundingClientRect().bottom;
@@ -107,7 +108,7 @@ function image(){
     return {scrolled:content.scrollTop>0,shift:Math.abs(node.getBoundingClientRect().bottom-bottom),gap:Math.abs(bottom-body.getBoundingClientRect().bottom)};
    });
    assert(layout.scrolled&&layout.shift<=1&&layout.gap<=1,JSON.stringify(layout));
-   await page.setViewportSize({width:config.width,height:900});
+   await resizeVisibleViewport(page,{width:config.width,height:900});
    let release;
    const pending=new Promise(resolve=>{release=resolve});
    await page.route('**/ui/accounts/disconnect',async route=>{
