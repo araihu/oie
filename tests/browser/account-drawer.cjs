@@ -76,6 +76,77 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(a11y.violations.map(v=>v.id),[]);
    results.push({width,mode,locale,accounts:35,axe:0});const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});if(width===818&&mode==='dark'&&locale==='pt-BR')await page.screenshot({path:path.join(artifacts,'account-drawer-overflow.png')});await page.close();
   }
+  const phoneContext=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2,locale:'pt-BR',reducedMotion:'reduce'});
+  const phone=await phoneContext.newPage();
+  await phone.goto(base+'/?open=accounts&accountPage=add&lang=pt-BR');
+  const addDrawer=phone.getByRole('dialog',{name:'Contas',exact:true});
+  const close=addDrawer.getByRole('button',{name:'Fechar',exact:true});
+  const field=addDrawer.locator('#register-address');
+  await close.waitFor();
+  assert.equal(await field.evaluate(el=>getComputedStyle(el).fontSize),'16px');
+  await field.focus();
+  const keyboardGeometry=await phone.evaluate(async()=>{
+   const viewport=window.visualViewport;
+   const innerHeightDescriptor=Object.getOwnPropertyDescriptor(window,'innerHeight');
+   const nextPaint=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   try {
+    // iOS can report equal viewport heights after panning the layout to a focused field.
+    Object.defineProperty(window,'innerHeight',{configurable:true,value:416});
+    Object.defineProperties(viewport,{
+     height:{configurable:true,value:416},
+     offsetTop:{configurable:true,value:428},
+    });
+    viewport.dispatchEvent(new Event('resize'));
+    await nextPaint();
+    const shell=document.querySelector('.oie-shell');
+    const {top,bottom}=shell.getBoundingClientRect();
+    return {top,bottom,fixed:getComputedStyle(shell).position==='fixed'};
+   } finally {
+    if(innerHeightDescriptor)Object.defineProperty(window,'innerHeight',innerHeightDescriptor);
+    else delete window.innerHeight;
+    delete viewport.height;
+    delete viewport.offsetTop;
+    document.activeElement.blur();
+    viewport.dispatchEvent(new Event('resize'));
+    await nextPaint();
+   }
+  });
+  assert.deepEqual(keyboardGeometry,{top:428,bottom:844,fixed:true});
+  assert.equal(await phone.locator('html').getAttribute('data-oie-keyboard'),null);
+  await phone.evaluate(()=>{
+   document.documentElement.style.setProperty('--oie-safe-top','47px');
+   document.documentElement.style.setProperty('--oie-safe-right','14px');
+   document.documentElement.style.setProperty('--oie-safe-bottom','34px');
+  });
+  const safe=await addDrawer.boundingBox();
+  assert(safe.y>=47&&safe.x+safe.width<=376&&safe.y+safe.height<=810);
+  const viewport=await phoneContext.newCDPSession(phone);
+  await viewport.send('Emulation.setPageScaleFactor',{pageScaleFactor:1.5});
+  await phone.waitForFunction(()=>visualViewport.scale===1.5);
+  await until(()=>close.evaluate(button=>{
+   const box=button.getBoundingClientRect(),vv=visualViewport;
+   return box.width>=44&&box.height>=44&&box.left>=vv.offsetLeft&&box.top>=vv.offsetTop&&
+    box.right<=vv.offsetLeft+vv.width-13&&box.bottom<=vv.offsetTop+vv.height-33;
+  }),'zoomed drawer close stays in the visual viewport');
+  await close.tap();
+  await addDrawer.waitFor({state:'hidden'});
+  await phone.setViewportSize({width:874,height:402});
+  await phone.goto(base+'/?open=accounts&accountPage=add&lang=pt-BR');
+  await field.focus();
+  await phone.evaluate(()=>{
+   const viewport=window.visualViewport;
+   Object.defineProperty(viewport,'height',{configurable:true,value:110});
+   viewport.dispatchEvent(new Event('resize'));
+  });
+  await phone.waitForFunction(()=>document.documentElement.hasAttribute('data-oie-keyboard'));
+  assert(await addDrawer.evaluate(panel=>{
+   const body=panel.querySelector('#accounts-body');
+   const save=panel.querySelector('#register-account-form button[type=submit]');
+   body.scrollTop=body.scrollHeight;
+   const visible=body.getBoundingClientRect(),button=save.getBoundingClientRect();
+   return button.top>=visible.top&&button.bottom<=visible.bottom;
+  }),'the entire register action scrolls above the landscape keyboard');
+  await phoneContext.close();
   state.count=3;
   state.changed=false;
   const accountId=id(100);

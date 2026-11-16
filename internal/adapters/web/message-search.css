@@ -65,3 +65,20 @@
 .oie-search-history-option{display:flex;align-items:center;gap:4px}
 .oie-search-history-option>label{min-width:0}
 .oie-search-history-info{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;min-width:24px;padding:3px;color:var(--oie-muted)}
+
+:root[data-oie-short-viewport] .oie-list-pane:has(.oie-message-search-slot:not([hidden])) .oie-list-account {
+  display:none;
+}
+:root[data-oie-short-viewport] .oie-list-pane:has(.oie-message-search-slot:not([hidden])) .oie-list-heading {
+  height:52px;
+  min-height:52px;
+  padding-block:4px;
+}
+:root[data-oie-short-viewport] .oie-message-search-slot .oie-search-categories {
+  flex-wrap:nowrap;
+  overflow-x:auto;
+}
+:root[data-oie-short-viewport] .oie-message-search-slot .oie-search-category {
+  flex:none;
+  white-space:nowrap;
+}

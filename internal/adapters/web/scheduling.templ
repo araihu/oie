@@ -86,7 +86,7 @@ templ scheduledResults(v view) {
 }
 
 templ conversationSchedulesDrawer(v view) {
-	@drawer.Drawer(drawer.Config{ID:"conversation-schedules",Title:v.Text.Scheduled,PanelClass:"oie-conversation-details-drawer"}) {
+	@workspaceDrawer(drawer.Config{ID:"conversation-schedules",Title:v.Text.Scheduled,PanelClass:"oie-conversation-details-drawer"}) {
 		<section class="oie-conversation-schedules" data-conversation-schedules={v.Selected.Id}
 			data-loading={v.Text.ScheduleLoading} data-unavailable={v.Text.ScheduleUnavailable} data-edit-unavailable={v.Text.MessageUnavailable}>
 			<div class="oie-conversation-schedules-heading">

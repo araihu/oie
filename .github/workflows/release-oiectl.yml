@@ -35,13 +35,15 @@ jobs:
           cache-dependency-path: |
             cli/go.sum
             tools/go.sum
-            tools/vacuum/go.sum
       - name: Generate and publish oiectl
         env:
           GH_TOKEN: ${{ github.token }}
           SPEC_TAG: ${{ inputs.spec_tag || github.ref_name }}
           CLI_PATCH: ${{ inputs.cli_patch }}
         run: |
+          # Resolve the binary before release-oiectl.py switches to the spec revision.
+          VACUUM="$(python3 tools/ci/linter.py --path vacuum)"
+          export VACUUM
           patch=()
           if [[ "$CLI_PATCH" == true ]]; then
             patch=(--patch "$GITHUB_RUN_ID")

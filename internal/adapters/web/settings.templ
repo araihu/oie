@@ -16,7 +16,7 @@ import (
 
 templ settings(v view) {
 	{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.Settings}}) }}
-	@drawer.Drawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
+	@workspaceDrawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
 		<div class="oie-settings oie-settings-scroll">
 			@tabs.Tabs(tabs.Config{
 				ID: "settings-tabs",
@@ -74,7 +74,7 @@ templ settingsSubpageBack(id, label string) {
 }
 
 templ settingsSubpage(id, title, backLabel string) {
-	@drawer.Drawer(drawer.Config{ID: id, Title: title}) {
+	@workspaceDrawer(drawer.Config{ID: id, Title: title}) {
 		<div class="oie-settings-section oie-settings-subpage">
 			@settingsSubpageBack(id, backLabel)
 			{ children... }

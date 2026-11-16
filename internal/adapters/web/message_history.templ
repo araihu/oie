@@ -13,7 +13,7 @@ import (
 
 templ messageHistoryDrawer(v view) {
 	if v.Selected!=nil {
-		@drawer.Drawer(drawer.Config{ID: "message-history", Title: v.Text.EditHistory, PanelClass: "oie-message-history-drawer"}) {
+		@workspaceDrawer(drawer.Config{ID: "message-history", Title: v.Text.EditHistory, PanelClass: "oie-message-history-drawer"}) {
 			<div id="message-history-content" class="oie-message-history-content" data-history-unavailable={ v.Text.EditHistoryUnavailable } data-history-changed={ v.Text.EditHistoryChanged }>
 				<div data-history-loading class="oie-history-feedback" role="status" hidden>@spinner.Spinner(spinner.Config{Size: spinner.SizeSM})<span>{ v.Text.EditHistoryLoading }</span></div>
 				<div data-history-error role="status" aria-live="polite" hidden></div>
