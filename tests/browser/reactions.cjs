@@ -141,7 +141,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await react();
   const reactionSearch=modal.locator('#reaction-emoji-search');
   await reactionSearch.fill('joinha');
-  await modal.locator('[data-emoji-family="👍"]').waitFor({state:'visible'});
+  await modal.locator('[data-emoji-pick="👍"]').waitFor({state:'visible'});
   await quick.locator('[data-reaction-more]').evaluate(button=>{
    button.setAttribute('aria-expanded','true');
    return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
