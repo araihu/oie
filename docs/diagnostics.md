@@ -1,6 +1,6 @@
 # Diagnostics
 
-Open **Settings → Diagnostics**, select a time range, and use **Refresh** to
+Open **Settings → General → Diagnostics**, select a time range, and use **Refresh** to
 read the latest records. Select **Copy** to copy the records on screen or open
 the menu next to **Copy** and select **Download** to save them as
 `oie-diagnostics.jsonl`. Each row shows the event, severity, time, and
