@@ -242,8 +242,17 @@ make ci-check  # Contracts, generation drift, golangci-lint, vet, unit/race test
 make ci        # Also isolated Prosody integration and all browser workflows
 ```
 
+Local `make ci`, `make ci-check`, `make ci-desktop` and `make package-linux` share
+one lock at `$HOME/.local/state/oie/ci.lock` across the user's Oiê worktrees on
+the same host. When a run is active, the next invocation reports that it is
+waiting. It starts preflight and takes its source snapshot after the active run
+finishes cleanup. Time spent waiting is outside `OIE_CI_TIMEOUT`. Ctrl+C cancels
+the waiting invocation. Keep the lock file in place while any run is active.
+Direct Dagger commands and other projects use their own concurrency.
+
 GitHub Actions runs the same `make ci` command and uploads its stage logs and
-test evidence as `dagger-ci-evidence`, including when tests fail.
+test evidence as `dagger-ci-evidence`, including when tests fail. Actions jobs
+bypass the local lock.
 The workflow uses `hostinger-vps-trusted` for allowlisted pushes to `main` and
 `hostinger-vps-pr` for ready pull requests opened by allowlisted actors from
 branches in the same repository. The allowlist comes from the organization

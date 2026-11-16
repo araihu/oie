@@ -6,14 +6,18 @@ case "$mode" in all|checks|desktop|release) ;; *) echo 'usage: tools/ci/run.sh [
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 ci_artifacts=${OIE_CI_ARTIFACTS:-"$root/tests/browser/artifacts/ci"}
 case "$ci_artifacts" in /*) ;; *) ci_artifacts="$root/$ci_artifacts" ;; esac
-python3 -m unittest discover -s "$root/tools/ci" -p '*_test.py'
-task_tmp=$(mktemp -d)
+task_tmp=
+lock_pid=
 ssh_pid=
 runner_pid=
 watchdog_pid=
 cleanup() {
   result=$?
   trap - EXIT HUP INT TERM
+  if [ -n "$lock_pid" ]; then
+    kill -TERM "$lock_pid" 2>/dev/null || true
+    wait "$lock_pid" 2>/dev/null || true
+  fi
   if [ -n "$runner_pid" ]; then
     kill -TERM "$runner_pid" 2>/dev/null || true
     # One Python process owns the delay, so stopping it cannot orphan a sleep.
@@ -51,13 +55,38 @@ PY_WATCHDOG
     watchdog_pid=
   fi
   if [ -n "$ssh_pid" ]; then kill "$ssh_pid" 2>/dev/null || true; wait "$ssh_pid" 2>/dev/null || true; fi
-  rm -rf "$task_tmp"
+  if [ -n "$task_tmp" ]; then rm -rf "$task_tmp"; fi
   exit "$result"
 }
 trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+if [ "${GITHUB_ACTIONS:-}" != true ]; then
+  lock_dir="$HOME/.local/state/oie"
+  mkdir -p "$lock_dir"
+  # Keep the same open file description in this shell through cleanup.
+  exec 9>>"$lock_dir/ci.lock"
+  python3 -c '
+import fcntl
+import sys
+
+try:
+    fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print("[ci] waiting for the current local Oiê CI run to finish", file=sys.stderr, flush=True)
+    fcntl.flock(9, fcntl.LOCK_EX)
+' &
+  lock_pid=$!
+  lock_result=0
+  wait "$lock_pid" || lock_result=$?
+  lock_pid=
+  [ "$lock_result" -eq 0 ] || exit "$lock_result"
+fi
+
+python3 -m unittest discover -s "$root/tools/ci" -p '*_test.py'
+task_tmp=$(mktemp -d)
 GOWORK=off go -C "$root/tools/ci" test -tags=http2legacy ./...
 GOWORK=off go -C "$root/tools/ci" build -tags=http2legacy -o "$task_tmp/oie-ci" .
 python3 "$root/tools/ci/materialize.py" "$root" "$task_tmp/source"
