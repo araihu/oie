@@ -48,7 +48,12 @@ templ pendingSendBody(v view) {
   <div class="oie-message-stamp">
    <span class="oie-send-state-slot">
     <span data-pending-state="sending" role="img" aria-label={v.Text.SendPending} title={v.Text.SendPending}>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-send-spinner"})</span>
-    <span data-pending-state="waiting" hidden role="img" aria-label={v.Text.SendWaitingForConnection} title={v.Text.SendWaitingForConnection}>@glyph(heroicons.Icon16SolidClock)</span>
+    // Inline Heroicons 16 solid clock so this state can render offline.
+    <span data-pending-state="waiting" hidden role="img" aria-label={v.Text.SendWaitingForConnection} title={v.Text.SendWaitingForConnection}>
+     <svg class="oie-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" fill-rule="evenodd" d="M1 8C1 4.13401 4.13401 1 8 1C11.866 1 15 4.13401 15 8C15 11.866 11.866 15 8 15C4.13401 15 1 11.866 1 8ZM8.75 3.75C8.75 3.33579 8.41421 3 8 3C7.58579 3 7.25 3.33579 7.25 3.75V8C7.25 8.41421 7.58579 8.75 8 8.75H11.25C11.6642 8.75 12 8.41421 12 8C12 7.58579 11.6642 7.25 11.25 7.25H8.75V3.75Z"></path>
+     </svg>
+    </span>
     <span data-pending-state="accepted" hidden role="img" aria-label={v.Text.Queued} title={v.Text.Queued}>@glyph(heroicons.Icon16SolidClock)</span>
     <span data-pending-state="uncertain" hidden>
      @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-send-retry"),button.WithAttrs(templ.Attributes{"data-pending-send-retry":"","aria-label":v.Text.SendUnconfirmed+" · "+v.Text.RetrySubmission,"title":v.Text.SendUnconfirmed+" · "+v.Text.RetrySubmission})){@glyph(heroicons.Icon16SolidArrowPath)}
