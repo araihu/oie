@@ -6,8 +6,9 @@ window.OieRuntime.register('timeline',life=>{
  const identity={engine:document.body.dataset.engineId,account:document.body.dataset.accountId,conversation:document.body.dataset.conversationId};
  const jump=document.querySelector('[data-jump-latest]');
  const labels=document.getElementById('oie-live-copy')?.dataset;
- let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,restoring=false,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
+ let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
  let unseenLiveMessages=false;
+ let correctedScrollTop;
  let exhaustedArchiveEdge='';
  let latestSnapshot=null;
  const hiddenChecks=new Set(),hiddenRevisions=new Map(),expired=new Set();
@@ -74,9 +75,17 @@ window.OieRuntime.register('timeline',life=>{
   if(label&&jump.textContent!==label)jump.textContent=label;
  }
  function scrollLatest(){root.scrollTop=root.scrollHeight;capture();syncJump()}
- function correct(){if(disposed||!root.isConnected)return;restoring=true;if(follow)root.scrollTop=root.scrollHeight;else if(anchor){const node=rows().find(row=>row.dataset.messageId===anchor.id);if(node)root.scrollTop+=node.getBoundingClientRect().top-anchor.top}
+ function correct(){
+  if(disposed||!root.isConnected)return;
+  const previousTop=root.scrollTop;
+  if(follow)root.scrollTop=root.scrollHeight;
+  else if(anchor){
+   const node=rows().find(row=>row.dataset.messageId===anchor.id);
+   if(node)root.scrollTop+=node.getBoundingClientRect().top-anchor.top;
+  }
+  if(root.scrollTop!==previousTop)correctedScrollTop=root.scrollTop;
   syncJump();
-  life.raf(()=>{restoring=false})}
+ }
  function hooks(page,generation,startedAt){document.dispatchEvent(new CustomEvent('oie:timeline-content',{detail:{page,startedAt}}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation}}));document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent('oie:actions-refreshed'))}
  function movedRelease(previous,item){
   return previous.ms!==item.ms&&item.node.hasAttribute('data-timeline-release')&&previous.node.classList.contains('oie-message-own')&&
@@ -303,9 +312,11 @@ window.OieRuntime.register('timeline',life=>{
  }
  let lastTop=root.scrollTop;
  life.on(root,'scroll',()=>{
-  const movedUp=root.scrollTop<lastTop;
-  lastTop=root.scrollTop;
-  if(!restoring){capture();if(movedUp)loadArchiveAtTop()}
+  const top=root.scrollTop,movedUp=top<lastTop;
+  const corrected=top===correctedScrollTop;
+  lastTop=top;
+  correctedScrollTop=undefined;
+  if(!corrected){capture();if(movedUp)loadArchiveAtTop()}
   syncJump();
  });
  life.on(root,'wheel',event=>{if(event.deltaY<0)loadArchiveAtTop()},{passive:true});

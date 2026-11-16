@@ -247,6 +247,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     root.dispatchEvent(new Event('scroll'));
    },distance);
    const atBottom=()=>timeline(page).evaluate(root=>Math.abs(root.scrollHeight-root.clientHeight-root.scrollTop)<=1);
+   const gapAfterRefresh=await timeline(page).evaluate(root=>{
+    const snapshot=document.createElement('div');
+    const copy=root.cloneNode(true);
+    copy.id='live-timeline';
+    snapshot.append(copy);
+    window.OieTimeline.refresh(snapshot);
+    root.scrollTop=root.scrollHeight-root.clientHeight-30;
+    root.dispatchEvent(new Event('scroll'));
+    return new Promise(resolve=>requestAnimationFrame(()=>resolve(root.scrollHeight-root.clientHeight-root.scrollTop)));
+   });
+   assert(Math.abs(gapAfterRefresh-30)<=1,'a scroll made during refresh preserves the reading position');
    const queueIncoming=(suffix,text)=>{
     const message={...messages.at(-1),id:id(suffix+width),revisionId:id(suffix+10000+width),sender:{id:id(9),displayName:'Bob'},originalText:text,createdAt:new Date(Date.parse(messages.at(-1).createdAt)+100).toISOString(),isOwn:false,sendState:'received'};
     positions.set(message.id,messages.length);messages.push(message);emit('message.created');
