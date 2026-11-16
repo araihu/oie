@@ -19,15 +19,7 @@ templ settings(v view) {
 	{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.Settings}}) }}
 	@workspaceDrawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
 		<div class="oie-settings oie-settings-scroll">
-			@tabs.Tabs(tabs.Config{
-				ID: "settings-tabs",
-				DefaultTab: v.SettingsTab,
-				Tabs: []tabs.Tab{
-					{ID: "general", Label: v.Text.SettingsGeneral, Content: generalSettings(v)},
-					{ID: "composition", Label: v.Text.Composition, Content: compositionSettings(v)},
-					{ID: "device", Label: v.Text.DevicePreferences, Content: deviceSettings(v)},
-				},
-			})
+			@tabs.Tabs(tabs.Config{ID: "settings-tabs", DefaultTab: v.SettingsTab, Tabs: settingsTabs(v)})
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
 		if v.HostedSignIn {
@@ -53,6 +45,18 @@ templ settings(v view) {
 	if v.Diagnostics {
 		@diagnosticsSettings(v)
 	}
+}
+
+func settingsTabs(v view) []tabs.Tab {
+	options := []tabs.Tab{
+		{ID: "general", Label: v.Text.SettingsGeneral, Content: generalSettings(v)},
+		{ID: "composition", Label: v.Text.Composition, Content: compositionSettings(v)},
+		{ID: "device", Label: v.Text.DevicePreferences, Content: deviceSettings(v)},
+	}
+	if !v.Preview && v.EngineID != "" {
+		options = append(options, tabs.Tab{ID: "engine", Label: v.Text.EngineMode, Content: engineSettings(v)})
+	}
+	return options
 }
 
 func settingsDrawerTransition(from, to string) string {
@@ -167,11 +171,14 @@ templ deviceSettings(v view) {
 	if !v.Preview && v.EngineID != "" {
 		@downloadRetentionSettings(v)
 		@notificationSettings(v)
-		<section class="oie-settings-section oie-device-retention" aria-labelledby="device-retention-title">
-			<h2 id="device-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
-			@retentionRegion(v,"",retentionView{Loading:true})
-		</section>
 	}
+}
+
+templ engineSettings(v view) {
+	<section class="oie-settings-section oie-engine-retention" aria-labelledby="engine-retention-title">
+		<h2 id="engine-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
+		@retentionRegion(v,"",retentionView{Loading:true})
+	</section>
 }
 
 

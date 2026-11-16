@@ -16,7 +16,9 @@ templ retentionIcon() {
 templ retentionRegion(v view, id string, p retentionView) {
 	{{ region := retentionRegionID(id) }}
 	<div id={region} class="oie-retention" x-data="{failed:false}" x-on:htmx:error="failed = true">
-		if p.Global != nil || p.Local != nil {
+		if p.Global != nil {
+			@engineRetentionForm(v,p)
+		} else if p.Local != nil {
 			@retentionForm(v,id,p)
 		} else {
 			<div class="oie-retention-load"
@@ -62,22 +64,11 @@ templ retentionForm(v view, id string, p retentionView) {
 		x-on:htmx:error="error = $el.dataset.unavailable"
 		x-on:htmx:after:request="const status = $event.detail.ctx.response.status; if (status !== 200 && status !== 409) { $event.preventDefault(); error = status === 403 ? $el.dataset.forbidden : status === 422 ? $el.dataset.invalid : $el.dataset.unavailable }"
 	>
-		<input type="hidden" name="csrf" value={v.CSRF}/>
-		<input type="hidden" name="engineId" value={v.EngineID}/>
+		@retentionIdentity(v, p.Local.Revision)
 		<fieldset class="oie-retention-fields">
-			if p.Local != nil {
-				<input type="hidden" name="revision" value={p.Local.Revision}/>
-				@retentionChoice(v,"override",p.Conversation.Title,p.Local.Days,p.Local.GlobalDays,true)
-			} else {
-				<input type="hidden" name="revision" value={p.Global.Revision}/>
-				@retentionChoice(v,"room",v.Text.RetentionRooms,&p.Global.RoomDays,0,false)
-				@retentionChoice(v,"direct",v.Text.RetentionDirect,&p.Global.DirectDays,0,false)
-			}
+			@retentionChoice(v,"override",p.Conversation.Title,p.Local.Days,p.Local.GlobalDays,true)
 		</fieldset>
-		<div class="oie-retention-help">
-			<p>{v.Text.RetentionUnlimitedHelp}</p>
-			<p>{v.Text.RetentionShorterHelp}</p>
-		</div>
+		@retentionHelp(v)
 		<div class="oie-retention-actions">
 			@button.Button(button.WithID(region+"-save"),button.WithType("submit"),button.WithTone(button.TonePrimary),button.WithAttrs(templ.Attributes{"x-bind:aria-disabled":"String(pending)"})){ {v.Text.RetentionSave} }
 			<div>
@@ -92,8 +83,40 @@ templ retentionForm(v view, id string, p retentionView) {
 	</form>
 }
 
+templ engineRetentionForm(v view, p retentionView) {
+	<form class="oie-retention-form" method="post" action={templ.URL(v.retentionHref(""))}
+		data-engine-retention data-room-days={strconv.Itoa(p.Global.RoomDays)} data-direct-days={strconv.Itoa(p.Global.DirectDays)}
+		data-unavailable={v.Text.RetentionUnavailable} data-invalid={v.Text.InvalidForm} data-forbidden={v.Text.CSRFError}
+		data-conflict={v.Text.RetentionConflict} data-saving={v.Text.Saving} data-saved={v.Text.RetentionSaved}
+	>
+		@retentionIdentity(v, p.Global.Revision)
+		<fieldset class="oie-retention-fields">
+			@retentionChoice(v,"room",v.Text.RetentionRooms,&p.Global.RoomDays,0,false)
+			@retentionChoice(v,"direct",v.Text.RetentionDirect,&p.Global.DirectDays,0,false)
+		</fieldset>
+		@retentionHelp(v)
+		<div class="oie-engine-retention-status">
+			<p role="status" tabindex="-1" data-retention-status>{p.Notice}</p>
+			@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-retention-retry":"","hidden":true})){ {v.Text.Retry} }
+		</div>
+	</form>
+}
+
+templ retentionIdentity(v view, revision string) {
+	<input type="hidden" name="csrf" value={v.CSRF}/>
+	<input type="hidden" name="engineId" value={v.EngineID}/>
+	<input type="hidden" name="revision" value={revision}/>
+}
+
+templ retentionHelp(v view) {
+	<div class="oie-retention-help">
+		<p>{v.Text.RetentionUnlimitedHelp}</p>
+		<p>{v.Text.RetentionShorterHelp}</p>
+	</div>
+}
+
 templ retentionChoice(v view, prefix string, label string, days *int, inherited int, canInherit bool) {
-	<div class="grid gap-2" x-data={retentionAlpine(days)} x-on:change="if ($event.target.name.endsWith('-mode')) mode = $event.target.value">
+	<div class="grid gap-2" data-retention-choice={prefix} x-data={retentionAlpine(days)} x-on:change="if ($event.target.name.endsWith('-mode')) mode = $event.target.value">
 		@selectfield.Select(selectfield.Config{ID:"retention-"+prefix,Name:prefix+"-mode",Label:label,Options:retentionOptions(v,days,inherited,canInherit),Required:true})
 		<div x-cloak?={retentionMode(days) != "finite"} x-show="mode === 'finite'">
 			@textinput.TextInput(textinput.Config{

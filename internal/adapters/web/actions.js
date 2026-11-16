@@ -213,6 +213,143 @@ window.OieRuntime.register('audio', life => {
   });
 });
 
+window.OieRuntime.register('engine-retention', life => {
+  const states = new WeakMap();
+  const snapshot = form => ({
+    revision: form.elements.revision.value,
+    room: Number(form.dataset.roomDays),
+    direct: Number(form.dataset.directDays),
+  });
+  const stateFor = form => {
+    if (!states.has(form)) {
+      const saved = snapshot(form);
+      states.set(form, {saved, observed: {...saved}, queued: new Map(), busy: false, failed: false});
+    }
+    return states.get(form);
+  };
+  const statusFor = form => form.querySelector('[data-retention-status]');
+  const modeFor = choice => choice.querySelector('[name$="-mode"]');
+  const retryFor = form => form.querySelector('[data-retention-retry]');
+
+  function choiceValue(choice) {
+    if (modeFor(choice).value === 'unlimited') return 0;
+    const input = choice.querySelector('input[type=number]');
+    const days = input.valueAsNumber;
+    return input.validity.valid && Number.isInteger(days) && days > 0 ? days : null;
+  }
+
+  function acceptSnapshot(form, state, saved) {
+    state.saved = saved;
+    // Keep edits in progress and update fields that the user has left alone.
+    for (const choice of form.querySelectorAll('[data-retention-choice]')) {
+      const key = choice.dataset.retentionChoice;
+      if (state.queued.has(key) || choice.contains(document.activeElement) ||
+          choiceValue(choice) !== state.observed[key] || state.observed[key] === saved[key]) continue;
+      const mode = modeFor(choice);
+      if (saved[key] > 0) choice.querySelector('input[type=number]').value = saved[key];
+      mode.value = saved[key] === 0 ? 'unlimited' : 'finite';
+      mode.dispatchEvent(new Event('change', {bubbles: true}));
+      state.observed[key] = saved[key];
+    }
+  }
+
+  async function save(form, state) {
+    if (state.busy || state.failed || state.queued.size === 0 || !form.isConnected || life.signal.aborted) return;
+    const changes = [...state.queued].filter(([key, days]) => days !== state.saved[key]);
+    state.queued.clear();
+    if (changes.length === 0) {
+      if (!retryFor(form).hidden) finish(form, '');
+      return;
+    }
+    const desired = {...state.saved, ...Object.fromEntries(changes)};
+    const body = new URLSearchParams({
+      csrf: form.elements.csrf.value, engineId: form.elements.engineId.value, revision: desired.revision,
+      'room-mode': desired.room === 0 ? 'unlimited' : 'finite', 'room-days': desired.room,
+      'direct-mode': desired.direct === 0 ? 'unlimited' : 'finite', 'direct-days': desired.direct,
+    });
+    const status = statusFor(form);
+    const retry = retryFor(form);
+    state.busy = true;
+    status.textContent = form.dataset.saving;
+    retry.setAttribute('aria-disabled', 'true');
+    let error = form.dataset.unavailable;
+    let saved;
+    try {
+      const response = await life.fetch(form.action, {method: 'POST', body});
+      if (response.ok || response.status === 409) {
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const updated = doc.querySelector('[data-engine-retention]');
+        if (updated?.elements.engineId.value === form.elements.engineId.value) {
+          saved = snapshot(updated);
+          // A response can be lost after the engine saved the change.
+          if (response.ok || changes.every(([key, days]) => saved[key] === days)) error = '';
+        }
+        if (error && response.status === 409) error = form.dataset.conflict;
+      } else if (response.status === 422) {
+        error = form.dataset.invalid;
+      } else if (response.status === 403) {
+        error = form.dataset.forbidden;
+      }
+    } catch {}
+    if (life.signal.aborted || !form.isConnected) return;
+
+    state.busy = false;
+    state.failed = error !== '';
+    if (state.failed) state.queued = new Map([...changes, ...state.queued]);
+    if (saved) acceptSnapshot(form, state, saved);
+    finish(form, error, state.failed);
+    if (!state.failed) void save(form, state);
+  }
+
+  function finish(form, error, failed = false) {
+    const status = statusFor(form);
+    const retry = retryFor(form);
+    status.textContent = error || form.dataset.saved;
+    if (!failed && document.activeElement === retry) status.focus({preventScroll:true});
+    retry.hidden = !failed;
+    retry.removeAttribute('aria-disabled');
+  }
+
+  life.on(document, 'focusout', event => {
+    const field = event.target;
+    const choice = field.closest('[data-retention-choice]');
+    const form = choice?.closest('form[data-engine-retention]');
+    if (!form) return;
+    const input = choice.querySelector('input[type=number]');
+    if (field !== input && choice.contains(event.relatedTarget)) return;
+    const state = stateFor(form);
+    const key = choice.dataset.retentionChoice;
+    const days = choiceValue(choice);
+    if (days === null) {
+      if (field === input) {
+        input.setAttribute('aria-invalid', 'true');
+        statusFor(form).textContent = form.dataset.invalid;
+      }
+      state.queued.delete(key);
+      delete state.observed[key];
+      return;
+    }
+    input.removeAttribute('aria-invalid');
+    if (state.observed[key] === days) return;
+    state.observed[key] = days;
+    state.queued.set(key, days);
+    void save(form, state);
+  });
+
+  life.on(document, 'click', event => {
+    const retry = event.target.closest('[data-retention-retry]');
+    if (!retry || retry.getAttribute('aria-disabled') === 'true') return;
+    const form = retry.form;
+    const state = stateFor(form);
+    state.failed = false;
+    void save(form, state);
+  });
+
+  life.on(document, 'submit', event => {
+    if (event.target.hasAttribute('data-engine-retention')) event.preventDefault();
+  });
+});
+
 window.OieRuntime.register('download-retention', life => {
   const section = document.querySelector('[data-download-retention]');
   if (!section) return;

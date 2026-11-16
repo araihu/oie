@@ -56,8 +56,8 @@ func (v *view) configureWorkspace(r *http.Request) {
 		v.InfoQuery = string([]rune(v.InfoQuery)[:200])
 	}
 	v.InfoFocus = q.Get("infoFocus")
-	if q.Get("open") == "settings" && q.Get("settingsTab") == "device" {
-		v.SettingsTab = "device"
+	if tab := q.Get("settingsTab"); q.Get("open") == "settings" && (tab == "device" || tab == "engine") {
+		v.SettingsTab = tab
 	}
 	v.SharedType = q.Get("contentType")
 	switch v.SharedType {

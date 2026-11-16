@@ -1,7 +1,7 @@
 # Message retention
 
 The engine applies the local expiry and XMPP recovery rules in the
-[specification](oie-spec.md#71-message-retention). Open **Settings → This device →
+[specification](oie-spec.md#71-message-retention). Open **Settings → Engine →
 Message retention** for the engine defaults, or **Details → Message retention**
 for a conversation override. API 0.33 provides the same controls through
 `GET` and `PUT` on `/api/v1/engine/retention` and
