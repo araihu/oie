@@ -29,6 +29,9 @@ type sentCorrectionWire struct {
 	Replacements []struct {
 		ID string `xml:"id,attr"`
 	} `xml:"urn:xmpp:message-correct:0 replace"`
+	Retractions []struct {
+		ID string `xml:"id,attr"`
+	} `xml:"urn:xmpp:message-retract:1 retract"`
 }
 
 func TestOwnSentCorrectionsDirectAndSavedRoom(t *testing.T) {
@@ -255,6 +258,16 @@ func TestOwnSentCorrectionsDirectAndSavedRoom(t *testing.T) {
 			}
 			if _, err = engine.EditMessage(ctx, id(), previous.MessageID, previous.CurrentRevisionID, "Stale conflicting edit"); err == nil {
 				t.Fatal("stale content revision accepted")
+			}
+			if conversation.Kind == "direct" {
+				retracted, err := engine.RetractMessage(ctx, target.MessageID, target.CurrentRevisionID)
+				if err != nil || retracted.Retraction == nil || retracted.OriginalText != "" {
+					t.Fatalf("direct retraction did not reach account server submission: %+v %v", retracted, err)
+				}
+				wire := awaitWire("A message was retracted.")
+				if len(wire.Retractions) != 1 || wire.Retractions[0].ID != originalWire.ID || wire.ID == originalWire.ID {
+					t.Fatalf("retraction of an edited message did not target the original stanza: %+v", wire)
+				}
 			}
 		})
 	}

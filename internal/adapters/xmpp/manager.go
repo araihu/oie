@@ -52,6 +52,7 @@ type entry struct {
 	correctionLatest    map[string]domain.ID
 	reactionLimits      map[string]reactionLimit
 	reactionCommands    map[string]reactionDestination
+	retractionAttempts  map[string]*retractionAttempt
 	state               domain.Connection
 	session             *mx.Session
 	suspended           *mx.Session
@@ -536,6 +537,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.sendMu.Lock()
 			e.mu.Lock()
 			e.session = nil
+			e.retractionAttempts = nil
 			e.replaying = false
 			e.raw = nil
 			e.presenceWake = nil
@@ -952,6 +954,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			}
 		}
 		if msg.Type == stanza.ErrorMessage {
+			if rejectRetraction(e, msg.Message) {
+				return nil
+			}
 			if handled, err := m.rejectReaction(ctx, e, msg.Message); handled {
 				return err
 			}

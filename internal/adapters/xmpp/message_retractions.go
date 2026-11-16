@@ -6,10 +6,12 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
@@ -17,7 +19,7 @@ import (
 
 type retractionSupport struct {
 	advertised bool
-	maxAge     time.Duration
+	maxAge     *time.Duration
 }
 
 func readRetractionSupport(info disco.Info) retractionSupport {
@@ -42,8 +44,8 @@ func readRetractionSupport(info disco.Info) retractionSupport {
 			return retractionSupport{}
 		}
 		age := time.Duration(seconds) * time.Second
-		if result.maxAge == 0 || age < result.maxAge {
-			result.maxAge = age
+		if result.maxAge == nil || age < *result.maxAge {
+			result.maxAge = &age
 		}
 	}
 	return result
@@ -69,6 +71,9 @@ func prepareRetractionLocked(e *entry, a domain.Account, c domain.Conversation, 
 		return empty, false
 	}
 	if c.Kind == "direct" && usableID(target.ProviderID) {
+		if !e.session.StreamManagement().Enabled && featureEvidence(e.discovery, "account", mamNS) != "supported" {
+			return empty, false
+		}
 		return application.IncomingRetraction{Scope: "xmpp:correct:sender:" + a.Address, RemoteID: target.ProviderID}, true
 	}
 	if c.Kind != "room" {
@@ -78,7 +83,7 @@ func prepareRetractionLocked(e *entry, a domain.Account, c domain.Conversation, 
 	configuration := e.roomConfigurations[c.Address]
 	e.historyMu.Unlock()
 	if configuration.pending || !configuration.retraction.advertised ||
-		configuration.retraction.maxAge > 0 && time.Since(target.CreatedAt) > configuration.retraction.maxAge {
+		configuration.retraction.maxAge != nil && time.Since(target.CreatedAt) > *configuration.retraction.maxAge {
 		return empty, false
 	}
 	slot := e.rooms[c.Address]
@@ -98,6 +103,45 @@ type outboundRetractionElement struct {
 	ID      string   `xml:"id,attr"`
 }
 
+type retractionAttempt struct {
+	session    *mx.Session
+	messageID  domain.ID
+	kind       string
+	target     jid.JID
+	plan       application.IncomingRetraction
+	last       *uint32
+	expiresAt  time.Time
+	result     chan struct{}
+	resultOnce sync.Once
+	err        error
+}
+
+func (a *retractionAttempt) complete(err error) {
+	a.resultOnce.Do(func() {
+		a.err = err
+		close(a.result)
+	})
+}
+
+const retractionRetryWindow = 2 * time.Minute
+
+// The entry lock protects the attempt table. Concurrent retries also share
+// the stream's send lock and cannot select a half-written attempt.
+func (e *entry) previousRetractionLocked(targetID domain.ID, plan application.IncomingRetraction, now time.Time) (string, *retractionAttempt) {
+	var id string
+	var previous *retractionAttempt
+	for key, attempt := range e.retractionAttempts {
+		if attempt.session != e.session || !now.Before(attempt.expiresAt) {
+			delete(e.retractionAttempts, key)
+			continue
+		}
+		if attempt.messageID == targetID && attempt.plan.Scope == plan.Scope && attempt.plan.RemoteID == plan.RemoteID {
+			id, previous = key, attempt
+		}
+	}
+	return id, previous
+}
+
 func (m *Manager) SendRetraction(ctx context.Context, a domain.Account, c domain.Conversation, target domain.Message, plan application.IncomingRetraction) error {
 	to, err := jid.Parse(c.Address)
 	if err != nil {
@@ -109,15 +153,38 @@ func (m *Manager) SendRetraction(ctx context.Context, a domain.Account, c domain
 	if e == nil {
 		return application.ErrProtocolUnavailable
 	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	e.sendMu.Lock()
-	defer e.sendMu.Unlock()
-	e.mu.RLock()
+	e.mu.Lock()
 	current, ok := prepareRetractionLocked(e, a, c, target)
 	session, raw := e.session, e.raw
-	e.mu.RUnlock()
 	if !ok || current.Scope != plan.Scope || current.RemoteID != plan.RemoteID {
+		e.mu.Unlock()
+		e.sendMu.Unlock()
 		return application.ErrProtocolUnavailable
 	}
+	now := time.Now()
+	if id, previous := e.previousRetractionLocked(target.ID, plan, now); previous != nil {
+		e.mu.Unlock()
+		e.sendMu.Unlock()
+		return m.confirmRetraction(ctx, e, id, previous)
+	}
+	id := randomQueryID()
+	if id == "" || len(e.retractionAttempts) >= maxOwnRoomMessages {
+		e.mu.Unlock()
+		e.sendMu.Unlock()
+		return application.ErrProtocolUnavailable
+	}
+	attempt := &retractionAttempt{
+		session: session, messageID: target.ID, kind: c.Kind, target: to, plan: plan,
+		expiresAt: now.Add(retractionRetryWindow), result: make(chan struct{}),
+	}
+	if e.retractionAttempts == nil {
+		e.retractionAttempts = make(map[string]*retractionAttempt)
+	}
+	e.retractionAttempts[id] = attempt
+	e.mu.Unlock()
 	kind := stanza.ChatMessage
 	if c.Kind == "room" {
 		kind = stanza.GroupChatMessage
@@ -129,20 +196,138 @@ func (m *Manager) SendRetraction(ctx context.Context, a domain.Account, c domain
 		Fallback   outboundFallbackElement
 		Store      storeHint
 	}{
-		Message:    stanza.Message{To: to, Type: kind, ID: "oie-retraction-" + string(target.ID)},
+		Message:    stanza.Message{To: to, Type: kind, ID: id},
 		Body:       "A message was retracted.",
 		Retraction: outboundRetractionElement{ID: plan.RemoteID},
 		Fallback:   outboundFallbackElement{For: roomRetractionNS},
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := session.Encode(ctx, payload); err != nil {
+	err = session.Encode(ctx, payload)
+	status := session.StreamManagement()
+	if err != nil {
+		e.forgetRetraction(id, attempt)
+		e.sendMu.Unlock()
 		if !definitivelyUnsent(session.StreamManagement().Enabled, err) {
 			_ = raw.Close()
 		}
 		return application.ErrProtocolUnavailable
 	}
-	return nil
+	if c.Kind == "direct" && status.Enabled {
+		last := status.Acknowledged + uint32(status.Unacknowledged)
+		attempt.last = &last
+	}
+	e.sendMu.Unlock()
+	return m.confirmRetraction(ctx, e, id, attempt)
+}
+
+func (e *entry) forgetRetraction(id string, attempt *retractionAttempt) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.retractionAttempts[id] == attempt {
+		delete(e.retractionAttempts, id)
+	}
+}
+
+func (m *Manager) confirmRetraction(ctx context.Context, e *entry, id string, attempt *retractionAttempt) (err error) {
+	defer func() {
+		if err == nil || errors.Is(err, application.ErrStateConflict) {
+			e.forgetRetraction(id, attempt)
+		}
+	}()
+	if attempt.kind == "room" {
+		return awaitRetraction(ctx, attempt)
+	}
+	if attempt.last == nil {
+		return m.awaitArchivedRetraction(ctx, e, attempt, id)
+	}
+	// Stream management proves submission to the account server. It cannot
+	// confirm that the recipient has processed the retraction.
+	if typingAwaitingAck(attempt.last, attempt.session.StreamManagement().Acknowledged) {
+		// A failed request may coincide with a final acknowledgement already
+		// being read by the stream. The bounded wait checks both possibilities.
+		_ = attempt.session.RequestStreamManagementAck(ctx)
+	}
+	return awaitRetraction(ctx, attempt)
+}
+
+func awaitRetraction(ctx context.Context, attempt *retractionAttempt) error {
+	var poll <-chan time.Time
+	if attempt.last != nil {
+		ticker := time.NewTicker(20 * time.Millisecond)
+		defer ticker.Stop()
+		poll = ticker.C
+	}
+	for {
+		if attempt.last != nil && !typingAwaitingAck(attempt.last, attempt.session.StreamManagement().Acknowledged) {
+			// The read loop processes earlier errors before the acknowledgement.
+			attempt.complete(nil)
+			return attempt.err
+		}
+		select {
+		case <-attempt.result:
+			return attempt.err
+		case <-ctx.Done():
+			select {
+			case <-attempt.result:
+				return attempt.err
+			default:
+				return application.ErrProtocolUnavailable
+			}
+		case <-poll:
+		}
+	}
+}
+
+func (m *Manager) awaitArchivedRetraction(ctx context.Context, e *entry, attempt *retractionAttempt, id string) error {
+	for range 2 {
+		if release, err := m.acquireArchive(ctx, e.account.Address, archiveInteractive); err == nil {
+			page, err := m.readArchivePage(ctx, e, attempt.session, e.account.Address, archivePageRequest{
+				With: attempt.target.Bare().String(), Backward: true, Limit: 20,
+			})
+			release()
+			select {
+			case <-attempt.result:
+				return attempt.err
+			default:
+			}
+			if err == nil {
+				for _, in := range page.Query.Messages {
+					if in.IsOwn && in.Kind == "direct" && in.Address == attempt.target.Bare().String() &&
+						in.ProviderID == id && in.Retraction != nil && in.Retraction.Scope == attempt.plan.Scope &&
+						in.Retraction.RemoteID == attempt.plan.RemoteID {
+						attempt.complete(nil)
+						return attempt.err
+					}
+				}
+			}
+		}
+		select {
+		case <-attempt.result:
+			return attempt.err
+		case <-ctx.Done():
+			return application.ErrProtocolUnavailable
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	return awaitRetraction(ctx, attempt)
+}
+
+func rejectRetraction(e *entry, msg stanza.Message) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	attempt := e.retractionAttempts[msg.ID]
+	if attempt == nil {
+		return false
+	}
+	own, _ := jid.Parse(e.account.Address)
+	if e.session != attempt.session || msg.To.String() != "" && !msg.To.Bare().Equal(own) {
+		return true
+	}
+	fromPeer := msg.From.Bare().Equal(attempt.target.Bare()) && (attempt.kind != "room" || msg.From.Resourcepart() == "")
+	if fromPeer || msg.From.Equal(attempt.target.Domain()) || msg.From.Equal(own.Domain()) {
+		attempt.complete(application.ErrStateConflict)
+		delete(e.retractionAttempts, msg.ID)
+	}
+	return true
 }
 
 func (m *Manager) receiveSenderRetraction(ctx context.Context, e *entry, msg stanza.Message, meta roomModerationMetadata, correction correctionMetadata, stamp, delayFrom string) error {
@@ -183,6 +368,16 @@ func (m *Manager) receiveSenderRetraction(ctx context.Context, e *entry, msg sta
 	}
 	err := m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Kind: kind, Address: address,
 		Retraction: &application.IncomingRetraction{RemoteID: ref.ID, Scope: scope, At: at}})
+	if err == nil && kind == "room" {
+		e.mu.Lock()
+		attempt := e.retractionAttempts[msg.ID]
+		if attempt != nil && attempt.session == e.session && attempt.kind == "room" &&
+			attempt.target.String() == address && attempt.plan.Scope == scope && attempt.plan.RemoteID == ref.ID {
+			attempt.complete(nil)
+			delete(e.retractionAttempts, msg.ID)
+		}
+		e.mu.Unlock()
+	}
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}
