@@ -941,6 +941,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil
 		}
+		msg.Body = attachmentBodyFallback(msg.Body, msg.fileSharingMetadata)
 		if strings.TrimSpace(msg.Body) == "" || msg.From.Localpart() == "" {
 			return nil
 		}
@@ -954,7 +955,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		_, requestsEnabled := m.host.(application.ConversationRequestHost)
 		own, _ := jid.Parse(e.account.Address)
-		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

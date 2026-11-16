@@ -171,7 +171,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	case "/ui/videos/thumbnail":
 		status, result = s.requestVideoThumbnail(ctx, r, text)
 	case "/ui/previews/download":
-		status, result = s.downloadPreview(ctx, r, text)
+		status, result = s.downloadPreview(ctx, w, r, text)
 	case "/ui/previews/refresh":
 		status, result = s.refreshPreview(ctx, r, text)
 	case "/ui/accounts/register":
@@ -582,12 +582,16 @@ func accountDestination(r *http.Request, id string) string {
 
 // Download is a resource-scoped ensure operation, so a lost response is safe to
 // retry without inventing a message send or another remote download intent.
-func (s *Server) downloadPreview(ctx context.Context, r *http.Request, text copy) (int, mutationResult) {
+func (s *Server) downloadPreview(ctx context.Context, w http.ResponseWriter, r *http.Request, text copy) (int, mutationResult) {
 	id := r.Form.Get("previewId")
 	if !validOperationKey(id) {
 		return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
 	}
-	response, err := s.client.DownloadPreviewImageWithResponse(ctx, id)
+	params := &engineapi.DownloadPreviewImageParams{}
+	if device := s.downloadDevice(w, r); device != "" {
+		params.XOieDownloadDevice = &device
+	}
+	response, err := s.client.DownloadPreviewImageWithResponse(ctx, id, params)
 	if err != nil {
 		return 503, mutationResult{Message: text.ImageDownloadFailed}
 	}

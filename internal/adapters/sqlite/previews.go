@@ -26,6 +26,7 @@ func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids 
 			return nil, application.ErrInvalid
 		}
 		var body struct {
+			AudioURLs      []string
 			OriginalText   string
 			WireBodySHA256 string
 			OutboundReply  *domain.OutboundReply
@@ -45,7 +46,7 @@ func (s *Store) PreviewSources(ctx context.Context, conversation domain.ID, ids 
 			text, _ = domain.ReplyBody(text, ref.Fallback)
 		}
 		sources = append(sources, application.PreviewSource{
-			ID: domain.ID(row.MessageID), AccountID: domain.ID(row.AccountID), ConversationID: conversation, Text: text,
+			ID: domain.ID(row.MessageID), AccountID: domain.ID(row.AccountID), ConversationID: conversation, Text: text, AudioURLs: body.AudioURLs,
 		})
 	}
 	return sources, nil
@@ -105,6 +106,13 @@ func (s *Store) SavePreview(ctx context.Context, p domain.MessagePreview, expect
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = updatePreview(ctx, q, p, expected); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func updatePreview(ctx context.Context, q *dbgen.Queries, p domain.MessagePreview, expected domain.ID) error {
 	n, err := q.UpdateMessagePreview(ctx, dbgen.UpdateMessagePreviewParams{RevisionID: string(p.RevisionID), State: p.State, DownloadState: p.DownloadState, UpdatedAt: stamp(p.UpdatedAt), Payload: jsonText(p), ID: string(p.ID), RevisionID_2: string(expected)})
 	if err != nil {
 		return err
@@ -112,11 +120,9 @@ func (s *Store) SavePreview(ctx context.Context, p domain.MessagePreview, expect
 	if n != 1 {
 		return application.ErrStateConflict
 	}
-	if err = previewRevision(ctx, q, p, jsonText([]domain.ID{expected})); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return previewRevision(ctx, q, p, jsonText([]domain.ID{expected}))
 }
+
 func previewRows(rows []dbgen.MessagePreview, err error) ([]domain.MessagePreview, error) {
 	if err != nil {
 		return nil, err

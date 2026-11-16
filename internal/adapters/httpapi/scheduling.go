@@ -130,6 +130,7 @@ func (s *Server) GetStagedMessageAttachment(ctx context.Context, r engineapi.Get
 		Body: body, ContentLength: file.Size,
 		Headers: engineapi.GetStagedMessageAttachment200ResponseHeaders{
 			ContentDisposition: mime.FormatMediaType("attachment", map[string]string{"filename": file.FileName}),
+			XOieAttachmentType: new(file.MediaType),
 		},
 	}, nil
 }

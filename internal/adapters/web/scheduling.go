@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/domain"
 )
 
 //go:embed scheduling.js
@@ -246,11 +247,17 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A staged filename and its declared media type come from the uploader.
-	// Only bytes recognized as raster images are served inline on this origin.
+	// Inline types are limited to recognized raster images and supported audio.
 	body := bufio.NewReaderSize(response.Body, 512)
 	prefix, _ := body.Peek(512)
 	contentType := http.DetectContentType(prefix)
-	if q.Has("download") || !rasterAttachment(contentType) {
+	if !q.Has("download") && !rasterAttachment(contentType) {
+		if audio := domain.PlayableAudioType(response.Header.Get("X-Oie-Attachment-Type")); audio != "" {
+			contentType = audio
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		}
+	}
+	if q.Has("download") || !rasterAttachment(contentType) && domain.PlayableAudioType(contentType) == "" {
 		contentType = "application/octet-stream"
 		disposition := response.Header.Get("Content-Disposition")
 		kind, params, err := mime.ParseMediaType(disposition)

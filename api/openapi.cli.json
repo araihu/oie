@@ -237,7 +237,8 @@
                 "media",
                 "links",
                 "documents",
-                "video"
+                "video",
+                "audio"
               ],
               "default": "media"
             }
@@ -450,20 +451,136 @@
         "x-cli-name": "request"
       }
     },
+    "/api/v1/downloads/{deviceId}/retention": {
+      "parameters": [
+        {
+          "name": "deviceId",
+          "in": "path",
+          "required": true,
+          "description": "Stable device identifier.",
+          "schema": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "SharedContent"
+        ],
+        "operationId": "getDownloadRetention",
+        "summary": "Read downloaded-file retention for a device",
+        "responses": {
+          "200": {
+            "description": "Device retention settings and retained download count.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadRetention"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "SharedContent"
+        ],
+        "operationId": "setDownloadRetention",
+        "summary": "Update downloaded-file retention for a device",
+        "description": "Applies the selected age to existing and future retained originals for the specified device.",
+        "requestBody": {
+          "description": "New retention period in days for this device.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDownloadRetention"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated device retention.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadRetention"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "SharedContent"
+        ],
+        "operationId": "clearDeviceDownloads",
+        "summary": "Remove originals retained for this device",
+        "responses": {
+          "200": {
+            "description": "Device retention settings after removing its downloads.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadRetention"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/shared-content/{itemId}/content": {
       "get": {
         "tags": [
           "SharedContent"
         ],
         "operationId": "getSharedContentMedia",
-        "summary": "Stream a retained video or supported document reference",
-        "description": "Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. This is explicit on-demand streaming, not a retained download: no full-file hash, sender verification, offline availability or transfer state is implied. Playback requires explicit activation. A preview client may request only a bounded byte range and must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.",
+        "summary": "Read a retained audio, video or document reference",
+        "description": "Reads the current retained canonical source before opening its URL through the engine's public-network policy. Never redirects the browser to the provider. Supports one byte range and If-Range; an upstream that ignores Range returns 200 rather than an invented 206. Video accepts MP4, WebM, Ogg video and QuickTime MIME types up to 2 GiB; codec playback remains a browser capability. Document references are restricted by URL extension and provider MIME: .txt/.log/.md/.csv/.json/.xml are served as text/plain up to 2 MiB and .pdf as application/pdf up to 100 MiB. Text MIME must be text/plain or the matching format's text/markdown, text/csv, application/json, text/json, application/xml or text/xml. HTML, SVG, office documents and mismatched MIME types are unsupported. A known complete size is required. Full downloads report a SHA-256 fingerprint and whether a supported sender digest was verified. Partial playback and preview requests have no integrity result. Audio and video playback require explicit activation. A preview client may request only a bounded byte range and must stop reading at its preview budget. Client disconnect cancels the upstream read. HEAD returns 405 without contacting the provider. Multiple or malformed ranges are invalid. JSON, XML and Markdown are returned as plain text, never active markup.",
         "parameters": [
           {
             "name": "itemId",
             "in": "path",
             "required": true,
             "description": "Current supported catalog item UUID, never an arbitrary provider URL.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "description": "Complete the download and calculate its integrity before delivering any bytes.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "X-Oie-Download-Device",
+            "in": "header",
+            "description": "Device scope for durable retention of an explicit download.",
             "schema": {
               "$ref": "#/components/schemas/ID"
             }
@@ -491,6 +608,23 @@
           "200": {
             "description": "Complete media/document response; the provider may have ignored Range.",
             "headers": {
+              "X-Oie-SHA256": {
+                "description": "Lowercase SHA-256 fingerprint of all original bytes when verified or downloaded.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "X-Oie-Integrity": {
+                "description": "Provenance of the complete download fingerprint.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "computed_only",
+                    "sender_verified"
+                  ]
+                }
+              },
               "Accept-Ranges": {
                 "description": "Byte-range capability for this source.",
                 "schema": {
@@ -542,6 +676,48 @@
                 }
               },
               "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/ogg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/flac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/aac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/webm": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -627,6 +803,48 @@
                 }
               },
               "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/ogg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/flac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/aac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/webm": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -749,6 +967,17 @@
           },
           "502": {
             "description": "Provider response or range metadata is invalid, unavailable, or truncated.",
+            "headers": {
+              "X-Oie-Integrity": {
+                "description": "Present when the complete file differs from the advertised digest.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "mismatch"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1536,13 +1765,21 @@
         ],
         "operationId": "downloadPreviewImage",
         "summary": "Retain the original image for a preview",
-        "description": "Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. The local SHA-256 fingerprint is computed-only, not evidence of sender-provided integrity. Link cards do not support this operation.",
+        "description": "Explicitly requests the original for a kind=image reference. This ensure operation is safe to retry: concurrent requests share queued work and an already retained file is reused. Failed downloads can be retried. Only validated PNG, JPEG and GIF images up to 32 MiB and bounded pixel dimensions are retained. Supported sender digests are checked before retaining an original. Link cards do not support this operation.",
         "parameters": [
           {
             "name": "previewId",
             "in": "path",
             "required": true,
             "description": "Stable entity UUID.",
+            "schema": {
+              "$ref": "#/components/schemas/ID"
+            }
+          },
+          {
+            "name": "X-Oie-Download-Device",
+            "in": "header",
+            "description": "Device scope for retaining this original.",
             "schema": {
               "$ref": "#/components/schemas/ID"
             }
@@ -5426,6 +5663,12 @@
           "200": {
             "description": "Retained attachment bytes",
             "headers": {
+              "X-Oie-Attachment-Type": {
+                "description": "Staged attachment media type supplied by the uploader.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Content-Disposition": {
                 "description": "Attachment disposition with the original filename.",
                 "required": true,
@@ -5892,6 +6135,14 @@
           "unreadCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "firstUnreadMessageId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ID"
+              }
+            ],
+            "description": "Earliest retained unread message in timeline order on GET responses, when present."
           },
           "canMarkLatestRead": {
             "type": "boolean",
@@ -7188,7 +7439,15 @@
             "enum": [
               "computed_only"
             ],
-            "description": "No expected sender digest was supplied for this URL reference."
+            "description": "The original was fingerprinted locally. A verified sender digest is indicated by verifiedAlgorithm."
+          },
+          "verifiedAlgorithm": {
+            "type": "string",
+            "enum": [
+              "sha-256",
+              "sha-512"
+            ],
+            "description": "Supported sender digest algorithm verified for this original."
           }
         },
         "example": {
@@ -7572,6 +7831,51 @@
           "metadataIndexing": {
             "$ref": "#/components/schemas/SharedContentIndexing"
           }
+        }
+      },
+      "DownloadRetention": {
+        "type": "object",
+        "description": "Per-device original download retention and current count.",
+        "additionalProperties": false,
+        "required": [
+          "days",
+          "count"
+        ],
+        "properties": {
+          "days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650,
+            "description": "Age in days before expiry, or zero to keep until explicit deletion."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of complete original downloads retained for this device."
+          }
+        },
+        "example": {
+          "days": 0,
+          "count": 3
+        }
+      },
+      "SetDownloadRetention": {
+        "type": "object",
+        "description": "Changes the retention period and applies it to existing downloads.",
+        "additionalProperties": false,
+        "required": [
+          "days"
+        ],
+        "properties": {
+          "days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650,
+            "description": "Age in days before expiry, or zero to keep until explicit deletion."
+          }
+        },
+        "example": {
+          "days": 30
         }
       },
       "SharedContentItem": {
@@ -9450,6 +9754,16 @@
           },
           "expectedReplyExcerptSha256": {
             "$ref": "#/components/schemas/ReplyExcerptSHA256"
+          },
+          "audioAttachmentUrls": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Current message audio attachment links advertised by the sender.",
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 4096
+            }
           },
           "originalText": {
             "type": "string",

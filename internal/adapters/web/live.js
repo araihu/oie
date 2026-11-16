@@ -761,7 +761,7 @@ window.OieRuntime.register('live', life => {
   },{capture:true});
   let highlightedMessage='',highlightTimer;
   function pinned(){const timeline=window.OieTimeline;return !!body.dataset.focusMessage||!!(timeline?.hasNewer&&!timeline.liveAttached);}
-  function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()?text('latest'):text('newMessages');}}
+  function showJump(show){const jump=document.querySelector('[data-jump-latest]');if(jump){jump.hidden=!show;jump.textContent=pinned()||body.dataset.firstUnread?text('latest'):text('newMessages');}}
   function scrollLatest() {
     if(window.OieTimeline)window.OieTimeline.scrollLatest();
     else{const timeline=document.querySelector('#message-timeline');if(timeline)timeline.scrollTop=timeline.scrollHeight;}
@@ -789,11 +789,15 @@ window.OieRuntime.register('live', life => {
       if(pinned()||url.searchParams.has('message')||url.searchParams.has('timelineCursor')){
         for(const key of ['message','timelineCursor','timelineDirection'])url.searchParams.delete(key);
         window.OieNavigation.go(url,{latest:true});
-      }else scrollLatest();
+      }else {delete body.dataset.firstUnread;scrollLatest();}
     }
   });
-  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(window.OieTimeline?.atBottom())showJump(pinned());});
-  localizeTimes();if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();else showJump(true);
+  life.on(document.querySelector('#message-timeline'),'scroll',()=>{if(window.OieTimeline?.atBottom()){delete body.dataset.firstUnread;showJump(pinned());}});
+  localizeTimes();
+  const firstUnread=body.dataset.firstUnread&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(body.dataset.firstUnread)}"]`);
+  if(firstUnread){firstUnread.scrollIntoView({block:'start',behavior:'instant'});showJump(true);}
+  else if(body.dataset.focusMessage&&focusMessage(body.dataset.focusMessage))showJump(true);
+  else scrollLatest();
 
   life.on(scheduleRetry,'click',()=>composer.requestSubmit());
   function applyScheduleEditor(editor, nextKey = editor.dataset.operationKey) {

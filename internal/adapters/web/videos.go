@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/domain"
 )
 
 const videoSampleLimit = 5 << 20
@@ -60,24 +61,40 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	params := &engineapi.GetSharedContentMediaParams{}
+	download := query.Get("download") == "1"
+	if download {
+		params.Download = new(true)
+		if device := s.currentDownloadDevice(r); device != "" {
+			params.XOieDownloadDevice = &device
+		}
+	}
 	if preview {
 		value := "bytes=0-" + strconv.Itoa(videoSampleLimit-1)
 		params.Range = &value
-	} else if value := r.Header.Get("Range"); value != "" {
+	} else if value := r.Header.Get("Range"); !download && value != "" {
 		if len(value) > 128 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		params.Range = &value
 	}
-	if value := r.Header.Get("If-Range"); !preview && value != "" {
+	if value := r.Header.Get("If-Range"); !preview && !download && value != "" {
 		if len(value) > 1024 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		params.IfRange = &value
 	}
-	response, err := s.streamClient.GetSharedContentMedia(r.Context(), id, params)
+	ctx := r.Context()
+	var client engineapi.ClientInterface = s.streamClient
+	if !preview && params.Range == nil {
+		// A complete verified response can begin only after the provider transfer.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 16*time.Minute)
+		defer cancel()
+		client = s.archiveClient
+	}
+	response, err := client.GetSharedContentMedia(ctx, id, params)
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -86,7 +103,8 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
 		switch response.StatusCode {
 		case http.StatusBadRequest, http.StatusNotFound, http.StatusUnsupportedMediaType,
-			http.StatusRequestedRangeNotSatisfiable, http.StatusBadGateway, http.StatusServiceUnavailable:
+			http.StatusRequestedRangeNotSatisfiable, http.StatusBadGateway, http.StatusServiceUnavailable,
+			http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusGatewayTimeout:
 			body, readErr := io.ReadAll(io.LimitReader(response.Body, (16<<10)+1))
 			if readErr != nil || len(body) > 16<<10 || len(body) > 0 && !json.Valid(body) {
 				w.WriteHeader(http.StatusBadGateway)
@@ -96,6 +114,9 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 				if value := response.Header.Get("Content-Range"); validUnsatisfiedVideoRange(value) {
 					w.Header().Set("Content-Range", value)
 				}
+			}
+			if response.StatusCode == http.StatusBadGateway && response.Header.Get("X-Oie-Integrity") == "mismatch" {
+				w.Header().Set("X-Oie-Integrity", "mismatch")
 			}
 			w.Header().Set("Content-Type", "application/problem+json")
 			w.WriteHeader(response.StatusCode)
@@ -124,6 +145,10 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
+	if hash, integrity := response.Header.Get("X-Oie-SHA256"), response.Header.Get("X-Oie-Integrity"); response.StatusCode == http.StatusOK && validAvatarHash(hash) && (integrity == "computed_only" || integrity == "sender_verified") {
+		w.Header().Set("X-Oie-SHA256", hash)
+		w.Header().Set("X-Oie-Integrity", integrity)
+	}
 	w.Header().Set("Content-Type", mediaType)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	w.Header().Set("Referrer-Policy", "no-referrer")
@@ -134,6 +159,9 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filename := "video"
+	if domain.PlayableAudioType(mediaType) != "" {
+		filename = "audio"
+	}
 	switch mediaType {
 	case "application/pdf":
 		filename = "document.pdf"
@@ -182,6 +210,9 @@ func sharedMediaMaximum(kind string) int64 {
 	if videoMediaType(kind) {
 		return 2 << 30
 	}
+	if domain.PlayableAudioType(kind) != "" {
+		return 100 << 20
+	}
 	switch kind {
 	case "text/plain":
 		return 2 << 20
@@ -226,7 +257,7 @@ func (v view) messageVideos(id string) []engineapi.SharedContentItem { return v.
 
 var messageBodyURLs = regexp.MustCompile(`https?://[^\s<>"\x00-\x1f]+`)
 
-func hasVideoReference(body, address string) bool {
+func hasMediaReference(body, address string) bool {
 	for _, candidate := range messageBodyURLs.FindAllString(body, 128) {
 		if strings.TrimRight(candidate, ".,;!)]}") == address {
 			return true
@@ -278,9 +309,13 @@ func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
 }
 
 func validMessageVideo(item engineapi.SharedContentItem, message messageView, owner *engineapi.Conversation) bool {
-	return item.Kind == "video" && item.Message.AccountId == owner.AccountId && item.Message.ConversationId == owner.Id &&
+	return item.Kind == "video" && validMessageMedia(item, message, owner) && hasMediaReference(message.displayBody(), item.Url)
+}
+
+func validMessageMedia(item engineapi.SharedContentItem, message messageView, owner *engineapi.Conversation) bool {
+	return item.Message.AccountId == owner.AccountId && item.Message.ConversationId == owner.Id &&
 		item.Message.RevisionId == message.RevisionId && item.Message.OriginalText == message.OriginalText &&
-		validOperationKey(item.Id) && safePreviewURL(item.Url) != "" && hasVideoReference(message.displayBody(), item.Url)
+		validOperationKey(item.Id) && safePreviewURL(item.Url) != ""
 }
 
 func (v *view) applyMessageVideos(items map[string][]engineapi.SharedContentItem) {

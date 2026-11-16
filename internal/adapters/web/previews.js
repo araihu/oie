@@ -216,7 +216,9 @@ window.OieRuntime.register('previews', life => {
     if(saving.has(id)){request.onState?.('cancelled');return;}saving.add(id);notify('loading');
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),60000);
     try{
-      if(!scope.dataset.previewFile&&!['queued','downloading'].includes(scope.dataset.previewDownload)&&!await download(scope))throw Error('ensure_failed');
+      if(scope.dataset.previewFile)registerOriginal(scope);
+      else if(!['queued','downloading'].includes(scope.dataset.previewDownload)&&!await download(scope))throw Error('ensure_failed');
+      else if(['queued','downloading'].includes(scope.dataset.previewDownload))registerOriginal(scope);
       let delay=300;
       while(active()&&!controller.signal.aborted){
         const current=findAll(id)[0];if(!current)throw Error('preview_missing');
@@ -238,6 +240,17 @@ window.OieRuntime.register('previews', life => {
     }catch{notify('failed');}finally{clearTimeout(timeout);saving.delete(id);if(!active())request.onState?.('cancelled');}
   });
   life.on(document,'oie:preview-refresh-request',event=>{const scope=findAll(event.detail?.id||'')[0];if(scope?.dataset.previewKind==='link')refreshLink(scope);});
+  const scopedOriginals=new Set();
+  function registerOriginal(scope){
+    const id=scope.dataset.previewId,revision=scope.dataset.previewRevision;
+    const key=id+':'+revision;
+    if(scopedOriginals.has(key))return;
+    scopedOriginals.add(key);
+    const body=new URLSearchParams({previewId:id,engineId:document.body.dataset.engineId,csrf,lang:document.documentElement.lang});
+    life.fetch('/ui/previews/download',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body})
+      .then(response=>{if(!response.ok)scopedOriginals.delete(key);return response.body?.cancel();})
+      .catch(()=>scopedOriginals.delete(key));
+  }
   async function download(scope) {
     const id=scope.dataset.previewId;if(downloading.has(id))return true;
     downloading.add(id);for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=true;
@@ -291,13 +304,17 @@ window.OieRuntime.register('previews', life => {
     if(menu?.id.startsWith('save-preview-')){
       const path=scope.dataset.previewFile;if(!/^\/ui\/media\/[0-9a-f]{64}$/.test(path||''))return;
       const name=scope.dataset.previewName||'image';
+      registerOriginal(scope);
       try{await saveFile(path+'?download='+encodeURIComponent(name),name);}catch{if(!life.signal.aborted)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:labels.failed||''}}));}return;
     }
     if(menu?.id.startsWith('info-preview-')){
+      if(scope.dataset.previewFile)registerOriginal(scope);
       expand(scope,true);life.timeout(()=>{viewer.querySelector('[data-viewer-info]')?.click();},40);return;
     }
     if(menu||button.hasAttribute('data-preview-expand')){
-      expand(scope,!!menu);if(!scope.dataset.previewFile&&!['queued','downloading'].includes(scope.dataset.previewDownload))download(scope);
+      expand(scope,!!menu);
+      if(scope.dataset.previewFile||['queued','downloading'].includes(scope.dataset.previewDownload))registerOriginal(scope);
+      else download(scope);
     }else download(scope);
   });
 });

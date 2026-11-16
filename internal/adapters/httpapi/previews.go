@@ -27,10 +27,13 @@ func preview(p domain.MessagePreview) engineapi.MessagePreview {
 	out.LastErrorCode = ptr(p.LastErrorCode)
 	if p.FileHash != "" {
 		mime := engineapi.MessagePreviewFileMimeType(p.FileMimeType)
-		integrity := engineapi.ComputedOnly
+		if p.VerifiedAlgorithm != "" {
+			out.VerifiedAlgorithm = new(engineapi.MessagePreviewVerifiedAlgorithm(p.VerifiedAlgorithm))
+		} else {
+			out.Integrity = new(engineapi.ComputedOnly)
+		}
 		out.FileMimeType = &mime
 		out.FileSize = &p.FileSize
-		out.Integrity = &integrity
 	}
 	return out
 }
@@ -62,7 +65,11 @@ func (s *Server) GetMessagePreview(ctx context.Context, r engineapi.GetMessagePr
 	return engineapi.GetMessagePreview200JSONResponse(preview(p)), nil
 }
 func (s *Server) DownloadPreviewImage(ctx context.Context, r engineapi.DownloadPreviewImageRequestObject) (engineapi.DownloadPreviewImageResponseObject, error) {
-	p, err := s.engine.DownloadPreview(ctx, domain.ID(r.PreviewId))
+	var device domain.ID
+	if r.Params.XOieDownloadDevice != nil {
+		device = domain.ID(*r.Params.XOieDownloadDevice)
+	}
+	p, err := s.engine.DownloadPreviewForDevice(ctx, domain.ID(r.PreviewId), device)
 	if err != nil {
 		return nil, err
 	}

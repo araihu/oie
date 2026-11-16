@@ -81,7 +81,7 @@ func hydrateRoomModeration(ctx context.Context, q *dbgen.Queries, m *domain.Mess
 	}
 	m.Moderation = &domain.MessageModeration{At: at, Reason: row.Reason}
 	m.OriginalText, m.AttachmentWireText = "", ""
-	m.MediaThumbnails, m.Attachments, m.Mentions = nil, nil, nil
+	m.MediaThumbnails, m.FileDigests, m.AudioURLs, m.Attachments, m.Mentions = nil, nil, nil, nil, nil
 	m.Composition, m.OutboundReply, m.Reply, m.ReplyReference = nil, nil, nil, nil
 	m.Edited, m.MentionsYou = false, false
 	return nil

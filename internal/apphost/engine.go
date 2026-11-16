@@ -81,6 +81,7 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	engine.SetAvatarFiles(avatarfiles.New(filepath.Join(dir, "media", "avatars")))
 	engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(dir, "media", "images")))
 	engine.SetMediaReader(fetcher)
+	engine.SetDownloadFiles(mediafiles.NewDownloads(filepath.Join(dir, "media", "downloads")))
 	instance.protocols = xmpadapter.New(filepath.Join(dir, "private", "connections"), h.roots)
 	instance.protocols.SetDiagnostics(h.cfg.Diagnostics)
 	engine.SetProtocols(instance.protocols)

@@ -39,7 +39,16 @@ func (s *Store) ConversationReadState(ctx context.Context, id domain.ID) (domain
 	if err != nil {
 		return domain.ReadState{}, err
 	}
-	return readState(ctx, q, c)
+	state, err := readState(ctx, q, c)
+	if err != nil || c.UnreadCount == 0 {
+		return state, err
+	}
+	first, err := q.FirstUnreadMessage(ctx, string(c.ID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return state, nil
+	}
+	state.FirstUnreadMessageID = domain.ID(first)
+	return state, err
 }
 func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutation) (application.ReadResult, error) {
 	tx, q, err := begin(ctx, s)

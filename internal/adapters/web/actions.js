@@ -97,3 +97,102 @@ window.OieRuntime.register('diagnostics', life => {
   }
   life.cleanup(close);
 });
+
+window.OieRuntime.register('audio', life => {
+  const players = new Set();
+  function release(player) {
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+    players.delete(player);
+  }
+  life.cleanup(() => { for (const player of players) release(player); });
+  life.on(document, 'oie:timeline-content', () => {
+    for (const player of players) if (!player.isConnected) release(player);
+  });
+  function recover(player) {
+    if (!player.isConnected || player.hidden) return;
+    const card = player.closest('[data-audio-source]');
+    const play = card.querySelector('[data-audio-play]');
+    player.hidden = true;
+    release(player);
+    play.hidden = false;
+    if (document.activeElement === player || document.activeElement === document.body) play.focus({preventScroll:true});
+    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioError}}));
+  }
+
+  life.on(document, 'error', event => {
+    if (event.target.matches?.('[data-audio-player]')) recover(event.target);
+  }, true);
+
+  life.on(document, 'click', event => {
+    const play = event.target.closest('[data-audio-play]');
+    if (!play) return;
+    const card = play.closest('[data-audio-source]');
+    const player = card.querySelector('[data-audio-player]');
+    if (!card.dataset.audioSource) return;
+    for (const previous of players) previous.pause();
+    players.add(player);
+    player.src = card.dataset.audioSource;
+    play.hidden = true;
+    player.hidden = false;
+    player.focus({preventScroll:true});
+    player.play().catch(error => { if (error.name !== 'AbortError') recover(player); });
+  });
+});
+
+window.OieRuntime.register('download-retention', life => {
+  const section = document.querySelector('[data-download-retention]');
+  if (!section) return;
+  const {downloadRetention, engine, daysLabel, saved, cleared, failed} = section.dataset;
+  const form = section.querySelector('[data-download-preferences]');
+  const fields = form.querySelector('fieldset');
+  const select = form.querySelector('select');
+  const status = section.querySelector('[role="status"]');
+  const dialog = document.getElementById('remove-device-downloads-dialog');
+  const remove = form.querySelector('[data-remove-device-downloads]');
+  const headers = {'X-Oie-Engine-ID':engine};
+  let busy = false;
+
+  async function update(action) {
+    if (busy) return;
+    busy = true;
+    form.setAttribute('aria-busy', 'true');
+    const options = {credentials:'same-origin', cache:'no-store', headers};
+    if (action) {
+      options.method = 'POST';
+      options.body = new URLSearchParams({action, days:select.value});
+      options.headers = {...headers, 'X-CSRF-Token':document.querySelector('meta[name="oie-csrf"]').content};
+    }
+    try {
+      const response = await life.fetch(downloadRetention, options);
+      if (!response.ok) throw Error('retention_unavailable');
+      const policy = await response.json();
+      if (life.signal.aborted) return;
+      if (!Number.isInteger(policy.days) || policy.days < 0 || policy.days > 3650) throw Error('retention_unavailable');
+      const days = String(policy.days);
+      if (![...select.options].some(option => option.value === days)) select.add(new Option(daysLabel.replace('{days}', days), days));
+      select.value = days;
+      fields.disabled = false;
+      status.textContent = action === 'clear' ? cleared : action === 'save' ? saved : '';
+    } catch {
+      if (!life.signal.aborted) {
+        fields.disabled = false;
+        status.textContent = failed;
+      }
+    } finally {
+      if (!life.signal.aborted) form.removeAttribute('aria-busy');
+      busy = false;
+    }
+  }
+
+  life.on(window, 'drawer:open', event => { if (event.detail?.id === 'settings') update(); });
+  life.on(form.querySelector('[data-save-download-retention]'), 'click', () => update('save'));
+  const modal = type => window.dispatchEvent(new CustomEvent('modal:'+type, {detail:{id:dialog.id}}));
+  life.on(remove, 'click', () => modal('open'));
+  life.on(dialog.querySelector('[data-confirm-remove-downloads]'), 'click', () => {
+    modal('close');
+    update('clear');
+  });
+  life.raf(() => { if (section.closest('[role="dialog"]')?.getClientRects().length) update(); });
+});

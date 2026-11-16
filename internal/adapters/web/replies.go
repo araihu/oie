@@ -100,3 +100,26 @@ func validContextTarget(page engineapi.MessageContext, requested, conversation, 
 	}
 	return target
 }
+
+// An automatic anchor is local to the rendered pane. Explicit message links
+// keep their own URL, focus and highlight behavior.
+func (s *Server) unreadContext(ctx context.Context, v *view, account string) ([]engineapi.Message, bool) {
+	response, err := s.client.GetConversationReadStateWithResponse(ctx, v.ChatID)
+	if err != nil || response.JSON200 == nil {
+		return nil, false
+	}
+	state := response.JSON200
+	if state.ConversationId != v.ChatID || state.AccountId != account || state.UnreadCount < 1 ||
+		state.FirstUnreadMessageId == nil || !validOperationKey(*state.FirstUnreadMessageId) {
+		return nil, false
+	}
+	context := *v
+	context.FocusMessage = *state.FirstUnreadMessageId
+	items, used := s.contextMessages(ctx, &context, account, timelinePageSize)
+	if !used || context.Unavailable {
+		return nil, false
+	}
+	v.FirstUnread = context.FocusMessage
+	v.ContextHasOlder, v.ContextHasNewer = context.ContextHasOlder, context.ContextHasNewer
+	return items, true
+}

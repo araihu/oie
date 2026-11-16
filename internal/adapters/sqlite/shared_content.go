@@ -196,7 +196,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 }
 
 func catalogBrowseScope(query domain.SharedContentQuery, search string) (string, bool) {
-	if search != "" || len(query.MessageIDs) != 0 || query.Type == "video" || len(query.AccountIDs) > 1 {
+	if search != "" || len(query.MessageIDs) != 0 || (query.Type == "video" || query.Type == "audio") || len(query.AccountIDs) > 1 {
 		return "", false
 	}
 	if query.ConversationID != "" {
@@ -288,7 +288,7 @@ func (s *Store) SharedContentItem(ctx context.Context, id domain.ID) (domain.Sha
 	if err = hydrateReply(ctx, s.queries, &item.Message); err != nil {
 		return item, err
 	}
-	for _, ref := range application.SharedReferences(domain.DisplayBody(item.Message)) {
+	for _, ref := range application.MessageSharedReferences(item.Message) {
 		if ref.URL == item.URL && ref.Kind == item.Kind {
 			return item, nil
 		}

@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AcknowledgeMessageSearchPending(ctx context.Context, arg AcknowledgeMessageSearchPendingParams) error
 	AcquireWriteLock(ctx context.Context) error
+	AdvanceDownloadGeneration(ctx context.Context, deviceID string) error
 	AdvanceMessageSearchIndex(ctx context.Context, arg AdvanceMessageSearchIndexParams) (int64, error)
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
 	BumpAccountArchiveRetentionRevision(ctx context.Context, accountID string) error
@@ -24,18 +25,26 @@ type Querier interface {
 	ClearPeerRetentionCheckpoints(ctx context.Context, arg ClearPeerRetentionCheckpointsParams) error
 	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
+	CopyLegacyImageDownloads(ctx context.Context, deviceID string) error
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountCatalogPage(ctx context.Context, arg CountCatalogPageParams) (int64, error)
+	CountDeviceDownloads(ctx context.Context, deviceID string) (int64, error)
+	CountDownloadsByHash(ctx context.Context, arg CountDownloadsByHashParams) (int64, error)
+	CountImageDownloadSources(ctx context.Context, sourceID string) (int64, error)
 	CountMessageSearchRoomPrefix(ctx context.Context, arg CountMessageSearchRoomPrefixParams) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	// Match ListSharedContent's scope, categories and search. Any matching rows
 	// suffice for the capped count, so stop at the limit without sorting them.
 	CountSharedContentFirstPage(ctx context.Context, arg CountSharedContentFirstPageParams) (int64, error)
+	DeleteDownloadImageFile(ctx context.Context, hash string) error
 	DeleteExpiredMessages(ctx context.Context, ids string) error
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
+	DropDeviceDownloads(ctx context.Context, deviceID string) ([]DeviceDownload, error)
+	DropExpiredDownloads(ctx context.Context, nowMs int64) ([]DeviceDownload, error)
 	DropExpiredMessageEvents(ctx context.Context, ids string) error
+	EnsureDownloadDevice(ctx context.Context, deviceID string) error
 	ExpiryCandidates(ctx context.Context, arg ExpiryCandidatesParams) ([]string, error)
 	ExpirySourceIDs(ctx context.Context, ids string) ([]string, error)
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
@@ -48,7 +57,9 @@ type Querier interface {
 	FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error)
 	// Look up the remote reference before checking its conversation.
 	FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error)
+	FinishImageDownloads(ctx context.Context, arg FinishImageDownloadsParams) error
 	FirstContentRevisionSource(ctx context.Context, id string) (string, error)
+	FirstUnreadMessage(ctx context.Context, conversationID string) (string, error)
 	GetAccount(ctx context.Context, id string) (string, error)
 	GetActiveMessageEdit(ctx context.Context, messageID string) (MessageEditCommand, error)
 	GetActiveMessageReaction(ctx context.Context, messageID string) (MessageReactionCommand, error)
@@ -62,6 +73,8 @@ type Querier interface {
 	GetConversationReadHead(ctx context.Context, conversationID string) (GetConversationReadHeadRow, error)
 	GetConversationRetention(ctx context.Context, conversationID string) (GetConversationRetentionRow, error)
 	GetCorrectionFacts(ctx context.Context, messageID string) ([]MessageCorrectionFact, error)
+	GetDeviceDownload(ctx context.Context, arg GetDeviceDownloadParams) (DeviceDownload, error)
+	GetDownloadDevice(ctx context.Context, deviceID string) (GetDownloadDeviceRow, error)
 	GetGlobalRetention(ctx context.Context) (GetGlobalRetentionRow, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
 	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
@@ -87,6 +100,7 @@ type Querier interface {
 	GetVisibleMessage(ctx context.Context, id string) (Message, error)
 	HasAcceptedDirectHistory(ctx context.Context, conversationID string) (bool, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
+	ImagePreviewStillUsesHash(ctx context.Context, hash string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
 	InsertArchiveAlias(ctx context.Context, arg InsertArchiveAliasParams) error
@@ -99,6 +113,7 @@ type Querier interface {
 	InsertConversationMessageReads(ctx context.Context, arg InsertConversationMessageReadsParams) ([]string, error)
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
 	InsertCorrectionFact(ctx context.Context, arg InsertCorrectionFactParams) (int64, error)
+	InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) error
 	InsertEngineIdentity(ctx context.Context, id string) error
 	InsertMediaFile(ctx context.Context, arg InsertMediaFileParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
@@ -143,6 +158,7 @@ type Querier interface {
 	ListContactSources(ctx context.Context, arg ListContactSourcesParams) ([]ListContactSourcesRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListDirectRetentionPeers(ctx context.Context, accountID string) ([]ListDirectRetentionPeersRow, error)
+	ListDownloadGarbage(ctx context.Context) ([]DownloadGarbage, error)
 	ListFiniteRetentionConversations(ctx context.Context, conversationID string) ([]ListFiniteRetentionConversationsRow, error)
 	ListInboundQuotesInConversation(ctx context.Context, ownerID string) ([]ListInboundQuotesInConversationRow, error)
 	ListInheritedRoomArchiveProgress(ctx context.Context) ([]ListInheritedRoomArchiveProgressRow, error)
@@ -201,6 +217,7 @@ type Querier interface {
 	PutRoomBannedNickname(ctx context.Context, arg PutRoomBannedNicknameParams) error
 	PutRoomIntent(ctx context.Context, arg PutRoomIntentParams) error
 	PutSharedContent(ctx context.Context, arg PutSharedContentParams) error
+	QueueDownloadGarbage(ctx context.Context, arg QueueDownloadGarbageParams) error
 	ReactionActorProfile(ctx context.Context, arg ReactionActorProfileParams) (ReactionActorProfileRow, error)
 	// Start from references or commands so each lookup reads only matching observations.
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
@@ -209,6 +226,8 @@ type Querier interface {
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
+	RemoveDownloadGarbage(ctx context.Context, arg RemoveDownloadGarbageParams) error
+	RemoveLegacyDownloadDevice(ctx context.Context) error
 	RemoveMessageSearchException(ctx context.Context, messageID string) error
 	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
 	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
@@ -233,6 +252,7 @@ type Querier interface {
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]SearchMessagesRow, error)
 	SearchMessagesChronological(ctx context.Context, arg SearchMessagesChronologicalParams) ([]SearchMessagesChronologicalRow, error)
 	SearchRoomMessagesChronological(ctx context.Context, arg SearchRoomMessagesChronologicalParams) ([]SearchRoomMessagesChronologicalRow, error)
+	SetDownloadDeviceDays(ctx context.Context, arg SetDownloadDeviceDaysParams) error
 	SetMessageSearchException(ctx context.Context, messageID string) error
 	SetMessageSubmittedAt(ctx context.Context, arg SetMessageSubmittedAtParams) error
 	SetMessageTimelineAt(ctx context.Context, arg SetMessageTimelineAtParams) error

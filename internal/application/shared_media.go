@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/url"
 	"path"
@@ -13,6 +14,7 @@ import (
 
 const (
 	MaxMediaSource int64 = 2 << 30
+	MaxAudioSource int64 = 100 << 20
 	MaxTextSource  int64 = 2 << 20
 	MaxPDFSource   int64 = 100 << 20
 )
@@ -25,6 +27,8 @@ func (f MediaFormat) Limit() int64 {
 	switch f {
 	case "", "video":
 		return MaxMediaSource
+	case "audio":
+		return MaxAudioSource
 	case "txt", "log", "md", "csv", "json", "xml":
 		return MaxTextSource
 	case "pdf":
@@ -41,6 +45,9 @@ func (f MediaFormat) MediaType(value string) string {
 			return value
 		}
 		return ""
+	}
+	if f == "audio" {
+		return domain.PlayableAudioType(value)
 	}
 	if f == "pdf" {
 		if value == "application/pdf" {
@@ -77,6 +84,9 @@ func (f MediaFormat) MediaType(value string) string {
 func sharedMediaFormat(item domain.SharedContentItem) (MediaFormat, bool) {
 	if item.Kind == "video" {
 		return "video", true
+	}
+	if item.Kind == "audio" {
+		return "audio", true
 	}
 	if item.Kind != "document" {
 		return "", false
@@ -126,17 +136,20 @@ type MediaCondition struct {
 }
 type MediaReadRequest struct {
 	Format    MediaFormat
+	Download  bool
+	DeviceID  domain.ID
 	Range     *ByteRange
 	Condition MediaCondition
 }
 type MediaRead struct {
-	FileName                string
-	Body                    io.ReadCloser
-	MediaType               string
-	Length, Total, Offset   int64
-	Partial, RangeSupported bool
-	ETag                    string
-	ModifiedAt              time.Time
+	FileName                  string
+	SHA256, VerifiedAlgorithm string
+	Body                      io.ReadCloser
+	MediaType                 string
+	Length, Total, Offset     int64
+	Partial, RangeSupported   bool
+	ETag                      string
+	ModifiedAt                time.Time
 }
 type MediaReader interface {
 	Open(context.Context, string, MediaReadRequest) (MediaRead, error)
@@ -158,7 +171,7 @@ func VideoMediaType(value string) bool {
 // SharedContentMedia opens only a current retained reference after explicit
 // activation. Streamed ranges do not mutate downloads, hashes, messages or stars.
 func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request MediaReadRequest) (MediaRead, error) {
-	if !validID(id) || (request.Range != nil && !request.Range.Valid()) || (request.Condition.ETag != "" && !request.Condition.ModifiedAt.IsZero()) {
+	if !validID(id) || request.DeviceID != "" && (!request.Download || !validID(request.DeviceID)) || (request.Range != nil && !request.Range.Valid()) || (request.Condition.ETag != "" && !request.Condition.ModifiedAt.IsZero()) {
 		return MediaRead{}, ErrInvalid
 	}
 	repo, ok := e.repo.(SharedMediaRepository)
@@ -181,7 +194,7 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 		return MediaRead{}, ErrNotFound
 	}
 	current := false
-	for _, ref := range SharedReferences(domain.DisplayBody(source)) {
+	for _, ref := range MessageSharedReferences(source) {
 		if ref.URL == item.URL && ref.Kind == item.Kind {
 			current = true
 			break
@@ -189,6 +202,25 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 	}
 	if !current {
 		return MediaRead{}, ErrNotFound
+	}
+	expected := fileDigests(source, item.URL)
+	var generation int64
+	if request.DeviceID != "" {
+		repo, ok := e.repo.(DownloadRepository)
+		if !ok || e.downloadFiles == nil {
+			return MediaRead{}, ErrProtocolUnavailable
+		}
+		retained, current, err := e.reuseDownload(ctx, repo, request.DeviceID, item, source)
+		if err == nil {
+			return retained, nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return MediaRead{}, err
+		}
+		generation = current
+	}
+	if request.Download {
+		request.Range, request.Condition = nil, MediaCondition{}
 	}
 	request.Format = format
 	result, err := e.mediaReader.Open(ctx, item.URL, request)
@@ -213,5 +245,9 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 	}
 	result.MediaType = format.MediaType(result.MediaType)
 	result.FileName = item.FileName
+	if request.Download || request.Range == nil && len(expected) > 0 {
+		ref := domain.Download{DeviceID: request.DeviceID, SourceID: item.ID, SourceRevision: source.RevisionID, Kind: "file"}
+		return e.completeDownload(ctx, result, expected, ref, generation)
+	}
 	return result, nil
 }
