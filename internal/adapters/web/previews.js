@@ -216,9 +216,8 @@ window.OieRuntime.register('previews', life => {
     if(saving.has(id)){request.onState?.('cancelled');return;}saving.add(id);notify('loading');
     const controller=new AbortController(),timeout=life.timeout(()=>controller.abort(),60000);
     try{
-      if(scope.dataset.previewFile)registerOriginal(scope);
-      else if(!['queued','downloading'].includes(scope.dataset.previewDownload)&&!await download(scope))throw Error('ensure_failed');
-      else if(['queued','downloading'].includes(scope.dataset.previewDownload))registerOriginal(scope);
+      if(scope.dataset.previewFile||['queued','downloading'].includes(scope.dataset.previewDownload))registerOriginal(scope);
+      else if(!await download(scope))throw Error('ensure_failed');
       let delay=300;
       while(active()&&!controller.signal.aborted){
         const current=findAll(id)[0];if(!current)throw Error('preview_missing');
