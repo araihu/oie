@@ -16,8 +16,8 @@ async function openSettings(page, server, fixture) {
   const footer = settings.locator('footer');
   await footer.getByRole('button', { name: fixture.signOut, exact: true }).waitFor();
   assert.equal(await footer.getByRole('button').count(), 1);
-  assert.equal(await settings.getByText(fixture.engineHeading, { exact: true }).count(), 0);
-  assert.equal(await settings.getByText(fixture.engineLabel, { exact: true }).count(), 0);
+  assert.equal(await general.getByText(fixture.engineHeading, { exact: true }).count(), 0);
+  assert.equal(await general.getByText(fixture.engineLabel, { exact: true }).count(), 0);
   await resizeVisibleViewport(page, { width: fixture.viewport.width, height: 280 });
   const placement = await footer.evaluate(node => {
     const panel = node.closest('[role="dialog"]');
