@@ -570,6 +570,11 @@
   if(ctx.oieInfoCancelled){event.preventDefault();return;}
   if(!ctx.oieKind)return;if(ctx.oieEpoch!==epoch){event.preventDefault();return}
   if(pendingConversation?.ctx===ctx)clearTimeout(pendingConversation.timer);
+  if(['conversation-pane',routeID,'oie-app'].includes(ctx.oieKind)&&ctx.response?.raw?.headers.get('X-Oie-Offline-History')==='fallback'){
+   event.preventDefault();
+   if(ctx.oieHistory)location.replace(ctx.request.action);else location.assign(ctx.request.action);
+   return;
+  }
   if(ctx.oieKind==='conversation-pane'){
    if(!conversationResponse(ctx)){event.preventDefault();showError(ctx);}
    return;

@@ -1,4 +1,9 @@
 {
+  "OfflineHistoryStatus": "Sem conexão",
+  "OfflineHistoryTitle": "Conversas recentes",
+  "OfflineHistoryEmpty": "Nenhuma conversa está disponível sem conexão.",
+  "OfflineHistoryMissing": "Esta conversa está indisponível sem conexão.",
+  "OfflineHistoryMessageMissing": "Esta mensagem está indisponível sem conexão.",
   "RetractMessage": "Retrair mensagem",
   "MessageRetracted": "Mensagem retraída",
   "RevealOriginal": "Revelar original",

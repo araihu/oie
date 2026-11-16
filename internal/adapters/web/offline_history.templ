@@ -1,0 +1,31 @@
+package web
+
+templ offlineHistoryPage(lang string, text copy) {
+	<!DOCTYPE html>
+	<html lang={ lang }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ text.AppName }</title>
+			<link rel="stylesheet" href="/ui/offline-history.css"/>
+			<script src="/ui/offline-history.js" defer></script>
+		</head>
+		<body data-offline-history data-retracted={ text.MessageRetracted } data-moderated={ text.RoomMessageModerated } data-conversation-missing={ text.OfflineHistoryMissing } data-message-missing={ text.OfflineHistoryMessageMissing }>
+			<header class="offline-header">
+				<a href="/" id="offline-back" aria-label={ text.Back } hidden>{ text.Chats }</a>
+				<strong role="status">{ text.OfflineHistoryStatus }</strong>
+				<a href="/" id="offline-retry">{ text.Retry }</a>
+			</header>
+			<main>
+				<h1 id="offline-title">{ text.OfflineHistoryTitle }</h1>
+				<ul id="offline-conversations" hidden></ul>
+				<ol id="offline-messages" aria-labelledby="offline-title" tabindex="0" hidden></ol>
+				<p id="offline-empty" role="status" hidden>{ text.OfflineHistoryEmpty }</p>
+				<noscript><p>{ text.OfflineHistoryMissing }</p></noscript>
+			</main>
+			<template id="offline-message">
+				<li><span class="offline-sender"></span><p></p><time></time></li>
+			</template>
+		</body>
+	</html>
+}

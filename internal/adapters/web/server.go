@@ -178,6 +178,8 @@ type connectionView struct {
 }
 type view struct {
 	BrowserPush          bool
+	OfflineHistory       bool
+	OfflineTransportDown bool
 	HostedSignIn         bool
 	RemoteSignInURL      string
 	AccountAvatarBorders map[string]string
@@ -274,6 +276,8 @@ type view struct {
 }
 
 type copy struct {
+	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing string
+
 	ConversationRemoved string
 
 	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel, SignOutTitle, SignOutDescription                                 string
@@ -941,7 +945,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if serveEmojiAsset(w, r) {
+	if s.serveOfflineHistory(w, r) || serveEmojiAsset(w, r) {
 		return
 	}
 	if s.serveBrand(w, r) {
@@ -1110,6 +1114,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.EngineMode = s.engineMode
 	v.HostedSignIn = s.createHostedKey != nil
 	v.BrowserPush = s.pushService != nil
+	v.OfflineHistory = s.offlineHistoryEnabled()
 	v.Diagnostics = s.diagnostics != nil
 	v.RemoteDiagnostics = v.Diagnostics && s.diagnostics.remote != nil
 	v.configureWorkspace(r)
@@ -1155,6 +1160,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	engine, err := s.client.GetEngineWithResponse(ctx, editor)
 	if err != nil || engine.JSON200 == nil {
+		v.OfflineTransportDown = err != nil || transientEngineStatus(engine.StatusCode())
 		if err == nil {
 			v.RemoteSignInURL = s.remoteSignIn(ctx, engine.ApplicationproblemJSON401)
 		}
@@ -1595,6 +1601,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
 	if v.CompactSource {
 		buf = encodeSourceFragment(w, r, buf)
+	}
+	if v.OfflineHistory && r.URL.Path == "/" {
+		if v.OfflineTransportDown {
+			w.Header().Set("X-Oie-Offline-History", "unavailable")
+		} else if validOperationKey(v.EngineID) {
+			w.Header().Set("X-Oie-Offline-History", v.EngineID)
+		}
 	}
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)

@@ -206,8 +206,9 @@ async function run() {
     });
     for (const [width, lang] of [[1440, 'en'], [390, 'pt-BR']]) {
       engineAvailable = false;
-      const cold = await profile.newPage();
-      await cold.setViewportSize({width, height: 900});
+      // Each cold start uses an empty profile so an earlier recoverable chat
+      // cannot turn the next request into an offline history navigation.
+      const cold = await browser.newPage({viewport: {width, height: 900}});
       const address = base + '/?lang=' + lang + '&chat=' + chat;
       const response = await cold.goto(address);
       assert.equal(response.status(), 503);
