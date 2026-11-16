@@ -676,7 +676,7 @@ type copy struct {
 	SendPending, SendUnconfirmed, SendAccepted                                                                                                                           string
 	Saving, InvalidForm, InvalidMessage, CSRFError, OperationConflict                                                                                                    string
 	AccountExists, EngineChanged, LiveConnecting, LiveReady, LiveRetry                                                                                                   string
-	NewMessages, QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                     string
+	QueueHelp, DraftStorageUnavailable, DraftLocked, MessageUnavailable                                                                                                  string
 	MediaUnavailable, NativeError, NewerHistory, ShowPassword, ChooseOption                                                                                              string
 	PreviewLoading, PreviewUnavailable, LoadImage, LoadingImage, OpenImage, ImageView, ImageDownloadFailed, ImageTooLarge, ImageBlocked, ImageUnsupported, ImageNotFound string
 	UnknownOriginal, OriginalUnavailable, JumpToLatest                                                                                                                   string

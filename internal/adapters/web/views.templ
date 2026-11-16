@@ -568,7 +568,7 @@ if v.scheduleAllowed() {
 if !v.Preview && v.Selected.Kind == "direct" && v.Selected.Request==nil && !removedConversation(v.Selected) && v.composeAllowed() && v.messagingImplemented("typing") {
 <span class="oie-typing-notice" data-typing-notice role="status" hidden>{v.Text.TypingNotice}</span>
 }
-<button type="button" class="oie-jump-latest" data-jump-latest hidden?={!v.ContextHasNewer&&!v.ContextMissing&&v.FirstUnread==""}>{v.Text.JumpToLatest}</button>
+@jumpLatestButton(v)
 <div class="oie-composer-auxiliary">
 if v.composeAllowed() {
 @draftLinkPreview(v)
@@ -605,6 +605,24 @@ if v.conversationSchedulesAvailable() {
 }
 templ composerSendButton(v view,live bool) {
 @button.Button(button.WithType("submit"),button.WithRootClass("oie-icon-button oie-send"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Send,"data-send-message":live,"disabled":!v.sendAllowed()})){@glyph(heroicons.Icon16SolidArrowUp)}
+}
+templ jumpLatestButton(v view) {
+{{ unread := v.timelineUnread() }}
+<button type="button" class="oie-jump-latest" data-jump-latest data-unread-label={v.Text.Unread}
+	aria-label={v.Text.JumpToLatest} hidden?={!v.ContextHasNewer&&!v.ContextMissing&&v.FirstUnread==""}
+	if unread > 0 {
+		aria-description={v.Text.Unread + ": " + strconv.Itoa(unread)}
+	}
+>
+	@glyph(heroicons.Icon16SolidArrowDown)
+	<span class="oie-jump-latest-badge" data-jump-latest-badge aria-hidden="true" hidden?={unread <= 0}>
+		if unread > 99 {
+			+99
+		} else if unread > 0 {
+			{strconv.Itoa(unread)}
+		}
+	</span>
+</button>
 }
 func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{return v.field("operationKey")};return newOperationKey()}
 
@@ -915,7 +933,7 @@ templ liveCopy(v view){
 <div id="oie-formatting-copy" hidden data-copy={v.Text.CopyOriginal} data-copied={v.Text.MessageCopied} data-failed={v.Text.CopyFailed}></div>
 <div id="oie-copy-status" class="sr-only" role="status" aria-live="polite"></div>
 <div id="oie-preview-copy" hidden data-refresh-failed={v.Text.RefreshPreviewFailed} data-refresh-loading={v.Text.PreviewLoading} data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
-<div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
+<div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
 <div id="oie-live-regions" data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
