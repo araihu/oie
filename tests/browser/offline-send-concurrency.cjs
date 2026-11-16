@@ -156,8 +156,10 @@ async function checkAcceptedBeforeOutage(browser, url, state, until, offlineFirs
     const message = offlineFirst ? 'Another tab already sent this offline composition' : 'Another tab already sent this composition';
     await composer(first).fill(message);
     const second = await openChat(context, url);
+    const independent = await openChat(context, url);
     const sharedKey = await formKey(first);
     assert.equal(await formKey(second),sharedKey);
+    assert.equal(await formKey(independent),sharedKey);
     assert.equal(await composer(second).inputValue(),message);
     if (offlineFirst) await context.setOffline(true);
     await submit(first);
@@ -169,6 +171,9 @@ async function checkAcceptedBeforeOutage(browser, url, state, until, offlineFirs
     }
     await until(() => state.operations.has(sharedKey), 'first tab commits the shared operation');
     await pending(first).waitFor({state:'detached'});
+    await until(() => first.locator('[data-send-message]').isEnabled(), 'the first tab finishes handling its acceptance');
+    const changed = message + ' with an independent edit';
+    await composer(independent).fill(changed);
 
     await second.evaluate(() => {
       window.observedCancellationOfAcceptedSend = false;
@@ -185,7 +190,7 @@ async function checkAcceptedBeforeOutage(browser, url, state, until, offlineFirs
     state.engineDown = true;
     await submit(second);
     await until(async() => Boolean(sendResponse) ||
-      await composer(second).inputValue() === '' && await pending(second).count() === 0,
+      await composer(second).inputValue() !== message && await pending(second).count() === 0,
       'the stale composition is handled using the prior acceptance');
     if (sendResponse) {
       assert.equal(sendResponse.status(),503,'a network attempt receives the confirmed engine outage');
@@ -196,11 +201,20 @@ async function checkAcceptedBeforeOutage(browser, url, state, until, offlineFirs
     state.engineDown = false;
     await wake(second);
     await pending(second).waitFor({state:'detached'});
-    assert.equal(await composer(second).inputValue(),'');
+    assert.notEqual(await composer(second).inputValue(),message);
     assert(!await second.evaluate(() => window.observedCancellationOfAcceptedSend),
       'a stale tab never offers to cancel the already accepted operation');
     assert.equal(state.posts || 0,before+1, 'the already accepted operation does not create another engine write');
     assert.equal(state.messages.filter(item => item.originalText === message).length,1);
+
+    await independent.reload();
+    assert.equal(await composer(independent).inputValue(),changed,
+      'consuming a receipt cannot discard the divergent draft in another tab');
+    await submit(independent);
+    await until(() => state.messages.some(item => item.originalText === changed),
+      'a stale tab can send an independently edited composition after the old one was accepted');
+    assert.equal(state.operations.get(sharedKey).acceptedMessage.originalText,message);
+    assert.equal(state.posts || 0,before+2);
   } finally {
     state.engineDown = false;
     await context.close();
@@ -333,7 +347,7 @@ module.exports = async function offlineSendConcurrency({browser, base, chat, sta
   findings.push('An unsent draft from another tab survives a previous offline send and reopening');
   await checkAcceptedBeforeOutage(browser, url, state, until);
   await checkAcceptedBeforeOutage(browser, url, state, until, true);
-  findings.push('A stale tab cannot duplicate or offer to cancel a prior online or offline acceptance during an outage');
+  findings.push('A stale tab cannot duplicate or cancel a prior acceptance, and its edited composition sends independently');
   await checkDraftSwitch(browser, url, state);
   findings.push('A separate draft does not hide cancellation, and both drafts are available again after reopening');
   await checkBlockedLockFallback(browser, url, state);
