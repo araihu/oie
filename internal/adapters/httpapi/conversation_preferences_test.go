@@ -295,3 +295,53 @@ func TestConversationPreferencesHTTPConcurrentCASHasOneWinner(t *testing.T) {
 		t.Fatal("concurrent CAS must publish exactly one accepted event", events, err)
 	}
 }
+
+func TestManualReadPreservesEvidenceAndChecksConversationRevision(t *testing.T) {
+	e, store, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	ctx := t.Context()
+	c := openTestConversation(t, e, "manual-read@localhost")
+	if err := e.Receive(ctx, application.Incoming{AccountID: c.AccountID, Address: c.Address, ProviderID: "manual-first", OriginalText: "First"}); err != nil {
+		t.Fatal(err)
+	}
+	unread, err := store.Conversation(ctx, c.ID)
+	if err != nil || unread.UnreadCount != 1 {
+		t.Fatal(unread, err)
+	}
+	key := id()
+	status, data := preferenceRequest(t, server.URL, unread, key, `"read":true`, false)
+	if status != http.StatusOK || preferenceConversation(t, data).UnreadCount != 0 {
+		t.Fatalf("manual read failed: %d %s", status, data)
+	}
+	read, _ := store.Conversation(ctx, c.ID)
+	evidence, _ := e.ConversationReadState(ctx, c.ID)
+	if evidence.RevisionID == "" || read.ActivitySequence != unread.ActivitySequence {
+		t.Fatal(evidence, read)
+	}
+	status, data = preferenceRequest(t, server.URL, unread, key, `"read":true`, true)
+	if status != http.StatusOK || preferenceConversation(t, data).RevisionId != string(read.RevisionID) {
+		t.Fatalf("manual read replay failed: %d %s", status, data)
+	}
+	status, _ = preferenceRequest(t, server.URL, unread, id(), `"read":false`)
+	if status != http.StatusConflict {
+		t.Fatalf("stale manual reminder status: %d", status)
+	}
+	status, data = preferenceRequest(t, server.URL, read, id(), `"read":false`)
+	reminder := preferenceConversation(t, data)
+	if status != http.StatusOK || reminder.UnreadReminder == nil || !*reminder.UnreadReminder || reminder.UnreadCount != 0 {
+		t.Fatalf("manual reminder failed: %d %s", status, data)
+	}
+	if state, _ := e.ConversationReadState(ctx, c.ID); state != evidence {
+		t.Fatal("reminder changed message read evidence", state)
+	}
+	status, data = request(t, server.URL, http.MethodGet, "/api/v1/conversations?unreadOnly=true", "", "")
+	var page engineapi.ConversationPage
+	if status != http.StatusOK || json.Unmarshal(data, &page) != nil || len(page.Items) != 1 || page.Items[0].Id != string(c.ID) {
+		t.Fatalf("reminder missing from unread filter: %d %s", status, data)
+	}
+	current, _ := store.Conversation(ctx, c.ID)
+	status, data = preferenceRequest(t, server.URL, current, id(), `"read":true`)
+	cleared := preferenceConversation(t, data)
+	if status != http.StatusOK || cleared.UnreadReminder == nil || *cleared.UnreadReminder || cleared.UnreadCount != 0 {
+		t.Fatalf("clearing reminder failed: %d %s", status, data)
+	}
+}

@@ -280,18 +280,24 @@
     return worker;
   }
 
-  async function showBanner(engine, message) {
+  async function showBanner(engine, message, eligible) {
     const title = settings()?.dataset.messageTitle;
     if (!title) return;
     const body = (message.sender?.displayName || '').slice(0, 120);
+    const canDeliver = async () => {
+      if (!eligible()) return false;
+      const current = await notificationContext(engine, message, true);
+      return current && !current.doNotDisturb && eligible();
+    };
     if (desktop()) {
-      await desktop().send(engine, message.accountId, message.conversationId, message.id, title, body);
+      if (await canDeliver()) await desktop().send(engine, message.accountId, message.conversationId, message.id, title, body);
       return;
     }
     const options = {body, tag: engine + ':' + message.id, silent: true, lang: document.documentElement.lang};
     if (navigator.serviceWorker) {
       try {
         const registration = await notificationWorker();
+        if (!await canDeliver()) return;
         await registration.showNotification(title, {...options, data: {
           engine, account: message.accountId, conversation: message.conversationId, message: message.id
         }});
@@ -300,6 +306,7 @@
         // A page notification can still work when the worker is unavailable.
       }
     }
+    if (!await canDeliver()) return;
     const banner = new Notification(title, options);
     banner.onclick = () => {
       banner.close();
@@ -328,22 +335,26 @@
     const canPlaySound = () => canNotify() && (soundScopeEnabled('focused') || !viewing(engine, conversation));
 
     if (canShowBanner()) {
-      void claim(engine, message.id).then(claimed => {
-        if (claimed && canShowBanner()) return showBanner(engine, message);
+      void notificationContext(engine, message).then(async context => {
+        if (!context || context.doNotDisturb || !canShowBanner()) return;
+        const claimed = await claim(engine, message.id);
+        if (claimed && canShowBanner()) return showBanner(engine, message, canShowBanner);
       }).catch(() => {});
     }
     if (canPlaySound()) void playMessageSound(engine, message, canPlaySound);
   }
 
-  function notificationContext(engine, message) {
+  function notificationContext(engine, message, fresh = false) {
     const params = new URLSearchParams({engineId: engine, accountId: message.accountId, conversationId: message.conversationId});
     if (message.reply?.available === true && uuid(message.reply.messageId)) {
       params.set('replyTo', message.reply.messageId);
     }
     const key = params.toString();
+    const load = () => window.OieRuntime.request('/ui/notification-context?' + key, {cache: 'no-store'})
+      .then(response => response.ok ? response.json() : null);
+    if (fresh) return load();
     if (!pendingContexts.has(key)) {
-      pendingContexts.set(key, window.OieRuntime.request('/ui/notification-context?' + key)
-        .then(response => response.ok ? response.json() : null)
+      pendingContexts.set(key, load()
         .finally(() => pendingContexts.delete(key)));
     }
     return pendingContexts.get(key);
@@ -360,17 +371,19 @@
     if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
     try {
       const conversation = await notificationContext(engine, message);
-      if (!conversation || !ready() || !eligible() || withinWindow()) return;
-      const permitsSound = () => {
-        if (conversation.kind === 'direct') return soundScopeEnabled('direct');
-        if (conversation.kind !== 'room' || (conversation.archived && !soundScopeEnabled('archived'))) return false;
+      if (!conversation || conversation.doNotDisturb || !ready() || !eligible() || withinWindow()) return;
+      const permitsSound = current => {
+        if (current.kind === 'direct') return soundScopeEnabled('direct');
+        if (current.kind !== 'room' || (current.archived && !soundScopeEnabled('archived'))) return false;
         const roomMode = roomSound();
         return roomMode === 'all' || (roomMode === 'attention' &&
-          (message.mentionsYou === true || conversation.replyToYou === true));
+          (message.mentionsYou === true || current.replyToYou === true));
       };
-      if (!permitsSound()) return;
+      if (!permitsSound(conversation)) return;
       const claimedAt = await claim(engine, message.id, receivedAt);
-      if (claimedAt && ready() && eligible() && permitsSound()) {
+      if (!claimedAt || !ready() || !eligible()) return;
+      const current = await notificationContext(engine, message, true);
+      if (current && !current.doNotDisturb && ready() && eligible() && permitsSound(current)) {
         write(lastSoundKey, String(claimedAt));
         await playSound(sound);
       }

@@ -113,6 +113,7 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-row-bottom>span:first-child{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--oie-muted);line-height:1.35}
 .oie-row-room-status{order:-1;flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.35;padding-inline:5px;border:1px solid var(--oie-border);border-radius:999px;color:var(--oie-text)}
 .oie-unread-count{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;background:var(--oie-accent);color:var(--oie-on-accent);flex-shrink:0}
+.oie-unread-reminder{width:10px;height:10px;margin-inline:4px}
 .oie-row-mention-slot{flex:0 0 18px;height:18px}
 .oie-row-mention{display:grid;place-items:center;height:100%;border-radius:50%;font-size:12px;font-weight:700;background:var(--oie-accent-soft);color:var(--oie-accent-text)}
 .oie-conversation-favorite{color:var(--oie-muted)}.oie-conversation-favorite .oie-icon{width:12px;height:12px}
@@ -871,6 +872,14 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
   align-content: start;
   gap: .75rem;
 }
+
+[data-account-contact-list]{margin-block-start:.75rem}
+.oie-contact-row{display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0;padding-block:.25rem}
+.oie-contact-row>span{min-width:0;overflow-wrap:anywhere}
+.oie-contact-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.25rem}
+
+.oie-typing-notice{display:inline-block;margin:.25rem .75rem;padding:.125rem .5rem;border-radius:.5rem;background:var(--oie-panel);font-size:.75rem;color:var(--oie-text)}
+.oie-typing-notice[hidden]{display:none}
 
 /* The keyboard can shrink the visual viewport without resizing the layout viewport. */
 :root[data-oie-keyboard] {

@@ -273,8 +273,9 @@ Support per-account contact add/remove and contact-request acceptance/decline wh
 contacts. The native adapter refreshes this cache on connection and authorized
 roster pushes; searching itself makes no provider request. Cache identities and
 observed revisions persist through reconnect/restart, and removal preserves saved
-chat history. Contact mutation controls, identity linking and app sync remain
-separate work. See [saved protocol contacts](contacts.md).
+chat history. The account profile opens its directory with roster add/remove, pending
+subscription decisions and presence observations. Identity linking and app sync
+remain separate work. See [saved protocol contacts](contacts.md).
 
 Allow starting a direct chat by address without first adding a contact, where permitted, with the sending account clearly selected. Neither sending nor receiving a message automatically adds a contact, requests presence access, or links identities.
 
@@ -774,7 +775,10 @@ Without app sync, independent engines can diverge. Configured sync can also dive
 
 Automatically mark visible incoming messages read in the active, focused conversation. At the latest end of the timeline, mark its earlier unread messages read as well, including messages outside the loaded history page. Receipt, indexing, fetching, and background tabs are not automatic read triggers.
 
-Implemented alpha scope: record read identities in the owning engine with durable independent UUID revisions and idempotent read batches. Away from the latest end, only visible incoming messages qualify. At the latest end, the engine verifies the displayed conversation revision and latest message before clearing unread state in that snapshot. Reading preserves subsequent arrivals, message content and conversation activity ordering. Hosted clients observe the shared counter through conversation events. Independent-engine read replication, manual unread reminders and provider receipt emission remain separate work.
+Implemented alpha scope: record read identities in the owning engine with durable independent UUID revisions and idempotent read batches. Away from the latest end, only visible incoming messages qualify. At the latest end, the engine verifies the displayed conversation revision and latest message before clearing unread state in that snapshot. Reading preserves subsequent arrivals, message content and conversation activity ordering. Hosted clients observe the shared counter through conversation events. Manual read marks all unread messages in the reviewed conversation revision.
+Manual unread adds a conversation reminder and preserves message read evidence.
+A later explicit Mark as read clears the reminder. Independent-engine read
+replication and provider receipt emission remain separate work.
 
 **AGREED:** highlight received room messages that mention the account's room nickname, with or without `@`. Show an `@` indicator on the conversation while it has any unread mentions. Reading clears the conversation indicator once all matching messages have been read. See [room mentions](mentions.md).
 
@@ -820,8 +824,9 @@ sound in archived rooms and in the conversation in focus. A conversation mute
 silences direct chats and rooms on this device. Cooperating windows play at
 most one sound in a two-second window, with no queued playback. The device
 can preview the bundled Oiê tone, import a personal clip for notifications,
-and restore Oiê. Imported audio stays on the device. Account DND and
-synchronized mutes remain part of the agreed scope.
+and restore Oiê. Imported audio stays on the device. Account Do Not Disturb suppresses notifications and sounds. Availability and
+outgoing typing preferences are saved per account on its engine. Independent
+engine synchronization remains part of the agreed scope.
 See [message notifications](notifications.md) for platform behavior.
 
 ## 11. Presentation, PWA, and internationalization

@@ -26,7 +26,10 @@ func TestAccountUnreadIncludesOtherAccountsAndArchivedPages(t *testing.T) {
 		} else {
 			next := "second"
 			page.NextCursor = &next
-			page.Items = []engineapi.Conversation{{Id: "first", AccountId: "alice", UnreadCount: 2}}
+			page.Items = []engineapi.Conversation{
+				{Id: "first", AccountId: "alice", UnreadCount: 2},
+				{Id: "reminder", AccountId: "alice", UnreadReminder: new(true)},
+			}
 		}
 		_ = json.NewEncoder(w).Encode(page)
 	}))

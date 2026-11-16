@@ -28,6 +28,7 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 		out.Request = &request
 		out.LastMessage = ""
 	}
+	out.UnreadReminder = &c.UnreadReminder
 	if c.RemovedFromChats {
 		out.RemovedFromChats = &c.RemovedFromChats
 	}

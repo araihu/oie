@@ -775,6 +775,11 @@ type NotificationContext struct {
 	// Example: true
 	Archived bool `json:"archived"`
 
+	// DoNotDisturb Whether the conversation's owning account has disabled alerts.
+	//
+	// Example: true
+	DoNotDisturb *bool `json:"doNotDisturb,omitempty"`
+
 	// Kind Type of the receiving conversation.
 	//
 	// Example: room

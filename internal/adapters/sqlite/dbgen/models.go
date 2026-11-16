@@ -22,6 +22,13 @@ type AccountArchiveRetention struct {
 	Revision  int64
 }
 
+type AccountCommunicationPreference struct {
+	AccountID  string
+	RevisionID string
+	Presence   string
+	SendTyping int64
+}
+
 type ArchiveAlias struct {
 	AccountID string
 	Scope     string

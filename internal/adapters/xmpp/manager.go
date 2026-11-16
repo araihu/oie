@@ -82,6 +82,16 @@ type entry struct {
 	avatarDirty         map[string]string
 	contactsWake        chan struct{}
 	profiles            map[string]*profileSlot
+
+	presenceMu           sync.Mutex
+	presenceShow         string
+	presenceWake         chan struct{}
+	typingPeers          map[string]typingPeer
+	pendingTyping        *uint32
+	contactsGate         chan struct{}
+	contactRequests      map[string]struct{}
+	contactSubscriptions map[string]bool
+	initialPeerPresence  map[string]map[string]peerResource
 }
 type Manager struct {
 	diagnostics     *diagnostics.Logger
@@ -358,6 +368,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string, sto
 		e.historyMu.Unlock()
 		e.peerPresence = nil
 		e.reactionCommands = nil
+		e.typingPeers = nil
 	}
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
@@ -400,7 +411,16 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 		if err == nil && !session.StreamManagement().Resumed {
 			m.discardSuspendedSession(ctx, e)
 			announceCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(avatarCaps().TokenReader()))
+			var show string
+			show, err = m.configuredPresence(announceCtx, e.account.ID)
+			if err == nil {
+				err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show)))
+			}
+			if err == nil {
+				e.presenceMu.Lock()
+				e.presenceShow = show
+				e.presenceMu.Unlock()
+			}
 			cancel()
 			if err != nil {
 				_ = raw.Close()
@@ -433,6 +453,12 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.uploadLimits = nil
 			e.attachmentUploads = nil
 			e.contactsWake = make(chan struct{}, 1)
+			e.contactsGate = make(chan struct{}, 1)
+			if !e.replaying {
+				e.contactRequests = make(map[string]struct{})
+				e.contactSubscriptions = nil
+				e.initialPeerPresence = make(map[string]map[string]peerResource)
+			}
 			e.historyWake = make(chan struct{}, 1)
 			e.requestsWake = make(chan struct{}, 1)
 			requestsWake := e.requestsWake
@@ -440,6 +466,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.archiveCapabilities = nil
 			e.historyMu.Unlock()
 			contactsWake := e.contactsWake
+			presenceWake := make(chan struct{}, 1)
+			e.presenceWake = presenceWake
 			e.mu.Unlock()
 			if previous != nil {
 				// The former transport's room setup workers were canceled.
@@ -472,7 +500,8 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				if serving == nil {
 					serving = startServing()
 				}
-				m.workers.Add(4)
+				m.workers.Add(5)
+				go func() { defer m.workers.Done(); m.presenceLoop(historyCtx, e, session, presenceWake) }()
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.discoverCapabilities(historyCtx, e, session) }()
@@ -504,11 +533,21 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if serving != nil {
 				err = errors.Join(err, <-serving)
 			}
+			e.sendMu.Lock()
 			e.mu.Lock()
 			e.session = nil
 			e.replaying = false
 			e.raw = nil
-			resumable := served && ctx.Err() == nil && session.StreamManagement().Resumable
+			e.presenceWake = nil
+			status := session.StreamManagement()
+			hasPendingTyping := typingAwaitingAck(e.pendingTyping, status.Acknowledged)
+			e.pendingTyping = nil
+			for address, peer := range e.typingPeers {
+				peer.until = time.Time{}
+				peer.sent = false
+				e.typingPeers[address] = peer
+			}
+			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingTyping
 			if resumable {
 				e.suspended = session
 			} else {
@@ -517,10 +556,11 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				e.correctionLatest = nil
 			}
 			e.mu.Unlock()
+			e.sendMu.Unlock()
 			if !resumable {
 				m.resetRoomSessions(ctx, e, session)
 			}
-			if !served {
+			if !served || hasPendingTyping {
 				management = new(mx.StreamManagement)
 			}
 		}
@@ -731,6 +771,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if err != nil {
 		return application.Failed
 	}
+	payload.ChatState = m.outgoingChatState(ctx, e, a, out)
 	if len(payload.Mentions) > 0 && !m.roomAllowsMentionReferences(ctx, e, session, out) {
 		payload.Mentions = nil
 	}
@@ -786,6 +827,12 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	e.mu.Lock()
 	trackCorrectionSource(e, a, out)
+	if payload.ChatState != nil {
+		peer, _ := e.typingPeer(out.Address)
+		peer.offered = true
+		peer.lastSeen = time.Now()
+		e.typingPeers[out.Address] = peer
+	}
 	e.mu.Unlock()
 
 	if err = session.Encode(ctx, payload); err != nil {
@@ -794,6 +841,14 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		}
 		_ = raw.Close()
 		return application.Unknown
+	}
+	if out.Kind == "direct" {
+		e.mu.Lock()
+		if peer, ok := e.typingPeers[out.Address]; ok && e.session == session {
+			peer.sent = false
+			e.typingPeers[out.Address] = peer
+		}
+		e.mu.Unlock()
 	}
 	return application.Submitted
 }
@@ -857,6 +912,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			correctionMetadata
 			reactionMetadata
 			roomModerationMetadata
+			typingMetadata
 			Subject     *string        `xml:"jabber:client subject"`
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
@@ -932,6 +988,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			m.observeRoomTopic(e, msg.Message, *msg.Subject)
 			return nil
 		}
+		if msg.Delay.Stamp == "" && msg.Delay.From == "" {
+			e.captureTyping(msg.Message, msg.Body, msg.typingMetadata)
+		}
 		if len(msg.Reactions) != 0 {
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
@@ -984,6 +1043,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if handled, err := m.captureRoomPresence(ctx, e, presence); handled {
 			return err
 		}
+		captureContactRequest(e, presence.Presence)
 		capturePeerPresence(e, presence)
 
 		return nil

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/araihu/goshtoso/components/dropdown"
+	"github.com/araihu/goshtoso/components/icon"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -23,7 +25,7 @@ func (s *Server) changeConversationPreferences(ctx context.Context, r *http.Requ
 	}
 	input := engineapi.UpdateConversationPreferences{AccountId: account, ExpectedRevisionId: expected}
 	count := 0
-	for _, field := range []string{"archived", "favorite", "acceptRequest"} {
+	for _, field := range []string{"archived", "favorite", "acceptRequest", "read"} {
 		if !r.Form.Has(field) {
 			continue
 		}
@@ -36,6 +38,8 @@ func (s *Server) changeConversationPreferences(ctx context.Context, r *http.Requ
 		switch field {
 		case "archived":
 			input.Archived = &desired
+		case "read":
+			input.Read = &desired
 		case "acceptRequest":
 			if !desired {
 				return 422, mutationResult{Message: text.InvalidForm, Rejected: true}
@@ -93,7 +97,25 @@ func (s *Server) changeConversationPreferences(ctx context.Context, r *http.Requ
 func validPreferenceConversation(c engineapi.Conversation, id, account string) bool {
 	return c.Id == id && c.AccountId == account && validOperationKey(c.RevisionId)
 }
+func hasUnread(c engineapi.Conversation) bool {
+	return c.UnreadCount > 0 || c.UnreadReminder != nil && *c.UnreadReminder
+}
+
+func (v view) conversationPreferenceFields() []string {
+	fields := []string{"archived", "favorite"}
+	if v.Selected.UnreadReminder != nil && v.Selected.Request == nil {
+		fields = append(fields, "read")
+	}
+	return fields
+}
+
 func (v view) conversationPreferenceLabel(field string) string {
+	if field == "read" {
+		if hasUnread(*v.Selected) {
+			return v.Text.MarkRead
+		}
+		return v.Text.MarkUnread
+	}
 	if field == "archived" {
 		if v.Selected.Archived {
 			return v.Text.UnarchiveConversation
@@ -107,23 +129,39 @@ func (v view) conversationPreferenceLabel(field string) string {
 }
 func (v view) conversationPreferenceSection() dropdown.Section {
 	id := v.Selected.Id
-	return dropdown.Section{Items: []dropdown.Item{
+	items := []dropdown.Item{
 		{ID: "archive-conversation-" + id, Label: v.Text.ArchiveConversation, Icon: glyph(heroicons.Icon16SolidFolder), OnClick: "$dispatch('oie:conversation-preference', {field: 'archived'})", Disabled: v.Preview},
 		{ID: "unarchive-conversation-" + id, Label: v.Text.UnarchiveConversation, Icon: glyph(heroicons.Icon16SolidFolder), OnClick: "$dispatch('oie:conversation-preference', {field: 'archived'})", Disabled: v.Preview},
 		{ID: "favorite-conversation-" + id, Label: v.Text.FavoriteConversation, Icon: glyph(heroicons.Icon16SolidHeart), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
 		{ID: "unfavorite-conversation-" + id, Label: v.Text.UnfavoriteConversation, Icon: glyph(heroicons.Icon16SolidHeart), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
 		{ID: "retry-archive-conversation-" + id, Label: v.Text.RetryConversationPreference, Icon: glyph(heroicons.Icon16SolidArrowPath), OnClick: "$dispatch('oie:conversation-preference', {field: 'archived'})", Disabled: v.Preview},
 		{ID: "retry-favorite-conversation-" + id, Label: v.Text.RetryConversationPreference, Icon: glyph(heroicons.Icon16SolidArrowPath), OnClick: "$dispatch('oie:conversation-preference', {field: 'favorite'})", Disabled: v.Preview},
-	}}
+	}
+	if slices.Contains(v.conversationPreferenceFields(), "read") {
+		for _, action := range []struct {
+			prefix, label string
+			icon          icon.Symbol
+		}{
+			{"mark-read", v.Text.MarkRead, heroicons.Icon16SolidCheck},
+			{"mark-unread", v.Text.MarkUnread, heroicons.Icon16SolidBell},
+			{"retry-read", v.Text.RetryConversationPreference, heroicons.Icon16SolidArrowPath},
+		} {
+			items = append(items, dropdown.Item{ID: action.prefix + "-conversation-" + id, Label: action.label, Icon: glyph(action.icon), OnClick: "$dispatch('oie:conversation-preference', {field: 'read'})", Disabled: v.Preview})
+		}
+	}
+	return dropdown.Section{Items: items}
 }
 func preferenceFormID(id, field string) string {
-	suffix := "favorite"
+	suffix := field
 	if field == "archived" {
 		suffix = "archive"
 	}
 	return "conversation-preferences-" + id + "-" + suffix
 }
 func (v view) preferenceDesired(field string) string {
+	if field == "read" {
+		return strconv.FormatBool(hasUnread(*v.Selected))
+	}
 	if field == "archived" {
 		return strconv.FormatBool(!v.Selected.Archived)
 	}

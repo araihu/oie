@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.35.0",
+    "version": "0.36.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -56,6 +56,169 @@
     }
   ],
   "paths": {
+    "/api/v1/accounts/{accountId}/communication-preferences": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        }
+      ],
+      "get": {
+        "operationId": "getAccountCommunicationPreferences",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Read account presence and communication preferences",
+        "responses": {
+          "200": {
+            "description": "Current account preferences and their revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCommunicationPreferences"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setAccountCommunicationPreferences",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Save account presence and communication preferences",
+        "description": "The revision is required, including null for preferences that have never been saved.",
+        "requestBody": {
+          "required": true,
+          "description": "The reviewed revision and desired account preference values.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCommunicationPreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved preferences with their resulting revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCommunicationPreferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "description": "Preferences body is too large"
+          },
+          "415": {
+            "description": "Preferences require a JSON body"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/contact-requests": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        }
+      ],
+      "get": {
+        "operationId": "listContactRequests",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "List pending contact requests for an account",
+        "description": "Returns requests observed by the active session. Returns unavailable while the account is disconnected.",
+        "responses": {
+          "200": {
+            "description": "Pending contact requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactRequests"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/contact-actions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        }
+      ],
+      "post": {
+        "operationId": "changeProtocolContact",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Manage an account's protocol contacts",
+        "description": "Add or remove one roster address or answer one pending presence subscription. Adding an existing or removing an absent address succeeds without a roster write. A contact request can only be answered while it is pending in the active session. Removing a roster entry preserves conversation history.",
+        "requestBody": {
+          "required": true,
+          "description": "Bare contact address and the requested roster or subscription action.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Roster change confirmed or contact request answer submitted"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "description": "Contact action body is too large"
+          },
+          "415": {
+            "description": "Contact action requires a JSON body"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/contacts": {
       "get": {
         "tags": [
@@ -84,6 +247,14 @@
           },
           {
             "$ref": "#/components/parameters/SearchAccountIDs"
+          },
+          {
+            "name": "includePresence",
+            "in": "query",
+            "description": "Include current presence observations for contacts subscribed by this account.",
+            "schema": {
+              "type": "boolean"
+            }
           },
           {
             "name": "cursor",
@@ -900,7 +1071,7 @@
                   "engine": {
                     "id": "019a5df0-0000-7000-8000-000000000003",
                     "role": "local",
-                    "apiVersion": "0.34.0",
+                    "apiVersion": "0.36.0",
                     "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                   },
                   "conversation": {
@@ -1224,6 +1395,82 @@
           "reads"
         ],
         "x-cli-name": "mark"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/typing": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getConversationTyping",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Read the current typing indicator in an accepted direct conversation",
+        "responses": {
+          "200": {
+            "description": "Recent verified live typing observation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TypingState"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setConversationTyping",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Send an expiring typing notification where supported",
+        "requestBody": {
+          "required": true,
+          "description": "The intended current typing state for the selected conversation.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypingState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Typing update completed or suppressed by availability or preferences"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "description": "Typing state body is too large"
+          },
+          "415": {
+            "description": "Typing state requires a JSON body"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
       }
     },
     "/api/v1/conversations/{conversationId}/message-stars": {
@@ -1797,7 +2044,7 @@
                 "example": {
                   "id": "019a5df0-0000-7000-8000-000000000003",
                   "role": "local",
-                  "apiVersion": "0.34.0",
+                  "apiVersion": "0.36.0",
                   "eventCursor": "019a5df0-0000-7000-8000-000000000003:1"
                 }
               }
@@ -4296,8 +4543,8 @@
         "tags": [
           "Conversations"
         ],
-        "summary": "Change conversation preferences or accept a direct message request",
-        "description": "Atomically updates only the supplied app-owned flags, records an immutable conversation revision and operation receipt, and emits conversation.updated only for an actual change. No protocol operation is performed. The owning account must match accountId. expectedRevisionId must match the latest conversation revision, including intervening incoming-message or read updates. A matching Idempotency-Key replays its original accepted snapshot before checking current state. Reusing a key with different fields or preconditions conflicts. Setting an already-current value succeeds without another revision or event. Activity order, message timestamps, unread counts and outbox are unchanged by archive or favorite changes. Accepting a direct message request reveals the conversation and restores it from the archive. Read the conversation after a replay for current state.",
+        "summary": "Change conversation preferences, set read status or accept a message request",
+        "description": "Atomically updates only the supplied app-owned flags, records an immutable conversation revision and operation receipt, and emits conversation.updated only for an actual change. No protocol operation is performed. The owning account must match accountId. expectedRevisionId must match the latest conversation revision, including intervening incoming-message or read updates. A matching Idempotency-Key replays its original accepted snapshot before checking current state. Reusing a key with different fields or preconditions conflicts. Setting an already-current value succeeds without another revision or event. Activity order, message timestamps, unread counts and outbox are unchanged by archive or favorite changes. Accepting a direct message request reveals the conversation and restores it from the archive. Setting read to true records read evidence for existing unread messages and clears a manual reminder. Setting it to false adds a reminder without changing message read evidence. Read status can be set only after a conversation request is resolved. Read the conversation after a replay for current state.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -6572,7 +6819,8 @@
               "0.32.0",
               "0.33.0",
               "0.34.0",
-              "0.35.0"
+              "0.35.0",
+              "0.36.0"
             ]
           },
           "eventCursor": {
@@ -7668,6 +7916,9 @@
               "both"
             ]
           },
+          "presence": {
+            "$ref": "#/components/schemas/PresenceObservation"
+          },
           "conversationId": {
             "$ref": "#/components/schemas/ID"
           }
@@ -7699,6 +7950,107 @@
             "format": "date-time",
             "description": "UTC time of the last successful complete roster observation."
           }
+        }
+      },
+      "AccountCommunicationPreferences": {
+        "description": "Manual availability and outbound typing preferences for one owning account.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "presence"
+        ],
+        "properties": {
+          "revisionId": {
+            "$ref": "#/components/schemas/NullableRevisionID"
+          },
+          "presence": {
+            "type": "string",
+            "enum": [
+              "available",
+              "away",
+              "dnd"
+            ]
+          },
+          "sendTyping": {
+            "description": "Whether to tell compatible contacts when this account is typing. Omit on updates to preserve the saved preference.",
+            "type": "boolean"
+          }
+        },
+        "example": {
+          "revisionId": null,
+          "presence": "available",
+          "sendTyping": true
+        }
+      },
+      "TypingState": {
+        "description": "Ephemeral composing state for a supported direct conversation.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "active"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Whether a participant is currently typing."
+          }
+        },
+        "example": {
+          "active": true
+        }
+      },
+      "ContactAction": {
+        "description": "One account-scoped roster modification or response to a presence subscription.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "action"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1023,
+            "description": "Bare protocol address of the contact."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "remove",
+              "accept",
+              "decline"
+            ]
+          }
+        },
+        "example": {
+          "address": "bob@localhost",
+          "action": "add"
+        }
+      },
+      "ContactRequests": {
+        "description": "Pending XMPP presence subscription requests on the current account session.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 256,
+            "items": {
+              "type": "string"
+            },
+            "description": "Bare addresses with pending presence subscription requests."
+          }
+        },
+        "example": {
+          "items": [
+            "bob@localhost"
+          ]
         }
       },
       "ContactPage": {
@@ -8450,7 +8802,7 @@
       },
       "UpdateConversationPreferences": {
         "type": "object",
-        "description": "Field-isolated archive, favorite or direct message request acceptance with a current conversation revision precondition.",
+        "description": "App-owned conversation change with a current conversation revision precondition.",
         "additionalProperties": false,
         "minProperties": 3,
         "required": [
@@ -8481,6 +8833,10 @@
           "favorite": {
             "type": "boolean",
             "description": "Desired conversation favorite state, separate from source-message stars."
+          },
+          "read": {
+            "type": "boolean",
+            "description": "Mark the conversation read, or set a manual unread reminder when false. Use this action on its own."
           },
           "acceptRequest": {
             "type": "boolean",
@@ -8571,6 +8927,10 @@
           "unreadCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "unreadReminder": {
+            "type": "boolean",
+            "description": "Manual conversation reminder, independent of the number of unread messages. Omitted on engines without manual read actions."
           },
           "unreadMention": {
             "type": "boolean",
