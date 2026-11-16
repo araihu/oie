@@ -264,11 +264,11 @@ test evidence, including on failure. Actions jobs bypass the local lock.
 The `Required CI` check aggregates both the Dagger and image smoke jobs.
 New commits on a PR cancel its superseded workflow runs.
 
-After a successful PR pilot, configure the `main` branch to require a pull
-request and the `Required CI` check. Then set the repository Actions variable
-`OIE_REQUIRED_PR_CI` to `true`. Pushes to `main` will run the image smoke and
-publication. Leaving the variable unset keeps the Dagger jobs on pushes during
-the rollout.
+The `main` branch requires a pull request and the `Required CI` check from
+GitHub Actions. With the repository Actions variable `OIE_REQUIRED_PR_CI` set
+to `true`, pushes to `main` run the image smoke tests and publication. To
+restore Dagger jobs on pushes, unset the variable. Keep the branch rule active
+whenever the variable is set.
 
 ### Browser presentation variants
 
