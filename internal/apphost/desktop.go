@@ -169,39 +169,57 @@ func (d *Desktop) activate(target *desktopTarget) {
 }
 
 func (d *Desktop) recoverLocal(target *desktopTarget) {
-	if target.engine != nil {
-		select {
-		case <-target.ctx.Done():
-			return
-		case <-target.engine.stopped:
-		}
-	}
-	delay := time.Second
+	const maxDelay = 30 * time.Second
+	var delay time.Duration
 	for target.ctx.Err() == nil {
-		d.mu.Lock()
-		if d.active.Load() != target || target.ctx.Err() != nil {
-			d.mu.Unlock()
-			return
-		}
-		if target.engine != nil && delay == time.Second {
+		if target.engine != nil {
+			started := time.Now()
+			select {
+			case <-target.ctx.Done():
+				return
+			case <-target.engine.stopped:
+			}
+			if target.ctx.Err() != nil || d.active.Load() != target {
+				return
+			}
+			if time.Since(started) >= maxDelay {
+				delay = 0
+			}
 			d.diagnostics.Record(diagnostics.DesktopFailed, 0, 0)
 		}
-		next, err := d.prepare(target.ctx, "", false, target.selection)
-		if err == nil {
-			d.activate(next)
+		for target.ctx.Err() == nil {
+			if delay > 0 {
+				timer := time.NewTimer(delay)
+				select {
+				case <-target.ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+			}
+			delay = min(max(time.Second, delay*2), maxDelay)
+			d.mu.Lock()
+			if d.active.Load() != target || target.ctx.Err() != nil {
+				d.mu.Unlock()
+				return
+			}
+			next, err := d.prepare(target.ctx, "", false, target.selection)
+			if err != nil {
+				d.mu.Unlock()
+				continue
+			}
+			if target.ctx.Err() != nil {
+				next.stop()
+				d.mu.Unlock()
+				return
+			}
+			// Keep supervising the selection across short-lived replacements.
+			d.active.Store(next)
 			target.stop()
+			target = next
 			d.mu.Unlock()
-			return
+			break
 		}
-		d.mu.Unlock()
-		timer := time.NewTimer(delay)
-		select {
-		case <-target.ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-		}
-		delay = min(delay*2, 30*time.Second)
 	}
 }
 

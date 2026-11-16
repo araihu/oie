@@ -163,20 +163,30 @@ func TestDesktopRestartsStoppedLocalEngine(t *testing.T) {
 		return string(match[1])
 	}
 	id := workspaceIdentity()
-	before.engine.beginClose()
-	deadline := time.Now().Add(10 * time.Second)
-	for desktop.active.Load() == before && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+	restart := func(previous *desktopTarget) *desktopTarget {
+		t.Helper()
+		previous.engine.beginClose()
+		deadline := time.Now().Add(10 * time.Second)
+		for desktop.active.Load() == previous && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		current := desktop.active.Load()
+		if current == previous || current.engine == nil || current.selection != previous.selection {
+			t.Fatal("desktop did not restart the selected local engine")
+		}
+		if got := workspaceIdentity(); got != id {
+			t.Fatalf("recovered engine identity = %s, want %s", got, id)
+		}
+		if current.engine.ctx.Err() != nil {
+			t.Fatal("recovered engine was stopped with old target")
+		}
+		return current
 	}
-	after := desktop.active.Load()
-	if after == before || after.engine == nil || after.selection != before.selection {
-		t.Fatal("desktop did not restart the selected local engine")
-	}
-	if got := workspaceIdentity(); got != id {
-		t.Fatalf("recovered engine identity = %s, want %s", got, id)
-	}
-	if after.engine.ctx.Err() != nil {
-		t.Fatal("recovered engine was stopped with old target")
+	after := restart(before)
+	failedAgain := time.Now()
+	restart(after)
+	if elapsed := time.Since(failedAgain); elapsed < time.Second {
+		t.Fatalf("restarted a short-lived replacement without backoff after %s", elapsed)
 	}
 }
 
