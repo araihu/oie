@@ -422,12 +422,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     const arrived=await watchArrival(arrivalDuringJump);
     queueIncoming(9530010,'Arrival while the latest fragment is held');
     await arrived();
+    await composer.fill(draft+' while jumping');
    }finally{sendLatest()}
    await waitForTail(arrivalDuringJump);
    await page.unroute(jumpURL,holdLatest);
    assert(await atBottom());
    assert(await newMessages.isHidden());
-   assert.equal(await composer.inputValue(),draft);
+   assert.equal(await composer.inputValue(),draft+' while jumping');
+   assert(await composer.evaluate(input=>document.activeElement===input),'a delayed jump preserves focus after returning to the composer');
+   await composer.fill(draft);
 
    state.hold=true;state.mode='failure';
    const afterOlderFailure=id(9540000+width);
@@ -441,10 +444,12 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),sleep=ms=>new 
     await until(async()=>await edge(page,'older').getAttribute('data-state')==='failed','older request fails after the arrival');
    }finally{release();state.mode='normal'}
    await newMessages.waitFor();
-   await newMessages.click();
+   await newMessages.focus();
+   await newMessages.press('Enter');
    await waitForTail(afterOlderFailure);
    assert(await atBottom());
    assert(await newMessages.isHidden());
+   assert(await timeline(page).evaluate(root=>document.activeElement===root),'keyboard recovery leaves focus at the timeline');
 
    await fromBottom(400);
    let releaseIncoming,heldIncoming=false,conversationRequests=0;

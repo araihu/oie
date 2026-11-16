@@ -1173,10 +1173,12 @@ window.OieRuntime.register('live', life => {
   life.on(document,'oie:timeline-latest',()=>{
     clearTimeout(highlightTimer);highlightedMessage='';
     const timeline=document.getElementById('message-timeline');
+    const active=document.activeElement;
     for(const node of [...acceptedBubbles,pendingBubble])if(node&&!node.isConnected){
       timeline.insertBefore(node,timeline.querySelector('[data-timeline-edge="newer"]'));window.Alpine?.initTree(node);
     }
-    retireAcceptedBubbles();scrollLatest();timeline.focus({preventScroll:true});
+    retireAcceptedBubbles();scrollLatest();
+    if(active===body||active?.matches('[data-jump-latest]'))timeline.focus({preventScroll:true});
   });
   life.on(document,'oie:timeline-focus',event=>focusMessage(event.detail.id,event.detail.focus!==false));
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
