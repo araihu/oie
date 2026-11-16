@@ -59,7 +59,12 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    assert.equal(await symbol.getAttribute('aria-label'),'Saving edit');assert.equal(await symbol.evaluate(n=>n.closest('a,button')!==null),false);assert.equal(await symbol.locator('svg.oie-edit-spinner').count(),1);
    assert.equal(await p.locator('[data-edit-pending] [data-edit-state="editing"]:visible').count(),0);
   };
-  const menuEdit=async()=>{await page.locator('[data-message-menu-trigger="'+own+'"]').click();await page.locator('#edit-message-'+own).click();await editing.waitFor({state:'visible'});assert(await banner.isHidden());assert(await page.locator('[data-live-status]').isHidden());await until(async()=>await input.inputValue()===messages[1].originalText,'edit loaded');};
+  const menuEdit=async()=>{
+   await page.locator('[data-message-menu-trigger="'+own+'"]').click();
+   const action=page.locator('#edit-message-'+own);
+   assert.equal(await action.locator('use').getAttribute('href'),'/ui/icons/heroicons-extra.svg#heroicons-pencil-16-solid-pencil');
+   await action.click();await editing.waitFor({state:'visible'});assert(await banner.isHidden());assert(await page.locator('[data-live-status]').isHidden());await until(async()=>await input.inputValue()===messages[1].originalText,'edit loaded');
+  };
   await page.goto(route());await until(async()=>await page.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'runtime');
   await input.fill('Preserve the normal draft 😀');await menuEdit();assert.equal(await input.inputValue(),'Own **plain** message 😀');await input.fill('Unsubmitted edit');messages[1].sender.displayName='Alice refreshed';emit();await page.waitForTimeout(400);assert.equal(await editing.count(),1);assert.equal(await input.inputValue(),'Unsubmitted edit');assert(await banner.isHidden());await cancel.click();assert.equal(await editing.count(),0);assert.equal(await input.inputValue(),'Preserve the normal draft 😀');assert.equal(state.effects,0);
   await page.goto(route({message:incoming}));await until(async()=>await page.locator('#message-timeline [data-message-id="'+incoming+'"]').count()===1,'old bounded page');assert.equal(await page.locator('#message-timeline [data-message-id="'+own+'"]').count(),0);await input.fill('');const reads=state.latestReads;await input.press('ArrowUp');await until(async()=>await input.inputValue()===messages[1].originalText,'engine latest outside DOM');await editing.waitFor({state:'visible'});assert(state.latestReads>reads);assert(await banner.isHidden());await input.press('Escape');await banner.waitFor({state:'hidden'});assert.equal(await input.inputValue(),'');
@@ -91,7 +96,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const assertEditIndicator=async(p,kind,label)=>{
    const marker=p.locator('[data-'+(kind==='editing'?'editing-message':'edit-pending')+']').first(),symbol=marker.locator('[data-edit-state="'+kind+'"] [role="img"]');
    await symbol.waitFor({state:'visible'});assert.equal(await symbol.getAttribute('aria-label'),label);assert.equal(await symbol.evaluate(n=>n.closest('a,button')!==null),false,'transient edit indicator has no action');
-   if(kind==='editing')assert.equal(await symbol.locator('use').getAttribute('href'),'/ui/icons/heroicons-extra.svg#heroicons-history-16-solid-document-magnifying-glass');
+   if(kind==='editing')assert.equal(await symbol.locator('use').getAttribute('href'),'/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
    const history=marker.locator('[data-message-edited]');if(await history.count())assert(await history.isHidden(),'history action is hidden during editing/pending');
    const before=await marker.boundingBox();await symbol.hover();const tip=p.locator('[role="tooltip"]').filter({hasText:label});
    await until(async()=>await tip.evaluateAll(nodes=>nodes.some(n=>Number(getComputedStyle(n).opacity)>.95&&n.getBoundingClientRect().width>0)),'localized edit tooltip');

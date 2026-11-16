@@ -4,6 +4,7 @@ import (
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 func (v view) imagePreviews(id string) []engineapi.MessagePreview {
@@ -33,7 +34,12 @@ func messageActions(v view, id string) []dropdown.Section {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "react-message-" + id, Icon: glyph(heroicons.Icon16SolidFaceSmile), Label: v.Text.ReactMessage, OnClick: "void 0", Disabled: !v.reactionAllowed(id), Tooltip: v.Text.ReactionUnavailable}}})
 	}
 	if v.editableMessage(id) {
-		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "edit-message-" + id, Icon: glyph(heroicons.Icon16SolidPencilSquare), Label: v.Text.EditMessage, Href: v.editTargetHref(id)}}})
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{
+			ID:    "edit-message-" + id,
+			Icon:  appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsPencil16SolidPencil, Decorative: true, RootClass: "oie-icon"}),
+			Label: v.Text.EditMessage,
+			Href:  v.editTargetHref(id),
+		}}})
 	}
 	for _, message := range v.Messages {
 		if message.Id == id && !v.Preview && message.CanRetract != nil && *message.CanRetract {

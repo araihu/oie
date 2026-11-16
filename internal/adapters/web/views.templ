@@ -1125,7 +1125,7 @@ templ messageEditStateIcon(label string,pending bool){
 if pending {
 @spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-edit-spinner"})
 }else{
-@historyIcon()
+@glyph(heroicons.Icon16SolidPencilSquare)
 }
 </span>
 }
@@ -1146,7 +1146,13 @@ templ messageHistoryLink(v view,m messageView){
 		attrs["data-edited-at"] = messageEditedAt(m)
 	}
 }}
-@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(attrs)){@historyIcon()}
+@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(attrs)){
+	if m.Retraction!=nil {
+		@historyIcon()
+	} else {
+		@glyph(heroicons.Icon16SolidPencilSquare)
+	}
+}
 }
 
 templ messageStarIndicator(v view,id string){
