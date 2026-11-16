@@ -249,6 +249,20 @@ jobs:
           python3 scripts/release_desktop.py verify-assets "$OIE_RELEASE_VERSION" "$OIE_RELEASE_REVISION" dist/release
           python3 scripts/release_desktop.py checksums dist/release --release-version "$OIE_RELEASE_VERSION"
       - run: bash scripts/publish-desktop-release.sh "$OIE_RELEASE_VERSION" dist/release "$OIE_RELEASE_REVISION"
+
+  publish-homebrew:
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Start Homebrew synchronization on the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: gh workflow run publish-homebrew.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH"
+
   publish-image:
     if: ${{ !cancelled() && needs.publish.result == 'success' }}
     needs: [tag, publish]
