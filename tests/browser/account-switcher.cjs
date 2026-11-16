@@ -8,9 +8,9 @@ const base = process.env.OIE_BROWSER_URL || 'http://127.0.0.1:8080';
 const artifacts = path.join(__dirname, 'artifacts');
 const axePath = require.resolve('axe-core/axe.min.js');
 
-async function openFixture(browser, variant) {
+async function openFixture(browser, variant, reducedMotion = 'no-preference') {
   const { width, theme, mode, locale } = variant;
-  const page = await browser.newPage({ viewport: { width, height: 900 }, locale });
+  const page = await browser.newPage({ viewport: { width, height: 900 }, locale, reducedMotion });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -32,7 +32,8 @@ async function waitForInViewport(page, dialog) {
   try {
     await page.waitForFunction(node => {
       const { width, height, x, y, right, bottom } = node.getBoundingClientRect();
-      return width > 0 && height > 0 && x >= -1 && y >= -1 &&
+      return getComputedStyle(node).opacity === '1' &&
+        width > 0 && height > 0 && x >= -1 && y >= -1 &&
         right <= innerWidth + 1 && bottom <= innerHeight + 1;
     }, element, { timeout: 5000 });
   } finally {
@@ -99,7 +100,7 @@ async function checkJourney(browser, variant) {
 }
 
 async function checkPresentation(browser, variant, account) {
-  const { page, trigger, panel, errors } = await openFixture(browser, variant);
+  const { page, trigger, panel, errors } = await openFixture(browser, variant, 'reduce');
   const { width, theme, mode, locale } = variant;
   const suffix = `${width}-${theme}-${mode}-${locale}`;
   const titles = locale === 'en' ? { list: 'Accounts', detail: 'Profile', add: 'Accounts' } :
