@@ -34,6 +34,46 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],findings=[];
  const until=async(fn,label)=>{for(let n=0;n<180;n++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50))}throw Error('Timed out: '+label+'\n'+log)};
  const route=(conversation=chat,locale='en',theme='dark')=>`${base}/?chat=${conversation}&lang=${locale}&theme=${theme}`;
+ const assertStablePickerScroll=async picker=>{
+  const measurements=await picker.locator('[data-emoji-scroll]').evaluate(scroll=>{
+   const content=scroll.closest('[data-emoji-content]');
+   const grid=scroll.querySelector('[data-emoji-section="1"] > .oie-emoji-grid');
+   const cells=['🚶‍➡️','🚶‍♂️‍➡️','🧎‍➡️','🧑‍🦯‍➡️'].map(emoji=>
+    grid.querySelector('[data-emoji-pick="'+emoji+'"]'));
+   const fixed=[content.querySelector('[data-emoji-search]'),scroll,content.querySelector('.oie-emoji-footer')];
+   const sample=()=>{
+    const chrome=fixed.flatMap(node=>{
+     const {x,y,width,height}=node.getBoundingClientRect();
+     return [x,y,width,height];
+    });
+    const geometry=cells.flatMap(cell=>{
+     const {x,y,width,height}=cell.getBoundingClientRect();
+     const glyph=cell.firstElementChild.getBoundingClientRect();
+     return [x,y+scroll.scrollTop,width,height,glyph.x+glyph.width/2-x,glyph.y+glyph.height/2-y];
+    });
+    return {scrollTop:scroll.scrollTop,positions:[...chrome,...geometry]};
+   };
+   const target=cells[0].getBoundingClientRect().top-scroll.getBoundingClientRect().top-36;
+   if(target<=scroll.clientHeight)throw Error('walking emojis must start offscreen');
+   const before=sample();
+   scroll.scrollTop=target;
+   return new Promise(resolve=>{
+    const frames=[];
+    function capture(){
+     frames.push(sample());
+     if(frames.length<8)requestAnimationFrame(capture);
+     else resolve({before,frames,hasHorizontalOverflow:scroll.scrollWidth>scroll.clientWidth});
+    }
+    requestAnimationFrame(capture);
+   });
+  });
+  assert(measurements.frames.every(frame=>frame.scrollTop>measurements.before.scrollTop),'picker scrolls to the people section');
+  assert.equal(measurements.hasHorizontalOverflow,false,'the grid fits beside the scrollbar');
+  for(const frame of measurements.frames){
+   frame.positions.forEach((value,index)=>assert(Math.abs(value-measurements.before.positions[index])<=.125,
+    'emoji cells, glyphs and controls keep their alignment during scroll'));
+  }
+ };
  const assertComposerTriggerPosition=async input=>{
   const geometry=()=>input.evaluate(field=>{
    const trigger=field.closest('.oie-composer-field').querySelector('[data-emoji-trigger]').getBoundingClientRect();
@@ -88,8 +128,6 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
    await search.fill(emoji);
    const button=picker.locator('[data-emoji-pick='+JSON.stringify(emoji)+']').first();
    await button.waitFor({state:'visible'});
-   const glyph=button.locator('.oie-emoji-glyph');
-   await until(()=>glyph.evaluate(node=>node.style.translate!==''),'visible glyph alignment');
    const bounds=await button.boundingBox();
    await button.hover();
    assert.deepEqual(await button.boundingBox(),bounds,'emoji hover preserves the cell geometry');
@@ -114,6 +152,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     emoji+' is centered in the hover highlight: '+JSON.stringify(offset));
   }
   await search.fill('');
+  await assertStablePickerScroll(picker);
+  await picker.screenshot({path:path.join(browseArtifacts,'emoji-picker-scroll-desktop.png')});
   const totalChoices=await page.locator('#oie-emoji-picker [data-emoji-section]>.oie-emoji-grid>[data-emoji-pick],[data-emoji-section]>.oie-emoji-grid>[data-emoji-family]').count();
   await page.locator('#oie-emoji-picker [data-emoji-jump="8"]').click();await until(async()=>await page.locator('#oie-emoji-picker [data-emoji-scroll]').evaluate(node=>node.scrollTop>100),'footer jumps down the long list');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-section]>.oie-emoji-grid>[data-emoji-pick],[data-emoji-section]>.oie-emoji-grid>[data-emoji-family]').count(),totalChoices,'footer jump must not filter emojis');assert.equal(await search.inputValue(),'');
   await search.fill('heart');await page.locator('#oie-emoji-picker [data-emoji-pick="❤️"]').click();
@@ -158,12 +198,26 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   await context.close();
   const mobileContext=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR',isMobile:true,hasTouch:true});
   await mobileContext.addInitScript(()=>{for(const name of ['getItem','setItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});
+  // This sequence renders as several symbols, like an emoji missing from the device font.
+  const wideFallback='👩‍🚶‍🦽‍➡️';
+  await mobileContext.route('**/ui/emoji/pt-BR.json',async route=>{
+   const response=await route.fetch(),data=await response.json();
+   data.items.push([wideFallback,'sequência larga','sequência larga',1]);
+   await route.fulfill({response,json:data});
+  });
   const mobile=await mobileContext.newPage();active=mobile;mobile.on('pageerror',error=>errors.push(error.message));
   await mobile.goto(route(chat,'pt-BR','light'));
   await mobile.locator('body[data-oie-live-ready]').waitFor();
   await assertComposerTriggerPosition(mobile.locator('#message-composer'));
   await mobile.locator('#oie-emoji-picker [data-emoji-trigger]').click();await mobile.locator('#emoji-grid [data-emoji-pick]').first().waitFor();const mobilePicker=mobile.getByRole('dialog',{name:'Escolher emoji',exact:true}),mobileHeight=await mobilePicker.evaluate(async node=>{await Promise.all(node.getAnimations().map(animation=>animation.finished.catch(()=>{})));return node.offsetHeight});
-  await mobile.getByText('Nenhum emoji recente ainda.',{exact:true}).waitFor();await mobile.screenshot({path:path.join(__dirname,'artifacts','emoji-picker-browse-mobile.png')});assert(Math.abs(await mobilePicker.evaluate(node=>node.offsetHeight)-mobileHeight)<2,'empty mobile recents collapsed the picker');await mobile.locator('#oie-emoji-picker [data-emoji-jump="8"]').tap();assert.equal(await mobile.locator('#oie-emoji-picker [data-emoji-section]').count(),10);
+  await mobile.getByText('Nenhum emoji recente ainda.',{exact:true}).waitFor();await mobile.screenshot({path:path.join(__dirname,'artifacts','emoji-picker-browse-mobile.png')});assert(Math.abs(await mobilePicker.evaluate(node=>node.offsetHeight)-mobileHeight)<2,'empty mobile recents collapsed the picker');await assertStablePickerScroll(mobilePicker);await mobilePicker.screenshot({path:path.join(browseArtifacts,'emoji-picker-scroll-mobile.png')});await mobile.locator('#oie-emoji-picker [data-emoji-jump="8"]').tap();assert.equal(await mobile.locator('#oie-emoji-picker [data-emoji-section]').count(),10);
+  await mobile.locator('#emoji-search').fill(wideFallback);
+  const wideCell=mobilePicker.locator('[data-emoji-pick="'+wideFallback+'"]');
+  const wideGeometry=await wideCell.evaluate(button=>{
+   const glyph=button.firstElementChild.getBoundingClientRect(),cell=button.getBoundingClientRect();
+   return {glyph:glyph.width,cell:cell.width};
+  });
+  assert(wideGeometry.glyph<=wideGeometry.cell+4,'a split emoji stays within its grid column');
   await mobile.locator('#emoji-search').fill('thumbs up');await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"]').waitFor();const mobileEnglish=await mobile.locator('#emoji-grid').evaluate(node=>[...node.querySelectorAll('[data-emoji-section]>.oie-emoji-grid')].flatMap(group=>[...group.children].map(child=>child.dataset.emojiFamily||child.dataset.emojiPick)));
   await mobile.locator('#emoji-search').fill('joinha');await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"]').waitFor();assert.deepEqual(await mobile.locator('#emoji-grid').evaluate(node=>[...node.querySelectorAll('[data-emoji-section]>.oie-emoji-grid')].flatMap(group=>[...group.children].map(child=>child.dataset.emojiFamily||child.dataset.emojiPick))),mobileEnglish);assert.equal(await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"] > [data-emoji-pick]').getAttribute('aria-label'),'polegar para cima');
   await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"] [data-emoji-variants-trigger]').tap();const mobileVariants=mobile.getByRole('dialog',{name:'Variações do emoji',exact:true});await mobileVariants.waitFor({state:'visible'});const variantBox=await mobileVariants.boundingBox();assert(variantBox.x>=-1&&variantBox.x+variantBox.width<=391,'subpicker fits mobile viewport');assert(await mobileVariants.evaluate(panel=>{const probe=document.createElement('span');probe.style.backgroundColor='var(--oie-raised)';document.body.append(probe);const same=getComputedStyle(panel.querySelector('.oie-emoji-variants-bubble')).backgroundColor===getComputedStyle(probe).backgroundColor;probe.remove();return same}),'variant strip keeps light theme colors');await mobileVariants.locator('[data-emoji-pick="👍🏻"]').tap();assert.equal(await mobile.locator('#message-composer').inputValue(),'👍🏻');await mobile.locator('#message-composer').fill('');

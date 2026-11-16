@@ -58,6 +58,79 @@ window.OieEmojiPicker=(()=>{
   }
   return{items,families,shortcuts};
  }
+ // Canvas metrics include transparent margins in bitmap emoji. Measure the
+ // painted bounds once per font and glyph, before its button can be painted.
+ const glyphLayouts=new Map(),sampleSize=48,samplesPerRow=8;
+ let ink;
+ function layoutGlyphs(container){
+  const buttons=container.querySelectorAll('[data-emoji-pick]');
+  if(!buttons.length)return;
+  if(!ink){
+   const canvas=document.createElement('canvas');
+   canvas.width=canvas.height=sampleSize*samplesPerRow;
+   ink=canvas.getContext('2d',{willReadFrequently:true});
+   if(!ink)return;
+  }
+  const style=getComputedStyle(buttons[0]);
+  const font=[style.fontWeight,style.fontSize,style.fontFamily].join(' ');
+  const fontSize=parseFloat(style.fontSize);
+  if(!glyphLayouts.has(font))glyphLayouts.set(font,new Map());
+  const layouts=glyphLayouts.get(font);
+  const missing=new Set([...buttons].map(button=>button.dataset.emojiPick).filter(glyph=>!layouts.has(glyph)));
+  if(missing.size)measureGlyphs([...missing],font,fontSize,layouts);
+  for(const button of buttons){
+   const layout=layouts.get(button.dataset.emojiPick);
+   if(!layout)continue;
+   const glyph=button.firstElementChild;
+   glyph.style.setProperty('--oie-emoji-left',layout.left);
+   glyph.style.setProperty('--oie-emoji-top',layout.top);
+   if(layout.width>fontSize){
+    glyph.dataset.emojiWide='';
+    glyph.style.setProperty('--oie-emoji-width',layout.width+'px');
+    glyph.style.setProperty('--oie-emoji-fit',fontSize/layout.width);
+   }
+  }
+ }
+ function measureGlyphs(glyphs,font,fontSize,layouts){
+  const midpoint=sampleSize/2,size=ink.canvas.width,batchSize=samplesPerRow**2;
+  ink.font=font;
+  ink.textAlign='center';
+  // Read one canvas for a batch of glyphs to keep the first render bounded.
+  for(let start=0;start<glyphs.length;start+=batchSize){
+   ink.setTransform(1,0,0,1,0,0);
+   ink.clearRect(0,0,size,size);
+   const samples=glyphs.slice(start,start+batchSize).map((glyph,index)=>{
+    layouts.set(glyph,null);
+    const metrics=ink.measureText(glyph);
+    const baseline=(metrics.fontBoundingBoxAscent-metrics.fontBoundingBoxDescent)/2;
+    if(!Number.isFinite(baseline))return null;
+    const x=index%samplesPerRow*sampleSize,y=Math.floor(index/samplesPerRow)*sampleSize;
+    // Leave room for sequences that the current font paints as several symbols.
+    const extent=Math.max(metrics.width/2,metrics.actualBoundingBoxLeft,metrics.actualBoundingBoxRight,1);
+    const scale=Math.min(1,(midpoint-2)/extent);
+    ink.setTransform(scale,0,0,scale,x+midpoint,y+midpoint);
+    ink.fillText(glyph,0,baseline);
+    return{glyph,x,y,scale};
+   });
+   let pixels;
+   try{pixels=ink.getImageData(0,0,size,Math.ceil(samples.length/samplesPerRow)*sampleSize).data}
+   catch{for(const glyph of glyphs.slice(start))layouts.set(glyph,null);return}
+   for(const sample of samples){
+    if(!sample)continue;
+    const {glyph,x,y,scale}=sample;
+    let left=sampleSize,right=-1,top=sampleSize,bottom=-1;
+    for(let row=0;row<sampleSize;row++)for(let column=0;column<sampleSize;column++){
+     if(pixels[((y+row)*size+x+column)*4+3]<32)continue;
+     left=Math.min(left,column);right=Math.max(right,column);
+     top=Math.min(top,row);bottom=Math.max(bottom,row);
+    }
+    if(right<0||left===0||top===0||right===sampleSize-1||bottom===sampleSize-1)continue;
+    const shift=(first,last)=>((midpoint-(first+last+1)/2)/scale/fontSize).toFixed(4)+'em';
+    const width=(right-left+1)/scale;
+    layouts.set(glyph,{left:shift(left,right),top:shift(top,bottom),width});
+   }
+  }
+ }
  function mount(root,life,options){
  'use strict';
  options=options||{};
@@ -68,60 +141,10 @@ window.OieEmojiPicker=(()=>{
  const writable=()=>root.isConnected&&(options.available?.()??true),allowed=glyph=>options.allowed?.(glyph)??true,enabled=glyph=>writable()&&(options.enabled?.(glyph)??true);
  const mutate=fn=>window.Alpine?.mutateDom?window.Alpine.mutateDom(fn):fn();
  function clear(node){for(const child of node.children)window.Alpine?.destroyTree(child);node.replaceChildren()}
- // Bitmap emoji can leave unequal transparent margins inside the same line box.
- // Measure visible glyphs once and move only their artwork, keeping the hit area fixed.
- const inkOffsets=new Map(),sampleSize=48,sampleScale=2;
- const canvas=document.createElement('canvas');
- canvas.width=canvas.height=sampleSize*sampleScale;
- const ink=canvas.getContext('2d',{willReadFrequently:true});
- let inkFont='';
- function inkOffset(emoji){
-  const midpoint=sampleSize/2,metrics=ink.measureText(emoji);
-  const baseline=midpoint+(metrics.fontBoundingBoxAscent-metrics.fontBoundingBoxDescent)/2;
-  if(!Number.isFinite(baseline)||metrics.width>=sampleSize)return '0px';
-  ink.clearRect(0,0,sampleSize,sampleSize);
-  ink.fillText(emoji,midpoint,baseline);
-  const size=canvas.width,alpha=ink.getImageData(0,0,size,size).data;
-  let left=size,right=-1,top=size,bottom=-1;
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-   if(alpha[(y*size+x)*4+3]<32)continue;
-   left=Math.min(left,x);right=Math.max(right,x);
-   top=Math.min(top,y);bottom=Math.max(bottom,y);
-  }
-  if(right<0||left===0||top===0||right===size-1||bottom===size-1)return '0px';
-  const shift=(start,end)=>Math.round((midpoint-(start+end+1)/(2*sampleScale))*4)/4;
-  return shift(left,right)+'px '+shift(top,bottom)+'px';
- }
- function centerGlyph(button){
-  const glyph=button?.firstElementChild;
-  if(!ink||!glyph||glyph.style.translate)return;
-  if(!inkFont){
-   const style=getComputedStyle(button);
-   inkFont=[style.fontWeight,style.fontSize,style.fontFamily].join(' ');
-   ink.scale(sampleScale,sampleScale);
-   ink.font=inkFont;
-   ink.textAlign='center';
-  }
-  const emoji=button.dataset.emojiPick;
-  if(!inkOffsets.has(emoji)){
-   let offset='0px';
-   try{offset=inkOffset(emoji)}catch{}
-   inkOffsets.set(emoji,offset);
-  }
-  glyph.style.translate=inkOffsets.get(emoji);
- }
- const visibleGlyphs=ink&&typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
-  for(const {target,isIntersecting} of entries)if(isIntersecting){
-   centerGlyph(target);visibleGlyphs.unobserve(target);
-  }
- },{root:scroll,rootMargin:'80px 0px'}):null;
- life.cleanup(()=>visibleGlyphs?.disconnect());
- for(const event of ['pointerover','focusin'])life.on(root,event,e=>centerGlyph(e.target.closest('[data-emoji-pick]')));
  function setButton(button,item){
   const glyph=document.createElement('span');
   glyph.className='oie-emoji-glyph';
   glyph.textContent=item.glyph;
-  if(inkOffsets.has(item.glyph))glyph.style.translate=inkOffsets.get(item.glyph);
   button.append(glyph);
   button.dataset.emojiPick=item.glyph;
   button.setAttribute('aria-label',item.name);
@@ -165,11 +188,13 @@ window.OieEmojiPicker=(()=>{
    if(!items.length){const empty=document.createElement('p');empty.textContent=content.dataset.emojiNoRecent;section.append(empty)}
    sections.set(key,section);fragment.append(section);
   }
-  visibleGlyphs?.disconnect();
-  stopVariantGeometry();mutate(()=>{clear(grid);grid.append(fragment);window.Alpine?.initTree(grid)});
-  if(visibleGlyphs)for(const button of grid.querySelectorAll('[data-emoji-pick]')){
-   if(!button.firstElementChild.style.translate)visibleGlyphs.observe(button);
-  }
+  stopVariantGeometry();
+  mutate(()=>{
+   clear(grid);
+   grid.append(fragment);
+   layoutGlyphs(grid);
+   window.Alpine?.initTree(grid);
+  });
   scroll.scrollTop=0;status.textContent=candidates.length?'':content.dataset.emojiEmpty;retry.hidden=true;
   if(glyph){const replacement=[...grid.querySelectorAll('[data-emoji-pick]')].find(button=>button.dataset.emojiPick===glyph&&button.closest('[data-emoji-section]')?.dataset.emojiSection===section);(replacement||search).focus()}
   updateFooter();
@@ -209,8 +234,21 @@ window.OieEmojiPicker=(()=>{
  function focusWhenOpen(toggle,target,attempt=0){life.raf(()=>{if(toggle.getAttribute('aria-expanded')!=='true'||document.activeElement===target)return;const active=document.activeElement;if(active!==toggle&&active!==document.body&&!(target===search&&active===options.input))return;if(target?.getClientRects().length){target.focus({preventScroll:true});if(document.activeElement===target)return}if(attempt<12)focusWhenOpen(toggle,target,attempt+1)})}
  function populateVariants(toggle){
   const wrapper=toggle.closest('[data-emoji-family]'),variants=wrapper?.querySelector('[data-emoji-variants]'),family=catalog?.families.get(wrapper?.dataset.emojiFamily);if(!variants||!family)return;
-  if(!variants.childElementCount){const fragment=document.createDocumentFragment();for(const item of family.variants.filter(item=>allowed(item.glyph))){const button=cell.content.firstElementChild.cloneNode(true);setButton(button,item);button.dataset.emojiVariant='';button.setAttribute('aria-pressed',String(options.selected?options.selected(item.glyph):item.glyph===wrapper.querySelector(':scope>[data-emoji-pick]').dataset.emojiPick));fragment.append(button)}mutate(()=>{variants.append(fragment);for(const node of variants.children)window.Alpine?.initTree(node)})}
-  for(const button of variants.children)centerGlyph(button);
+  if(!variants.childElementCount){
+   const fragment=document.createDocumentFragment();
+   for(const item of family.variants.filter(item=>allowed(item.glyph))){
+    const button=cell.content.firstElementChild.cloneNode(true);
+    setButton(button,item);
+    button.dataset.emojiVariant='';
+    button.setAttribute('aria-pressed',String(options.selected?options.selected(item.glyph):item.glyph===wrapper.querySelector(':scope>[data-emoji-pick]').dataset.emojiPick));
+    fragment.append(button);
+   }
+   mutate(()=>{
+    variants.append(fragment);
+    layoutGlyphs(variants);
+    for(const node of variants.children)window.Alpine?.initTree(node);
+   });
+  }
   if(toggle.getAttribute('aria-expanded')==='true')watchVariantGeometry(toggle);
   focusWhenOpen(toggle,variants.querySelector('[data-emoji-pick]'));
  }

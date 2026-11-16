@@ -1,9 +1,19 @@
 .oie-emoji-panel{width:min(360px,calc(100vw - 24px));color:var(--oie-text);background:var(--oie-panel);border-color:var(--oie-border)}
 .oie-emoji-content{display:flex;flex-direction:column;gap:8px;padding:12px;min-height:0;height:min(460px,65dvh);max-height:min(460px,65dvh)}
-.oie-emoji-scroll{flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;overscroll-behavior:contain}
+.oie-emoji-scroll{flex:1;overflow:hidden auto;min-height:0;scrollbar-width:thin;scrollbar-gutter:stable;overscroll-behavior:contain}
 .oie-emoji-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px}
-.oie-emoji-cell{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:25px;line-height:1;width:100%;height:37px;min-width:0;padding:0;border-radius:var(--radius-radius)}
-.oie-emoji-glyph{display:block;pointer-events:none}
+.oie-emoji-cell{container-type:inline-size;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:25px;line-height:1;width:100%;height:37px;min-width:0;padding:0;border-radius:var(--radius-radius)}
+.oie-emoji-glyph{display:block;flex:none;position:relative;left:var(--oie-emoji-left,0px);top:var(--oie-emoji-top,0px);pointer-events:none}
+.oie-emoji-glyph[data-emoji-wide]{font-size:min(1em,calc((100cqi - 4px)*var(--oie-emoji-fit)))}
+@supports (scale:calc(1px / 1px)){
+ .oie-emoji-glyph[data-emoji-wide]{
+  --oie-emoji-scale:clamp(0,calc((100cqi - 4px)/var(--oie-emoji-width)),1);
+  font-size:inherit;
+  left:calc(var(--oie-emoji-left)*var(--oie-emoji-scale));
+  top:calc(var(--oie-emoji-top)*var(--oie-emoji-scale));
+  scale:var(--oie-emoji-scale);
+ }
+}
 .oie-emoji-status{margin:0;color:var(--oie-muted);font-size:12px}.oie-emoji-status:empty{display:none}
 [data-emoji-retry][hidden]{display:none}
 
