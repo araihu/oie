@@ -9,7 +9,7 @@ window.OieRuntime.register('reactions',life=>{
  const filters=new Map(),snapshots=new Map(),busy=new Set(),polls=new Map(),stored=new Set(),prefix='oie.reaction.v1:'+Object.values(scope).join(':')+':';
  const receiptUpdates=new Set();
  const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v),sameSet=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every(e=>b.includes(e));
- let preparation=null,opener=null,openerID='',preparing=null;
+ let preparation=null,opener=null,openerID='',preparing=null,pointerChoice=null;
  const activeSnapshot=()=>preparation&&snapshots.get(preparation.messageId);
  const allowed=glyph=>{const s=activeSnapshot();return !!s&&(!s.allowedEmojis||s.allowedEmojis.includes(glyph))};
  const selected=glyph=>preparation?.emojis.includes(glyph)===true;
@@ -229,15 +229,18 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   const bubble=document.querySelector('[data-message-bubble="'+CSS.escape(openerID)+'"]');
   const timeline=document.getElementById('message-timeline');
   if(!bubble||!timeline){close(false);return}
+  const catalogOpen=more.getAttribute('aria-expanded')==='true';
+  // Keep the anchor still while the keyboard moves during an emoji press.
+  if(catalogOpen&&catalog.contains(pointerChoice)&&pointerChoice.matches('[data-emoji-pick]:enabled'))return;
   const source=bubble.getBoundingClientRect(),pane=timeline.getBoundingClientRect();
   const anchor=bubble.querySelector('.oie-reaction-shortcut')?.getBoundingClientRect();
   const rect=anchor?.width?anchor:source,viewport=window.visualViewport;
   const offsetLeft=viewport?.offsetLeft||0,offsetTop=viewport?.offsetTop||0;
   const viewWidth=viewport?.width||document.documentElement.clientWidth,viewHeight=viewport?.height||innerHeight;
   const left=offsetLeft+8,right=offsetLeft+viewWidth-8;
-  const catalogFocused=more.getAttribute('aria-expanded')==='true'&&catalog.contains(document.activeElement);
+  const catalogActive=catalog.contains(document.activeElement)||catalog.contains(pointerChoice);
   const reducedViewport=viewHeight<innerHeight||viewWidth<document.documentElement.clientWidth;
-  const keepCatalog=catalogFocused&&reducedViewport;
+  const keepCatalog=catalogOpen&&catalogActive&&reducedViewport;
   const top=(keepCatalog?offsetTop:Math.max(pane.top,offsetTop))+6;
   const bottom=(keepCatalog?offsetTop+viewHeight:Math.min(pane.bottom,offsetTop+viewHeight))-6;
   if(!keepCatalog&&(source.bottom<=top||source.top>=bottom)){close(false);return}
@@ -271,6 +274,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   if(quick.isConnected)quick.hidePopover?.();
   quick.hidden=true;
   preparation=null;
+  pointerChoice=null;
   if(source?.matches('[data-reaction-open]'))source.setAttribute('aria-expanded','false');
   if(!restoreFocus)return;
   const root=document.querySelector('[data-message-bubble="'+CSS.escape(id)+'"]');
@@ -305,9 +309,13 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   buttons[(current+buttons.length+(event.key==='ArrowRight'?1:-1))%buttons.length].focus({preventScroll:true});
  });
  function cancelPreparation(){preparing?.abort();preparing=null}
- let choosingWithPointer=false;
+ function releasePickerPress(){
+  if(!pointerChoice)return;
+  pointerChoice=null;
+  life.raf(positionQuick);
+ }
  life.on(document,'keydown',event=>{
-  choosingWithPointer=false;
+  releasePickerPress();
   if(event.key!=='Escape')return;
   cancelPreparation();
   if(quick.hidden||more.getAttribute('aria-expanded')==='true')return;
@@ -315,20 +323,22 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   close();
  });
  life.on(document,'pointerdown',event=>{
-  const inside=quick.contains(event.target);
-  choosingWithPointer=inside&&(catalog.contains(event.target)||!!event.target.closest('[data-reaction-quick-emoji]'));
-  if(inside||opener?.contains(event.target))return;
+  const target=event.target,inside=quick.contains(target),control=target.closest('button,input');
+  pointerChoice=event.isPrimary&&event.button===0&&inside&&control&&!control.matches(':disabled')&&
+   (catalog.contains(control)||control.matches('[data-reaction-quick-emoji]'))?control:null;
+  if(inside||opener?.contains(target))return;
   cancelPreparation();
   close(false);
  },{capture:true});
  life.on(document,'focusin',event=>{
   // WebKit can focus the workspace between pointerdown and click.
-  if(!choosingWithPointer&&!quick.hidden&&!quick.contains(event.target)&&event.target!==opener)close(false);
+  if(!pointerChoice&&!quick.hidden&&!quick.contains(event.target)&&event.target!==opener)close(false);
  });
  life.on(document,'scroll',event=>{if(!quick.contains(event.target))positionQuick()},{capture:true,passive:true});
  life.on(window,'resize',positionQuick);
  life.on(window.visualViewport,'resize',positionQuick);
  life.on(window.visualViewport,'scroll',positionQuick);
+ life.on(window,'blur',releasePickerPress);
  life.on(document,'click',event=>{
   const filter=event.target.closest('[data-reaction-filter]');if(filter){event.preventDefault();filters.set(filter.dataset.reactionMessage,filter.dataset.reactionFilter);render();return}
   const direct=event.target.closest('[data-reaction-open]'),menu=event.target.closest('[id^="react-message-"]'),chip=event.target.closest('[data-reaction-emoji][data-reaction-message]'),check=event.target.closest('[data-reaction-check]');if(!direct&&!menu&&!chip&&!check)return;const button=direct||menu||chip||check;if(button.disabled)return;event.preventDefault();if(!direct||button.closest('[data-reaction-details]'))button.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));const id=direct?direct.dataset.reactionOpen:menu?menu.id.slice(14):button.dataset.reactionMessage;if(check){const intent=journals.get(id);if(intent)void submit(intent,!!intent.command||!intent.missingReceipt)}else if(!quick.hidden&&button===opener)close();else{close(false);void prepare(id,button,chip?.dataset.reactionEmoji)}
@@ -350,11 +360,11 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   if(!gesture||gesture.id!==event.pointerId)return;const candidate=gesture;cancelGesture();if(candidate.held||!candidate.source.isConnected)return;const now=performance.now();if(now-candidate.time>450){lastTap=null;return}
   if(lastTap&&lastTap.source===candidate.source&&now-lastTap.time<=320&&Math.hypot(candidate.x-lastTap.x,candidate.y-lastTap.y)<=24){event.preventDefault();lastTap=null;suppressClick={source:candidate.source,until:now+700};close(false);void prepare(candidate.source.dataset.messageBubble,candidate.source)}else lastTap={...candidate,time:now}
  },{passive:false});
- life.on(document,'pointercancel',()=>{choosingWithPointer=false;cancelGesture();cancelPrimary();lastTap=null},{passive:true});
+ life.on(document,'pointercancel',()=>{releasePickerPress();cancelGesture();cancelPrimary();lastTap=null},{passive:true});
  life.on(document,'scroll',()=>{cancelGesture();cancelPrimary();lastTap=null},{capture:true,passive:true});
  life.on(document,'contextmenu',event=>{if(gesture&&gesture.source.contains(event.target)){event.preventDefault();gesture.held=true;clearTimeout(gesture.timer);lastTap=null;suppressClick={source:gesture.source,until:performance.now()+900};openMessageMenu(gesture.source)}else if(suppressClick&&performance.now()<suppressClick.until&&suppressClick.source.contains(event.target))event.preventDefault()});
  life.on(window,'click',event=>{
-  choosingWithPointer=false;
+  releasePickerPress();
   if(suppressClick&&performance.now()<suppressClick.until&&suppressClick.source.contains(event.target)&&event.isTrusted){event.preventDefault();event.stopImmediatePropagation();suppressClick=null;return}
   const primary=event.target.closest('[data-preview-expand],[data-document-open]');if(event.isTrusted&&primary&&lastTap?.primary===primary&&performance.now()-lastTap.time<250){event.preventDefault();event.stopImmediatePropagation();cancelPrimary();const next={primary,timer:0};delayedPrimary=next;next.timer=life.timeout(()=>{if(delayedPrimary!==next)return;delayedPrimary=null;lastTap=null;if(primary.isConnected&&!primary.disabled)primary.click()},320)}
  },{capture:true});

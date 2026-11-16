@@ -103,6 +103,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   emit();
   // A rejected delayed preparation must never flash the picker or shift layout.
   state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:!document.querySelector('#oie-reaction-quick').hidden}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await openReact();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('#react-message-'+message).isEnabled(),'eligibility refreshed');
+  // Missing acceptance can retry only the exact same command after a receipt GET.
+  let abort=true;await page.route('**/ui/messages/reactions',r=>{if(abort){abort=false;return r.abort('connectionreset')}return r.continue()});await react();await pick('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});assert.equal(state.effects,2);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').getAttribute('aria-label')==='Try again','missing receipt exposes Retry');await region.locator('[data-reaction-check]').click();await own('😂',true);assert.equal(state.effects,3);await page.unroute('**/ui/messages/reactions');
+  // Lost reply after acceptance must reconcile without another engine POST.
+  let lost=true;await page.route('**/ui/messages/reactions',async r=>{if(lost){lost=false;await r.fetch();return r.abort('connectionreset')}return r.continue()});
+  const posts=state.posts+1;
+  await removeReaction('😂');
+  await until(()=>state.posts===posts&&state.effects===4,'engine accepted the reaction before losing its response');
+  await region.locator('[data-reaction-check]').waitFor({state:'visible'});await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'accepted receipt reconciled');assert.equal(state.posts,posts);assert.equal(state.effects,4);await page.unroute('**/ui/messages/reactions');
+  state.commandState='unknown';await react();await pick('🙏');await region.locator('[data-reaction-check]').waitFor({state:'visible'});const unknown=[...commands.values()].at(-1),unknownPosts=state.posts;await page.reload();await region.locator('[data-reaction-check]').waitFor({state:'visible'});await region.locator('[data-reaction-check]').click();await wait(250);assert.equal(state.posts,unknownPosts);assert.equal(await region.locator('[data-reaction-check]').getAttribute('aria-label'),'Check reaction status');apply(unknown);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'unknown command resolved');state.commandState='submitted';findings.push('Abort before acceptance supports explicit same-key retry after receipt404; lost accepted response/reload and known unknown dispatch use read-only reconciliation without another provider command');
+  // Cross-account and CSRF attempts are rejected before any mutation.
+  const effects=state.effects,csrf=await page.locator('meta[name="oie-csrf"]').getAttribute('content'),bad=new URLSearchParams({csrf,engineId:engine,accountId:id(999),conversationId:chat,messageId:message,operationKey:id(901),expectedOwnRevisionId:state.ownRevision||'',emojis:'[]',lang:'en'});
+  const foreign=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(foreign.status(),404);bad.set('accountId',account);bad.set('csrf','wrong');const denied=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(denied.status(),403);assert.equal(state.effects,effects);
+  state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();
   const keyboardBubble=page.locator('[data-message-bubble="'+message+'"]');
   await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.marginTop='500px');
   await react();
@@ -117,38 +130,44 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
    const viewport=window.visualViewport,source=document.querySelector('[data-message-bubble]').getBoundingClientRect();
    return source.top>=viewport.height&&node===document.activeElement&&node.getBoundingClientRect().bottom<=viewport.height;
   }),'catalog search remains focused with the message behind the keyboard');
-  await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
-  await dismissCatalog();
-  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.removeProperty('margin-top'));
-  // Missing acceptance can retry only the exact same command after a receipt GET.
-  let abort=true;await page.route('**/ui/messages/reactions',r=>{if(abort){abort=false;return r.abort('connectionreset')}return r.continue()});await react();await pick('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});assert.equal(state.effects,2);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').getAttribute('aria-label')==='Try again','missing receipt exposes Retry');await region.locator('[data-reaction-check]').click();await own('😂',true);assert.equal(state.effects,3);await page.unroute('**/ui/messages/reactions');
-  // Lost reply after acceptance must reconcile without another engine POST.
-  let lost=true;await page.route('**/ui/messages/reactions',async r=>{if(lost){lost=false;await r.fetch();return r.abort('connectionreset')}return r.continue()});
-  const posts=state.posts+1;
-  await removeReaction('😂');
-  await until(()=>state.posts===posts&&state.effects===4,'engine accepted the reaction before losing its response');
-  await region.locator('[data-reaction-check]').waitFor({state:'visible'});await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'accepted receipt reconciled');assert.equal(state.posts,posts);assert.equal(state.effects,4);await page.unroute('**/ui/messages/reactions');
-  state.commandState='unknown';await react();await pick('🙏');await region.locator('[data-reaction-check]').waitFor({state:'visible'});const unknown=[...commands.values()].at(-1),unknownPosts=state.posts;await page.reload();await region.locator('[data-reaction-check]').waitFor({state:'visible'});await region.locator('[data-reaction-check]').click();await wait(250);assert.equal(state.posts,unknownPosts);assert.equal(await region.locator('[data-reaction-check]').getAttribute('aria-label'),'Check reaction status');apply(unknown);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').count()===0,'unknown command resolved');state.commandState='submitted';findings.push('Abort before acceptance supports explicit same-key retry after receipt404; lost accepted response/reload and known unknown dispatch use read-only reconciliation without another provider command');
-  // Cross-account and CSRF attempts are rejected before any mutation.
-  const effects=state.effects,csrf=await page.locator('meta[name="oie-csrf"]').getAttribute('content'),bad=new URLSearchParams({csrf,engineId:engine,accountId:id(999),conversationId:chat,messageId:message,operationKey:id(901),expectedOwnRevisionId:state.ownRevision||'',emojis:'[]',lang:'en'});
-  const foreign=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(foreign.status(),404);bad.set('accountId',account);bad.set('csrf','wrong');const denied=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(denied.status(),403);assert.equal(state.effects,effects);
-  state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();
-  await react();
   const catalogReaction=modal.locator('[data-emoji-pick="😂"]').first();
-  await catalogReaction.waitFor({state:'visible'});
-  // WebKit can focus the workspace after pointerdown and before the click.
+  await catalogReaction.scrollIntoViewIfNeeded();
+  // WebKit can focus the workspace and resize the viewport before the click.
   await catalogReaction.evaluate(button=>{
-   button.dispatchEvent(new PointerEvent('pointerdown',{pointerType:'mouse',bubbles:true}));
-   document.getElementById('main-content').focus({preventScroll:true});
+   button.addEventListener('pointerdown',()=>{
+    const workspace=document.getElementById('main-content');
+    workspace.focus({preventScroll:true});
+    const viewport=window.visualViewport;
+    Object.defineProperty(viewport,'height',{configurable:true,value:550});
+    viewport.dispatchEvent(new Event('resize'));
+    window.catalogPointerFocus={
+     workspace:document.activeElement===workspace,
+     pickerOpen:!document.getElementById('oie-reaction-quick').hidden,
+    };
+   },{once:true});
   });
-  assert.equal(await modal.isVisible(),true,'the catalog stays open until the emoji receives its click');
   const beforeCatalogChoice=state.posts;
-  await catalogReaction.click();
+  const pressed=await catalogReaction.boundingBox();
+  await page.mouse.move(pressed.x+pressed.width/2,pressed.y+pressed.height/2);
+  await page.mouse.down();
+  assert.deepEqual(await page.evaluate(()=>window.catalogPointerFocus),{workspace:true,pickerOpen:true});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const held=await catalogReaction.boundingBox();
+  assert(Math.abs(held.x-pressed.x)<=1&&Math.abs(held.y-pressed.y)<=1,'the emoji stays under the pressed pointer during viewport resize');
+  await page.mouse.up();
+  await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.removeProperty('margin-top'));
   await own('😂',true);
   assert.equal(state.posts,beforeCatalogChoice+1,'the catalog choice submits exactly once');
   assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');
   assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);
   await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
+  const beforeSecondaryClick=state.posts;
+  await react();
+  await reactionSearch.click({button:'middle'});
+  await input.focus();
+  await quick.waitFor({state:'hidden'});
+  assert.equal(state.posts,beforeSecondaryClick,'a secondary click leaves focus dismissal active');
   const summary=region.locator('[data-reaction-summary]'),count=summary.locator('[data-reaction-summary-count]');
   const busySummary=region.locator('[data-reaction-summary][aria-busy="true"]');
   state.commandState='queued';await react();
@@ -248,8 +267,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-quick'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');const noWrites=state.effects;await text.tap();await text.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(state.effects,noWrites,'double tap only prepares a reaction');
   const phoneCatalog=phone.locator('#oie-reaction-picker-panel');
   const touchKeepsPickerFocus=await phoneDialog.locator('[data-reaction-quick-emoji]:visible').first().evaluate(button=>{
-   const touch=new PointerEvent('pointerdown',{pointerType:'touch',bubbles:true,cancelable:true});
-   button.dispatchEvent(touch);
+   const touch={pointerType:'touch',isPrimary:true,bubbles:true,cancelable:true};
+   button.dispatchEvent(new PointerEvent('pointerdown',touch));
+   button.dispatchEvent(new PointerEvent('pointerup',touch));
    document.getElementById('main-content').focus({preventScroll:true});
    return !button.closest('#oie-reaction-quick').hidden;
   });
@@ -281,7 +301,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   // Both entry points mount the same categorized selector and share device recents.
   await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-section]').first().waitFor();const categoryChoices=await modal.locator('[data-emoji-section]>.oie-emoji-grid>*').count();assert(categoryChoices>1000);await modal.locator('[data-emoji-jump="8"]').click();assert.equal(await modal.locator('[data-emoji-section]>.oie-emoji-grid>*').count(),categoryChoices,'category navigation scrolls the shared list without filtering');assert.equal(await modal.locator('[data-emoji-scroll]').evaluate(n=>n.scrollTop>100),true);await modal.locator('#reaction-emoji-search').fill('thumbs up');await modal.locator('[data-emoji-family="👍"]').waitFor();const englishFamilies=await modal.locator('[data-emoji-family]').count();await modal.locator('#reaction-emoji-search').fill('joinha');assert.equal(await modal.locator('[data-emoji-family]').count(),englishFamilies);await modal.locator('[data-emoji-family="👍"] [data-emoji-variants-trigger]').click();const tone=modal.locator('[data-emoji-variants] [data-emoji-pick="👍🏽"]');await tone.waitFor({state:'visible'});assert.equal(await modal.locator('[data-emoji-variant]').count(),6);await tone.focus();await page.keyboard.press('Escape');await tone.waitFor({state:'hidden'});assert.equal(await modal.isVisible(),true,'Escape closes only the tone submenu');assert.equal(await modal.locator('[data-emoji-variants-trigger]').evaluate(n=>document.activeElement===n),true);await modal.locator('[data-emoji-variants-trigger]').click();await tone.click();await own('👍🏽',true);assert.equal(await input.inputValue(),'Keep this unsent draft 😀','reacting with a tone never inserts it into the composer');
   const composeTrigger=page.locator('#oie-emoji-picker [data-emoji-trigger]');await composeTrigger.click();const composePicker=page.locator('#oie-emoji-picker-panel');await composePicker.waitFor({state:'visible'});await composePicker.locator('[data-emoji-jump=recent]').click();await composePicker.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').waitFor({state:'visible'});await composePicker.locator('#emoji-search').fill('rocket');await composePicker.locator('[data-emoji-pick="🚀"]').click();const composerDraft=await input.inputValue();assert(composerDraft.includes('🚀'));await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-jump=recent]').click();await modal.locator('#reaction-emoji-section-recent [data-emoji-pick="🚀"]').waitFor({state:'visible'});await dismissCatalog();assert.equal(await input.inputValue(),composerDraft);
-  state.max=2;emit();await react();await modal.locator('#reaction-emoji-search').fill('😂');await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'limit choice rendered');assert.equal(await modal.locator('[data-emoji-pick="😂"]').first().isDisabled(),true,'full multi-selection limit disables additional choices');await dismissCatalog();
+  state.max=2;emit();await react();await modal.locator('#reaction-emoji-search').fill('😂');
+  const disabledChoice=modal.locator('[data-emoji-pick="😂"]').first();
+  await disabledChoice.scrollIntoViewIfNeeded();
+  assert.equal(await disabledChoice.isDisabled(),true,'full multi-selection limit disables additional choices');
+  const disabledBox=await disabledChoice.boundingBox(),beforeDisabledClick=state.posts;
+  await page.mouse.click(disabledBox.x+disabledBox.width/2,disabledBox.y+disabledBox.height/2);
+  await input.focus();
+  await quick.waitFor({state:'hidden'});
+  assert.equal(state.posts,beforeDisabledClick,'a disabled choice leaves focus dismissal active');
   state.allowed=['👍🏽','😂'];state.max=1;emit();await openReact();
   await quick.waitFor({state:'visible'});
   assert.deepEqual(await quick.locator('[data-reaction-quick-emoji]:visible').allTextContents(),['😂']);
