@@ -302,7 +302,7 @@ func TestLiveReceiveUsesDurableReceiptTimeForPush(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	t.Cleanup(func() { _ = store.Close() })
 	engine, err := application.New(store, "hosted", id, time.Now)
 	if err != nil {
 		t.Fatal(err)
