@@ -353,12 +353,6 @@ window.OieRuntime.register('live', life => {
     const key = draftStorageKey();
     if (!key) return;
     record = {...record, conversationKind: record.conversationKind || conversationKind};
-    if (!editingSchedule && !record.pending && journal?.key === record.key && !journal.pending &&
-        compositionIdentity(journal) !== compositionIdentity(record)) {
-      // An editable draft may already be open or submitted in another tab.
-      record.key = localOperationKey();
-      submissionKey.value = record.key;
-    }
     journal = record; inMemory.set(key, record);
     const serialized = JSON.stringify(record);
     try { localStorage.setItem(key, serialized); }
@@ -1390,6 +1384,10 @@ window.OieRuntime.register('live', life => {
     }
     let result = await offlineRequest('reconcile', values);
     const waiting = record.offline === 'waiting';
+    if (waiting && result?.code === 'idempotency_conflict') {
+      await updateOfflineDraft(key, raw, null, {...result, rejected:true, returned:true});
+      return;
+    }
     if (!result?.accepted && !result?.rejected && navigator.onLine &&
         ((waiting && result?.code === 'not_found') || manual)) {
       // Claim every network attempt, including explicit retries in other tabs.
@@ -1913,6 +1911,11 @@ window.OieRuntime.register('live', life => {
       if (signedOut && (!sending || retryingSend)) return;
       const result = signedOut ? {rejected: true} : await response.json();
       if(life.signal.aborted)return;
+      const keyConflict = sending && !retryingSend && !editingSchedule && result.code === 'idempotency_conflict';
+      if (keyConflict) {
+        result.rejected = true;
+        result.message = offlineCopy.returned;
+      }
       releaseReservation = result.accepted || reservation?.firstAttempt && result.rejected;
       if (result.accepted) normalAcceptance = result;
       if (sending && result.code === 'engine_unavailable' && values.get('offlineCapable') === '1') {
@@ -1958,9 +1961,13 @@ window.OieRuntime.register('live', life => {
           const mentions=result.code==='mention_unavailable'?[]:journal.mentions;
           if(result.code==='mention_unavailable')form.dispatchEvent(new Event('oie:mentions-invalidated'));
           const {submittedAt, ...draft} = journal;
+          if (keyConflict) {
+            draft.key = localOperationKey();
+            submissionKey.value = draft.key;
+          }
           input.value=journal.text;restoreMentions(mentions);saveDraft({...draft,mentions,pending:false});lockComposer(false);
           const message = result.code === 'reply_source_changed' ? scheduleReviewChanged : result.message || text('invalidMessage');
-          if (['media_too_large','reply_source_changed','engine_unavailable'].includes(result.code)) errorToast(message);
+          if (keyConflict || ['media_too_large','reply_source_changed','engine_unavailable'].includes(result.code)) errorToast(message);
           else feedback(form, message, true);
           if (result.code === 'reply_source_changed') void refreshRejectedQuote();
         } else if (removingAccount) {
