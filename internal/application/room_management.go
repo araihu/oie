@@ -127,7 +127,7 @@ func (e *Engine) RoomManagementForMessage(ctx context.Context, id domain.ID, aff
 }
 
 func roomModerationEligible(c domain.Conversation, message domain.Message) bool {
-	return !message.IsOwn && message.SendState == "received" && message.Moderation == nil &&
+	return !message.IsOwn && message.SendState == "received" && !message.IsWithdrawn() &&
 		slices.ContainsFunc(message.References, func(ref domain.MessageReference) bool { return ref.Scope == "room:"+c.Address })
 }
 

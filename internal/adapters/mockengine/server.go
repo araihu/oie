@@ -279,14 +279,14 @@ func (s *Server) sampleMessages(ctx context.Context, c previewapi.Conversation, 
 // not turn preview fixtures into a protocol adapter or infer roster contacts.
 type sampleSearch struct {
 	Query, Account, Conversation, Cursor string
-	History                              bool
+	History, Retracted                   bool
 	Limit                                int
 }
 
 func readSampleSearch(r *http.Request, messages bool) (sampleSearch, bool) {
 	q := r.URL.Query()
 	state := sampleSearch{Query: strings.TrimSpace(q.Get("q")), Account: q.Get("accountId"), Conversation: q.Get("conversationId"), Cursor: q.Get("cursor"), Limit: 50}
-	for _, key := range []string{"q", "accountId", "conversationId", "includeEditHistory", "cursor", "limit"} {
+	for _, key := range []string{"q", "accountId", "conversationId", "includeEditHistory", "includeRetracted", "cursor", "limit"} {
 		if len(q[key]) > 1 {
 			return state, false
 		}
@@ -313,6 +313,12 @@ func readSampleSearch(r *http.Request, messages bool) (sampleSearch, bool) {
 			return state, false
 		}
 		state.History = q.Get("includeEditHistory") == "true"
+	}
+	if q.Has("includeRetracted") {
+		if q.Get("includeRetracted") != "true" && q.Get("includeRetracted") != "false" {
+			return state, false
+		}
+		state.Retracted = q.Get("includeRetracted") == "true"
 	}
 	if !messages && (state.Cursor != "" || state.Conversation != "" || q.Has("includeEditHistory")) {
 		return state, false
@@ -386,7 +392,7 @@ func (s *Server) searchMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	data, _ := json.Marshal([]any{id(1), state.Query, state.Account, state.Conversation, state.History, r.Context().Value(localeKey{})})
+	data, _ := json.Marshal([]any{id(1), state.Query, state.Account, state.Conversation, state.History, state.Retracted, r.Context().Value(localeKey{})})
 	scope := fmt.Sprintf("%x", sha256.Sum256(data))
 	cursor := sampleSearchCursor{}
 	if state.Cursor != "" {
@@ -406,7 +412,7 @@ func (s *Server) searchMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	page := engineapi.MessageSearchPage{Query: state.Query, IncludeEditHistory: state.History, Items: []engineapi.MessageSearchHit{}, MetadataIndexing: engineapi.SharedContentIndexing{State: "complete"}}
+	page := engineapi.MessageSearchPage{Query: state.Query, IncludeEditHistory: state.History, IncludeRetracted: &state.Retracted, Items: []engineapi.MessageSearchHit{}, MetadataIndexing: engineapi.SharedContentIndexing{State: "complete"}}
 	if state.Account != "" {
 		page.AccountId = &state.Account
 	}

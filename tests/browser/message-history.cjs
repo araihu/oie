@@ -4,7 +4,8 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const engine=id(1),account=id(2),direct=id(3),room=id(4),revision=id(5),streams=new Set();
- const state={generation:0,transport:0,fail:false,foreign:false,delay:0,writes:[],historyReads:[],otherReads:[]};
+ const state={generation:0,transport:0,fail:false,failTimeline:false,foreign:false,delay:0,retracted:false,writes:[],historyReads:[],otherReads:[]};
+ const retraction={at:'2026-11-09T15:00:00Z',originalAvailable:true};
  const owner={id:account,revisionId:revision,protocol:'xmpp',label:'Fixture account',address:'alice@fixture',createdAt:'2026-11-09T12:00:00Z'};
  const chats=[{id:direct,kind:'direct',address:'bob@fixture',title:'Bob'},{id:room,kind:'room',address:'room@fixture',title:'Saved room'}].map(c=>({...c,revisionId:revision,accountId:account,lastMessage:'Retained text',updatedAt:'2026-11-09T12:19:00Z',unreadCount:0,archived:false,favorite:false}));
  const baseNumber=c=>c.id===room?200:100,targetID=c=>id(baseNumber(c)+18),revisionID=(c,n)=>id((c.id===room?4000:3000)+n);
@@ -14,7 +15,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const sourceText=(c,n)=>n===0?'Original **literal** <script>alert(1)</script>\nCafé 🧑🏽‍💻':n===25?'Current **saved** message\nSecond line':n===26?'Alternative authored later than the selected current head':n===27?'Newest verified correction':n===28?'Newest verified correction after live refresh':n===22||n===23?'Repeated authored text':'Observed content version '+n;
  const messages=c=>Array.from({length:20},(_,n)=>{
   const messageId=id(baseNumber(c)+n),queued=messageId===queuedRoomMessage;
-  return {id:messageId,revisionId:n===18?revisionID(c,currentNumber()+state.transport*10000):n===17?revisionID(c,currentNumber()+100):revision,accountId:account,conversationId:c.id,sender:queued?{id:account,displayName:'Alice'}:{id:id(8),displayName:'Bob'},originalText:n===18?sourceText(c,currentNumber()):n===17?'Other logical source version '+currentNumber():'Retained message '+n,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:queued,historical:true,sendState:queued?'queued':'received',edited:n===18||n===17,editedAt:n===18||n===17?new Date(Date.UTC(2026,10,9,13,currentNumber())).toISOString():undefined};
+  const withdrawn=state.retracted&&c.id===direct&&n===18;
+  return {id:messageId,revisionId:n===18?revisionID(c,currentNumber()+state.transport*10000):n===17?revisionID(c,currentNumber()+100):revision,accountId:account,conversationId:c.id,sender:queued?{id:account,displayName:'Alice'}:{id:id(8),displayName:'Bob'},originalText:withdrawn?'':n===18?sourceText(c,currentNumber()):n===17?'Other logical source version '+currentNumber():'Retained message '+n,retraction:withdrawn?retraction:undefined,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:queued,historical:true,sendState:queued?'queued':'received',edited:n===18||n===17,editedAt:n===18||n===17?new Date(Date.UTC(2026,10,9,13,currentNumber())).toISOString():undefined};
  });
  const versions=(c,canonical=targetID(c))=>Array.from({length:27+state.generation},(_,n)=>({revisionId:revisionID(c,n+(canonical===targetID(c)?0:100)),sourceMessageId:n===0?canonical:id((c.id===room?6000:5000)+n+(canonical===targetID(c)?0:100)),createdAt:new Date(Date.UTC(2026,10,9,13,n)).toISOString(),originalText:canonical===targetID(c)?sourceText(c,n):'Other logical source version '+n,sender:{id:id(8),displayName:'Bob'},isCurrent:n===currentNumber(),isOriginal:n===0,parentRevisionIds:n===0?[]:[revisionID(c,(n===26?24:n-1)+(canonical===targetID(c)?0:100))]})).reverse();
  const api=http.createServer((req,res)=>{
@@ -22,13 +24,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(req.method!=='GET'){state.writes.push({method:req.method,path:u.pathname});return send(405,{status:405,code:'invalid_request'})}
   const history=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)\/edit-history$/);
   if(history){
-   state.historyReads.push({message:history[1],cursor:u.searchParams.get('cursor')||''});
+   const includeRetracted=u.searchParams.get('includeRetracted')==='true';
+   state.historyReads.push({message:history[1],cursor:u.searchParams.get('cursor')||'',includeRetracted});
    const canonical=history[1]===id(900)?targetID(chats[0]):history[1],c=chats.find(chat=>targetID(chat)===canonical||id(baseNumber(chat)+17)===canonical);
    if(!c)return send(404,{status:404,code:'not_found'});
+   const withdrawn=state.retracted&&canonical===targetID(chats[0]);
+   if(withdrawn&&!includeRetracted)return send(404,{status:404,code:'not_found'});
    if(state.fail)return send(503,{status:503,code:'unavailable'});
    const snapshot=(state.generation>1?'e':state.generation?'c':canonical!==targetID(c)?'d':c.id===room?'b':'a').repeat(64),limit=Number(u.searchParams.get('limit')||20),cursor=u.searchParams.get('cursor')||'';
    let start=0;if(cursor){const match=cursor.match(/^history:([a-f0-9-]+):(\d+):([a-f0-9]+)$/);if(!match||match[1]!==c.id)return send(400,{status:400,code:'invalid_request'});if(match[3]!==snapshot)return send(409,{status:409,code:'history_changed'});start=Number(match[2]);}
-   const all=versions(c,canonical),items=all.slice(start,start+limit),body={requestedMessageId:history[1],messageId:canonical,accountId:state.foreign?id(999):account,conversationId:c.id,currentRevisionId:revisionID(c,currentNumber()+(canonical===targetID(c)?0:100)),snapshot,items,nextCursor:start+limit<all.length?'history:'+c.id+':'+(start+limit)+':'+snapshot:undefined};
+   const all=versions(c,canonical),items=all.slice(start,start+limit),body={requestedMessageId:history[1],messageId:canonical,accountId:state.foreign?id(999):account,conversationId:c.id,currentRevisionId:revisionID(c,currentNumber()+(canonical===targetID(c)?0:100)),snapshot,retraction:withdrawn?retraction:undefined,items,nextCursor:start+limit<all.length?'history:'+c.id+':'+(start+limit)+':'+snapshot:undefined};
    const delay=state.delay;return delay?setTimeout(()=>send(200,body),delay):send(200,body);
   }
   state.otherReads.push(u.pathname);
@@ -44,7 +49,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    return {messageId,accountId:account,conversationId:chats.find(c=>u.pathname.includes(c.id))?.id||direct,starred,revisionId:starred?id(6):null,updatedAt:starred?owner.createdAt:null};
   })});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
-  for(const c of chats){if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return send(200,{items:messages(c).reverse()});}
+  for(const c of chats){if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return state.failTimeline?send(503,{status:503,code:'unavailable'}):send(200,{items:messages(c).reverse()});}
   const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const m=chats.flatMap(messages).find(m=>m.id===(retained[1]===id(900)?targetID(chats[0]):retained[1]));return m?send(200,m):send(404,{status:404,code:'not_found'})}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   return send(404,{status:404,code:'not_found'});
@@ -68,9 +73,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en',timezoneId:'America/Sao_Paulo'});
   await context.route('**/*',r=>{if(new URL(r.request().url()).origin!==base){external.push(r.request().url());return r.abort()}return r.continue()});
+  await context.addInitScript(()=>document.addEventListener('oie:shared-refresh',()=>{window.historyInitialRefresh=true},{once:true}));
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));let documents=0;page.on('request',r=>{if(r.isNavigationRequest()&&r.frame()===page.mainFrame())documents++});
-  await page.goto(route(chats[0]));await page.locator('[data-message-edited][data-open-message-history]').first().waitFor();await until(()=>streams.size>0,'SSE ready');await page.waitForTimeout(250);
-  const target=page.locator('[data-message-id="'+targetID(chats[0])+'"]'),edited=target.locator('[data-message-edited][data-open-message-history]'),slot=page.locator('#message-history-content'),drawer=page.getByRole('dialog',{name:'Edit history',exact:true});
+  await page.goto(route(chats[0]));await page.locator('[data-message-edited][data-open-message-history]').first().waitFor();await until(()=>streams.size>0,'SSE ready');await page.waitForFunction(()=>window.OieEvents?.connected&&window.historyInitialRefresh);
+  const target=page.locator('[data-message-id="'+targetID(chats[0])+'"]'),edited=target.locator('[data-message-edited][data-open-message-history]'),slot=page.locator('#message-history-content'),drawer=page.getByRole('dialog',{name:'Message history',exact:true});
   assert.equal(await edited.locator('use').getAttribute('href'),'/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
   await page.locator('#message-composer').fill('Keep this draft 😀');await edited.scrollIntoViewIfNeeded();await edited.focus();
   await page.evaluate(()=>{window.historyTimeline=document.querySelector('#message-timeline');window.historyTimelineRow=document.querySelector('[data-message-id]');window.historyScroll=historyTimeline.scrollTop;window.historyDocument=crypto.randomUUID();});const token=await page.evaluate(()=>historyDocument),beforeDocuments=documents,beforeHistoryReads=state.otherReads.length;
@@ -97,11 +103,37 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.transport=1;await refreshTimeline();assert.equal(await rows().count(),20);
   state.generation=2;state.transport=0;await refreshTimeline();await slot.locator('[data-history-restart]').waitFor({state:'visible'});assert.equal(await rows().count(),0);await slot.locator('[data-history-restart]').click();await until(async()=>await rows().count()===20,'restart after content refresh');await refreshTimeline();assert.equal(await rows().count(),20);await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   findings.push('A transport-only row revision keeps the observed page, while a retained-source refresh clears it and offers a fresh scoped read');
+  await edited.click();await until(async()=>await rows().count()===20,'history before withdrawal');
+  const readsBeforeRetraction=state.historyReads.length;
+  state.retracted=true;state.failTimeline=true;
+  const withdrawnMessage=messages(chats[0]).find(message=>message.id===targetID(chats[0]));
+  const sendUpdate=(sequence,message)=>{for(const stream of streams)stream.write(`id: ${engine}:${sequence}\nevent: message.updated\ndata: ${JSON.stringify({message})}\n\n`)};
+  sendUpdate(1,{...withdrawnMessage,conversationId:room});
+  await page.waitForFunction(cursor=>window.OieEvents.latest('')===cursor,engine+':1');
+  assert.equal(await rows().count(),20,'an unrelated conversation cannot close this history');
+  sendUpdate(2,withdrawnMessage);
+  await drawer.waitFor({state:'hidden'});await settleDrawers();
+  assert.equal(await rows().count(),0);assert.equal(state.historyReads.length,readsBeforeRetraction);
+  assert.equal(await target.locator('[data-message-history-retracted]').count(),0,'withdrawal closes history even without a fresh timeline');
+  state.failTimeline=false;
+  await page.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:refresh-request')));
+  const reveal=target.getByRole('link',{name:'Reveal original',exact:true});
+  await reveal.waitFor({state:'visible'});await drawer.waitFor({state:'hidden'});await settleDrawers();
+  assert.equal(await rows().count(),0);assert.equal(state.historyReads.length,readsBeforeRetraction);
+  await until(()=>reveal.evaluate(el=>el===document.activeElement),'withdrawal focuses explicit reveal');
+  await page.keyboard.press('Enter');await slot.locator('[data-history-retraction]').waitFor({state:'visible'});
+  assert(state.historyReads.at(-1).includeRetracted);assert(await rows().first().isVisible());
+  await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
+  state.retracted=false;await page.goto(route(chats[0]));await edited.waitFor({state:'visible'});
+  findings.push('A withdrawal event closes ordinary edit history even without a fresh timeline, then focuses explicit Reveal original when the refreshed row arrives');
   state.fail=true;await edited.click();await drawer.waitFor({state:'visible'});await settleDrawers();await slot.locator('[data-history-retry]').waitFor({state:'visible'});assert.equal(await rows().count(),0);state.fail=false;await slot.locator('[data-history-retry]').click();await until(async()=>await rows().count()===20,'retry saved history');await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   state.foreign=true;await edited.click();await slot.locator('[data-history-retry]').waitFor({state:'visible'});assert.equal(await rows().count(),0);state.foreign=false;await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   findings.push('Transient failures have scoped read-only retry, and a foreign account response never exposes versions');
   // The context-menu action opens the same read-only path, including on touch.
-  await target.locator('[data-message-menu-trigger]').click();await page.locator('[id="history-message-'+targetID(chats[0])+'"]:visible').click();await drawer.waitFor({state:'visible'});await until(async()=>await rows().count()===20,'context menu history');await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
+  await target.locator('[data-message-menu-trigger]').click();
+  const historyMenuItem=page.locator('[id="history-message-'+targetID(chats[0])+'"]:visible');
+  assert.equal(await historyMenuItem.locator('use').getAttribute('href'),'/ui/icons/heroicons-extra.svg#heroicons-history-16-solid-document-magnifying-glass');
+  await historyMenuItem.click();await drawer.waitFor({state:'visible'});await until(async()=>await rows().count()===20,'context menu history');await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   state.delay=650;await edited.click();await drawer.waitFor({state:'visible'});await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();const closed=await slot.innerHTML();await page.waitForTimeout(800);assert.equal(await slot.innerHTML(),closed);
   state.delay=650;await edited.click();await drawer.waitFor({state:'visible'});await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();state.delay=0;const other=page.locator('[data-message-id="'+id(baseNumber(chats[0])+17)+'"] [data-message-edited][data-open-message-history]');await other.click();await until(async()=>await slot.locator('[data-message-history-page]').getAttribute('data-history-message')===id(baseNumber(chats[0])+17),'different source history');await page.waitForTimeout(800);assert.equal(await slot.locator('[data-message-history-page]').getAttribute('data-history-message'),id(baseNumber(chats[0])+17));await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   state.delay=650;await edited.click();await drawer.waitFor({state:'visible'});await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'message-history'}})));await drawer.waitFor({state:'hidden'});await settleDrawers();await page.locator('#conversation-list a[data-conversation-id="'+room+'"]').click();await until(async()=>await page.locator('#conversation-pane').getAttribute('data-conversation-id')===room,'room fragment navigation');state.delay=0;await page.waitForTimeout(800);assert.equal(await page.locator('#message-history-content [data-message-history-page]').count(),0);assert.equal(await page.locator('#message-history-content').isVisible(),false);
@@ -129,7 +161,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    assert(Math.abs(inset)<=1,'the edit icon starts at the footer edge when the room message has no mention');
    await assertStampAlignment(p,targetID(chats[1]),'hi-16-solid-pencil-square');
    await assertStampAlignment(p,queuedRoomMessage,'hi-16-solid-clock');
-   const historyTooltip=await observeHistoryTooltip(p,historyAction);await historyAction.click();const title=locale==='en'?'Edit history':'Histórico de edições';const d=p.getByRole('dialog',{name:title,exact:true});await d.waitFor({state:'visible'});await p.locator('[data-message-history-page]').waitFor();await settleDrawers(p);await assertHistoryTooltipDismissed(p,historyTooltip);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await d.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1,JSON.stringify({width,locale,theme,box}));await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale} ${theme}`);await fs.mkdir(artifacts,{recursive:true});if(theme==='dark')await p.screenshot({path:path.join(artifacts,`message-history-${width}-${locale}.png`)});await p.close();findings.push({width,locale,theme,axe:0});
+   const historyTooltip=await observeHistoryTooltip(p,historyAction);await historyAction.click();const title=locale==='en'?'Message history':'Histórico da mensagem';const d=p.getByRole('dialog',{name:title,exact:true});await d.waitFor({state:'visible'});await p.locator('[data-message-history-page]').waitFor();await settleDrawers(p);await assertHistoryTooltipDismissed(p,historyTooltip);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await d.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1,JSON.stringify({width,locale,theme,box}));await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale} ${theme}`);await fs.mkdir(artifacts,{recursive:true});if(theme==='dark')await p.screenshot({path:path.join(artifacts,`message-history-${width}-${locale}.png`)});await p.close();findings.push({width,locale,theme,axe:0});
   }
   assert.deepEqual(state.writes,[]);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);findings.push('Native aliased read resolves canonical history, unedited messages have no history action and all 8 responsive localized theme variants pass accessibility with zero writes or external requests');
   console.log('PASS: scoped observed edit history, bounded older/newer pages, current/original labels, literal sources, stale/retry/route guards, keyboard/draft/scroll preservation, native alias and localized accessible layouts');

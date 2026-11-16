@@ -148,7 +148,21 @@ async function launch() {
       assert.equal(await player.getAttribute('src'),null);
       assert(reads.some(read => read.item === clips[index].id && read.range === 'bytes=0-5242879'));
       assert(reads.every(read => read.range === 'bytes=0-5242879'));
-      await page.waitForFunction(() => !document.querySelector('[data-attach-menu]').disabled);
+      const options = page.locator('#composer-split [data-popover-trigger] button');
+      const menu = page.locator('#composer-split').getByRole('menu');
+      const imageAction = menu.getByRole('menuitem', {name:locale === 'en' ? 'Image' : 'Imagem', exact:true});
+      const fileAction = menu.getByRole('menuitem', {name:locale === 'en' ? 'File' : 'Arquivo', exact:true});
+      const scheduleAction = menu.getByRole('menuitem', {name:locale === 'en' ? 'Schedule message' : 'Agendar mensagem', exact:true});
+      assert.equal(await composer.inputValue(), '');
+      for (const [action, accept] of [[imageAction, 'image/*'], [fileAction, '']]) {
+        await options.click();
+        await menu.waitFor();
+        assert.equal(await menu.getByRole('menuitem').count(), 3);
+        assert(await scheduleAction.isEnabled());
+        const chooser = page.waitForEvent('filechooser');
+        await action.click();
+        assert.equal(await (await chooser).element().getAttribute('accept'), accept);
+      }
       await composer.fill(locale === 'en' ? 'My caption' : 'Minha legenda');
       const caption = await composer.inputValue();
       let release;

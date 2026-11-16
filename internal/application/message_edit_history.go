@@ -20,7 +20,7 @@ var ErrHistoryChanged = errors.New("message content history changed")
 type MessageEditHistoryRepository interface {
 	// ReadMessageEditHistory resolves aliases and returns at most 128 verified
 	// content sources in one read transaction, without provider requests.
-	ReadMessageEditHistory(context.Context, domain.ID) (domain.MessageEditHistoryPage, error)
+	ReadMessageEditHistory(context.Context, domain.ID, bool) (domain.MessageEditHistoryPage, error)
 }
 
 type editHistoryCursor struct {
@@ -69,7 +69,7 @@ func historyDigest(s string) bool {
 	return true
 }
 
-func (e *Engine) MessageEditHistory(ctx context.Context, id domain.ID, cursor string, limit int) (domain.MessageEditHistoryPage, error) {
+func (e *Engine) MessageEditHistory(ctx context.Context, id domain.ID, cursor string, limit int, includeRetracted bool) (domain.MessageEditHistoryPage, error) {
 	empty := domain.MessageEditHistoryPage{Items: []domain.MessageEditHistoryItem{}}
 	if !validID(id) || limit < 1 || limit > 50 {
 		return empty, ErrInvalid
@@ -82,7 +82,7 @@ func (e *Engine) MessageEditHistory(ctx context.Context, id domain.ID, cursor st
 	if !ok {
 		return empty, ErrProtocolUnavailable
 	}
-	page, err := repo.ReadMessageEditHistory(ctx, id)
+	page, err := repo.ReadMessageEditHistory(ctx, id, includeRetracted)
 	if err != nil {
 		return empty, err
 	}
@@ -110,17 +110,19 @@ func (e *Engine) MessageEditHistory(ctx context.Context, id domain.ID, cursor st
 		Sender                      domain.Sender
 		Current, Original           bool
 		Parents                     []domain.ID
+		Attachments                 []domain.StagedAttachment `json:",omitempty"`
 	}
 	proofs := make([]contentProof, 0, len(page.Items))
 	for _, item := range page.Items {
 		sum := sha256.Sum256([]byte(item.OriginalText))
-		proofs = append(proofs, contentProof{item.RevisionID, item.SourceMessageID, item.CreatedAt, hex.EncodeToString(sum[:]), item.Sender, item.IsCurrent, item.IsOriginal, item.ParentRevisionIDs})
+		proofs = append(proofs, contentProof{item.RevisionID, item.SourceMessageID, item.CreatedAt, hex.EncodeToString(sum[:]), item.Sender, item.IsCurrent, item.IsOriginal, item.ParentRevisionIDs, item.Attachments})
 	}
 	page.Snapshot = fingerprint("message_edit_history_snapshot", struct {
-		Scope   string
-		Current domain.ID
-		Proofs  []contentProof
-	}{scope, page.CurrentRevisionID, proofs})
+		Scope      string
+		Current    domain.ID
+		Proofs     []contentProof
+		Retraction *domain.MessageRetraction `json:",omitempty"`
+	}{scope, page.CurrentRevisionID, proofs, page.Retraction})
 	if cursor != "" {
 		if position.Scope != scope {
 			return empty, ErrInvalid

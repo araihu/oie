@@ -169,7 +169,26 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 .oie-chat-skeleton-outgoing{align-self:flex-end}
 .oie-chat-skeleton-input[data-skeleton-item]{height:var(--oie-composer-control-size);border-radius:2rem}
 .oie-composer-input{flex:1;min-width:0}
-.oie-composer>.oie-icon-button,.oie-composer [data-attach-menu],.oie-composer .oie-edit-cancel,.oie-composer [data-emoji-trigger]{width:var(--oie-composer-control-size);height:var(--oie-composer-control-size);min-width:var(--oie-composer-control-size);min-height:var(--oie-composer-control-size);min-inline-size:var(--oie-composer-control-size);min-block-size:var(--oie-composer-control-size)}
+.oie-composer>.oie-icon-button,.oie-composer .oie-edit-cancel,.oie-composer [data-emoji-trigger]{width:var(--oie-composer-control-size);height:var(--oie-composer-control-size);min-width:var(--oie-composer-control-size);min-height:var(--oie-composer-control-size);min-inline-size:var(--oie-composer-control-size);min-block-size:var(--oie-composer-control-size)}
+.oie-composer-field {
+  --oie-composer-action-inset: .5rem;
+  --oie-composer-action-space: calc(var(--oie-composer-control-size) + var(--oie-composer-action-inset));
+}
+.oie-composer-emoji {
+  position: absolute;
+  inset-inline-end: var(--oie-composer-action-inset);
+  inset-block-end: 0;
+  display: flex;
+}
+.oie-composer-emoji [data-emoji-trigger]:hover {background: var(--oie-panel)}
+#message-composer {
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  padding-inline-end: var(--oie-composer-action-space);
+}
+.oie-composer-field:has([data-edit-cancel]:not([hidden])) #message-composer {
+  padding-inline-end: calc(var(--oie-composer-action-space) + var(--oie-composer-control-size));
+}
 .oie-chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px;padding:28px;flex:1;min-width:0}
 .oie-list-state{padding:25px 12px;text-align:center}
 .oie-settings{padding:8px;color:var(--oie-text)}
@@ -763,6 +782,7 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-forward-room-text > strong, .oie-forward-topic, .oie-forward-room-info > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oie-forward-room-text > strong { font-size: .875rem; }
 .oie-forward-room-info { color: var(--oie-muted); font-size: .8125rem; }
+.oie-forward-address { overflow-wrap: anywhere; }
 .oie-forward-result { grid-column: 2; margin: 0 0 .5rem; color: var(--oie-muted); font-size: .8125rem; }
 .oie-forward-result:empty { display: none; }
 .oie-forward-footer { display: flex; justify-content: flex-end; }
@@ -889,11 +909,6 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
   position:fixed;
   inset:var(--oie-visible-top) 0 auto;
 }
-.oie-composer-field:has([data-edit-cancel]:not([hidden])) textarea {
-  padding-inline-end:var(--oie-composer-control-size);
-}
-#message-composer::placeholder {white-space:nowrap;text-overflow:ellipsis}
-
 @media (max-width:720px), (pointer:coarse) {
   /* A legible focus size also avoids WebKit enlarging the whole page. */
   #oie-app :is(input, textarea, [contenteditable=true]) {font-size:max(16px,1em)}

@@ -30,7 +30,7 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPag
 	limit := sharedContentPageSize
 	kind := engineapi.ListSharedContentParamsType(v.SharedType)
 	includeStars := !v.Preview
-	params := &engineapi.ListSharedContentParams{Type: &kind, Limit: &limit, IncludeMessageStars: &includeStars}
+	params := &engineapi.ListSharedContentParams{Type: &kind, Limit: &limit, IncludeMessageStars: &includeStars, IncludeRetracted: &v.SharedIncludeRetracted}
 	if includeFirstPageCounts {
 		params.IncludeFirstPageCounts = &includeFirstPageCounts
 	}
@@ -66,6 +66,9 @@ func (s *Server) loadSharedContent(ctx context.Context, v *view, includeFirstPag
 		item := &result.JSON200.Items[i]
 		m := item.Message
 		if !validOperationKey(item.Id) || !validOperationKey(m.Id) || !validOperationKey(m.AccountId) || !validOperationKey(m.ConversationId) || safePreviewURL(item.Url) == "" || v.account(m.AccountId).Address == "" {
+			return
+		}
+		if (m.Retraction != nil || m.Moderation != nil) && !v.SharedIncludeRetracted {
 			return
 		}
 		if (len(accounts) > 0 && !slices.Contains(accounts, m.AccountId)) || (v.SharedConversation != "" && m.ConversationId != v.SharedConversation) {

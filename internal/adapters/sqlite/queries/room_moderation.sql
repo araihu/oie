@@ -19,6 +19,3 @@ JOIN conversations c ON c.id=m.conversation_id
 JOIN message_references r ON r.message_id=m.id
 WHERE m.account_id=sqlc.arg(account_id) AND c.address=sqlc.arg(room_address)
 AND r.scope='room:'||c.address AND r.remote_id=sqlc.arg(stanza_id);
-
--- name: RemoveModeratedSharedContent :exec
-DELETE FROM shared_content WHERE message_id=?;

@@ -72,3 +72,22 @@ func TestArchiveModerationTrustAndTombstone(t *testing.T) {
 		})
 	}
 }
+
+func TestArchivedSenderRetractionRequiresVerifiedRoomOccupant(t *testing.T) {
+	const room = "garden@conference.localhost"
+	const author = room + "/Reader"
+	wire := `<result id="archive"><forwarded xmlns="urn:xmpp:forward:0"><delay xmlns="urn:xmpp:delay" stamp="2026-11-13T16:00:00Z"/><message xmlns="jabber:client" id="notice" from="` + author + `" type="groupchat"><body>Fallback</body><occupant-id xmlns="urn:xmpp:occupant-id:0" id="occupant"/><retract xmlns="urn:xmpp:message-retract:1" id="room-stanza"/></message></forwarded></result>`
+	var result archiveResult
+	if err := xml.Unmarshal([]byte(wire), &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, trust := range []archiveTrust{{}, {SIDVerified: true}, {OccupantVerified: true}, {SIDVerified: true, OccupantVerified: true}} {
+		in, ok, err := archivedIncoming(domain.Account{Address: "alice@localhost"}, room, &result, trust)
+		if err != nil || ok != (trust.SIDVerified && trust.OccupantVerified) {
+			t.Fatalf("unexpected room retraction trust: %+v, %t, %v", trust, ok, err)
+		}
+		if ok && (in.Retraction == nil || in.Retraction.RemoteID != "room-stanza" || in.Retraction.Scope != roomCorrectionScope(room, author, "occupant") || in.OriginalText != "") {
+			t.Fatalf("invalid sender retraction: %+v", in)
+		}
+	}
+}

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie browser presentation API
-  version: 0.7.0
+  version: 0.8.0
   description: Browser-only presentation operations. Engine data and protocol operations remain in the engine API.
   contact:
     name: Arai Hû
@@ -959,6 +959,10 @@ paths:
         description: Requested retained source, allowing engine-validated canonical aliases.
         schema: {type: string, format: uuid}
       - in: query
+        name: includeRetracted
+        description: Explicitly reveal retained revisions and show the retraction in the history.
+        schema: {type: boolean, default: false}
+      - in: query
         name: cursor
         description: Engine-issued older-page cursor for the exact history snapshot.
         schema: {type: string, maxLength: 2048}
@@ -1059,6 +1063,12 @@ paths:
         schema:
           type: string
           format: uuid
+      - in: query
+        name: includeRetracted
+        description: Include retained content from retracted messages.
+        schema:
+          type: boolean
+          default: false
       - in: query
         name: includeEditHistory
         description: Include retained earlier content versions, explicitly labelled as prior versions.

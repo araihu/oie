@@ -48,7 +48,12 @@ WHERE s.starred=1
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
 AND (CAST(sqlc.arg(search) AS TEXT)='' OR oie_search_match(
- COALESCE(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'),'') || ' ' ||
+ CASE WHEN EXISTS (
+ SELECT 1 FROM shared_catalog_moderated_sources x WHERE x.message_id=m.id
+) OR EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+) THEN '' ELSE COALESCE(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText'),'') END || ' ' ||
  COALESCE(json_extract(m.payload,'$.Sender.DisplayName'),'') || ' ' ||
  COALESCE(json_extract(c.payload,'$.Title'),'') || ' ' || c.address,
  CAST(sqlc.arg(search) AS TEXT))=1)

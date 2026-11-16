@@ -9,6 +9,7 @@ import (
 	"github.com/araihu/goshtoso/components/panel"
 	"github.com/araihu/goshtoso/components/spinner"
 	"strconv"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 templ messageHistoryDrawer(v view) {
@@ -42,19 +43,43 @@ templ messageHistoryError(v view, changed bool) {
 }
 
 templ messageHistoryPage(v view, h historyPageView) {
-	<section data-message-history-page data-history-engine={ h.EngineID } data-history-account={ h.Page.AccountId } data-history-conversation={ h.Page.ConversationId } data-history-message={ h.Page.MessageId } data-history-requested={ h.Page.RequestedMessageId } data-history-snapshot={ h.Page.Snapshot } data-history-current-revision={ h.Page.CurrentRevisionId } data-history-cursor={ h.Cursor } data-history-next={ h.nextHref() } tabindex="-1" aria-label={ v.Text.EditHistory }>
-		if len(h.Items)==0 {
+	<section data-message-history-page data-history-engine={ h.EngineID } data-history-account={ h.Page.AccountId } data-history-conversation={ h.Page.ConversationId } data-history-message={ h.Page.MessageId } data-history-requested={ h.Page.RequestedMessageId } data-history-snapshot={ h.Page.Snapshot } data-history-current-revision={ h.Page.CurrentRevisionId } data-history-cursor={ h.Cursor } data-history-retracted={ strconv.FormatBool(h.Page.Retraction!=nil) } data-history-next={ h.nextHref() } tabindex="-1" aria-label={ v.Text.EditHistory }>
+		if len(h.Items)==0 && h.Page.Retraction==nil {
 			<p>{ v.Text.EditHistoryEmpty }</p>
 		} else {
 			<ol class="oie-history-versions">
+		if h.Page.Retraction!=nil && h.Cursor=="" {
+			<li>
+			@panel.Panel(panel.Config{Density: panel.DensityCompact, RootClass: "oie-history-version"}) {
+				<div data-history-retraction class="oie-history-version-heading">
+					<div class="oie-history-version-labels">
+						@badge.Badge(badge.Config{Label: v.Text.EditHistoryCurrent, Tone: badge.ToneSuccess, Size: badge.SizeSM})
+					</div>
+					<strong>{ h.WithdrawalLabel }</strong>
+					<time data-history-date datetime={ h.Page.Retraction.At.Format("2006-01-02T15:04:05Z07:00") }>{ h.Page.Retraction.At.UTC().Format("2006-01-02 15:04 UTC") }</time>
+				</div>
+				if h.Reason!="" {
+					<p>{h.Reason}</p>
+				}
+			}
+			</li>
+		}
 				for _,item:=range h.Items {
 					<li data-history-revision={ item.RevisionId } data-history-source={ item.SourceMessageId } data-history-is-current={ strconv.FormatBool(item.IsCurrent) } data-history-is-original={ strconv.FormatBool(item.IsOriginal) }>
-						@panel.Panel(panel.Config{Header: messageHistoryHeading(v, item), Density: panel.DensityCompact, RootClass: "oie-history-version"}) {
+						@panel.Panel(panel.Config{Header: messageHistoryHeading(v, item, h.Page.Retraction!=nil), Density: panel.DensityCompact, RootClass: "oie-history-version"}) {
 							if item.Formatted!=nil {
 								<div class="oie-rendered-message">@item.Formatted</div>
 								<div class="oie-original-message">{ item.OriginalText }</div>
 							} else {
 								<div class="oie-plain-fallback">{ item.OriginalText }</div>
+							}
+							@outgoingAttachments(v,engineapi.Message{ConversationId:h.Page.ConversationId, Attachments:item.Attachments})
+							if h.Page.Retraction != nil && item.AttachmentLinks != nil {
+								for _, file := range *item.AttachmentLinks {
+									if address := safePreviewURL(file.Url); address != "" {
+										<p><a href={ templ.URL(address) } target="_blank" rel="noopener noreferrer">{ file.FileName }</a></p>
+									}
+								}
 							}
 						}
 					</li>
@@ -74,15 +99,15 @@ templ messageHistoryPage(v view, h historyPageView) {
 	</section>
 }
 
-templ messageHistoryHeading(v view, item historyItemView) {
+templ messageHistoryHeading(v view, item historyItemView, retracted bool) {
 	<div class="oie-history-version-heading">
 		<div class="oie-history-version-labels">
-			if item.IsCurrent {
+			if item.IsCurrent && !retracted {
 				@badge.Badge(badge.Config{Label: v.Text.EditHistoryCurrent, Tone: badge.ToneSuccess, Size: badge.SizeSM})
 			}
 			if item.IsOriginal {
 				@badge.Badge(badge.Config{Label: v.Text.EditHistoryOriginal, Size: badge.SizeSM})
-			} else if !item.IsCurrent {
+			} else if !item.IsCurrent || retracted {
 				<span>{ v.Text.EditHistoryPrevious }</span>
 			}
 		</div>

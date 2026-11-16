@@ -3,6 +3,10 @@ window.OieRuntime.register('shared-content', life => {
  const controllers=new Map(),memoryKey='shared-scroll-v1',historyBytes=8*1024*1024;
  if(!window.OieRuntime.memory.has(memoryKey))window.OieRuntime.memory.set(memoryKey,new Map());
  const memory=window.OieRuntime.memory.get(memoryKey),uuid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value||'');
+ const engine=document.body.dataset.engineId,withdrawnKey='shared-withdrawn-v1';
+ const prior=window.OieRuntime.memory.get(withdrawnKey);
+ const withdrawn=prior&&prior.engine===engine?prior.ids:new Set();
+ window.OieRuntime.memory.set(withdrawnKey,{engine,ids:withdrawn});
  const keyCompare=(a,b)=>a.ms===b.ms?(a.id>b.id?1:a.id<b.id?-1:0):(a.ms>b.ms?1:-1),sorted=items=>[...items].sort((a,b)=>-keyCompare(a,b));
  function rawItem(node){
   const copy=node.cloneNode(true);
@@ -15,7 +19,7 @@ window.OieRuntime.register('shared-content', life => {
  }
  function records(root){
   const found=[],seen=new Set();
-  for(const item of root.querySelectorAll('[data-shared-item]')){const id=item.dataset.sharedItem,ms=Number(item.dataset.sharedCreatedMs);if(!uuid(id)||!Number.isSafeInteger(ms)||!/^[-]?\d+$/.test(item.dataset.sharedCreatedMs||'')||seen.has(id))throw Error('invalid_items');seen.add(id);found.push({id,ms,version:item.dataset.sharedRecordVersion||rawItem(item),html:rawItem(item)})}
+  for(const item of root.querySelectorAll('[data-shared-item]')){const id=item.dataset.sharedItem,ms=Number(item.dataset.sharedCreatedMs),messageId=item.querySelector('[data-shared-actions]')?.dataset.sharedMessage;if(!uuid(id)||!uuid(messageId)||!Number.isSafeInteger(ms)||!/^[-]?\d+$/.test(item.dataset.sharedCreatedMs||'')||seen.has(id))throw Error('invalid_items');seen.add(id);found.push({id,ms,messageId,version:item.dataset.sharedRecordVersion||rawItem(item),html:rawItem(item)})}
   for(let index=1;index<found.length;index++)if(keyCompare(found[index-1],found[index])<=0)throw Error("unordered_items");return found;
  }
  function monthSection(results, month, date) {
@@ -41,9 +45,10 @@ window.OieRuntime.register('shared-content', life => {
  function pageData(root,info,live=false){
   const prefix=info?'info-shared':'shared-content',resultSelector=live?(info?'#live-info-content #info-shared-results':'#live-shared-results'):'#'+prefix+'-results',pagerSelector=live?(info?'#live-info-content #info-shared-pagination':'#live-shared-pagination'):'#'+prefix+'-pagination';
   const results=root.querySelector(resultSelector),pagination=root.querySelector(pagerSelector),page=pagination?.querySelector('[data-shared-page]');if(!results||!page||!['engine','scope','cursor','next','state'].every(key=>page.hasAttribute('data-shared-page-'+key)))return null;
-  const link=page.querySelector('[data-shared-next]');return{results,pagination,page,engine:page.dataset.sharedPageEngine,scope:page.dataset.sharedPageScope,cursor:page.dataset.sharedPageCursor||'',next:page.dataset.sharedPageNext||'',state:page.dataset.sharedPageState,href:link?.getAttribute('href')||'',version:results.dataset.version||''};
+  const link=page.querySelector('[data-shared-next]');return{results,pagination,page,engine:page.dataset.sharedPageEngine,scope:page.dataset.sharedPageScope,cursor:page.dataset.sharedPageCursor||'',next:page.dataset.sharedPageNext||'',state:page.dataset.sharedPageState,includeRetracted:page.dataset.sharedPageIncludeRetracted==='true',href:link?.getAttribute('href')||'',version:results.dataset.version||''};
  }
- function check(c,data,cursor){if(!data||c.engine!==document.body.dataset.engineId||data.engine!==c.engine||data.scope!==c.scope||data.cursor!==cursor||data.state!=='ready')throw Error('invalid_page');if(data.next&&data.next===cursor)throw Error('repeated_cursor');return records(data.results)}
+ const visibleRecords=(items,includeRetracted)=>includeRetracted?items:items.filter(item=>!withdrawn.has(item.messageId));
+ function check(c,data,cursor){if(!data||c.engine!==document.body.dataset.engineId||data.engine!==c.engine||data.scope!==c.scope||data.cursor!==cursor||data.state!=='ready'||data.includeRetracted!==c.includeRetracted)throw Error('invalid_page');if(data.next&&data.next===cursor)throw Error('repeated_cursor');return visibleRecords(records(data.results),c.includeRetracted)}
  function requestURL(c,cursor,href){const url=new URL(href||c.templateURL,location.href);if(url.origin!==location.origin||url.pathname!=='/'||url.hash||url.username||url.password)throw Error('invalid_url');url.searchParams.set(c.cursorName,cursor);if(!cursor)url.searchParams.delete(c.cursorName);return url}
  function capturePreviews(c){
   for(const live of c.results.querySelectorAll('[data-shared-item]')){
@@ -55,8 +60,8 @@ window.OieRuntime.register('shared-content', life => {
   }
  }
  function save(c){
-  if(!c.items.size)return;
-  const entry={scope:c.scope,engine:c.engine,base:c.base,items:[...c.items.values()],pages:c.pages,next:c.next,href:c.href,templateURL:c.templateURL,pagerHTML:c.pagerHTML,tailRequest:c.tailRequest,edges:[...c.edges],scroll:c.top};
+  if(!c.items.size){memory.delete(c.cacheKey);return}
+  const entry={scope:c.scope,engine:c.engine,base:c.base,includeRetracted:c.includeRetracted,items:[...c.items.values()],pages:c.pages,next:c.next,href:c.href,templateURL:c.templateURL,pagerHTML:c.pagerHTML,tailRequest:c.tailRequest,edges:[...c.edges],scroll:c.top};
   const size=JSON.stringify(entry).length;if(size>historyBytes){memory.delete(c.cacheKey);return}memory.delete(c.cacheKey);memory.set(c.cacheKey,entry);
   while(memory.size>4||[...memory.values()].reduce((sum,value)=>sum+JSON.stringify(value).length,0)>historyBytes)memory.delete(memory.keys().next().value);
  }
@@ -132,9 +137,10 @@ window.OieRuntime.register('shared-content', life => {
   const prefix=info?'info-shared':'shared-content',data=pageData(document,info),scroll=document.getElementById(info?'details-body':'shared-content-scroll'),existing=controllers.get(prefix);
   if(existing&&data&&existing.results===data.results&&existing.scope===data.scope)return existing;
   if(existing){dispose(existing);controllers.delete(prefix)}if(!data||!scroll||data.state!=='ready'||!uuid(data.engine)||!/^([0-9a-f]{64})$/.test(data.scope))return null;
-  let initial;try{initial=records(data.results)}catch{return null}
-  const c={prefix,info,results:data.results,pagination:data.pagination,scroll,engine:data.engine,scope:data.scope,base:data.cursor,cursorName:info?'infoCursor':'contentCursor',next:data.next,href:data.href,templateURL:data.href||location.href,items:new Map(initial.map(item=>[item.id,item])),headIDs:new Set(initial.map(item=>item.id)),pages:[data.cursor],used:new Set([data.cursor]),cacheKey:data.scope+':'+data.cursor,rendered:new Map(initial.map(item=>[item.id,item.version||item.html])),pagerHTML:data.pagination.innerHTML,tailRequest:data.cursor,edges:new Map(data.next&&initial.length?[[data.next,initial.at(-1)]]:[]),bridge:'',headNext:data.next,closed:false,generation:0,eofPriority:false,events:new AbortController(),top:scroll.scrollTop,busy:false,failed:false,disposed:false,round:0,lastRefresh:0};controllers.set(prefix,c);
-  const cached=memory.get(c.cacheKey);if(cached&&cached.engine===c.engine&&cached.scope===c.scope&&cached.base===c.base){c.items=new Map(cached.items.map(item=>[item.id,item]));mergeWindow(c,initial,true);c.pages=[...cached.pages];c.used=new Set(c.pages);c.next=cached.next;c.href=cached.href;c.templateURL=cached.templateURL;c.tailRequest=cached.tailRequest??c.pages.at(-1);c.edges=new Map(cached.edges||[]);if(data.next&&initial.length)c.edges.set(data.next,initial.at(-1));c.top=cached.scroll;refreshPager(c,cached.pagerHTML||data.pagination.innerHTML);render(c,document);c.scroll.scrollTop=cached.scroll;c.top=c.scroll.scrollTop;save(c);life.raf(()=>{if(!c.disposed){c.scroll.scrollTop=cached.scroll;c.top=c.scroll.scrollTop;observe(c)}})}else{scroll.scrollTop=0;c.top=0;group(data.results);life.raf(()=>observe(c))}
+  let rawInitial;try{rawInitial=records(data.results)}catch{return null}
+  const initial=visibleRecords(rawInitial,data.includeRetracted);
+  const c={prefix,info,results:data.results,pagination:data.pagination,scroll,engine:data.engine,scope:data.scope,base:data.cursor,includeRetracted:data.includeRetracted,cursorName:info?'infoCursor':'contentCursor',next:data.next,href:data.href,templateURL:data.href||location.href,items:new Map(initial.map(item=>[item.id,item])),headIDs:new Set(initial.map(item=>item.id)),pages:[data.cursor],used:new Set([data.cursor]),cacheKey:data.scope+':'+data.cursor,rendered:new Map(initial.map(item=>[item.id,item.version||item.html])),pagerHTML:data.pagination.innerHTML,tailRequest:data.cursor,edges:new Map(data.next&&rawInitial.length?[[data.next,rawInitial.at(-1)]]:[]),bridge:'',headNext:data.next,closed:false,generation:0,eofPriority:false,events:new AbortController(),top:scroll.scrollTop,busy:false,failed:false,disposed:false,round:0,lastRefresh:0};controllers.set(prefix,c);
+  const cached=memory.get(c.cacheKey);if(cached&&cached.engine===c.engine&&cached.scope===c.scope&&cached.base===c.base){c.items=new Map(visibleRecords(cached.items,c.includeRetracted).map(item=>[item.id,item]));mergeWindow(c,initial,true);c.pages=[...cached.pages];c.used=new Set(c.pages);c.next=cached.next;c.href=cached.href;c.templateURL=cached.templateURL;c.tailRequest=cached.tailRequest??c.pages.at(-1);c.edges=new Map(cached.edges||[]);if(data.next&&rawInitial.length)c.edges.set(data.next,rawInitial.at(-1));c.top=cached.scroll;refreshPager(c,cached.pagerHTML||data.pagination.innerHTML);render(c,document);c.scroll.scrollTop=cached.scroll;c.top=c.scroll.scrollTop;save(c);life.raf(()=>{if(!c.disposed){c.scroll.scrollTop=cached.scroll;c.top=c.scroll.scrollTop;observe(c)}})}else{scroll.scrollTop=0;c.top=0;if(initial.length!==rawInitial.length)render(c,document);else group(data.results);life.raf(()=>observe(c))}
   scroll.addEventListener('scroll',()=>{if(c.results.isConnected){c.top=scroll.scrollTop;clearTimeout(c.cacheTimer);c.cacheTimer=life.timeout(()=>{if(!c.disposed)save(c)},200)}},{passive:true,signal:c.events.signal});return c;
  }
  function update(page,info){
@@ -156,6 +162,22 @@ window.OieRuntime.register('shared-content', life => {
  for(const name of ['drawer:close','drawer:close-request'])life.on(window,name,event=>{if(event.detail?.id==='details')life.timeout(()=>{if(!event.defaultPrevented){const c=controllers.get('info-shared');if(c){c.closed=true;c.generation++;c.request?.abort();c.request=null;c.busy=false;c.observer?.disconnect();capturePreviews(c);feedback(c,c.failed);save(c)}}},0)});
  life.on(window,'drawer:open',event=>{if(event.detail?.id==='details'){const c=bind(true);if(c){c.closed=false;life.timeout(()=>observe(c),250)}}});
  life.on(document,'oie:shared-refresh',event=>{update(event.detail,false);update(event.detail,true)});
+ life.on(window.OieEvents?.target,'message.updated',event=>{
+  let message;try{message=JSON.parse(event.detail.data).message}catch{return;}
+  if(!uuid(message?.id)||!(message.retraction||message.moderation)||withdrawn.has(message.id))return;
+  withdrawn.add(message.id);
+  for(const [key,cached]of memory){
+   if(cached.engine!==engine||cached.includeRetracted)continue;
+   cached.items=visibleRecords(cached.items,false);
+   if(!cached.items.length)memory.delete(key);
+  }
+  for(const c of controllers.values()){
+   if(c.engine!==engine||c.includeRetracted)continue;
+   let removed=false;
+   for(const [id,item]of c.items)if(item.messageId===message.id){c.items.delete(id);c.headIDs.delete(id);removed=true;}
+   if(removed)render(c,document);
+  }
+ });
  life.on(document,'oie:time-zone',()=>{for(const c of controllers.values())render(c,document)});
  life.on(document,'oie:appearance-changed',()=>{
   for(const c of controllers.values())for(const key of ['href','templateURL']){
@@ -186,7 +208,7 @@ window.OieRuntime.register('shared-search', life => {
    const values=new FormData(form),root=info?form.closest('#chat-info-content'):form.closest('#workspace');
    for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){
     const url=new URL(link.href);
-    for(const key of info?['infoQuery']:['q','account','contentAccount']){
+    for(const key of info?['infoQuery','infoIncludeRetracted']:['q','account','contentAccount','contentIncludeRetracted']){
      url.searchParams.delete(key);
      for(const value of values.getAll(key).sort())if(value||key==='contentAccount')url.searchParams.append(key,value);
     }
@@ -202,6 +224,12 @@ window.OieRuntime.register('shared-search', life => {
   on(input,'compositionstart',()=>{composing=true;clearTimeout(pending)});
   on(input,'compositionend',()=>{composing=false;alignTabs();schedule()});
   on(form,'submit',()=>clearTimeout(pending),{capture:true});
+  on(form,'change',event=>{
+   if(!event.target.matches('[data-shared-retraction-filter]')||!connected())return;
+   alignTabs();
+   cancel();
+   input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}));
+  });
   on(form,'combobox:change',event=>{
    if(info||event.detail?.id!=='shared-account'||!connected())return;
    const all=form.querySelector('[data-shared-all-accounts]');

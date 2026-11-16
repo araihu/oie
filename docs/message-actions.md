@@ -32,3 +32,29 @@ Popover/Dropdown/Dialog browser tests, unit/build checks and lint. The current p
 also includes the searchable account-filter fixes from
 [combobox PR #376](https://github.com/araihu/goshtoso/pull/376). Full upstream
 browser-suite completion remains unverified; these PRs remain draft.
+
+## Retraction and forwarding
+
+The XMPP adapter handles sender retractions using XEP-0424. Direct chats use
+the sender's stanza ID and authenticated bare JID. In rooms, retraction
+requires a server-assigned stanza ID and verified occupant identity. Sending
+also requires a joined room that advertises retraction and honors any
+advertised age limit. The same message uses the same retraction stanza ID
+when the request is retried. A successful stream write records the local
+retraction without asserting what other clients retained.
+
+Retraction observations are scoped by account, conversation and author.
+An observation can arrive before its source. The regular timeline, reply
+quotes, favorites excerpts and default search and catalog queries hide
+withdrawn content. Reveal original opens the message history. The history shows the retraction as
+the current state and lists the retained content revisions underneath. Include retracted applies independently
+of Include edit history. It retrieves only content still available under
+the retention policy.
+
+The forwarding picker accepts direct conversations and rooms across
+accounts. The destination account stages and uploads each selected file
+through the existing forward outbox.
+
+XEP-0308 corrections continue to target the most recent own original in
+the verified sending connection. Quoted replies with a verified reference
+can be corrected while preserving that reference and its fallback quote.
