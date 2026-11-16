@@ -18,10 +18,9 @@ self.addEventListener('push', event => {
   if (![engine, account, conversation, message].every(id => id && uuid.test(id))) return;
 
   event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
     await self.registration.showNotification(data.title, {
       body: data.body, lang: data.lang, tag: engine + ':' + message,
-      silent: data.silent === true || windows.some(window => window.visibilityState === 'visible'),
+      silent: data.silent === true,
       data: {engine, account, conversation, message},
     });
   })());

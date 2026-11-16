@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,18 @@ func (r *testRegistry) PushRecipients(string) (hostauth.PushKeys, []hostauth.Pus
 	return r.keys, r.recipients, nil
 }
 
-func (r *testRegistry) ForgetPush(_ context.Context, recipient hostauth.PushRecipient) error {
+func (r *testRegistry) CurrentPushRecipient(_, session string) (*hostauth.PushRecipient, error) {
+	index := slices.IndexFunc(r.recipients, func(recipient hostauth.PushRecipient) bool {
+		return recipient.SessionID == session
+	})
+	if index < 0 {
+		return nil, nil
+	}
+	recipient := r.recipients[index]
+	return &recipient, nil
+}
+
+func (r *testRegistry) ExpirePush(_ context.Context, recipient hostauth.PushRecipient) error {
 	r.expired = append(r.expired, recipient.SessionID)
 	return nil
 }
@@ -45,7 +57,7 @@ type testSource struct {
 	message      domain.Message
 	conversation domain.Conversation
 	presence     string
-	unread       int
+	read         bool
 }
 
 func (s testSource) Message(context.Context, domain.ID) (domain.Message, error) {
@@ -54,8 +66,8 @@ func (s testSource) Message(context.Context, domain.ID) (domain.Message, error) 
 func (s testSource) Conversation(context.Context, domain.ID) (domain.Conversation, error) {
 	return s.conversation, nil
 }
-func (s testSource) ConversationReadState(context.Context, domain.ID) (domain.ReadState, error) {
-	return domain.ReadState{UnreadCount: s.unread}, nil
+func (s testSource) HasMessageRead(context.Context, domain.ID) (bool, error) {
+	return s.read, nil
 }
 func (s testSource) AccountCommunicationPreferences(context.Context, domain.ID) (domain.AccountCommunicationPreferences, error) {
 	return domain.AccountCommunicationPreferences{Presence: s.presence}, nil
@@ -76,11 +88,12 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 		ID:             "019a5df0-0000-7000-8000-000000000002",
 		AccountID:      "019a5df0-0000-7000-8000-000000000003",
 		ConversationID: "019a5df0-0000-7000-8000-000000000004",
+		ReceivedAt:     time.Now().Add(-2 * time.Second),
 		OriginalText:   "private text", Sender: domain.Sender{DisplayName: "private sender"}, SendState: "received",
 	}
 	var calls []string
 	registered := &testRegistry{keys: testKey(t)}
-	for _, id := range []string{"ready", "gone", "focused", "muted", "new"} {
+	for _, id := range []string{"ready", "gone", "focused", "muted", "new", "revoked", "late-mute"} {
 		entry := hostauth.PushRecipient{SessionID: id, PushSubscription: hostauth.PushSubscription{
 			Endpoint: "https://web.push.apple.com/" + id, Auth: base64.RawURLEncoding.EncodeToString(make([]byte, 16)),
 			PublicKey: testKey(t).Public, EngineID: engineID, Language: "pt-BR", Sound: true, DirectSound: true,
@@ -97,6 +110,16 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 		origin: "https://oie.example",
 		client: transportFunc(func(request *http.Request) (*http.Response, error) {
 			calls = append(calls, request.URL.Path)
+			if request.URL.Path == "/ready" {
+				registered.recipients = slices.DeleteFunc(registered.recipients, func(recipient hostauth.PushRecipient) bool {
+					return recipient.SessionID == "revoked"
+				})
+				for index := range registered.recipients {
+					if registered.recipients[index].SessionID == "late-mute" {
+						registered.recipients[index].MutedConversations = []string{string(message.ConversationID)}
+					}
+				}
+			}
 			if request.Method != http.MethodPost || request.Header.Get("Content-Encoding") != "aes128gcm" ||
 				!strings.HasPrefix(request.Header.Get("Authorization"), "vapid t=") || request.Header.Get("TTL") != "300" {
 				t.Fatalf("invalid Web Push request: %v %v", request.Method, request.Header)
@@ -112,29 +135,33 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 			return &http.Response{StatusCode: status, Body: http.NoBody}, nil
 		}),
 	}}
-	if !service.ClaimForeground("focused", engineID, string(message.ID)) {
+	if !service.ClaimForeground("focused", engineID, string(message.ID), false) ||
+		!service.ClaimForeground("focused", engineID, string(message.ID), true) {
 		t.Fatal("foreground delivery unable to claim an unsent message")
 	}
 	source := testSource{message: message, conversation: domain.Conversation{
 		ID: message.ConversationID, AccountID: message.AccountID, Kind: "direct",
-	}, unread: 1}
+	}}
 	job := delivery{message.ID, time.Now().Add(-2 * time.Second)}
 	service.deliver(t.Context(), source, engineID, job)
 	if strings.Join(calls, ",") != "/ready,/gone" || strings.Join(registered.expired, ",") != "gone" {
 		t.Fatalf("delivery attempts %v, expired endpoints %v", calls, registered.expired)
 	}
-	if service.ClaimForeground("ready", engineID, string(message.ID)) {
+	if service.ClaimForeground("ready", engineID, string(message.ID), false) {
 		t.Fatal("foreground delivery would duplicate an issued Web Push")
 	}
 	service.claims = make(map[deliveryKey]deliveryClaim)
 	source.presence = "dnd"
 	service.deliver(t.Context(), source, engineID, job)
-	source.presence, source.unread = "", 0
+	source.presence, source.read = "", true
 	service.deliver(t.Context(), source, engineID, job)
-	source.unread, source.message.Retraction = 1, &domain.MessageRetraction{}
+	source.read, source.message.Retraction = false, &domain.MessageRetraction{}
+	service.deliver(t.Context(), source, engineID, job)
+	source.message.Retraction = nil
+	source.message.ReceivedAt = time.Now().Add(-time.Minute)
 	service.deliver(t.Context(), source, engineID, job)
 	if len(calls) != 2 {
-		t.Fatalf("sent an alert for a DND account, read conversation or retracted message: %v", calls)
+		t.Fatalf("sent an alert for a DND account, read message or retracted/stale message: %v", calls)
 	}
 
 	data, err := payload("https://oie.example", engineID, message, registered.recipients[0], false)
@@ -194,5 +221,25 @@ func TestPushEndpointAndEncryptionKeyValidation(t *testing.T) {
 	}
 	if ValidSubscription("https://web.push.apple.com/endpoint", auth, keys.Private) {
 		t.Fatal("accepted an invalid ECDH point")
+	}
+}
+
+func TestAbandonedForegroundReservationAllowsWebPush(t *testing.T) {
+	service := &Service{claims: make(map[deliveryKey]deliveryClaim)}
+	key := deliveryKey{"session", engineID, "message"}
+	if !service.ClaimForeground(key.session, key.engine, key.message, false) {
+		t.Fatal("unable to reserve foreground delivery")
+	}
+	if ok, until := service.claim(key, remoteClaimed); ok || until.IsZero() {
+		t.Fatal("remote path did not wait for the foreground reservation")
+	}
+	service.claims[key] = deliveryClaim{
+		expires: time.Now().Add(time.Minute), reservedUntil: time.Now().Add(-time.Millisecond), state: foregroundPending,
+	}
+	if service.ClaimForeground(key.session, key.engine, key.message, true) {
+		t.Fatal("foreground completed an expired reservation")
+	}
+	if ok, _ := service.claim(key, remoteClaimed); !ok {
+		t.Fatal("abandoned foreground reservation suppressed remote delivery")
 	}
 }

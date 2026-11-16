@@ -797,6 +797,8 @@ paths:
       tags: [Conversations]
       summary: Subscribe this browser or update its notification preferences
       security: [{csrfToken: []}]
+      parameters:
+      - {in: header, name: If-Match, description: Version of an existing subscription being updated., schema: {type: string}, example: '"abc123"'}
       requestBody:
         description: Browser subscription and its device settings.
         required: true
@@ -810,18 +812,21 @@ paths:
         '401': {description: Sign-in required.}
         '403': {description: CSRF rejected.}
         '404': {description: Background notifications unavailable.}
-        '409': {description: Engine changed.}
+        '409': {description: Engine or subscription changed.}
         '503': {description: Notification settings unavailable.}
     delete:
       operationId: deleteBrowserPush
       tags: [Conversations]
       summary: Remove this browser session's notification subscription
       security: [{csrfToken: []}]
+      parameters:
+      - {in: header, name: If-Match, description: Version of an existing subscription being reconciled., schema: {type: string}, example: '"abc123"'}
       responses:
         '204': {description: Subscription removed.}
         '401': {description: Sign-in required.}
         '403': {description: CSRF rejected.}
         '404': {description: Background notifications unavailable.}
+        '409': {description: Subscription changed.}
         '503': {description: Notification settings unavailable.}
   /ui/notification-push/foreground:
     post:
@@ -1380,6 +1385,8 @@ components:
         publicKey: {type: string, description: Base64url-encoded public application server key., example: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU}
         enabled: {type: boolean, description: Whether the session has a subscription for this engine., example: true}
         lang: {type: string, description: Existing subscription language., example: pt-BR}
+        subscriptionTag: {type: string, description: Version of the enabled subscription., example: '1d23e4.1794835243000000000'}
+        expired: {type: boolean, description: The push provider no longer accepts delivery to the subscribed endpoint., example: false}
         engineId: {type: string, format: uuid, description: Current engine identity., example: 019a5df0-0000-7000-8000-000000000001}
     BrowserPushSubscription:
       type: object
@@ -1388,7 +1395,6 @@ components:
       required: [endpoint, keys, engineId, lang, mutedConversations, sound, directSound, roomSound, archivedSound]
       properties:
         endpoint: {type: string, format: uri, maxLength: 2048, description: Browser push service endpoint., example: 'https://web.push.apple.com/example'}
-        existing: {type: boolean, description: Update preferences only while the same endpoint is still subscribed.}
         keys:
           type: object
           required: [auth, p256dh]
@@ -1409,12 +1415,13 @@ components:
           items: {type: string, format: uuid}
     BrowserPushForeground:
       type: object
-      description: Claim for foreground notification handling for one message.
+      description: Reserve or complete foreground notification handling for one message.
       example: {engineId: 019a5df0-0000-7000-8000-000000000001, messageId: 019a5df0-0000-7000-8000-000000000005}
       required: [engineId, messageId]
       properties:
         engineId: {type: string, format: uuid, description: Source engine identity., example: 019a5df0-0000-7000-8000-000000000001}
         messageId: {type: string, format: uuid, description: Incoming message already visible to this device., example: 019a5df0-0000-7000-8000-000000000005}
+        complete: {type: boolean, description: The browser handled the message during its reservation., example: false}
     NotificationContext:
       description: Current conversation and reply ownership used to decide whether an incoming message can play a sound.
       type: object

@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/ecdh"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"time"
 )
 
@@ -17,6 +20,7 @@ type PushSubscription struct {
 	RoomSound                                     string
 	StartedAt                                     time.Time
 	Sound, DirectSound, ArchivedSound             bool
+	Expired                                       bool `json:"expired,omitempty"`
 }
 
 var ErrPushChanged = errors.New("browser push subscription changed")
@@ -28,6 +32,16 @@ type PushKeys struct {
 type PushRecipient struct {
 	SessionID string
 	PushSubscription
+}
+
+type PushStatus struct {
+	PublicKey, Language, SubscriptionTag string
+	Expired                              bool
+}
+
+func (p *PushSubscription) tag() string {
+	hash := sha256.Sum256([]byte(p.Endpoint + "\n" + p.Auth + "\n" + p.PublicKey))
+	return hex.EncodeToString(hash[:]) + "." + strconv.FormatInt(p.StartedAt.UnixNano(), 10)
 }
 
 // BrowserSessionID returns the verifier, never the bearer value in the cookie.
@@ -43,19 +57,21 @@ func BrowserSessionID(r *http.Request) string {
 	return verifier(cookie.Value)
 }
 
-func (a *Auth) BrowserPushStatus(ctx context.Context, sessionID, engineID string) (string, string, error) {
+func (a *Auth) BrowserPushStatus(ctx context.Context, sessionID, engineID string) (PushStatus, error) {
 	current, err := a.store.read()
 	if err != nil {
-		return "", "", err
+		return PushStatus{}, err
 	}
 	index := current.activeSessionIndex(sessionID)
 	if index < 0 {
-		return "", "", errUnauthorized
+		return PushStatus{}, errUnauthorized
 	}
 	keys := current.PushKeys
+	push := current.Sessions[index].Push
 	if keys == nil {
 		err = a.store.update(ctx, false, func(current *state) error {
-			if current.activeSessionIndex(sessionID) < 0 {
+			index := current.activeSessionIndex(sessionID)
+			if index < 0 {
 				return errUnauthorized
 			}
 			if current.PushKeys == nil {
@@ -67,31 +83,35 @@ func (a *Auth) BrowserPushStatus(ctx context.Context, sessionID, engineID string
 				current.PushKeys = &PushKeys{encoding.EncodeToString(key.PublicKey().Bytes()), encoding.EncodeToString(key.Bytes())}
 			}
 			keys = current.PushKeys
+			push = current.Sessions[index].Push
 			return nil
 		})
 		if err != nil {
-			return "", "", err
+			return PushStatus{}, err
 		}
 	}
-	push := current.Sessions[index].Push
+	status := PushStatus{PublicKey: keys.Public}
 	if push != nil && push.EngineID == engineID {
-		return keys.Public, push.Language, nil
+		status.Language = push.Language
+		status.SubscriptionTag = push.tag()
+		status.Expired = push.Expired
 	}
-	return keys.Public, "", nil
+	return status, nil
 }
 
-func (a *Auth) SaveBrowserPush(ctx context.Context, sessionID string, push *PushSubscription, existing bool) error {
+func (a *Auth) SaveBrowserPush(ctx context.Context, sessionID string, push *PushSubscription, expected string) error {
 	return a.store.update(ctx, false, func(current *state) error {
 		index := current.activeSessionIndex(sessionID)
 		if index < 0 {
 			return errUnauthorized
 		}
+		previous := current.Sessions[index].Push
+		if expected != "" && (previous == nil || previous.tag() != expected) {
+			return ErrPushChanged
+		}
 		if push != nil {
-			previous := current.Sessions[index].Push
-			same := previous != nil && previous.EngineID == push.EngineID && previous.Endpoint == push.Endpoint
-			if existing && !same {
-				return ErrPushChanged
-			}
+			same := previous != nil && !previous.Expired && previous.EngineID == push.EngineID && previous.Endpoint == push.Endpoint &&
+				previous.Auth == push.Auth && previous.PublicKey == push.PublicKey
 			if same {
 				push.StartedAt = previous.StartedAt
 			} else {
@@ -117,23 +137,40 @@ func (a *Auth) PushRecipients(engineID string) (PushKeys, []PushRecipient, error
 	var recipients []PushRecipient
 	now := time.Now()
 	for _, session := range current.Sessions {
-		if session.Push != nil && session.Push.EngineID == engineID && now.Before(session.ExpiresAt) {
+		if session.Push != nil && !session.Push.Expired && session.Push.EngineID == engineID && now.Before(session.ExpiresAt) {
 			recipients = append(recipients, PushRecipient{session.Verifier, *session.Push})
 		}
 	}
 	return *current.PushKeys, recipients, nil
 }
 
-// ForgetPush removes an expired endpoint only if it is still registered for
-// that session. A stale delivery cannot clear a replacement subscription.
-func (a *Auth) ForgetPush(ctx context.Context, recipient PushRecipient) error {
+func (a *Auth) CurrentPushRecipient(engineID, sessionID string) (*PushRecipient, error) {
+	current, err := a.store.read()
+	if err != nil {
+		return nil, err
+	}
+	index := current.activeSessionIndex(sessionID)
+	if index < 0 {
+		return nil, nil
+	}
+	push := current.Sessions[index].Push
+	if push == nil || push.Expired || push.EngineID != engineID {
+		return nil, nil
+	}
+	return &PushRecipient{sessionID, *push}, nil
+}
+
+// ExpirePush stops delivery to an expired endpoint while preserving consent
+// for browser renewal. A stale delivery cannot disable a replacement endpoint.
+func (a *Auth) ExpirePush(ctx context.Context, recipient PushRecipient) error {
 	return a.store.update(ctx, false, func(current *state) error {
 		index := current.activeSessionIndex(recipient.SessionID)
 		if index >= 0 {
 			push := current.Sessions[index].Push
 			if push != nil && push.Endpoint == recipient.Endpoint && push.Auth == recipient.Auth &&
-				push.PublicKey == recipient.PublicKey && push.EngineID == recipient.EngineID {
-				current.Sessions[index].Push = nil
+				push.PublicKey == recipient.PublicKey && push.EngineID == recipient.EngineID &&
+				push.StartedAt.Equal(recipient.StartedAt) {
+				push.Expired = true
 			}
 		}
 		return nil

@@ -14,20 +14,30 @@ import (
 )
 
 const foregroundGrace = 1500 * time.Millisecond
+const foregroundLease = 2 * time.Second
 const freshEventWindow = 30 * time.Second
 
 type deliveryKey struct {
 	session, engine, message string
 }
 
+type claimState uint8
+
+const (
+	foregroundPending claimState = iota
+	foregroundHandled
+	remoteClaimed
+)
+
 type deliveryClaim struct {
-	expires time.Time
-	remote  bool
+	expires, reservedUntil time.Time
+	state                  claimState
 }
 
 type registry interface {
 	PushRecipients(string) (hostauth.PushKeys, []hostauth.PushRecipient, error)
-	ForgetPush(context.Context, hostauth.PushRecipient) error
+	CurrentPushRecipient(string, string) (*hostauth.PushRecipient, error)
+	ExpirePush(context.Context, hostauth.PushRecipient) error
 }
 
 type Service struct {
@@ -42,13 +52,18 @@ func New(auth *hostauth.Auth, origin string) *Service {
 	return &Service{auth: auth, sender: sender{origin: origin, client: previewfetch.PublicHTTPSClient()}, claims: make(map[deliveryKey]deliveryClaim)}
 }
 
-// ClaimForeground arbitrates between a visible page and server push. Multiple
-// cooperating pages may claim locally and use their existing IndexedDB dedupe.
-func (s *Service) ClaimForeground(session, engine, message string) bool {
-	return s.claim(deliveryKey{session, engine, message}, false)
+// ClaimForeground reserves a short window for the browser to finish handling
+// a message. An abandoned reservation leaves the message eligible for push.
+func (s *Service) ClaimForeground(session, engine, message string, complete bool) bool {
+	state := foregroundPending
+	if complete {
+		state = foregroundHandled
+	}
+	ok, _ := s.claim(deliveryKey{session, engine, message}, state)
+	return ok
 }
 
-func (s *Service) claim(key deliveryKey, remote bool) bool {
+func (s *Service) claim(key deliveryKey, state claimState) (bool, time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
@@ -61,13 +76,36 @@ func (s *Service) claim(key deliveryKey, remote bool) bool {
 		s.nextPrune = now.Add(freshEventWindow)
 	}
 	if previous, ok := s.claims[key]; ok && now.Before(previous.expires) {
-		return !previous.remote && !remote
+		switch {
+		case previous.state == foregroundPending && now.Before(previous.reservedUntil):
+			if state == remoteClaimed {
+				return false, previous.reservedUntil
+			}
+			if state == foregroundHandled {
+				previous.state = state
+				s.claims[key] = previous
+			}
+			return true, time.Time{}
+		case previous.state == foregroundPending && state == remoteClaimed:
+			previous.state = state
+			s.claims[key] = previous
+			return true, time.Time{}
+		default:
+			return previous.state == foregroundHandled && state == foregroundHandled, time.Time{}
+		}
+	}
+	if state == foregroundHandled {
+		return false, time.Time{}
 	}
 	if len(s.claims) >= 4096 {
-		return remote
+		return state == remoteClaimed, time.Time{}
 	}
-	s.claims[key] = deliveryClaim{expires: now.Add(freshEventWindow), remote: remote}
-	return true
+	claim := deliveryClaim{expires: now.Add(freshEventWindow), state: state}
+	if state == foregroundPending {
+		claim.reservedUntil = now.Add(foregroundLease)
+	}
+	s.claims[key] = claim
+	return true, time.Time{}
 }
 
 type eventSource interface {
@@ -75,7 +113,7 @@ type eventSource interface {
 	Events(context.Context, int64) ([]application.Event, error)
 	Message(context.Context, domain.ID) (domain.Message, error)
 	Conversation(context.Context, domain.ID) (domain.Conversation, error)
-	ConversationReadState(context.Context, domain.ID) (domain.ReadState, error)
+	HasMessageRead(context.Context, domain.ID) (bool, error)
 	AccountCommunicationPreferences(context.Context, domain.ID) (domain.AccountCommunicationPreferences, error)
 }
 
@@ -110,7 +148,7 @@ func (s *Service) Run(ctx context.Context, source eventSource, snapshot applicat
 		}
 		for _, event := range events {
 			cursor = event.Sequence
-			if !isLiveMessage(event) {
+			if !isLiveMessage(event) || time.Since(event.Message.ReceivedAt) > freshEventWindow {
 				continue
 			}
 			select {
@@ -154,51 +192,57 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 	if remaining := time.Until(job.seenAt.Add(foregroundGrace)); remaining > 0 && !wait(ctx, remaining) {
 		return
 	}
-	if time.Since(job.seenAt) > freshEventWindow {
-		return
-	}
 	keys, recipients, err := s.auth.PushRecipients(engineID)
 	if err != nil || len(recipients) == 0 {
 		return
 	}
 	message, err := source.Message(ctx, job.messageID)
-	if err != nil || message.IsWithdrawn() {
-		return
-	}
-	preferences, err := source.AccountCommunicationPreferences(ctx, message.AccountID)
-	if err != nil || preferences.Presence == "dnd" {
+	if err != nil || message.IsWithdrawn() || time.Since(message.ReceivedAt) > freshEventWindow {
 		return
 	}
 	conversation, err := source.Conversation(ctx, message.ConversationID)
 	if err != nil || conversation.AccountID != message.AccountID || conversation.RemovedFromChats {
 		return
 	}
-	read, err := source.ConversationReadState(ctx, conversation.ID)
-	if err != nil || read.UnreadCount == 0 {
-		return
-	}
-
 	replyToYou := false
 	if message.Reply != nil && message.Reply.Available && conversation.Kind == "room" {
 		target, err := source.Message(ctx, message.Reply.MessageID)
 		replyToYou = err == nil && target.AccountID == message.AccountID &&
 			target.ConversationID == message.ConversationID && target.IsOwn
 	}
-	for _, recipient := range recipients {
-		if ctx.Err() != nil || time.Since(job.seenAt) > freshEventWindow {
+	for _, candidate := range recipients {
+		if ctx.Err() != nil || time.Since(message.ReceivedAt) > freshEventWindow {
 			return
 		}
-		if recipient.StartedAt.After(job.seenAt) || slices.Contains(recipient.MutedConversations, string(conversation.ID)) {
+		key := deliveryKey{candidate.SessionID, engineID, string(message.ID)}
+		ok, pendingUntil := s.claim(key, remoteClaimed)
+		if !pendingUntil.IsZero() && wait(ctx, time.Until(pendingUntil)) {
+			ok, _ = s.claim(key, remoteClaimed)
+		}
+		if !ok {
+			continue
+		}
+		read, err := source.HasMessageRead(ctx, message.ID)
+		if err != nil || read || time.Since(message.ReceivedAt) > freshEventWindow {
+			return
+		}
+		preferences, err := source.AccountCommunicationPreferences(ctx, message.AccountID)
+		if err != nil || preferences.Presence == "dnd" {
+			return
+		}
+		recipient, err := s.auth.CurrentPushRecipient(engineID, candidate.SessionID)
+		if err != nil || recipient == nil || recipient.StartedAt.After(message.ReceivedAt) ||
+			slices.Contains(recipient.MutedConversations, string(conversation.ID)) {
 			continue
 		}
 		silent := !soundsFor(recipient.PushSubscription, conversation, message.MentionsYou || replyToYou)
-		data, err := payload(s.sender.origin, engineID, message, recipient, silent)
-		if err != nil || !s.claim(deliveryKey{recipient.SessionID, engineID, string(message.ID)}, true) {
+		data, err := payload(s.sender.origin, engineID, message, *recipient, silent)
+		if err != nil {
 			continue
 		}
-		expired, err := s.sender.send(ctx, keys, recipient, data, message.ID)
+		expired, err := s.sender.send(ctx, keys, *recipient, data, message.ID)
 		if err == nil && expired {
-			_ = s.auth.ForgetPush(ctx, recipient)
+			_ = s.auth.ExpirePush(ctx, *recipient)
 		}
 	}
 }

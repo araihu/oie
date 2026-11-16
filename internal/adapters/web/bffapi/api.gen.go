@@ -617,10 +617,15 @@ type BrowserForward struct {
 	RevisionId externalRef0.ID `json:"revisionId"`
 }
 
-// BrowserPushForeground Claim for foreground notification handling for one message.
+// BrowserPushForeground Reserve or complete foreground notification handling for one message.
 //
 // Example: {"engineId":"019a5df0-0000-7000-8000-000000000001","messageId":"019a5df0-0000-7000-8000-000000000005"}
 type BrowserPushForeground struct {
+	// Complete The browser handled the message during its reservation.
+	//
+	// Example: false
+	Complete *bool `json:"complete,omitempty"`
+
 	// EngineId Source engine identity.
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000001
@@ -646,6 +651,11 @@ type BrowserPushStatus struct {
 	// Example: 019a5df0-0000-7000-8000-000000000001
 	EngineId openapi_types.UUID `json:"engineId"`
 
+	// Expired The push provider no longer accepts delivery to the subscribed endpoint.
+	//
+	// Example: false
+	Expired *bool `json:"expired,omitempty"`
+
 	// Lang Existing subscription language.
 	//
 	// Example: pt-BR
@@ -655,6 +665,11 @@ type BrowserPushStatus struct {
 	//
 	// Example: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU
 	PublicKey string `json:"publicKey"`
+
+	// SubscriptionTag Version of the enabled subscription.
+	//
+	// Example: 1d23e4.1794835243000000000
+	SubscriptionTag *string `json:"subscriptionTag,omitempty"`
 }
 
 // BrowserPushSubscription Browser-supplied destination and delivery settings selected on this device.
@@ -674,9 +689,6 @@ type BrowserPushSubscription struct {
 
 	// EngineId Selected engine identity.
 	EngineId openapi_types.UUID `json:"engineId"`
-
-	// Existing Update preferences only while the same endpoint is still subscribed.
-	Existing *bool `json:"existing,omitempty"`
 
 	// Keys Example: {"auth":"AAAAAAAAAAAAAAAAAAAAAA","p256dh":"BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"}
 	Keys struct {
@@ -1497,6 +1509,18 @@ type GetBrowserNotificationContextParams struct {
 
 	// ReplyTo Resolved original message from the incoming reply.
 	ReplyTo *openapi_types.UUID `form:"replyTo,omitempty" json:"replyTo,omitempty"`
+}
+
+// DeleteBrowserPushParams defines parameters for DeleteBrowserPush.
+type DeleteBrowserPushParams struct {
+	// IfMatch Version of an existing subscription being reconciled.
+	IfMatch *string `json:"If-Match,omitempty"`
+}
+
+// PutBrowserPushParams defines parameters for PutBrowserPush.
+type PutBrowserPushParams struct {
+	// IfMatch Version of an existing subscription being updated.
+	IfMatch *string `json:"If-Match,omitempty"`
 }
 
 // RefreshWorkspaceParams defines parameters for RefreshWorkspace.

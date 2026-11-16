@@ -72,12 +72,12 @@ RFC 8291 payloads with a five-minute lifetime and same-origin message URLs.
 The service worker handles conventional browser push, and WebKit can use
 the declarative notification when the worker is unavailable.
 
-The engine watches new committed incoming messages. It allows a short
-window for a visible page to claim notification handling before sending.
-That page uses the existing banner and sound rules, including suppressing
-alerts for the focused conversation. The engine checks current mute,
-conversation, read and account state for Web Push. Only the path that
-claims an alert can display it.
+The engine watches new committed incoming messages. A visible page can
+reserve a short window to handle an alert using the existing banner and sound
+rules, including suppression for the focused conversation. If the page closes
+before it finishes, the engine can still send Web Push after the reservation
+expires. The engine checks the subscription, device mute, the exact message's
+read state and the account's Do Not Disturb setting before sending.
 
 Run `node tests/browser/notification-push.cjs` after `make build` to check
 hosted enrollment, authorization, notification handling after all Oiê

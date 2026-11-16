@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 
 	"github.com/araihu/oie/internal/adapters/browserpush"
 	"github.com/araihu/oie/internal/adapters/hostauth"
@@ -45,7 +46,16 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if !s.pushService.ClaimForeground(session, request.EngineId.String(), request.MessageId.String()) {
+		recipient, err := s.pushAuth.CurrentPushRecipient(request.EngineId.String(), session)
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if recipient == nil {
+			http.NotFound(w, r)
+			return
+		}
+		if !s.pushService.ClaimForeground(session, request.EngineId.String(), request.MessageId.String(), request.Complete != nil && *request.Complete) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
@@ -54,8 +64,20 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	var expected string
+	if match := r.Header.Get("If-Match"); match != "" {
+		var err error
+		expected, err = strconv.Unquote(match)
+		if err != nil || expected == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
 	if r.Method == http.MethodDelete {
-		if err := s.pushAuth.SaveBrowserPush(ctx, session, nil, false); err != nil {
+		if err := s.pushAuth.SaveBrowserPush(ctx, session, nil, expected); errors.Is(err, hostauth.ErrPushChanged) {
+			w.WriteHeader(http.StatusConflict)
+			return
+		} else if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -74,13 +96,19 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 	}
 	id := engine.JSON200.Id
 	if r.Method == http.MethodGet {
-		key, lang, err := s.pushAuth.BrowserPushStatus(ctx, session, id)
+		status, err := s.pushAuth.BrowserPushStatus(ctx, session, id)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(bffapi.BrowserPushStatus{EngineId: uuid.MustParse(id), PublicKey: key, Enabled: lang != "", Lang: &lang})
+		body := bffapi.BrowserPushStatus{EngineId: uuid.MustParse(id), PublicKey: status.PublicKey, Enabled: status.SubscriptionTag != ""}
+		if body.Enabled {
+			body.Lang = &status.Language
+			body.SubscriptionTag = &status.SubscriptionTag
+			body.Expired = &status.Expired
+		}
+		_ = json.NewEncoder(w).Encode(body)
 		return
 	}
 	var request bffapi.BrowserPushSubscription
@@ -107,7 +135,7 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 		Endpoint: request.Endpoint, Auth: request.Keys.Auth, PublicKey: request.Keys.P256dh,
 		EngineID: id, Language: string(request.Lang), MutedConversations: slices.Compact(mutes),
 		Sound: request.Sound, DirectSound: request.DirectSound, RoomSound: string(request.RoomSound), ArchivedSound: request.ArchivedSound,
-	}, request.Existing != nil && *request.Existing)
+	}, expected)
 	if errors.Is(err, hostauth.ErrPushChanged) {
 		w.WriteHeader(http.StatusConflict)
 		return

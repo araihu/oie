@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {createECDH, randomBytes} = require('node:crypto');
-const {mkdir} = require('node:fs/promises');
+const {mkdir, readFile} = require('node:fs/promises');
 const path = require('node:path');
 const {chromium} = require('playwright');
 const {startHostedOie} = require('./fixtures/hosted-oie.cjs');
@@ -29,21 +29,27 @@ async function check() {
       Object.defineProperty(Notification, 'permission', {
         configurable: true, get: () => localStorage.getItem(permissionKey) ? 'granted' : permission.call(Notification),
       });
-      const current = {
-        toJSON: () => subscription,
-        unsubscribe: async () => {
-          localStorage.removeItem(key);
-          return true;
-        },
+      const current = () => {
+        const version = localStorage.getItem(key);
+        if (!version) return null;
+        const value = version === '1' ? subscription : {...subscription, endpoint: subscription.endpoint + '-renewed'};
+        return {
+          endpoint: value.endpoint,
+          toJSON: () => value,
+          unsubscribe: async () => {
+            if (localStorage.getItem(key) === version) localStorage.removeItem(key);
+            return true;
+          },
+        };
       };
-      PushManager.prototype.getSubscription = async () => localStorage.getItem(key) ? current : null;
+      PushManager.prototype.getSubscription = async () => current();
       PushManager.prototype.subscribe = async options => {
         if (!options.userVisibleOnly || options.applicationServerKey.length !== 65) {
           throw Error('Invalid push subscription options');
         }
         localStorage.setItem(key, '1');
         localStorage.setItem(permissionKey, '1');
-        return current;
+        return current();
       };
     }, subscription);
 
@@ -101,6 +107,55 @@ async function check() {
     assert.equal(enabled.lang, 'pt-BR');
     assert.equal(enabled.publicKey, before.publicKey);
     assert(await page.locator('[data-notification-banners]').isChecked());
+
+    const renewal = page.waitForResponse(response => response.url().endsWith(pushPath) && response.request().method() === 'PUT');
+    await page.evaluate(() => {
+      localStorage.setItem('oie-test-push-subscription', '2');
+      window.dispatchEvent(new Event('online'));
+    });
+    assert.equal((await renewal).status(), 204);
+    const renewed = await getStatus();
+    assert.equal(renewed.enabled, true);
+    assert.notEqual(renewed.subscriptionTag, enabled.subscriptionTag);
+    assert.equal((await page.request.delete(hosted.url + pushPath, {
+      headers: {Origin: hosted.url, 'X-CSRF-Token': csrf, 'If-Match': '"' + enabled.subscriptionTag + '"'},
+    })).status(), 409);
+    assert.equal((await getStatus()).subscriptionTag, renewed.subscriptionTag);
+
+    const second = await context.newPage();
+    await second.goto(hosted.url + entry + '&settingsTab=device');
+    const browserSound = '[data-notification-sound]';
+    const initialSound = page.locator(browserSound);
+    const otherSound = second.locator(browserSound);
+    await otherSound.waitFor();
+    let finishFirst, observedFirst;
+    const firstHeld = new Promise(resolve => { finishFirst = resolve; });
+    const firstObserved = new Promise(resolve => { observedFirst = resolve; });
+    const holdFirstPreference = async route => {
+      if (route.request().method() === 'PUT') {
+        observedFirst();
+        await firstHeld;
+      }
+      await route.continue();
+    };
+    await page.route('**' + pushPath, holdFirstPreference);
+    await initialSound.press('Space');
+    await firstObserved;
+    try {
+      await second.waitForFunction(selector => !document.querySelector(selector).checked, browserSound);
+      const secondSaved = second.waitForResponse(response => response.url().endsWith(pushPath) && response.request().method() === 'PUT');
+      await otherSound.press('Space');
+      await second.waitForFunction(async lock => (await navigator.locks.query()).pending.some(entry => entry.name === lock), pushPath);
+      finishFirst();
+      assert.equal((await secondSaved).status(), 204);
+      const saved = JSON.parse(await readFile(path.join(hosted.dir, 'host-auth', 'state.json')));
+      assert.equal(saved.sessions.find(session => session.push).push.Sound, true);
+    } finally {
+      finishFirst();
+    }
+    await page.unroute('**' + pushPath, holdFirstPreference);
+    await second.close();
+
     await mkdir(path.join(__dirname, 'artifacts'), {recursive: true});
     await page.locator('[data-notification-settings]').screenshot({
       path: path.join(__dirname, 'artifacts', 'notification-push-settings-pt.png'),
@@ -153,10 +208,11 @@ async function check() {
     const reopenedToggle = reopened.locator('[data-notification-background]');
     assert(await reopenedToggle.isChecked());
     const off = reopened.waitForResponse(response => response.url().endsWith(pushPath) && response.request().method() === 'DELETE');
-    await reopenedToggle.press('Space');
+    await reopened.evaluate(() => localStorage.removeItem('oie.notifications.background'));
+    await reopened.locator('[data-notification-banners]').press('Space');
     assert.equal((await off).status(), 204);
     assert.equal((await getStatus()).enabled, false);
-    assert(await reopened.locator('[data-notification-banners]').isChecked());
+    await reopened.waitForFunction(() => !document.querySelector('[data-notification-banners]').checked);
 
     const failSave = route => route.request().method() === 'PUT'
       ? route.fulfill({status: 503}) : route.continue();
@@ -170,7 +226,7 @@ async function check() {
     assert.equal((await getStatus()).enabled, false);
     assert.equal(await reopenedToggle.isChecked(), false);
     assert(await reopenedToggle.evaluate(control => control === document.activeElement));
-    console.log('PASS: hosted opt-in, stable settings geometry, closed-page notification and click, unsubscribe and CSRF');
+    console.log('PASS: hosted opt-in, stable settings geometry, subscription renewal, cross-tab writes, closed-page notification and click, unsubscribe and CSRF');
   } finally {
     await browser?.close();
     await hosted.stop();

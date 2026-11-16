@@ -298,16 +298,19 @@
     return Boolean(uuid(engine) && read(pushStateKey) === engine);
   }
 
-  async function pushRequest(method, body, suffix = '') {
+  async function pushRequest(method, body, suffix = '', expected) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
+      const headers = {'Content-Type': 'application/json', 'X-CSRF-Token': settings()?.dataset.csrf ?? ''};
+      if (expected) headers['If-Match'] = '"' + expected + '"';
       const response = await window.OieRuntime.request(pushPath + suffix, {
         method, cache: 'no-store', signal: controller.signal,
-        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': settings()?.dataset.csrf ?? ''},
+        keepalive: body?.complete === true,
+        headers,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      if (!response.ok) throw Error('Background notifications unavailable');
+      if (!response.ok) throw Object.assign(Error('Background notifications unavailable'), {status: response.status});
       return response;
     } finally {
       clearTimeout(timeout);
@@ -333,15 +336,47 @@
     };
   }
 
-  function savePush(subscription, engine, existing = false) {
+  function savePush(subscription, engine, expected) {
     const {endpoint, keys} = subscription.toJSON();
-    return pushRequest('PUT', {endpoint, keys, existing, ...pushSettings(engine)});
+    return pushRequest('PUT', {endpoint, keys, ...pushSettings(engine)}, '', expected);
+  }
+
+  async function pushFingerprint(subscription) {
+    const {endpoint, keys} = subscription.toJSON();
+    const value = new TextEncoder().encode([endpoint, keys.auth, keys.p256dh].join('\n'));
+    const fingerprint = await crypto.subtle.digest('SHA-256', value);
+    return Array.from(new Uint8Array(fingerprint), byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function boundedPush(action) {
+    let timer;
+    try {
+      return await Promise.race([action, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Error('Background notifications unavailable')), 5000);
+      })]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function unsubscribePush(subscription) {
+    return boundedPush(subscription?.unsubscribe()).catch(() => {});
+  }
+
+  async function matchesPush(subscription, status) {
+    return status.subscriptionTag?.startsWith(await pushFingerprint(subscription) + '.');
   }
 
   function serializePush(action) {
-    const result = pushWrites.then(action);
+    const result = pushWrites.then(() => navigator.locks
+      ? navigator.locks.request(pushPath, action) : action());
     pushWrites = result.catch(() => {});
     return result;
+  }
+
+  async function readPushStatus() {
+    const response = await pushRequest('GET');
+    return response.json();
   }
 
   function preparePush(refresh = false) {
@@ -350,22 +385,31 @@
     if (pushCheck) return pushCheck;
     if (!refresh && pushStatus?.engineId === engine) return Promise.resolve();
     pushCheck = serializePush(async () => {
-      const [response, registration] = await Promise.all([pushRequest('GET'), notificationWorker()]);
-      const status = await response.json();
+      const [status, registration] = await Promise.all([readPushStatus(), boundedPush(notificationWorker())]);
       if (status.engineId !== app()?.dataset.engineId) return;
       pushManager = window.pushManager || registration.pushManager;
-      const subscription = await pushManager.getSubscription();
-      if (status.enabled && (!subscription || window.Notification?.permission !== 'granted' || read(bannerKey) !== '1')) {
-        await pushRequest('DELETE');
-        await subscription?.unsubscribe().catch(() => {});
-        status.enabled = false;
+      const subscription = await boundedPush(pushManager.getSubscription());
+      let active = status.enabled && !status.expired;
+      if (status.enabled && ((!subscription && !status.expired) ||
+          window.Notification?.permission === 'denied' || read(bannerKey) !== '1')) {
+        await pushRequest('DELETE', undefined, '', status.subscriptionTag);
+        await unsubscribePush(subscription);
+        active = false;
+      } else if (status.enabled && subscription) {
+        const matches = await matchesPush(subscription, status);
+        if (status.expired && matches) {
+          await unsubscribePush(subscription);
+        } else if (!matches || status.lang !== pushLanguage()) {
+          await savePush(subscription, status.engineId, status.subscriptionTag);
+          active = true;
+        }
       }
-      if (status.enabled && status.lang !== pushLanguage()) {
-        await savePush(subscription, status.engineId, true);
-      }
-      write(pushStateKey, status.enabled ? status.engineId : null);
+      write(pushStateKey, active ? status.engineId : null);
       pushStatus = status;
-    }).catch(() => {}).finally(() => {
+      if (notice === 'backgroundFailed') notice = '';
+    }).catch(() => {
+      if (!pushStatus && !notice) notice = 'backgroundFailed';
+    }).finally(() => {
       pushCheck = undefined;
       renderSettings();
     });
@@ -375,7 +419,7 @@
   async function setPush(desired) {
     if (pushPending || (pending && desired)) {
       renderSettings();
-      return;
+      return false;
     }
     pushPending = true;
     notice = '';
@@ -389,31 +433,36 @@
         const subscription = await pushManager.subscribe({
           userVisibleOnly: true, applicationServerKey: Uint8Array.from(atob(key), value => value.charCodeAt(0)),
         });
-        const previous = read(bannerKey);
-        if (!write(bannerKey, '1') || !write(pushStateKey, engine)) {
-          await subscription.unsubscribe().catch(() => {});
-          throw Error('Notification storage unavailable');
-        }
-        try {
-          await serializePush(() => savePush(subscription, engine));
-        } catch (error) {
-          write(bannerKey, previous);
-          write(pushStateKey, null);
-          await subscription.unsubscribe().catch(() => {});
-          throw error;
-        }
+        await serializePush(async () => {
+          const current = await boundedPush(pushManager.getSubscription());
+          if (!current || current.endpoint !== subscription.endpoint || app()?.dataset.engineId !== engine) {
+            throw Error('Background notifications changed');
+          }
+          const status = await readPushStatus();
+          const previous = read(bannerKey);
+          const subscribed = pushEnabled(engine);
+          try {
+            if (!write(bannerKey, '1') || !write(pushStateKey, engine)) throw Error('Notification storage unavailable');
+            await savePush(current, engine, status.subscriptionTag);
+          } catch (error) {
+            write(bannerKey, previous);
+            write(pushStateKey, subscribed ? engine : null);
+            if (!status.enabled || status.expired) await unsubscribePush(current);
+            throw error;
+          }
+        });
       } else {
         await serializePush(async () => {
+          const subscription = await boundedPush(pushManager?.getSubscription()).catch(() => null);
           await pushRequest('DELETE');
           write(pushStateKey, null);
-          try {
-            const subscription = await pushManager?.getSubscription();
-            await subscription?.unsubscribe();
-          } catch {}
+          await unsubscribePush(subscription);
         });
       }
+      return true;
     } catch {
       notice = window.Notification?.permission === 'denied' ? 'denied' : 'backgroundFailed';
+      return false;
     } finally {
       pushPending = false;
       renderSettings();
@@ -421,27 +470,30 @@
   }
 
   async function writeNotificationPreference(key, value) {
-    const previous = read(key);
-    if (!write(key, value)) return false;
-    if (!pushEnabled()) return true;
-    try {
-      await serializePush(async () => {
-        const engine = app()?.dataset.engineId;
-        if (!pushEnabled(engine)) return;
-        const subscription = await pushManager?.getSubscription();
+    if (!canPush()) return write(key, value);
+    return serializePush(async () => {
+      const previous = read(key);
+      if (!write(key, value)) return false;
+      const engine = app()?.dataset.engineId;
+      if (!pushEnabled(engine)) return true;
+      try {
+        const status = await readPushStatus();
+        if (!status.enabled || status.engineId !== engine) return true;
+        const subscription = await boundedPush(pushManager?.getSubscription());
+        if (status.expired && (!subscription || await matchesPush(subscription, status))) return true;
         if (!subscription) throw Error('Background notifications unavailable');
-        await savePush(subscription, engine, true);
-      });
-      return true;
-    } catch {
-      if (read(key) === value) write(key, previous);
-      return false;
-    }
+        await savePush(subscription, engine, status.subscriptionTag);
+        return true;
+      } catch {
+        if (read(key) === value) write(key, previous);
+        return false;
+      }
+    });
   }
 
   async function showBanner(engine, message, eligible) {
     const title = settings()?.dataset.messageTitle;
-    if (!title) return;
+    if (!title) return false;
     const body = (message.sender?.displayName || '').slice(0, 120);
     const canDeliver = async () => {
       if (!eligible()) return false;
@@ -449,28 +501,30 @@
       return current && !current.doNotDisturb && eligible();
     };
     if (desktop()) {
-      if (await canDeliver()) await desktop().send(engine, message.accountId, message.conversationId, message.id, title, body);
-      return;
+      if (!await canDeliver()) return false;
+      await desktop().send(engine, message.accountId, message.conversationId, message.id, title, body);
+      return true;
     }
     const options = {body, tag: engine + ':' + message.id, silent: true, lang: document.documentElement.lang};
     if (navigator.serviceWorker) {
       try {
         const registration = await notificationWorker();
-        if (!await canDeliver()) return;
+        if (!await canDeliver()) return false;
         await registration.showNotification(title, {...options, data: {
           engine, account: message.accountId, conversation: message.conversationId, message: message.id
         }});
-        return;
+        return true;
       } catch {
         // A page notification can still work when the worker is unavailable.
       }
     }
-    if (!await canDeliver()) return;
+    if (!await canDeliver()) return false;
     const banner = new Notification(title, options);
     banner.onclick = () => {
       banner.close();
       open(engine, message.accountId, message.conversationId, message.id);
     };
+    return true;
   }
 
   function canBanner() {
@@ -502,11 +556,34 @@
         if (claimed && canShowBanner()) return showBanner(engine, message, canShowBanner);
       }).catch(() => {});
     };
-    if (!pushEnabled(engine)) handleBanner();
-    else if (!document.hidden && canNotify()) {
-      void pushRequest('POST', {engineId: engine, messageId: message.id}, '/foreground')
-        .then(handleBanner).catch(() => {});
+    if (pushEnabled(engine)) {
+      const visible = () => !document.hidden && canNotify() && wantsBanner();
+      if (!visible()) return;
+      void notificationContext(engine, message).then(async context => {
+        if (!context || context.doNotDisturb || !visible()) return;
+        const request = {engineId: engine, messageId: message.id};
+        const started = performance.now();
+        const reserved = () => visible() && performance.now() - started < 1750;
+        try {
+          await pushRequest('POST', request, '/foreground');
+        } catch (error) {
+          if (error.status === 404 && visible()) {
+            handleBanner();
+            if (canPlaySound()) void playMessageSound(engine, message, canPlaySound);
+          }
+          return;
+        }
+        if (!reserved()) return;
+        if (!viewing(engine, conversation) && !await claim(engine, message.id)) return;
+        if (!reserved()) return;
+        const shown = canShowBanner() && await showBanner(engine, message, () => reserved() && canShowBanner());
+        if (!shown && (!reserved() || !viewing(engine, conversation))) return;
+        await pushRequest('POST', {...request, complete: true}, '/foreground');
+        if (canPlaySound()) await playMessageSound(engine, message, canPlaySound);
+      }).catch(() => {});
+      return;
     }
+    handleBanner();
     if (canPlaySound()) void playMessageSound(engine, message, canPlaySound);
   }
 
@@ -651,10 +728,7 @@
     renderSettings();
     try {
       if (!desired) {
-        if (pushEnabled()) {
-          await setPush(false);
-          if (pushEnabled()) return;
-        }
+        if (canPush() && !await setPush(false)) return;
         if (!write(bannerKey, null)) notice = 'unavailable';
       } else {
         const granted = desktop()
