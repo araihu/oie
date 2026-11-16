@@ -53,6 +53,38 @@ func validEngineURL(address string) bool {
 		u.User == nil && !u.ForceQuery && u.RawQuery == "" && !strings.Contains(address, "#")
 }
 
+// remoteSignIn looks for the hosted browser on the selected HTTPS origin.
+func (s *Server) remoteSignIn(ctx context.Context, problem *engineapi.AuthenticationRequired) string {
+	if s.engineMode == nil || problem == nil || problem.Type != engineapi.UrnOieProblemAuthenticationRequired {
+		return ""
+	}
+	address := s.engineMode.url
+	u, err := url.Parse(address)
+	if err != nil || !validEngineURL(address) || u.Scheme != "https" ||
+		(u.Path != "" && u.Path != "/") || u.RawPath != "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	u.Path = "/auth/sign-in"
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
+	if err != nil {
+		return ""
+	}
+	response, err := s.streamClient.Client.Do(request)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = response.Body.Close() }()
+	contentType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if response.StatusCode != http.StatusOK || contentType != "text/html" {
+		return ""
+	}
+	u.Path = "/"
+	u.RawQuery = "open=settings"
+	return u.String()
+}
+
 // CheckEngine makes a bounded read of the engine descriptor before switching.
 func (s *Server) CheckEngine(ctx context.Context) error {
 	res, err := s.streamClient.GetEngine(ctx)

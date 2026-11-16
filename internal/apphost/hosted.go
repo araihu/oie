@@ -101,6 +101,7 @@ func (s *hostedServer) handler(api, browser, diagnostics http.Handler) http.Hand
 	mux.Handle("/api/", preventCaching(s.auth.API(api)))
 	if browser != nil {
 		mux.Handle("GET /assets/", assets.Handler())
+		mux.HandleFunc("GET /auth/assets/", web.HostedSignInAsset)
 		mux.Handle("/", preventCaching(browser))
 	}
 	if diagnostics != nil {

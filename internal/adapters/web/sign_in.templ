@@ -1,22 +1,40 @@
 package web
 
-import (
-	"github.com/araihu/goshtoso/components/head"
-	"github.com/araihu/goshtoso/components/link"
-)
+import "github.com/araihu/goshtoso/components/link"
 
-templ signIn(lang, label, message, loginURL string) {
+templ signIn(lang, mode, label, message, loginURL string) {
 	<!doctype html>
-	<html lang={ lang }>
+	<html lang={ lang } data-mode={ mode }>
 		<head>
 			<meta charset="utf-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+			if mode == "system" {
+				<meta name="color-scheme" content="light dark"/>
+				<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)"/>
+				<meta name="theme-color" content="#1c1d1c" media="(prefers-color-scheme: dark)"/>
+			} else if mode == "dark" {
+				<meta name="color-scheme" content="dark"/>
+				<meta name="theme-color" content="#1c1d1c"/>
+			} else {
+				<meta name="color-scheme" content="light"/>
+				<meta name="theme-color" content="#f7f8f7"/>
+			}
 			<title>{ label } · Oiê</title>
-			@head.Dependencies(head.WithStylesheetOnly())
+			<link rel="icon" type="image/svg+xml" href="/auth/assets/favicon.svg"/>
+			<link rel="stylesheet" href={ templ.URL(versionedStylesheetURL("/auth/assets/sign-in.css", signInStylesheet)) }/>
 		</head>
-		<body class="min-h-screen bg-background text-foreground grid place-items-center p-6">
-			<main class="grid justify-items-start gap-5">
-				<h1 class="text-3xl font-semibold">Oiê</h1>
+		<body>
+			<main class="oie-sign-in">
+				<h1>
+					<picture>
+						if mode == "dark" {
+							<source srcset="/auth/assets/logo-dark.svg"/>
+						} else if mode == "system" {
+							<source media="(prefers-color-scheme: dark)" srcset="/auth/assets/logo-dark.svg"/>
+						}
+						<img src="/auth/assets/logo-light.svg" alt="Oiê" width="131" height="51"/>
+					</picture>
+				</h1>
 				if message != "" {
 					<p role="alert">{ message }</p>
 				}

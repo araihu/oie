@@ -16,6 +16,49 @@ function withDeadline(promise, label) {
   return Promise.race([promise, expired]);
 }
 
+async function verifySignInAppearance(browser, origin) {
+  const page = await browser.newPage({ignoreHTTPSErrors: true, viewport: {width: 1440, height: 900}});
+  try {
+    await page.emulateMedia({colorScheme: 'light'});
+    await page.goto(origin + '/auth/sign-in?lang=pt-BR');
+    const action = page.getByRole('link', {name: 'Entrar', exact: true});
+    const check = async (dark, width, height) => {
+      const background = dark ? 'rgb(28, 29, 28)' : 'rgb(247, 248, 247)';
+      const logo = dark ? '/logo-dark.svg' : '/logo-light.svg';
+      await page.waitForFunction(({background, logo}) =>
+        getComputedStyle(document.body).backgroundColor === background &&
+        document.querySelector('h1 img')?.currentSrc.endsWith(logo) &&
+        document.querySelector('h1 img').naturalWidth > 0, {background, logo});
+      const frame = await page.getByRole('main').boundingBox();
+      assert(frame.x >= 20 && frame.y >= 20 && frame.x + frame.width <= width - 20);
+      assert(Math.abs(frame.x + frame.width / 2 - width / 2) <= 1);
+      assert(Math.abs(frame.y + frame.height / 2 - height / 2) <= 1);
+      assert.equal(await action.evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(96, 146, 171)');
+      assert((await action.boundingBox()).height >= 48);
+    };
+
+    await check(false, 1440, 900);
+    const originalFrame = await page.getByRole('main').boundingBox();
+    await page.keyboard.press('Tab');
+    assert(await action.evaluate(element => element.matches(':focus-visible')));
+    await page.emulateMedia({colorScheme: 'dark'});
+    await check(true, 1440, 900);
+    assert.deepEqual(await page.getByRole('main').boundingBox(), originalFrame);
+    assert(await action.evaluate(element => element.matches(':focus-visible')));
+
+    await page.setViewportSize({width: 390, height: 700});
+    await page.goto(origin + '/auth/sign-in?theme=light');
+    await check(false, 390, 700);
+    await page.goto(origin + '/auth/sign-in');
+    await check(false, 390, 700);
+    await page.emulateMedia({colorScheme: 'light'});
+    await page.goto(origin + '/auth/sign-in?theme=dark');
+    await check(true, 390, 700);
+  } finally {
+    await page.context().close();
+  }
+}
+
 async function expireWhenSending(page, context) {
   await page.route('**/ui/messages/send', async route => {
     await context.clearCookies({name: '__Host-oie-session'});
@@ -46,6 +89,7 @@ async function create(api, endpoint, sequence, data) {
     const search = '/search?' + new URLSearchParams({q: 'a+b & ação ' + '😀'.repeat(180), lang: 'en'});
     const workspace = '/?' + new URLSearchParams({chat: chat.id, lang: 'en'});
     browser = await chromium.launch({args: ['--ignore-certificate-errors-spki-list=' + server.certificatePin]});
+    await verifySignInAppearance(browser, url);
     const context = await browser.newContext({ignoreHTTPSErrors: true, locale: 'en', viewport: {width: 1440, height: 900}});
     const page = await context.newPage();
     await server.signIn(page, search);

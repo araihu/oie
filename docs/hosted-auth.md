@@ -123,6 +123,11 @@ still requires a bearer key. See the [internal OpenAPI contract](../api/probe.op
 3. In the desktop app, open **Settings → General → Engine → Remote**.
    Enter the hosted HTTPS address, paste the key, and select **Save**.
 
+If a remote engine starts requiring authentication after an upgrade, the
+desktop offers **Sign in in your browser** and **Enter access key**. Browser
+sign-in opens the hosted settings. Create a key there and paste it into the
+desktop's engine settings to reconnect.
+
 The desktop saves the connection in a private file in its profile after
 verifying access to the server. The key is only sent to the selected HTTPS
 origin. If you change the address after pasting a key, paste the key for

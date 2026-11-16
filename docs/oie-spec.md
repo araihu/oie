@@ -53,7 +53,9 @@ desktop profile. Check the remote engine before changing the active selection.
 Local mode runs the embedded engine and resumes its SQLite/media profile.
 Remote mode runs the desktop client against the configured engine, with the
 embedded engine stopped. For authenticated hosted engines, enter an API key
-alongside the HTTPS address in desktop settings. See [hosted access](hosted-auth.md).
+alongside the HTTPS address in desktop settings. If the selected server starts
+requiring authentication and offers a web workspace, the desktop links to
+browser sign-in and to the access key field. See [hosted access](hosted-auth.md).
 
 Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
 
@@ -837,7 +839,7 @@ See [message notifications](notifications.md) for platform behavior.
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
-**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The settings drawer keeps About in its footer. About shows the Oiê logo, license, and third-party attributions.
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The General tab groups About and Diagnostics with the other settings pages. The hosted settings drawer keeps Sign out in its footer. About shows the Oiê logo, license, and third-party attributions.
 
 **AGREED:** the default conversation wallpaper uses a dense arrangement of subtle outline doodles. The artwork includes a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher, along with Brazilian motifs such as the berimbau, caju, mandacaru and jangada. Small details fill the spaces between larger drawings. The 480 × 480 CSS-pixel tile joins seamlessly in both directions and stays subtle behind messages in light and dark themes.
 

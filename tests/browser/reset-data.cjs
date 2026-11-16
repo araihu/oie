@@ -9,8 +9,13 @@ const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/
 async function openSettings(page, server, fixture) {
   await server.signIn(page, '/?open=settings&lang=' + fixture.locale + '&theme=' + fixture.theme);
   const settings = page.getByRole('dialog', { name: fixture.settings, exact: true });
+  const general = settings.getByRole('tabpanel', { name: fixture.general, exact: true });
+  for (const name of [fixture.accessKeys, fixture.diagnostics, fixture.about, fixture.destructiveActions]) {
+    await general.getByRole('button', { name, exact: true }).waitFor();
+  }
   const footer = settings.locator('footer');
-  await footer.getByRole('button', { name: fixture.about, exact: true }).waitFor();
+  await footer.getByRole('button', { name: fixture.signOut, exact: true }).waitFor();
+  assert.equal(await footer.getByRole('button').count(), 1);
   assert.equal(await settings.getByText(fixture.engineHeading, { exact: true }).count(), 0);
   assert.equal(await settings.getByText(fixture.engineLabel, { exact: true }).count(), 0);
   await resizeVisibleViewport(page, { width: fixture.viewport.width, height: 280 });
@@ -197,6 +202,7 @@ async function testReset(browser, server, fixture) {
     await testReset(browser, server, {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
       settings: 'Settings', general: 'General', about: 'About', theme: 'light',
+      accessKeys: 'Access keys', diagnostics: 'Diagnostics', signOut: 'Sign out',
       destructiveActions: 'Destructive actions', back: 'Back to settings',
       engineHeading: 'Engine', engineLabel: 'Hosted engine',
       confirmation: 'Type delete to confirm', failure: 'Could not delete all data.',
@@ -205,6 +211,7 @@ async function testReset(browser, server, fixture) {
     await testReset(browser, server, {
       locale: 'pt-BR', viewport: { width: 390, height: 844 }, action: 'Apagar todos os dados',
       settings: 'Configurações', general: 'Geral', about: 'Sobre', theme: 'dark',
+      accessKeys: 'Chaves de acesso', diagnostics: 'Diagnóstico', signOut: 'Sair',
       destructiveActions: 'Ações destrutivas', back: 'Voltar às configurações',
       engineHeading: 'Motor', engineLabel: 'Motor hospedado',
       confirmation: 'Digite delete para confirmar', failure: 'Não foi possível apagar todos os dados.',

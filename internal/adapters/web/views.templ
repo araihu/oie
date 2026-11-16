@@ -974,8 +974,7 @@ if v.accountScreen()=="capabilities" {
 templ conversationList(v view){
 if v.Unavailable {
 <div class="oie-list-state">
-@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable,Description:v.Text.UnavailableBody})
-@link.Link(v.href()){ {v.Text.Retry} }
+@engineUnavailableState(v)
 </div>
 }else if len(v.Accounts)==0 {
 <div class="oie-list-state">

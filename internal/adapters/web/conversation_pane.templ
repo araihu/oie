@@ -17,10 +17,7 @@ templ conversationPane(v view){
 		<section class="oie-chat-pane" aria-label={ v.Text.Conversations }>
 			if v.Unavailable && v.ChatOpen {
 				<div class="oie-chat-empty">
-					@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
-					@link.Link(v.href()) {
-						{ v.Text.Retry }
-					}
+					@engineUnavailableState(v)
 					@link.Link(v.href("chat", "")) {
 						{ v.Text.Back }
 					}

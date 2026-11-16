@@ -174,6 +174,7 @@ type connectionView struct {
 }
 type view struct {
 	HostedSignIn         bool
+	RemoteSignInURL      string
 	AccountAvatarBorders map[string]string
 	EngineMode           *engineMode
 	StarredContent       starredContent
@@ -270,6 +271,7 @@ type copy struct {
 
 	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                                                   string
 	AccessKeys, AccessKeyName, AccessKeyCreate, AccessKeySecret, AccessKeyCopy, AccessKeyCopied, AccessKeyFailed, AccessKeyInvalid string
+	EngineModeSignIn, EngineModeSignInHelp, EngineModeOpenBrowser, EngineModeEnterKey                                              string
 	EngineModeKey, EngineModeKeySaved, EngineModeAuthentication, EngineModeKeyHTTPS                                                string
 	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting                         string
 	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                                              string
@@ -1073,7 +1075,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, v)
 }
 func (s *Server) baseView(r *http.Request) view {
-	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
+	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: appearanceMode(r), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.EngineMode = s.engineMode
 	v.HostedSignIn = s.createHostedKey != nil
@@ -1121,6 +1123,9 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	engine, err := s.client.GetEngineWithResponse(ctx, editor)
 	if err != nil || engine.JSON200 == nil {
+		if err == nil {
+			v.RemoteSignInURL = s.remoteSignIn(ctx, engine.ApplicationproblemJSON401)
+		}
 		v.Unavailable = true
 		return
 	}
@@ -1582,6 +1587,10 @@ func preference(r *http.Request, key string, choices []string, fallback string) 
 		}
 	}
 	return fallback
+}
+
+func appearanceMode(r *http.Request) string {
+	return preference(r, "theme", []string{"system", "light", "dark"}, "system")
 }
 
 func locale(r *http.Request) string {

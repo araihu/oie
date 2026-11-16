@@ -2,6 +2,8 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/radio"
 	"github.com/araihu/goshtoso/components/textinput"
 )
@@ -48,4 +50,21 @@ func engineKeyPlaceholder(v view) string {
 		return v.Text.EngineModeKeySaved
 	}
 	return ""
+}
+
+templ engineUnavailableState(v view) {
+	if v.RemoteSignInURL != "" {
+		@emptystate.EmptyState(emptystate.Config{Title: v.Text.EngineModeSignIn, Description: v.Text.EngineModeSignInHelp})
+		<div class="oie-engine-recovery" x-data="{}">
+			@link.Link(v.RemoteSignInURL, link.WithAppearance(link.AppearanceButton), link.WithAttrs(templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"})) {
+				{ v.Text.EngineModeOpenBrowser }
+			}
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'engine-settings'})"})) {
+				{ v.Text.EngineModeEnterKey }
+			}
+		</div>
+	} else {
+		@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
+		@link.Link(v.href()) { { v.Text.Retry } }
+	}
 }

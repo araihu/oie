@@ -10,6 +10,16 @@ files:
     path: .iconpack/sources/heroicons-archive/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-arrow-left-start-on-rectangle/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-left-start-on-rectangle.svg
+    path: .iconpack/sources/heroicons-arrow-left-start-on-rectangle/16/solid/arrow-left-start-on-rectangle.svg
+    size: 615
+    integrity: sha384-jn6rBTYIDjEnJ6VAZjuC/RqZW1ver4XSJrufuQO1iwngUfFAGA+ZVqF/aMG8GZs1
+  - id: heroicons-arrow-left-start-on-rectangle/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-arrow-left-start-on-rectangle/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-check-badge/icon
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/check-badge.svg
     path: .iconpack/sources/heroicons-check-badge/16/solid/check-badge.svg
@@ -18,6 +28,16 @@ files:
   - id: heroicons-check-badge/license
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
     path: .iconpack/sources/heroicons-check-badge/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-fire/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/fire.svg
+    path: .iconpack/sources/heroicons-fire/16/solid/fire.svg
+    size: 613
+    integrity: sha384-5zf3vXzSVx0XVT4byD/i33GSEzyxK753iF8PGzgwwlJ54kjVZbsoIqTQ7EpoPHsb
+  - id: heroicons-fire/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-fire/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-forward/icon
@@ -38,6 +58,16 @@ files:
   - id: heroicons-group/license
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
     path: .iconpack/sources/heroicons-group/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-key/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/key.svg
+    path: .iconpack/sources/heroicons-key/16/solid/key.svg
+    size: 409
+    integrity: sha384-CC+zNJeKq/bd5QHWtlL3bkg7SQNSBD+iDt0GFar+CbtaHE1RD3JFEaiUOhm1ITPV
+  - id: heroicons-key/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-key/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-navigation/icon

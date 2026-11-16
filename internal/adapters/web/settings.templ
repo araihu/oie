@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/araihu/goshtoso/components/button"
-	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/combobox"
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
@@ -13,6 +12,7 @@ import (
 	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/toggle"
 	"github.com/araihu/goshtoso/expressions"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 templ settings(v view) {
@@ -30,19 +30,16 @@ templ settings(v view) {
 			})
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
-		<footer class="oie-settings-footer">
-			if v.Diagnostics {
-				@settingsSubpageEntry("diagnostics", v.Text.Diagnostics)
-			}
-			@settingsSubpageEntry("about", v.Text.About)
-			if v.HostedSignIn {
+		if v.HostedSignIn {
+			<footer class="oie-settings-footer">
 				<form method="post" action="/auth/logout" data-hosted-sign-out>
-					@button.Button(button.WithType("submit"), button.WithAppearance(button.AppearancePlain)) {
-						{ v.Text.SignOutLabel }
+					@button.Button(button.WithType("submit"), button.WithTone(button.ToneWarning)) {
+						@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsArrowLeftStartOnRectangle16SolidArrowLeftStartOnRectangle, Decorative: true, RootClass: "oie-icon"})
+						<span>{ v.Text.SignOutLabel }</span>
 					}
 				</form>
-			}
-		</footer>
+			</footer>
+		}
 	}
 	if !v.Preview && v.EngineID != "" {
 		@removeDownloadsDialog(v)
@@ -62,7 +59,7 @@ func settingsDrawerTransition(from, to string) string {
 	return "$dispatch('drawer:close', {id: " + strconv.Quote(from) + "}); $nextTick(() => $dispatch('drawer:open', {id: " + strconv.Quote(to) + "}))"
 }
 
-templ settingsSubpageEntry(id, title string) {
+templ settingsSubpageEntry(id, title string, leading templ.Component) {
 	@button.Button(
 		button.WithType("button"),
 		button.WithAppearance(button.AppearancePlain),
@@ -70,6 +67,7 @@ templ settingsSubpageEntry(id, title string) {
 		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": id + "-body"}),
 		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition("settings", id)}),
 	) {
+		@leading
 		<span>{ title }</span>
 		@glyph(heroicons.Icon16SolidChevronRight)
 	}
@@ -101,18 +99,24 @@ templ generalSettings(v view) {
 		@appearanceSettings(v)
 		@languageSettings(v)
 		@timeZoneSettings(v)
-		if v.EngineMode != nil {
-			@settingsSubpageEntry("engine-settings", v.Text.EngineMode)
-		}
-		if v.HostedSignIn {
-			@settingsSubpageEntry("access-keys", v.Text.AccessKeys)
-		}
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}
-		if v.CanResetData {
-			@settingsSubpageEntry("destructive-actions", v.Text.DestructiveActions)
-		}
+		<div class="oie-settings-links">
+			if v.EngineMode != nil {
+				@settingsSubpageEntry("engine-settings", v.Text.EngineMode, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRetention16SolidCircleStack, Decorative: true, RootClass: "oie-icon"}))
+			}
+			if v.HostedSignIn {
+				@settingsSubpageEntry("access-keys", v.Text.AccessKeys, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsKey16SolidKey, Decorative: true, RootClass: "oie-icon"}))
+			}
+			if v.Diagnostics {
+				@settingsSubpageEntry("diagnostics", v.Text.Diagnostics, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsWrenchScrewdriver16SolidWrenchScrewdriver, Decorative: true, RootClass: "oie-icon"}))
+			}
+			@settingsSubpageEntry("about", v.Text.About, glyph(heroicons.Icon16SolidInformationCircle))
+			if v.CanResetData {
+				@settingsSubpageEntry("destructive-actions", v.Text.DestructiveActions, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"}))
+			}
+		</div>
 	</div>
 }
 

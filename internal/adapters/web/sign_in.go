@@ -1,10 +1,35 @@
 package web
 
 import (
+	_ "embed"
 	"net/http"
+	"strings"
 
 	"github.com/araihu/oie/internal/adapters/hostauth"
 )
+
+//go:embed sign-in.css
+var signInStylesheet []byte
+
+// HostedSignInAsset exposes only the static assets used before sign-in.
+func HostedSignInAsset(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/auth/assets/sign-in.css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		_, _ = w.Write(signInStylesheet)
+	case "/auth/assets/logo-light.svg", "/auth/assets/logo-dark.svg", "/auth/assets/favicon.svg":
+		name := strings.TrimPrefix(r.URL.Path, "/auth/assets/")
+		data, err := brandFiles.ReadFile("brand/" + name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/svg+xml")
+		_, _ = w.Write(data)
+	default:
+		http.NotFound(w, r)
+	}
+}
 
 func WithHostedSignIn(auth *hostauth.Auth) Option {
 	return func(s *Server) { s.createHostedKey = auth.CreateBrowserKey }
@@ -12,8 +37,9 @@ func WithHostedSignIn(auth *hostauth.Auth) Option {
 
 // SignIn renders the public hosted sign-in page without accessing the engine.
 func (s *Server) SignIn(w http.ResponseWriter, r *http.Request, status int, loginURL string) {
-	lang := locale(r)
+	lang, mode := locale(r), appearanceMode(r)
 	savePreference(w, r, "lang", lang)
+	savePreference(w, r, "theme", mode)
 	text := s.catalogs[lang]
 	message := ""
 	switch status {
@@ -25,7 +51,7 @@ func (s *Server) SignIn(w http.ResponseWriter, r *http.Request, status int, logi
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'")
 	w.WriteHeader(status)
-	_ = signIn(lang, text.SignInLabel, message, loginURL).Render(r.Context(), w)
+	_ = signIn(lang, mode, text.SignInLabel, message, loginURL).Render(r.Context(), w)
 }
 
 func secureCookie(r *http.Request) bool {
