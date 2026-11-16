@@ -4,7 +4,7 @@ See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.6
 for installation and access via `kubectl port-forward`.
 
 Chart releases use their own version. Chart `0.2.6` defaults to the Oiê image
-`v0.0.1-rc.27`. Install it from GHCR or download the archive and checksum
+`v0.0.1-rc.28`. Install it from GHCR or download the archive and checksum
 from [Helm chart 0.2.6](https://github.com/araihu/oie/releases/tag/helm-v0.2.6).
 
 ```sh
