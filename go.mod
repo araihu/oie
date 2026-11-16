@@ -85,4 +85,4 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace mellium.im/xmpp => github.com/araihu/xmpp v0.24.0-araihu.1
+replace mellium.im/xmpp => github.com/araihu/xmpp v0.24.0-araihu.2

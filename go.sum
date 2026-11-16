@@ -17,8 +17,8 @@ github.com/araihu/goshtoso v0.6.3 h1:Cwm9lgkNPnR5GIb/RF1PfVvr4UqF7cJiJlJjDiKNbK8
 github.com/araihu/goshtoso v0.6.3/go.mod h1:H/vLd+4wvpzNIjDnW81Sk44+4670WIe7x6DUE57Kg/8=
 github.com/araihu/margo v0.0.36 h1:VV+plQdiHGRXY83v3/hwt2OfR4v00fpiwuYfmg7LIP0=
 github.com/araihu/margo v0.0.36/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
-github.com/araihu/xmpp v0.24.0-araihu.1 h1:2Qd3uKRpP6tn9iRGdd8rDJpzUDak5YPJ+LhtgGzCdeU=
-github.com/araihu/xmpp v0.24.0-araihu.1/go.mod h1:mkGzl6UacHQqQVWQOZXrkHC6j3jVd2novcDJEnSyMxQ=
+github.com/araihu/xmpp v0.24.0-araihu.2 h1:7MDKpEf1hizDNz9EZVQLzMCF63W61yd2SSv+bapgfdE=
+github.com/araihu/xmpp v0.24.0-araihu.2/go.mod h1:IvZgNBBzp57lP0Jfb5B1fTRuSpwAn/GpbSy4sX42cDM=
 github.com/bits-and-blooms/bitset v1.24.2 h1:M7/NzVbsytmtfHbumG+K2bremQPMJuqv1JD3vOaFxp0=
 github.com/bits-and-blooms/bitset v1.24.2/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/blevesearch/bleve/v2 v2.6.1 h1:47vLskRTqxvQEtxVPYHjf5KpOgzD2msslXFjvUQCgWQ=
