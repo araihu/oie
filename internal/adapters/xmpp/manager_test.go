@@ -15,6 +15,7 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
+	"mellium.im/xmpp/stream"
 )
 
 func TestDevelopmentStreamResumption(t *testing.T) {
@@ -182,6 +183,27 @@ func TestAuthenticationFailureClassification(t *testing.T) {
 			code, stopped := connectionError(authenticationError{failure})
 			if code != tc.code || stopped != tc.stopped {
 				t.Fatalf("failure classified as %s, stopped = %v", code, stopped)
+			}
+		})
+	}
+}
+
+func TestAuthenticationTransportFailuresRetry(t *testing.T) {
+	decoder := xml.NewDecoder(strings.NewReader(`<stream><challenge>`))
+	for {
+		if _, err := decoder.Token(); err != nil {
+			code, stopped := connectionError(authenticationError{err})
+			if code != "connection_failed" || stopped {
+				t.Fatalf("truncated SASL exchange reported %s, stopped = %v (error: %v)", code, stopped, err)
+			}
+			break
+		}
+	}
+	for _, failure := range []stream.Error{stream.ConnectionTimeout, stream.Reset, stream.ResourceConstraint, stream.SystemShutdown} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			code, stopped := connectionError(authenticationError{failure})
+			if code != "connection_failed" || stopped {
+				t.Fatalf("stream error during SASL reported %s, stopped = %v", code, stopped)
 			}
 		})
 	}

@@ -29,6 +29,7 @@ import (
 	"mellium.im/xmpp/disco"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
+	"mellium.im/xmpp/stream"
 )
 
 type configuration struct {
@@ -54,6 +55,7 @@ type entry struct {
 	state               domain.Connection
 	session             *mx.Session
 	suspended           *mx.Session
+	replaying           bool
 	raw                 net.Conn
 	historyMu           sync.Mutex
 	archives            map[string]*archiveQuery
@@ -346,6 +348,7 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string, sto
 	e.mu.Lock()
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
 	e.workerStopped = stopped
+	e.replaying = false
 	preserve := e.suspended != nil || state == "connected" && e.session != nil && e.session.StreamManagement().Resumed
 	if !preserve {
 		e.historyMu.Lock()
@@ -368,6 +371,15 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string, sto
 		e.detailsWake = make(chan struct{}, 1)
 		e.discoveryPartial = false
 		e.details = nil
+		if preserve {
+			// Connection loss suspends public reaction identities in storage.
+			// Refresh discovery before publishing them again for resumed rooms.
+			for _, slot := range e.rooms {
+				if slot.session == e.session && slot.snapshot.State == "joined" && !slot.leaving {
+					queueRoomDetailsLocked(e, slot.conversation)
+				}
+			}
+		}
 	}
 	snapshot := e.state
 	e.mu.Unlock()
@@ -400,6 +412,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.mu.Lock()
 			historyCtx, historyCancel := context.WithCancel(ctx)
 			e.session = session
+			e.replaying = session.StreamManagement().Resumed
 			e.archiveSessionCtx = historyCtx
 			e.raw = raw
 			previous := e.suspended
@@ -433,8 +446,32 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				m.resetRoomSessions(ctx, e, previous)
 			}
 			served := false
-			if err = m.publish(ctx, e, "connected", "", false); err == nil {
+			startServing := func() <-chan error {
 				served = true
+				done := make(chan error, 1)
+				go func() {
+					done <- session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
+						return m.handle(historyCtx, e, tokens, start)
+					}))
+				}()
+				return done
+			}
+			var serving <-chan error
+			if session.StreamManagement().Resumed {
+				// Drain inbound replay while the outbound replay finishes.
+				// Keep new room and outbox work paused until the writer is ready.
+				serving = startServing()
+				replayCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				err = session.RequestStreamManagementAck(replayCtx)
+				cancel()
+			}
+			if err == nil {
+				err = m.publish(ctx, e, "connected", "", false)
+			}
+			if err == nil {
+				if serving == nil {
+					serving = startServing()
+				}
 				m.workers.Add(4)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
@@ -456,17 +493,20 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				connectedAt := time.Now()
 				m.workers.Add(1)
 				go func() { defer m.workers.Done(); watchConnection(historyCtx, session, raw) }()
-				err = session.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
-					return m.handle(historyCtx, e, tokens, start)
-				}))
+				err = <-serving
+				serving = nil
 				if time.Since(connectedAt) >= connectionIdle {
 					delay = time.Second
 				}
 			}
 			historyCancel()
 			_ = raw.Close()
+			if serving != nil {
+				err = errors.Join(err, <-serving)
+			}
 			e.mu.Lock()
 			e.session = nil
+			e.replaying = false
 			e.raw = nil
 			resumable := served && ctx.Err() == nil && session.StreamManagement().Resumable
 			if resumable {
@@ -534,11 +574,8 @@ func connectionError(err error) (string, bool) {
 		return "tls_failed", true
 	}
 	var auth authenticationError
-	if errors.As(err, &auth) {
-		var network net.Error
-		if !temporarySASLFailure(auth.error) && !errors.As(auth.error, &network) && !errors.Is(auth.error, io.EOF) && !errors.Is(auth.error, io.ErrUnexpectedEOF) && !errors.Is(auth.error, context.DeadlineExceeded) {
-			return "authentication_failed", true
-		}
+	if errors.As(err, &auth) && !retryAuthentication(auth.error) {
+		return "authentication_failed", true
 	}
 	return "connection_failed", false
 }
@@ -559,6 +596,16 @@ func connectionDiagnostic(code string, err error) diagnostics.Event {
 	default:
 		return diagnostics.XMPPConnectFailed
 	}
+}
+
+func retryAuthentication(err error) bool {
+	var network net.Error
+	var syntax *xml.SyntaxError
+	return errors.As(err, &network) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.As(err, &syntax) && syntax.Msg == "unexpected EOF" ||
+		errors.Is(err, stream.ConnectionTimeout) || errors.Is(err, stream.Reset) ||
+		errors.Is(err, stream.ResourceConstraint) || errors.Is(err, stream.SystemShutdown) || temporarySASLFailure(err)
 }
 
 func temporarySASLFailure(err error) bool {
@@ -702,7 +749,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if out.Kind == "room" && out.Reaction == nil {
 		e.mu.Lock()
 		slot := e.rooms[out.Address]
-		if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
+		if slot == nil || slot.session != session || slot.snapshot.State != "joined" || slot.leaving || slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
 			e.mu.Unlock()
 			if out.Correction != nil {
 				return application.Failed
@@ -732,31 +779,47 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if out.RecordWireAttempt != nil && out.RecordWireAttempt(ctx, attachmentBody) != nil {
 		return application.NotSent
 	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(10 * time.Second)
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
 	}
-	_ = raw.SetWriteDeadline(deadline)
-	defer func() { _ = raw.SetWriteDeadline(time.Time{}) }()
 	e.mu.Lock()
 	trackCorrectionSource(e, a, out)
 	e.mu.Unlock()
 
 	if err = session.Encode(ctx, payload); err != nil {
+		if definitivelyUnsent(session.StreamManagement().Enabled, err) {
+			return application.NotSent
+		}
 		_ = raw.Close()
 		return application.Unknown
 	}
 	return application.Submitted
 }
 
+func definitivelyUnsent(managed bool, err error) bool {
+	if !managed || errors.Is(err, mx.ErrStreamManagementOutcomeUnknown) {
+		return false
+	}
+	return errors.Is(err, mx.ErrStreamManagementQueueFull) || errors.Is(err, mx.ErrOutputStreamClosed) ||
+		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+var errStanzaTooLarge = errors.New("XMPP stanza exceeds size limit")
+
 type boundedTokens struct {
 	reader    xml.TokenReader
 	remaining int
+	readError error
 }
 
 func (b *boundedTokens) Token() (xml.Token, error) {
 	token, err := b.reader.Token()
 	if err != nil && (err != io.EOF || token == nil) {
+		if err != io.EOF {
+			b.readError = err
+		}
 		return token, err
 	}
 	switch t := token.(type) {
@@ -769,12 +832,26 @@ func (b *boundedTokens) Token() (xml.Token, error) {
 		}
 	}
 	if b.remaining < 0 {
-		return nil, errors.New("XMPP stanza exceeds size limit")
+		return nil, errStanzaTooLarge
 	}
 	return token, nil
 }
 func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEncoder, start *xml.StartElement) error {
-	decoder := xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), &boundedTokens{reader: t, remaining: 1 << 20}))
+	limited := &boundedTokens{reader: t, remaining: 1 << 20}
+	decoder := xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), limited))
+	decode := func(v any) (bool, error) {
+		err := decoder.Decode(v)
+		switch {
+		case err == nil:
+			return true, nil
+		case errors.Is(err, errStanzaTooLarge):
+			return false, stream.PolicyViolation
+		default:
+			// The session drains a malformed payload. Transport errors and
+			// application errors still reach Serve and can trigger resumption.
+			return false, limited.readError
+		}
+	}
 	if start.Name.Space != "jabber:client" {
 		return nil
 	}
@@ -802,7 +879,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 				Stamp string `xml:"stamp,attr"`
 			} `xml:"urn:xmpp:delay delay"`
 		}
-		if err := decoder.Decode(&msg); err != nil {
+		if ok, err := decode(&msg); !ok {
 			return err
 		}
 		if msg.AvatarEvent != nil && msg.AvatarEvent.Items.Node == avatarMetadataNS && msg.From.Resourcepart() == "" {
@@ -901,7 +978,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		return err
 	case "presence":
 		var presence incomingPresence
-		if err := decoder.Decode(&presence); err != nil {
+		if ok, err := decode(&presence); !ok {
 			return err
 		}
 		if presence.Update != nil && presence.Update.Photo != nil {
@@ -930,7 +1007,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			Disco  *disco.InfoQuery      `xml:"http://jabber.org/protocol/disco#info query"`
 			Roster *contactRosterPayload `xml:"jabber:iq:roster query"`
 		}
-		if err = decoder.Decode(&query); err != nil {
+		if ok, err := decode(&query); !ok {
 			return err
 		}
 		if query.Roster != nil {
