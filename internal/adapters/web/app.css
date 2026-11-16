@@ -932,7 +932,8 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
   .oie-message-menu-slot {top:-10px;inset-inline-end:-10px}
   .oie-message-body {--oie-message-menu-clearance:38px}
   .oie-message-heading {padding-inline-end:var(--oie-message-menu-clearance)}
-  .oie-message-heading,.oie-message-body:has(>.oie-message-menu-slot)>.oie-message-body-content {min-height:34px}
+  /* Keep the stamp below the touch target, including while a send replaces its menu. */
+  .oie-message-heading,.oie-message-body-content {min-height:34px}
 
   .oie-filter {min-height:44px}
   :is(#join-room-body,#create-room-body):has([data-room-entry]) {overflow:hidden}
