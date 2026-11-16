@@ -40,4 +40,17 @@ attachments before writing the outgoing chat message. The recipient receives
 the caption followed by the provider’s download links. A pending message shows
 filenames and supported thumbnails while the engine confirms acceptance.
 
+## Voice messages
+
+The recording indicator and timer start when the microphone is live and the
+recorder starts. The waveform can appear after recording or playback is already
+underway. Playback uses available audio data immediately and adds the seekable
+waveform when the format can be decoded within the waveform limits.
+
+After stopping a recording, Send can be selected during the upload. The request
+continues in the original conversation if the user switches conversations.
+Removing the recording before staging finishes cancels its send. A failed stage
+returns the recording for retry in the current app session. Once staging
+succeeds, the existing message submission and recovery flow handles the send.
+
 Native operating-system drag and drop requires a Wails integration.

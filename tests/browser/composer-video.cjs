@@ -54,6 +54,256 @@ const features = ['schedules', 'file_upload', 'room_messaging', 'send_correction
   id, appSupport:'supported', protocolSupport:'supported', serverSupport:'supported', scope:'service',
 }));
 
+async function installMicrophoneTone(page) {
+  // The tone and the amplified microphone meter each have their own trusted activation.
+  await page.evaluate(() => {
+    // Keep the mock method on a stable wrapper across WebKit garbage collection.
+    Object.defineProperty(navigator, 'mediaDevices', {value:navigator.mediaDevices,configurable:true});
+    const button = document.createElement('button');
+    button.id = 'audio-fixture-start-tone';
+    button.textContent = 'Start fixture tone';
+    button.style.cssText = 'position:fixed;top:0;left:0;z-index:9999';
+    button.addEventListener('click', () => {
+      const context = new AudioContext();
+      const output = context.createMediaStreamDestination();
+      const tone = context.createOscillator();
+      const gain = context.createGain();
+      gain.gain.value = 0.6;
+      tone.connect(gain).connect(output);
+      tone.start();
+      void context.resume().then(() => {
+        window.microphoneTone = {context, stream:output.stream};
+        button.remove();
+      });
+    }, {once:true});
+    document.body.append(button);
+  });
+  await page.locator('#audio-fixture-start-tone').click();
+  await page.waitForFunction(() => !!window.microphoneTone);
+}
+
+async function verifyAudioCapture(page, locale, useTone) {
+  const copy = locale === 'pt-BR' ? {
+    record:'Gravar áudio', waiting:'Aguardando microfone…', stop:'Parar gravação', recording:'Gravando áudio…', cancel:'Cancelar',
+  } : {
+    record:'Record audio', waiting:'Waiting for microphone…', stop:'Stop recording', recording:'Recording audio…', cancel:'Cancel',
+  };
+  const record = page.getByRole('button', {name:copy.record,exact:true});
+  const stop = page.getByRole('button', {name:copy.stop,exact:true});
+  const audio = page.locator('[data-record-audio]');
+  const dot = audio.locator('.oie-audio-recording-dot');
+  const time = audio.locator('[data-record-audio-time]');
+  const composer = page.locator('#message-composer');
+  const geometry = await composer.boundingBox();
+  if (useTone) await installMicrophoneTone(page);
+  await page.evaluate(() => {
+    const getUserMedia = navigator.mediaDevices.getUserMedia;
+    const Recorder = MediaRecorder;
+    let releaseStart;
+    const started = new Promise(resolve => { releaseStart = resolve; });
+    window.startAudioTestRecorder = releaseStart;
+    window.audioTestRecorderCalls = 0;
+    window.MediaRecorder = class extends Recorder {
+      set onstart(callback) {
+        super.onstart = event => {
+          window.audioTestRecorderReady = true;
+          void started.then(() => callback.call(this, event));
+        };
+      }
+      start(...args) {
+        window.audioTestRecorderCalls++;
+        return super.start(...args);
+      }
+    };
+    navigator.mediaDevices.getUserMedia = async options => {
+      const microphone = window.microphoneTone;
+      const stream = microphone?.stream ?? await getUserMedia.call(navigator.mediaDevices, options);
+      const track = stream.getAudioTracks()[0];
+      let muted = true;
+      Object.defineProperty(track,'muted',{get:() => muted});
+      window.unmuteAudioTestTrack = () => {
+        muted = false;
+        track.dispatchEvent(new Event('unmute'));
+      };
+      window.cleanupAudioTest = () => {
+        navigator.mediaDevices.getUserMedia = getUserMedia;
+        window.MediaRecorder = Recorder;
+        void microphone?.context.close();
+      };
+      return stream;
+    };
+    const measure = () => ['#message-timeline','#composer-split','.oie-composer-field'].flatMap(selector => {
+      const node = document.querySelector(selector);
+      const {x,y,width,height} = node.getBoundingClientRect();
+      return [x,y,width,height,node.scrollTop];
+    });
+    window.audioTestFrames = [measure()];
+    function sample() {
+      window.audioTestFrames.push(measure());
+      window.audioTestFrame = requestAnimationFrame(sample);
+    }
+    window.audioTestFrame = requestAnimationFrame(sample);
+  });
+  await record.click();
+  const waiting = audio.getByText(copy.waiting, {exact:true});
+  await waiting.waitFor();
+  assert(await waiting.evaluate(node => node.scrollWidth <= node.clientWidth));
+  await page.waitForFunction(() => typeof window.unmuteAudioTestTrack === 'function');
+  assert(await dot.isHidden());
+  assert(await time.isHidden());
+  assert(await record.isDisabled());
+  assert.equal(await page.evaluate(() => window.audioTestRecorderCalls),0,'muted microphone must not start a silent recording');
+  await page.evaluate(() => window.unmuteAudioTestTrack());
+  await page.waitForFunction(() => window.audioTestRecorderReady);
+  assert(await waiting.isVisible());
+  assert(await dot.isHidden());
+  assert(await stop.isHidden());
+  await page.evaluate(() => window.startAudioTestRecorder());
+  await stop.waitFor();
+  await audio.getByText(copy.recording,{exact:true}).waitFor();
+  assert(await dot.isVisible());
+  assert(await time.isVisible());
+  assert.deepEqual(await audio.boundingBox(),geometry);
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector('[data-record-audio-wave] > canvas');
+    if (!canvas?.width || !canvas?.height) return false;
+    const pixels = canvas.getContext('2d').getImageData(0,Math.floor(canvas.height / 3),canvas.width,1).data;
+    return pixels.some((value,index) => index % 4 === 3 && value > 0);
+  });
+  await audio.getByRole('button',{name:copy.cancel,exact:true}).click();
+  await audio.waitFor({state:'hidden'});
+  assert(await composer.evaluate(node => node === document.activeElement));
+  const frames = await page.evaluate(() => {
+    cancelAnimationFrame(window.audioTestFrame);
+    window.cleanupAudioTest();
+    return window.audioTestFrames;
+  });
+  for (const frame of frames) assert(frame.every((value,index) => Math.abs(value-frames[0][index]) <= 1),
+    JSON.stringify({locale,expected:frames[0],frame}));
+}
+
+async function verifyDraftPlayback(page, href, locale, queuedSend) {
+  const portuguese = locale === 'pt-BR';
+  const audio = page.locator('[data-record-audio]');
+  const record = page.getByRole('button', {name:portuguese ? 'Gravar áudio' : 'Record audio',exact:true});
+  const play = audio.getByRole('button', {name:portuguese ? 'Reproduzir gravação' : 'Play recording',exact:true});
+  const stop = page.getByRole('button', {name:portuguese ? 'Parar gravação' : 'Stop recording',exact:true});
+  const position = audio.getByRole('slider', {name:portuguese ? 'Posição da gravação' : 'Recording position',exact:true});
+  const media = '[data-record-audio-media]';
+  await page.addInitScript(() => {
+    const decode = OfflineAudioContext.prototype.decodeAudioData;
+    const gate = new Promise(resolve => { window.releaseAudioWaveform = resolve; });
+    OfflineAudioContext.prototype.decodeAudioData = async function(...args) {
+      await gate;
+      return decode.apply(this,args);
+    };
+  });
+  await page.goto(href);
+  const geometry = await page.locator('#message-composer').boundingBox();
+  await installMicrophoneTone(page);
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async () => window.microphoneTone.stream;
+  });
+  await record.click();
+  await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:02');
+  const stage = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
+  await stop.click();
+  await play.focus();
+  await play.press('Enter');
+  await page.waitForFunction(selector => document.querySelector(selector).currentTime > .05,media);
+  assert(await position.isHidden());
+  await page.evaluate(selector => {
+    const audio = document.querySelector(selector);
+    window.beforeAudioWaveform = {audio,src:audio.currentSrc,time:audio.currentTime,focus:document.activeElement};
+    window.releaseAudioWaveform();
+  },media);
+  await position.waitFor();
+  await page.waitForFunction(selector => {
+    const current = document.querySelector(selector);
+    return current.currentTime > window.beforeAudioWaveform.time;
+  },media);
+  assert(await page.evaluate(selector => {
+    const current = document.querySelector(selector);
+    const {audio,src,focus} = window.beforeAudioWaveform;
+    return current === audio && current.currentSrc === src && !current.paused && document.activeElement === focus;
+  },media));
+  assert.deepEqual(await audio.boundingBox(),geometry);
+  const upload = await stage;
+  assert(upload.ok());
+  await page.evaluate(() => window.microphoneTone.context.close());
+  await page.waitForFunction(() => !document.querySelector('#send-message-form').hasAttribute('data-attachments-pending'));
+  const restoredID = new URL(upload.url()).searchParams.get('attachmentId');
+  let releaseRestoredWave;
+  const restoredWave = new Promise(resolve => { releaseRestoredWave = resolve; });
+  const nativeFailure = queuedSend ? page.waitForResponse(response => response.status() === 416 &&
+    new URL(response.url()).searchParams.get('attachmentId') === restoredID) : null;
+  await page.route(url => url.pathname === '/ui/scheduling/file' && url.searchParams.get('attachmentId') === restoredID,
+    async route => {
+      if (route.request().resourceType() === 'fetch') await restoredWave;
+      else if (queuedSend) return route.fulfill({status:416,headers:{'Content-Range':'bytes */0'}});
+      await route.continue();
+    });
+  await page.reload();
+  try {
+    await play.click();
+    if (nativeFailure) {
+      await nativeFailure;
+      releaseRestoredWave();
+    }
+    await page.waitForFunction(selector => document.querySelector(selector).currentTime > .05,media);
+    assert(await position.isHidden());
+    const source = new URL(await page.locator(media).evaluate(audio => audio.currentSrc));
+    if (nativeFailure) assert.equal(source.protocol,'blob:');
+    else assert.equal(source.searchParams.get('attachmentId'),restoredID);
+  } finally {
+    releaseRestoredWave();
+    await page.evaluate(() => window.releaseAudioWaveform());
+  }
+  await position.waitFor();
+  await audio.locator('[data-record-audio-remove]').click();
+  await audio.waitFor({state:'hidden'});
+
+  if (!queuedSend) return;
+  await installMicrophoneTone(page);
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async () => window.microphoneTone.stream;
+  });
+  await record.click();
+  await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+  const send = page.getByRole('button', {name:portuguese ? 'Enviar mensagem' : 'Send message',exact:true});
+  let resumeUpload;
+  const uploadGate = new Promise(resolve => { resumeUpload = resolve; });
+  await page.route('**/ui/scheduling/stage?*', async route => {
+    await uploadGate;
+    await route.continue();
+  }, {times:1});
+  const uploadRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
+  await stop.click();
+  const attachmentID = new URL((await uploadRequest).url()).searchParams.get('attachmentId');
+  let requests = 0;
+  const response = page.waitForResponse(result => new URL(result.url()).pathname === '/ui/messages/send');
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/ui/messages/send') requests++;
+  });
+  try {
+    assert(await send.isEnabled());
+    await send.click();
+    assert.equal(await send.getAttribute('aria-busy'),'true');
+    assert.equal(await send.getAttribute('aria-disabled'),'true');
+    assert.equal(requests,0);
+  } finally {
+    resumeUpload();
+  }
+  const sent = await response;
+  assert(sent.ok());
+  assert(sent.request().postData().includes(attachmentID));
+  assert.equal(requests,1);
+  await audio.waitFor({state:'hidden'});
+  await page.evaluate(() => window.microphoneTone.context.close());
+  await page.reload();
+  await page.locator('[data-message-id="' + id(35) + '"]').waitFor();
+}
+
 async function launch() {
   const bytes = await fs.readFile(path.join(__dirname, 'fixtures/tiny-video.webm'));
   const audioBytes = audioFixture();
@@ -114,10 +364,15 @@ async function launch() {
       if (item === audioItem.id) {
         const range = request.headers.range;
         audioReads.push({item, range, download:url.searchParams.has('download')});
-        const headers = {'Content-Type':'audio/wav','Content-Length':audioBytes.length,
+        const headers = {'Content-Type':'audio/wav','Accept-Ranges':'bytes',
           'Content-Disposition':'inline; filename=mensagem.wav'};
-        if (range === 'bytes=0-20971519') headers['Content-Range'] = 'bytes 0-' + (audioBytes.length - 1) + '/' + audioBytes.length;
-        return response.writeHead(headers['Content-Range'] ? 206 : 200,headers).end(audioBytes);
+        const [, from, to] = /^bytes=(\d+)-(\d*)$/.exec(range || '') || [];
+        if (from === undefined) return response.writeHead(200, {...headers,'Content-Length':audioBytes.length}).end(audioBytes);
+        const start = Number(from);
+        const end = Math.min(to ? Number(to) : audioBytes.length - 1, audioBytes.length - 1);
+        if (start > end) return response.writeHead(416, {...headers,'Content-Range':'bytes */' + audioBytes.length}).end();
+        return response.writeHead(206, {...headers,'Content-Length':end - start + 1,
+          'Content-Range':`bytes ${start}-${end}/${audioBytes.length}`}).end(audioBytes.subarray(start,end + 1));
       }
       const range = request.headers.range;
       reads.push({item,range});
@@ -153,7 +408,15 @@ async function launch() {
           headers['X-Oie-Attachment-Type'] = metadata.mediaType;
           headers['Content-Disposition'] = "attachment; filename*=UTF-8''" + encodeURIComponent(metadata.fileName);
         }
-        return response.writeHead(200,headers).end(file);
+        const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.range || '');
+        if (!range) return response.writeHead(200,headers).end(file);
+        const start = Number(range[1]);
+        const end = range[2] ? Math.min(Number(range[2]), file.length - 1) : file.length - 1;
+        if (start > end) return response.writeHead(416,{'Content-Range':'bytes */' + file.length}).end();
+        headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + file.length;
+        headers['Content-Length'] = end - start + 1;
+        headers['Accept-Ranges'] = 'bytes';
+        return response.writeHead(206,headers).end(file.subarray(start,end + 1));
       }
       posts.push(key);
       const chunks = [];
@@ -203,6 +466,67 @@ async function launch() {
     for (let attempt = 0; attempt < 100; attempt++) {
       if (await fetch(base).then(response => response.ok, () => false)) break;
       await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    for (const [locale, width] of [['en',1440], ['pt-BR',390]]) {
+      const page = await browser.newPage({locale,viewport:{width,height:844}});
+      try {
+        await page.goto(base + '/?chat=' + direct + '&lang=' + locale);
+        await verifyAudioCapture(page, locale, useWebKit);
+      } finally {
+        await page.close();
+      }
+      const draftPage = await browser.newPage({locale,viewport:{width,height:844}});
+      try {
+        await verifyDraftPlayback(draftPage, base + '/?chat=' + direct + '&lang=' + locale, locale, useWebKit && locale === 'pt-BR');
+      } finally {
+        await draftPage.close();
+      }
+    }
+    for (const rejectNativeRange of [false, true]) {
+      const page = await browser.newPage({locale:'pt-BR',viewport:{width:390,height:844}});
+      let releaseWave;
+      const waveGate = new Promise(resolve => { releaseWave = resolve; });
+      const nativeRequest = page.waitForRequest(request => request.url().includes('/' + audioItem.id + '/content') &&
+        request.headers().range !== 'bytes=0-20971519');
+      await page.route(url => url.pathname.endsWith('/' + audioItem.id + '/content'), async route => {
+        if (route.request().headers().range === 'bytes=0-20971519') await waveGate;
+        else if (rejectNativeRange) return route.fulfill({status:416,headers:{'Content-Range':`bytes */${audioBytes.length}`}});
+        await route.continue();
+      });
+      try {
+        await page.goto(base + '/?chat=' + direct + '&lang=pt-BR');
+        const player = page.locator('[data-message-id="' + receivedAudio.id + '"] [data-message-audio]');
+        const audio = player.locator('audio');
+        const play = player.getByRole('button',{name:/^Reproduzir áudio/});
+        const pause = player.getByRole('button',{name:/^Pausar áudio/});
+        const slider = player.getByRole('slider',{name:'Posição do áudio',exact:true});
+        await player.scrollIntoViewIfNeeded();
+        await play.click();
+        await nativeRequest;
+        if (rejectNativeRange) {
+          await page.waitForFunction(node => !!node.error, await audio.elementHandle());
+          assert.equal(await player.getAttribute('aria-busy'),'true');
+          releaseWave();
+          await page.waitForFunction(node => node.currentSrc.startsWith('blob:') && node.currentTime > 0, await audio.elementHandle());
+          await slider.waitFor();
+          continue;
+        }
+        await page.waitForFunction(node => !node.paused && node.currentTime > 0, await audio.elementHandle());
+        assert.equal(await player.getAttribute('aria-busy'),'true');
+        assert.equal(await slider.count(),0);
+        await pause.focus();
+        await pause.press('Enter');
+        const before = await audio.evaluate(node => [node.currentSrc, node.currentTime]);
+        releaseWave();
+        await slider.waitFor();
+        await player.locator('canvas').first().waitFor();
+        assert.deepEqual(await audio.evaluate(node => [node.currentSrc, node.currentTime]),before);
+        assert(await audio.evaluate(node => node.paused));
+        assert(await play.evaluate(node => node === document.activeElement));
+      } finally {
+        releaseWave();
+        await page.close();
+      }
     }
     if (!useWebKit) {
       for (const [locale, width, playLabel, pauseLabel, positionLabel, downloadLabel, theme] of [
@@ -329,7 +653,7 @@ async function launch() {
     if (!useWebKit) {
       const page = await browser.newPage({viewport:{width:838,height:844}});
       await page.addInitScript(() => {
-        AudioContext.prototype.decodeAudioData = () => Promise.reject(new Error('Waveform decoder unavailable'));
+        OfflineAudioContext.prototype.decodeAudioData = () => Promise.reject(new Error('Waveform decoder unavailable'));
       });
       await page.goto(base + '/?chat=' + direct + '&lang=en');
       const player = page.locator('[data-message-id="' + sentAudio.id + '"] [data-message-audio]');
@@ -524,7 +848,7 @@ async function launch() {
           };
         });
         await record.click();
-        await audio.getByText('Waiting for microphone access…',{exact:true}).waitFor();
+        await audio.getByText('Waiting for microphone…',{exact:true}).waitFor();
         await page.evaluate(() => window.dispatchEvent(new Event('oie:desktop-hide')));
         await audio.waitFor({state:'hidden'});
         await page.evaluate(() => window.grantMicrophone());
@@ -553,14 +877,40 @@ async function launch() {
         await record.click();
         await audio.locator('[data-record-audio-wave] canvas').first().waitFor();
         await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:02');
+        let releaseFailedUpload;
+        const failedUpload = new Promise(resolve => { releaseFailedUpload = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          await failedUpload;
+          await route.continue();
+        }, {times:1});
         state.stageStatus = 503;
         await stop.click();
+        try {
+          await send.click();
+          assert.equal(await send.getAttribute('aria-disabled'),'true');
+          assert.equal(sends,0);
+        } finally {
+          releaseFailedUpload();
+        }
         await position.waitFor();
         await retry.waitFor();
         await page.locator('#toast-container').getByText('Could not attach this file.',{exact:true}).waitFor();
         assert(await send.isDisabled());
         state.stageStatus = 201;
-        await retry.click();
+        let releaseRetryUpload;
+        const retryUpload = new Promise(resolve => { releaseRetryUpload = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          await retryUpload;
+          await route.continue();
+        }, {times:1});
+        const stagedRetry = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
+        try {
+          await retry.click();
+          assert(await send.isEnabled(),'send is available during an upload retry');
+        } finally {
+          releaseRetryUpload();
+        }
+        assert((await stagedRetry).ok());
         assert(Number(await position.getAttribute('aria-valuemax')) >= 1);
         await page.waitForFunction(() => !document.querySelector('#composer-send').disabled);
         assert(await cancel.evaluate(node => node === document.activeElement));
@@ -638,12 +988,105 @@ async function launch() {
         assert.equal(sendRequests.length,2);
         assert.deepEqual(sendRequests[1].attachmentIds,[newRecordingID]);
         assert.equal(sendRequests[1].originalText,'');
+
+        await record.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+        let releaseUpload;
+        const upload = new Promise(resolve => { releaseUpload = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          await upload;
+          await route.continue();
+        }, {times:1});
+        const uploadRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
+        await stop.click();
+        const attachmentID = new URL((await uploadRequest).url()).searchParams.get('attachmentId');
+        const queued = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
+        try {
+          await audio.evaluate(panel => {
+            const nodes = [panel, panel.closest('form'), document.getElementById('message-timeline')];
+            window.uploadFrames = [];
+            const sample = () => {
+              window.uploadFrames.push(nodes.flatMap(node => {
+                const {x,y,width,height} = node.getBoundingClientRect();
+                return [x,y,width,height,node.scrollTop];
+              }));
+              window.uploadFrame = requestAnimationFrame(sample);
+            };
+            sample();
+          });
+          await send.click();
+          assert.equal(await send.getAttribute('aria-disabled'),'true');
+          assert(await send.evaluate(node => node === document.activeElement));
+          await page.locator('#send-message-form').evaluate(form => form.requestSubmit());
+          assert.equal(sends,2,'no message request before the attachment is staged');
+          const frames = await page.evaluate(() => {
+            cancelAnimationFrame(window.uploadFrame);
+            return window.uploadFrames;
+          });
+          assert(frames.length > 1);
+          for (const frame of frames) assert(frame.every((value,index) => Math.abs(value-frames[0][index]) <= 1));
+        } finally {
+          releaseUpload();
+        }
+        assert.equal((await (await queued).json()).accepted,true);
+        await audio.waitFor({state:'hidden'});
+        assert.equal(sends,3,'upload completion dispatches the queued click once');
+        assert.equal(sendRequests.length,3);
+        assert.deepEqual(sendRequests[2].attachmentIds,[attachmentID]);
+
+        await record.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+        let releaseCancelledUpload;
+        const cancelledUpload = new Promise(resolve => { releaseCancelledUpload = resolve; });
+        let uploadRouted;
+        const cancelPageUpload = new Promise(resolve => { uploadRouted = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          uploadRouted();
+          await cancelledUpload;
+          await route.continue().catch(() => {});
+        }, {times:1});
+        await stop.click();
+        await cancelPageUpload;
+        try {
+          await send.click();
+          await cancel.click();
+          await record.waitFor();
+          assert(await composer.evaluate(node => node === document.activeElement));
+        } finally {
+          releaseCancelledUpload();
+        }
+        assert.equal(sends,3,'discarding a pending voice draft cancels its queued send');
+
+        await record.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+        let finishBackgroundUpload;
+        const backgroundUpload = new Promise(resolve => { finishBackgroundUpload = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          await backgroundUpload;
+          await route.continue();
+        }, {times:1});
+        const background = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
+        await stop.click();
+        const backgroundID = new URL((await background).url()).searchParams.get('attachmentId');
+        const backgroundSend = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/messages/send');
+        try {
+          await send.click();
+          await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
+          await page.waitForFunction(id => document.body.dataset.conversationId === id, room);
+          assert.equal(sends,3);
+        } finally {
+          finishBackgroundUpload();
+        }
+        const originalScope = new URLSearchParams((await backgroundSend).postData());
+        assert.equal(originalScope.get('conversationId'),direct);
+        assert.deepEqual(JSON.parse(originalScope.get('attachmentIds')),[backgroundID]);
+        assert.equal(sends,4,'switching conversations preserves the explicitly requested send');
       }
       assert.deepEqual(errors,[]);
       await page.close();
       reads.length = 0;
     }
-    console.log('PASS: draft thumbnail, staging failure/retry, playback and reload, bounded received DM and room previews, and chat waveforms before playback');
+    console.log('PASS: attachment staging and video previews, voice capture, playback during waveform preparation, and queued voice sends');
   } catch (error) {
     console.error(log);
     throw error;

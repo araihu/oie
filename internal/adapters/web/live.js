@@ -223,13 +223,16 @@ window.OieRuntime.register('live', life => {
       (composer.dataset.sendAllowed!=='true'&&!editingSchedule);
   }
 
+  let waitingForRecordingUpload = false;
+
   function renderReply(){
     const reply=journal?.reply,locked=!!journal?.pending,editing=!!editSession||editPreparing;
     if(replyField)replyField.value=reply?.messageId||'';
-    if(replyBox){replyBox.hidden=!reply||(locked&&!journal?.scheduledAt&&!editingSchedule)||!!editSession;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply;}
-    for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply||editing;
+    if(replyBox){replyBox.hidden=!reply||(locked&&!journal?.scheduledAt&&!editingSchedule)||!!editSession;replyBox.querySelector('[data-composer-reply-sender]').textContent=typeof reply?.senderName==='string'?reply.senderName:'';replyBox.querySelector('[data-composer-reply-excerpt]').textContent=typeof reply?.excerpt==='string'?reply.excerpt:'';const cancel=replyBox.querySelector('[data-cancel-reply]');if(cancel)cancel.disabled=locked||preparingReply||waitingForRecordingUpload;}
+    for(const button of document.querySelectorAll('[id^="reply-message-"]'))button.disabled=!composer||composer.dataset.replyAllowed!=='true'||locked||preparingReply||editing||waitingForRecordingUpload;
     if(composerSend) composerSend.disabled=stopped||locked||preparingReply||editing||composer.dataset.busy==='true'||
-      composer.hasAttribute('data-attachments-pending')||(composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
+      (composer.hasAttribute('data-attachments-pending')&&(!composer.hasAttribute('data-recording-upload')||composer.dataset.attachmentAllowed!=='true'))||
+      (composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
     if(scheduleRetry){scheduleRetry.hidden=!locked||!journal.scheduledAt&&!editingSchedule;scheduleRetry.disabled=stopped||composer.dataset.busy==='true';}
     const composingLocked=compositionLocked();
     const scheduleDisabled=scheduleBlocked(composingLocked);
@@ -388,27 +391,41 @@ window.OieRuntime.register('live', life => {
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
   }
-  async function saveOfflineSend(record, reservation) {
-    const key = draftStorageKey();
+  async function saveOfflineSend(record, reservation, source) {
+    const key = source?.key ?? draftStorageKey();
     const pending = {...record, pending: true, offline: 'waiting', conversationKind,
       submittedAt: record.submittedAt || new Date().toISOString()};
+    const matchesDraft = draft => sameComposition(draft, record) || (source && sameComposition(draft, source.draft));
+    const retireSourceDraft = () => {
+      if (key === offlineKey) return;
+      try {
+        if (matchesDraft(parseDraft(localStorage.getItem(key)))) localStorage.removeItem(key);
+      } catch {}
+      if (!source) return;
+      if (matchesDraft(inMemory.get(key))) inMemory.delete(key);
+      if (window.OieHostedSession) {
+        try {
+          if (matchesDraft(parseDraft(sessionStorage.getItem(key)))) clearSessionDraft(key);
+        } catch {}
+      }
+    };
     try {
       const identity = reservation?.identity ?? await sendIdentity(record);
       const saved = await withOfflineLock(offlineKey, () => {
-        if (life.signal.aborted || stopped || key !== draftStorageKey()) return false;
+        if (!source && (life.signal.aborted || stopped || key !== draftStorageKey())) return false;
         const queued = parseDraft(localStorage.getItem(offlineKey));
         const operation = reservation ? sendOperationState(record.key, queued) : selectSendOperation(record, identity, queued);
         if (!operation) return false;
-        if (operation.accepted?.identity === identity) return operation.accepted;
+        if (operation.accepted?.identity === identity) {
+          if (source) retireSourceDraft();
+          return operation.accepted;
+        }
         if (hasDraft(queued) && (isOfflineIntent(queued) || key !== offlineKey || !sameComposition(queued, record))) return false;
         if (reservation ? operation.attempt?.token !== reservation.token : operation.attempt) return false;
         pending.key = operation.key;
-        const source = parseDraft(localStorage.getItem(key));
         // Keep another window's draft when it diverged from this composition.
         localStorage.setItem(offlineKey, JSON.stringify(pending));
-        if (key !== offlineKey && sameComposition(source, record)) {
-          try { localStorage.removeItem(key); } catch {}
-        }
+        retireSourceDraft();
         return true;
       });
       if (!saved) return false;
@@ -417,7 +434,10 @@ window.OieRuntime.register('live', life => {
         return true;
       }
     } catch { return false; }
-    if (life.signal.aborted) return true;
+    if (life.signal.aborted) {
+      if (source) document.dispatchEvent(new Event('oie:resume-offline-sends'));
+      return true;
+    }
     clearSessionDraft(key);
     if (inMemory.get(key)?.key === record.key) inMemory.delete(key);
     selectRecoveredDraft('');
@@ -1273,6 +1293,16 @@ window.OieRuntime.register('live', life => {
   function recoveredKey(key, operation) {
     return key.replace('oie.offline-send.v1', 'oie.recovered-draft.v1') + ':' + operation;
   }
+  async function sendStagedRecording(source, metadata, submittedAt) {
+    const record = {...source.draft, attachments:[metadata], submittedAt, conversationKind};
+    if (await saveOfflineSend(record, undefined, source)) return;
+    const original = readStoredDraft(source.key);
+    const key = !hasDraft(original) || sameComposition(original, source.draft) || sameComposition(original, record)
+      ? source.key : recoveredKey(offlineKey, record.key);
+    inMemory.set(key, record);
+    try { localStorage.setItem(key, JSON.stringify(record)); } catch {}
+    errorToast(offlineCopy.storageFailed);
+  }
   async function updateOfflineDraft(key, raw, next, result) {
     const previous = parseDraft(raw);
     const changed = await withOfflineLock(key, () => {
@@ -1454,6 +1484,11 @@ window.OieRuntime.register('live', life => {
       localStorage.removeItem(oldKey);
     });
   }
+  let rescanOfflineSends = false;
+  life.on(document, 'oie:resume-offline-sends', () => {
+    if (resumingOfflineSends) rescanOfflineSends = true;
+    else void resumeOfflineSends();
+  });
   async function resumeOfflineSends() {
     if (mock || stopped || !canonicalID(offlineEngine) || resumingOfflineSends) return;
     resumingOfflineSends = true;
@@ -1468,7 +1503,13 @@ window.OieRuntime.register('live', life => {
         await resumeOfflineSend(key);
       }
     } catch { /* The saved operation can be recovered when storage is available again. */ }
-    finally { resumingOfflineSends = false; }
+    finally {
+      resumingOfflineSends = false;
+      if (rescanOfflineSends) {
+        rescanOfflineSends = false;
+        void resumeOfflineSends();
+      }
+    }
   }
   async function refresh() {
     if (stopped || mock) return;
@@ -1806,7 +1847,33 @@ window.OieRuntime.register('live', life => {
     if(sending&&(editSession||editPreparing)){if(editSession&&!editSession.submitted)void submitEdit(false);return;}
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
-      if (composer.hasAttribute('data-attachments-pending')||composer.hasAttribute('data-capturing-audio')||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
+      if (waitingForRecordingUpload||composer.hasAttribute('data-capturing-audio')||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
+      let voiceSubmittedAt, voiceSource, finishVoiceSendAfterNavigation;
+      if (composer.hasAttribute('data-attachments-pending')) {
+        if (!composer.hasAttribute('data-recording-upload') || editingSchedule || journal?.pending) return;
+        const upload = {};
+        composer.dispatchEvent(new CustomEvent('oie:wait-for-recording-upload', {detail: upload}));
+        if (!upload.ready) return;
+        voiceSource = {key: draftStorageKey(), draft: draftRecord()};
+        voiceSubmittedAt = new Date().toISOString();
+        waitingForRecordingUpload = true;
+        composer.setAttribute('data-waiting-recording-upload', '');
+        composerSend.setAttribute('aria-busy', 'true');
+        renderReply();
+        const metadata = await upload.ready;
+        waitingForRecordingUpload = false;
+        if (metadata) finishVoiceSendAfterNavigation = () => sendStagedRecording(voiceSource, metadata, voiceSubmittedAt);
+        if (life.signal.aborted) {
+          await finishVoiceSendAfterNavigation?.();
+          return;
+        }
+        composer.removeAttribute('data-waiting-recording-upload');
+        composerSend.removeAttribute('aria-busy');
+        renderReply();
+        if (!metadata || stopped || editingSchedule || editSession || editPreparing || journal?.pending ||
+            form.dataset.busy === 'true' || form.dataset.sendAllowed !== 'true' ||
+            composer.hasAttribute('data-attachments-pending') || !journal?.attachments?.some(file => file.id === metadata.id)) return;
+      }
       if (journal?.offline) {
         if (offlinePendingState(journal) === 'uncertain') retryOfflineSend();
         return;
@@ -1820,7 +1887,8 @@ window.OieRuntime.register('live', life => {
         renderReply();
         try{
           const reply = await fetchReplySource(requested, Boolean(reviewed));
-          if (life.signal.aborted || epoch !== replyEpoch) return;
+          if (life.signal.aborted) { await finishVoiceSendAfterNavigation?.(); return; }
+          if (epoch !== replyEpoch) return;
           const current = draftRecord();
           if (reviewed && reviewed !== scheduleReview(current)) {
             errorToast(scheduleReviewChanged);
@@ -1833,7 +1901,8 @@ window.OieRuntime.register('live', life => {
             return;
           }
         } catch (error) {
-          if (life.signal.aborted || epoch !== replyEpoch) return;
+          if (life.signal.aborted) { await finishVoiceSendAfterNavigation?.(); return; }
+          if (epoch !== replyEpoch) return;
           if (!reviewed && error instanceof ReplySourceUnavailable) {
             // The failed lookup was a GET. Keep the selected quote for replay.
             offline = true;
@@ -1851,12 +1920,12 @@ window.OieRuntime.register('live', life => {
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
       const record = {...draftRecord(true), text: value, mentions, scheduledAt,
         privateMapLinks: journal?.pending ? journal.privateMapLinks : privateMapLinks(),
-        submittedAt: journal?.submittedAt};
+        submittedAt: journal?.submittedAt || voiceSubmittedAt};
       if (offline) {
         form.dataset.busy = 'true';
         lockComposer(true);
         renderReply();
-        const saved = await saveOfflineSend(record);
+        const saved = await saveOfflineSend(record, undefined, voiceSource);
         if (!life.signal.aborted) {
           form.dataset.busy = 'false';
           lockComposer(Boolean(journal?.pending));
@@ -1871,7 +1940,11 @@ window.OieRuntime.register('live', life => {
         lockComposer(true);
         renderReply();
         reservation = await reserveNormalSend(record);
-        if (life.signal.aborted) return;
+        if (life.signal.aborted) {
+          if (reservation?.token) await settleNormalSend(reservation, true);
+          await finishVoiceSendAfterNavigation?.();
+          return;
+        }
         form.dataset.busy = 'false';
         if (reservation === false) {
           lockComposer(Boolean(journal?.pending));

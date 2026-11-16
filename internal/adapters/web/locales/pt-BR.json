@@ -52,7 +52,7 @@
   "AttachFile": "Arquivo",
   "AttachmentPreparing": "Preparando anexos…",
   "RecordAudio": "Gravar áudio",
-  "AudioPreparing": "Aguardando acesso ao microfone…",
+  "AudioPreparing": "Aguardando microfone…",
   "AudioRecording": "Gravando áudio…",
   "AudioRecordingFailed": "Não foi possível gravar o áudio. Verifique o acesso ao microfone.",
   "AudioRecordingFile": "Gravação de áudio",

@@ -1,5 +1,26 @@
 export const waveformDurationLimit = 5 * 60;
 
+export async function audioPeaks(blob, signal) {
+  const bytes = await blob.arrayBuffer();
+  signal.throwIfAborted();
+  // Offline decoding works before a playback gesture, including in WebKit.
+  const audio = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(bytes);
+  signal.throwIfAborted();
+  const peaks = new Float32Array(Math.min(1024, audio.length));
+  for (let channel = 0; channel < audio.numberOfChannels; channel++) {
+    const samples = audio.getChannelData(channel);
+    let start = 0;
+    for (let bin = 0; bin < peaks.length; bin++) {
+      const end = Math.floor((bin + 1) * samples.length / peaks.length);
+      for (let sample = start; sample < end; sample++) {
+        peaks[bin] = Math.max(peaks[bin], Math.abs(samples[sample]));
+      }
+      start = end;
+    }
+  }
+  return [peaks];
+}
+
 async function audioEvent(media, type, start, signal) {
   signal.throwIfAborted();
   const listeners = new AbortController();
@@ -28,7 +49,7 @@ export async function audioDuration(blob, signal) {
   try {
     await audioEvent(media, 'loadedmetadata', () => { media.src = url; }, signal);
     // MediaRecorder's WebM output can omit the duration until the end is read.
-    if (media.duration === Infinity && blob.type === 'audio/webm') {
+    if (!Number.isFinite(media.duration) && blob.type === 'audio/webm') {
       await audioEvent(media, 'seeked', () => { media.currentTime = Number.MAX_SAFE_INTEGER; }, signal);
     }
     return media.duration;
