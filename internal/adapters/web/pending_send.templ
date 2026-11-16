@@ -12,13 +12,18 @@ import (
 // A local submission is separate from authoritative timeline rows. It is retired
 // only after the accepted message ID appears, never by matching message text.
 templ pendingSendTemplate(v view) {
- <template data-pending-send-template>
+ <template data-pending-send-template data-storage-failed={v.Text.OfflineSendStorageFailed} data-returned={v.Text.OfflineSendReturned} data-cancel-failed={v.Text.OfflineSendCancelFailed}>
   <div class="oie-message oie-message-own" data-pending-send tabindex="-1">
    <div class="oie-message-content" data-pending-send-content>
     @chatbubble.ChatBubble(chatbubble.Config{Side:chatbubble.Sent,RootClass:"oie-bubble",MessageContent:pendingSendBody(v)})
    </div>
+   <div class="oie-offline-send-actions" data-offline-send-actions hidden>
+    <span>{v.Text.OfflineSendExplanation}</span>
+    <button type="button" data-cancel-offline-send>{v.Text.ScheduleCancelSend}</button>
+   </div>
     <span class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-pending-send-status>
      <span class="sr-only" data-pending-state="sending">{v.Text.SendPending}</span>
+     <span data-pending-state="waiting" hidden>{v.Text.SendWaitingForConnection}</span>
      <span data-pending-state="uncertain" hidden>{v.Text.SendUnconfirmed}</span>
      <span class="sr-only" data-pending-state="accepted" hidden>{v.Text.SendAccepted}</span>
     </span>
@@ -29,7 +34,10 @@ templ pendingSendTemplate(v view) {
 templ pendingSendBody(v view) {
  <div class="oie-message-body oie-message-body-compact">
   <div class="oie-message-menu-slot">
-   @dropdown.Dropdown(dropdown.Config{ID:"pending-send-menu",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"pending-send"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{{ID:"retry-pending-send",Label:v.Text.RetrySubmission,Icon:glyph(heroicons.Icon16SolidArrowPath),OnClick:"void 0"}}}}})
+   @dropdown.Dropdown(dropdown.Config{ID:"pending-send-menu",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"pending-send"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{
+    {ID:"retry-pending-send",Label:v.Text.RetrySubmission,Icon:glyph(heroicons.Icon16SolidArrowPath),OnClick:"void 0"},
+    {ID:"cancel-offline-send",Label:v.Text.ScheduleCancelSend,Icon:glyph(heroicons.Icon16SolidXMark),OnClick:"void 0"},
+   }}}})
   </div>
   <div class="oie-message-body-content">
   <div data-pending-send-reply hidden>
@@ -47,6 +55,12 @@ templ pendingSendBody(v view) {
   <div class="oie-message-stamp">
    <span class="oie-send-state-slot">
     <span data-pending-state="sending" role="img" aria-label={v.Text.SendPending} title={v.Text.SendPending}>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-send-spinner"})</span>
+    // Inline Heroicons 16 solid signal-slash so this state can render offline.
+    <span class="oie-offline-send-icon" data-pending-state="waiting" hidden role="img" aria-label={v.Text.SendWaitingForConnection} title={v.Text.SendWaitingForConnection}>
+     <svg class="oie-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l4.782 4.783a1 1 0 0 0 .935.935l4.783 4.782a.75.75 0 1 0 1.06-1.06L8.998 7.937a1 1 0 0 0-.935-.935L3.28 2.22ZM3.05 12.95a7.003 7.003 0 0 1-1.33-8.047L2.86 6.04a5.501 5.501 0 0 0 1.25 5.849.75.75 0 1 1-1.06 1.06ZM5.26 10.74a3.87 3.87 0 0 1-1.082-3.38L5.87 9.052c.112.226.262.439.45.627a.75.75 0 1 1-1.06 1.061ZM12.95 3.05a7.003 7.003 0 0 1 1.33 8.048l-1.14-1.139a5.501 5.501 0 0 0-1.25-5.848.75.75 0 0 1 1.06-1.06ZM10.74 5.26a3.87 3.87 0 0 1 1.082 3.38L10.13 6.948a2.372 2.372 0 0 0-.45-.627.75.75 0 0 1 1.06-1.061Z"></path>
+     </svg>
+    </span>
     <span data-pending-state="accepted" hidden role="img" aria-label={v.Text.Queued} title={v.Text.Queued}>@glyph(heroicons.Icon16SolidClock)</span>
     <span data-pending-state="uncertain" hidden>
      @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-send-retry"),button.WithAttrs(templ.Attributes{"data-pending-send-retry":"","aria-label":v.Text.SendUnconfirmed+" · "+v.Text.RetrySubmission,"title":v.Text.SendUnconfirmed+" · "+v.Text.RetrySubmission})){@glyph(heroicons.Icon16SolidArrowPath)}
