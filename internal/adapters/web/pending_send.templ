@@ -31,6 +31,7 @@ templ pendingSendBody(v view) {
   <div class="oie-message-menu-slot">
    @dropdown.Dropdown(dropdown.Config{ID:"pending-send-menu",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"pending-send"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:[]dropdown.Item{{ID:"retry-pending-send",Label:v.Text.RetrySubmission,Icon:glyph(heroicons.Icon16SolidArrowPath),OnClick:"void 0"}}}}})
   </div>
+  <div class="oie-message-body-content">
   <div data-pending-send-reply hidden>
    @card.Card(card.Config{Body:pendingSendReplyExcerpt(),Density:card.DensityCompact,RootClass:"oie-reply-card"})
   </div>
@@ -42,6 +43,7 @@ templ pendingSendBody(v view) {
    <span></span>
   </a>
  </template>
+  </div>
   <div class="oie-message-stamp">
    <span class="oie-send-state-slot">
     <span data-pending-state="sending" role="img" aria-label={v.Text.SendPending} title={v.Text.SendPending}>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-send-spinner"})</span>
