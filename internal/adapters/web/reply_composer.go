@@ -44,27 +44,34 @@ func validReplyExcerptSHA256(hash string) bool {
 	return err == nil
 }
 func (s *Server) retainedReplySource(ctx context.Context, conversation, account, target string) (*engineapi.Message, int) {
+	source, status, _ := s.readReplySource(ctx, conversation, account, target)
+	return source, status
+}
+
+// readReplySource also distinguishes transient engine failures from invalid scope.
+func (s *Server) readReplySource(ctx context.Context, conversation, account, target string) (*engineapi.Message, int, bool) {
 	limit := 1
 	response, err := s.client.GetMessageContextWithResponse(ctx, conversation, target, &engineapi.GetMessageContextParams{Limit: &limit})
 	if err != nil {
-		return nil, 503
+		return nil, 503, true
 	}
 	if response.JSON200 == nil {
 		status := response.StatusCode()
+		unavailable := transientEngineStatus(status)
 		if status != 400 && status != 404 {
 			status = 503
 		}
-		return nil, status
+		return nil, status, unavailable
 	}
 	if !validContextTarget(*response.JSON200, target, conversation, account) {
-		return nil, 503
+		return nil, 503, false
 	}
 	for _, m := range response.JSON200.Items {
 		if m.Id == response.JSON200.TargetId && m.ConversationId == conversation && m.AccountId == account {
-			return &m, 200
+			return &m, 200, false
 		}
 	}
-	return nil, 503
+	return nil, 503, false
 }
 func (s *Server) prepareReply(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -84,7 +91,11 @@ func (s *Server) prepareReply(w http.ResponseWriter, r *http.Request) {
 	}
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
-		fail(503, text.UnavailableBody, "unavailable")
+		code := "unavailable"
+		if err != nil || transientEngineStatus(engine.StatusCode()) {
+			code = "engine_unavailable"
+		}
+		fail(503, text.UnavailableBody, code)
 		return
 	}
 	if q.Get("engineId") != engine.JSON200.Id || engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true" {
@@ -93,16 +104,24 @@ func (s *Server) prepareReply(w http.ResponseWriter, r *http.Request) {
 	}
 	owner, err := s.client.GetConversationWithResponse(ctx, conversation)
 	if err != nil || owner.JSON200 == nil {
-		fail(503, text.ReplyUnavailable, "unavailable")
+		code := "unavailable"
+		if err != nil || transientEngineStatus(owner.StatusCode()) {
+			code = "engine_unavailable"
+		}
+		fail(503, text.ReplyUnavailable, code)
 		return
 	}
 	if owner.JSON200.AccountId != account {
 		fail(404, text.ReplyUnavailable, "not_found")
 		return
 	}
-	source, status := s.retainedReplySource(ctx, conversation, account, target)
+	source, status, unavailable := s.readReplySource(ctx, conversation, account, target)
 	if source == nil {
-		fail(status, text.ReplyUnavailable, "not_found")
+		code := "not_found"
+		if unavailable {
+			code = "engine_unavailable"
+		}
+		fail(status, text.ReplyUnavailable, code)
 		return
 	}
 	excerpt := quoteExcerpt(*source)
@@ -135,8 +154,8 @@ func matchingSend(m engineapi.Message, conversation, account, body, target strin
 func (s *Server) sendReceipt(ctx context.Context, key string) (*engineapi.Message, string) {
 	include := true
 	receipt, err := s.client.GetOperationWithResponse(ctx, key, &engineapi.GetOperationParams{IncludeAcceptedMessage: &include})
-	if err != nil {
-		return nil, "unknown"
+	if err != nil || transientEngineStatus(receipt.StatusCode()) {
+		return nil, "unavailable"
 	}
 	if receipt.StatusCode() == 404 {
 		return nil, "missing"

@@ -81,6 +81,24 @@ type mutationResult struct {
 	NextKey            string                    `json:"nextKey,omitempty"`
 }
 
+// Only a fresh immediate send can treat an upstream read failure as evidence
+// that it can still be cancelled locally. Explicit retries reconcile first.
+func canQueueOfflineSend(r *http.Request) bool {
+	return r.URL.Path == "/ui/messages/send" && r.Form.Get("offlineCapable") == "1" && r.Form.Get("scheduledAt") == ""
+}
+
+func transientEngineStatus(status int) bool {
+	switch status {
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
+
+func engineUnavailableBeforeSend(text copy) (int, mutationResult) {
+	return http.StatusServiceUnavailable, mutationResult{Message: text.SendWaitingForConnection, Code: "engine_unavailable"}
+}
+
 func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 
 	if !isMutationPath(r.URL.Path) {
@@ -115,6 +133,11 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
 		message := text.PendingAcceptance
+		if canQueueOfflineSend(r) && (err != nil || transientEngineStatus(engine.StatusCode())) {
+			status, result := engineUnavailableBeforeSend(text)
+			s.mutationResponse(w, r, status, result)
+			return
+		}
 		if r.URL.Path == "/ui/conversations/preferences" {
 			s.mutationResponse(w, r, 503, mutationResult{Message: text.ConversationPreferenceUncertain, Code: "unavailable", PreferencesPending: true})
 			return
@@ -301,6 +324,9 @@ func problemResult(text copy, status int, body []byte) mutationResult {
 		}
 	case "unavailable", "protocol_unavailable":
 		result.Message = text.UnavailableBody
+	case "engine_unavailable":
+		// This BFF code is reserved for an outage before any send attempt.
+		result.Code, result.Message = "unavailable", text.UnavailableBody
 	case "state_conflict":
 		result.Message = text.CancelConflict
 	}
@@ -352,6 +378,7 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		params.XOieExpectedConversationKind = &expectedKind
 	}
 	receipt, evidence := s.sendReceipt(ctx, key)
+	queueOffline := canQueueOfflineSend(r)
 	switch evidence {
 	case "found":
 		if matchingComposition(*receipt, conversation, account, payload) {
@@ -412,6 +439,11 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	case "conflict":
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
+	case "unavailable":
+		if queueOffline {
+			return engineUnavailableBeforeSend(text)
+		}
+		fallthrough
 	case "unknown":
 		return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 	}
@@ -419,6 +451,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		return 404, mutationResult{Message: text.PendingAcceptance, Code: "not_found"}
 	}
 	owner, err := s.client.GetConversationWithResponse(ctx, conversation)
+	if queueOffline && (err != nil || transientEngineStatus(owner.StatusCode())) {
+		return engineUnavailableBeforeSend(text)
+	}
 	if err != nil {
 		return 503, mutationResult{Message: text.PendingAcceptance}
 	}
@@ -436,6 +471,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	}
 	if owner.JSON200.Kind == "room" {
 		session, callErr := s.client.GetRoomSessionWithResponse(ctx, conversation)
+		if queueOffline && (callErr != nil || transientEngineStatus(session.StatusCode())) {
+			return engineUnavailableBeforeSend(text)
+		}
 		if callErr != nil {
 			return 503, mutationResult{Message: text.PendingAcceptance}
 		}
@@ -451,6 +489,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	}
 	if target != "" || owner.JSON200.Kind == "room" {
 		capabilities, callErr := s.client.GetAccountCapabilitiesWithResponse(ctx, account)
+		if queueOffline && (callErr != nil || transientEngineStatus(capabilities.StatusCode())) {
+			return engineUnavailableBeforeSend(text)
+		}
 		if callErr != nil || capabilities.JSON200 == nil || capabilities.JSON200.AccountId != account {
 			return 503, mutationResult{Message: text.PendingAcceptance}
 		}
@@ -460,8 +501,11 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 		}
 	}
 	if target != "" && replyRevision == "" {
-		source, status := s.retainedReplySource(ctx, conversation, account, target)
+		source, status, unavailable := s.readReplySource(ctx, conversation, account, target)
 		if source == nil {
+			if queueOffline && unavailable {
+				return engineUnavailableBeforeSend(text)
+			}
 			return status, mutationResult{Message: text.ReplyUnavailable, Code: "reply_unavailable", Rejected: status == 400 || status == 404}
 		}
 	}
