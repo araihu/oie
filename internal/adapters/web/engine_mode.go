@@ -16,19 +16,22 @@ import (
 )
 
 var (
-	ErrEngineModeChanged = errors.New("engine mode changed")
-	ErrEngineModeSave    = errors.New("save desktop engine mode")
-	errEngineUnavailable = errors.New("engine unavailable")
+	ErrEngineModeChanged        = errors.New("engine mode changed")
+	ErrEngineModeAuthentication = errors.New("engine access key required")
+	ErrEngineModeKeyHTTPS       = errors.New("engine key requires HTTPS")
+	ErrEngineModeSave           = errors.New("save desktop engine mode")
+	errEngineUnavailable        = errors.New("engine unavailable")
 )
 
 type engineMode struct {
 	selection, url string
-	save           func(context.Context, string) error
+	hasKey         bool
+	save           func(context.Context, string, string) error
 }
 
-func WithEngineMode(selection, url string, save func(context.Context, string) error) Option {
+func WithEngineMode(selection, url string, hasKey bool, save func(context.Context, string, string) error) Option {
 	return func(s *Server) {
-		s.engineMode = &engineMode{selection: selection, url: url, save: save}
+		s.engineMode = &engineMode{selection: selection, url: url, hasKey: hasKey, save: save}
 	}
 }
 
@@ -57,6 +60,9 @@ func (s *Server) CheckEngine(ctx context.Context) error {
 		return errEngineUnavailable
 	}
 	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode == http.StatusUnauthorized {
+		return ErrEngineModeAuthentication
+	}
 	mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type"))
 	if res.StatusCode != http.StatusOK || mediaType != "application/json" {
 		return errEngineUnavailable
@@ -97,11 +103,17 @@ func (s *Server) setEngineMode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, text.EngineModeChanged, http.StatusConflict)
 		return
 	}
-	var address string
+	var address, key string
 	switch bffapi.SetDesktopEngineModeFormdataBodyMode(r.PostForm.Get("mode")) {
 	case bffapi.SetDesktopEngineModeFormdataBodyModeLocal:
 	case bffapi.SetDesktopEngineModeFormdataBodyModeRemote:
-		address = strings.TrimSpace(r.PostForm.Get("url"))
+		rawAddress := r.PostForm.Get("url")
+		address = strings.TrimSpace(rawAddress)
+		key = strings.TrimSpace(r.PostForm.Get("apiKey"))
+		if len(key) > 512 || (key != "" && r.PostForm.Get("apiKeyAddress") != rawAddress) {
+			http.Error(w, text.EngineModeAuthentication, http.StatusBadRequest)
+			return
+		}
 		if len(address) > 2048 || !validEngineURL(address) {
 			http.Error(w, text.EngineModeInvalid, http.StatusBadRequest)
 			return
@@ -113,10 +125,14 @@ func (s *Server) setEngineMode(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	err := s.engineMode.save(ctx, address)
+	err := s.engineMode.save(ctx, address, key)
 	switch {
 	case errors.Is(err, ErrEngineModeChanged):
 		http.Error(w, text.EngineModeChanged, http.StatusConflict)
+	case errors.Is(err, ErrEngineModeKeyHTTPS):
+		http.Error(w, text.EngineModeKeyHTTPS, http.StatusBadRequest)
+	case errors.Is(err, ErrEngineModeAuthentication):
+		http.Error(w, text.EngineModeAuthentication, http.StatusUnauthorized)
 	case errors.Is(err, ErrEngineModeSave):
 		http.Error(w, text.EngineModeSaveFailed, http.StatusInternalServerError)
 	case err != nil:

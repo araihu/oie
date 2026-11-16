@@ -67,6 +67,7 @@ var presentationTimeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
+	createHostedKey   func(*http.Request, string) (string, error)
 	devBuildID        string
 	engineEditors     []engineapi.RequestEditorFn
 	client            *engineapi.ClientWithResponses
@@ -165,6 +166,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	HostedSignIn         bool
 	AccountAvatarBorders map[string]string
 	EngineMode           *engineMode
 	StarredContent       starredContent
@@ -251,8 +253,11 @@ type view struct {
 type copy struct {
 	ConversationRemoved string
 
-	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting string
-	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                      string
+	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                                                   string
+	AccessKeys, AccessKeyName, AccessKeyCreate, AccessKeySecret, AccessKeyCopy, AccessKeyCopied, AccessKeyFailed, AccessKeyInvalid string
+	EngineModeKey, EngineModeKeySaved, EngineModeAuthentication, EngineModeKeyHTTPS                                                string
+	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting                         string
+	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                                              string
 
 	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardNoRoomsFound, ForwardLoading, ForwardSending string
 	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                                                string
@@ -698,6 +703,11 @@ var previewsScript []byte
 //go:embed runtime.js
 var runtimeScript []byte
 
+//go:embed hosted-session.js
+var hostedSessionScript []byte
+
+var hostedRuntimeScript = append(append([]byte(nil), runtimeScript...), hostedSessionScript...)
+
 //go:embed viewport.js
 var viewportScript []byte
 
@@ -770,6 +780,10 @@ var roomArchiveScript []byte
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == DiagnosticsPath {
 		s.diagnostics.ServeHTTP(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/access-keys" {
+		s.hostedAccessKey(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/engine-mode" {
@@ -910,6 +924,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/diagnostics.js": {"text/javascript", diagnosticsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
+		if s.createHostedKey != nil && r.URL.Path == "/ui/runtime.js" {
+			asset.body = hostedRuntimeScript
+		}
 		w.Header().Set("Content-Type", asset.mime)
 		w.Header().Set("ETag", cachehttp.Digest(asset.body))
 		cachehttp.Revalidate.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(asset.body) })).ServeHTTP(w, r)
@@ -1019,6 +1036,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.EngineMode = s.engineMode
+	v.HostedSignIn = s.createHostedKey != nil
 	v.Diagnostics = s.diagnostics != nil
 	v.RemoteDiagnostics = v.Diagnostics && s.diagnostics.remote != nil
 	v.configureWorkspace(r)
@@ -1533,7 +1551,7 @@ func savePreference(w http.ResponseWriter, r *http.Request, key, value string) {
 	if r.URL.Query().Has(key) {
 		http.SetCookie(w, &http.Cookie{
 			Name: "oie_" + key, Value: value, Path: "/", MaxAge: 365 * 24 * 60 * 60,
-			HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
+			HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
 		})
 	}
 }

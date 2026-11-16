@@ -35,6 +35,8 @@ type Config struct {
 	DevReload                                    bool
 	PrivateAPI                                   bool
 	DataOnly                                     bool
+	Hosted                                       HostedConfig
+	ProbeListen                                  string
 	Diagnostics                                  *diagnostics.Logger
 	DiagnosticsKey                               string
 	engineOnly                                   bool
@@ -47,6 +49,8 @@ type Server struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	server       *http.Server
+	private      *http.Server
+	probe        *http.Server
 	presentation http.Handler
 	done         chan error
 	stopped      chan struct{}
@@ -74,6 +78,14 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 		cfg.Diagnostics.Record(diagnostics.ConfigFailed, 0, 0)
 		return nil, err
 	}
+	var hosted *hostedServer
+	if cfg.Role == "hosted" {
+		hosted, err = configureHosted(cfg)
+		if err != nil {
+			cfg.Diagnostics.Record(diagnostics.ConfigFailed, 0, 0)
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithCancel(parent)
 	listener, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -83,12 +95,19 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	}
 	var store *sqlite.Store
 	var engine *engineHost
+	var privateListener, probeListener net.Listener
 	defer func() {
 		if err == nil {
 			return
 		}
 		cancel()
 		_ = listener.Close()
+		if privateListener != nil {
+			_ = privateListener.Close()
+		}
+		if probeListener != nil {
+			_ = probeListener.Close()
+		}
 		if engine != nil {
 			engine.instance.close()
 		}
@@ -96,20 +115,31 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 			err = errors.Join(err, store.Close())
 		}
 	}()
+	if cfg.ProbeListen != "" {
+		probeListener, err = net.Listen("tcp", cfg.ProbeListen)
+		if err != nil {
+			cfg.Diagnostics.Record(diagnostics.ListenFailed, 0, 0)
+			return nil, fmt.Errorf("listen for internal probes: %w", err)
+		}
+	}
 	host := &Server{url: listenerURL(listener), ctx: ctx, cancel: cancel, done: make(chan error, 1), stopped: make(chan struct{})}
-	if cfg.PrivateAPI {
+	if cfg.PrivateAPI || (hosted != nil && !cfg.DataOnly) {
 		host.capability = rand.Text()
 	}
 	apiMux := http.NewServeMux()
 	engineURL := cfg.EngineURL
 	var options []web.Option
+	var hostedDiagnostics http.Handler
 	if cfg.Diagnostics != nil {
 		addr := listener.Addr().(*net.TCPAddr)
 		access := web.DiagnosticsKeyRequired
 		if cfg.Role == "local" && addr.IP.IsLoopback() {
 			access = web.DiagnosticsLoopback
 		}
-		if cfg.DataOnly {
+		if hosted != nil {
+			hostedDiagnostics = web.DiagnosticsHandler(cfg.Diagnostics, "", web.DiagnosticsAuthenticated)
+			options = append(options, web.WithDiagnostics(cfg.Diagnostics, "", web.DiagnosticsAuthenticated))
+		} else if cfg.DataOnly {
 			apiMux.Handle(web.DiagnosticsPath, web.DiagnosticsHandler(cfg.Diagnostics, cfg.DiagnosticsKey, access))
 		} else {
 			options = append(options, web.WithDiagnostics(cfg.Diagnostics, cfg.DiagnosticsKey, access))
@@ -139,31 +169,76 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 			_, _ = w.Write(api.OpenAPI)
 		})
 		engineURL = host.url
-		if cfg.PrivateAPI {
+		if hosted != nil && !cfg.DataOnly {
+			privateListener, err = net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				return nil, err
+			}
+			engineURL = listenerURL(privateListener)
+		}
+		if host.capability != "" {
 			options = append(options, web.WithEngineRequestEditor(host.editEngineRequest))
 		}
 	}
 	host.presentation = host.track(http.NotFoundHandler())
+	var browser http.Handler
 	if !cfg.DataOnly && !cfg.engineOnly {
+		if hosted != nil {
+			options = append(options, web.WithHostedSignIn(hosted.auth))
+		}
 		ui, err := web.New(engineURL, options...)
 		if err != nil {
 			cfg.Diagnostics.Record(diagnostics.ConfigFailed, 0, 0)
 			return nil, err
 		}
-		presentation := presentationHandler(ui)
-		host.presentation = host.track(presentation)
-		apiMux.Handle("/", presentation)
+		if hosted != nil {
+			browser = hosted.auth.Browser(ui, ui.SignIn)
+		} else {
+			presentation := presentationHandler(ui)
+			host.presentation = host.track(presentation)
+			apiMux.Handle("/", presentation)
+		}
 	}
 	networkHandler := http.Handler(apiMux)
-	if cfg.PrivateAPI {
+	if hosted != nil {
+		networkHandler = hosted.handler(apiMux, browser, hostedDiagnostics)
+		if privateListener != nil {
+			host.private = host.httpServer(host.guard(apiMux), cfg.Diagnostics)
+		}
+	} else if cfg.PrivateAPI {
 		networkHandler = host.guard(networkHandler)
 	}
-	host.server = &http.Server{ErrorLog: cfg.Diagnostics.StandardLogger(), Handler: host.track(networkHandler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
-	served := make(chan error, 1)
-	go func() { served <- host.server.Serve(listener) }()
+	host.server = host.httpServer(networkHandler, cfg.Diagnostics)
+	if hosted != nil {
+		host.url = hosted.origin.String()
+		host.server.TLSConfig = hosted.tls
+	}
+	served := make(chan error, 3)
+	if probeListener != nil {
+		host.probe = host.httpServer(probeHandler(engine), cfg.Diagnostics)
+		host.probe.Addr = probeListener.Addr().String()
+		go func() { served <- host.probe.Serve(probeListener) }()
+	}
+	if host.private != nil {
+		go func() { served <- host.private.Serve(privateListener) }()
+	}
+	go func() {
+		if hosted != nil && hosted.tls != nil {
+			served <- host.server.ServeTLS(listener, "", "")
+		} else {
+			served <- host.server.Serve(listener)
+		}
+	}()
 	cfg.Diagnostics.Record(diagnostics.Ready, 0, 0)
 	go host.supervise(served, engine, cfg.Diagnostics)
 	return host, nil
+}
+
+func (s *Server) httpServer(handler http.Handler, diag *diagnostics.Logger) *http.Server {
+	return &http.Server{
+		ErrorLog: diag.StandardLogger(), Handler: s.track(handler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return s.ctx },
+	}
 }
 
 func presentationHandler(ui http.Handler) http.Handler {
@@ -198,6 +273,15 @@ func validate(cfg Config) error {
 	}
 	if cfg.Role != "local" && cfg.Role != "hosted" && cfg.Role != "bff" {
 		return errors.New("role must be local, hosted, or bff; sync service is not implemented yet")
+	}
+	if cfg.ProbeListen != "" && (cfg.Role == "bff" || cfg.PrivateAPI) {
+		return errors.New("--probe-listen requires a local or hosted network engine")
+	}
+	if cfg.Role == "hosted" && cfg.PrivateAPI {
+		return errors.New("hosted mode uses its own authenticated API")
+	}
+	if cfg.Role != "hosted" && cfg.Hosted != (HostedConfig{}) {
+		return errors.New("hosted TLS and OIDC options require --role hosted")
 	}
 	if cfg.DevReload && cfg.Role != "bff" {
 		return errors.New("dev-reload is only supported by the bff role")
@@ -294,10 +378,10 @@ func (s *Server) supervise(served <-chan error, engine *engineHost, diag *diagno
 	}
 	s.beginClose()
 	shutdownCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	shutdownErr := s.server.Shutdown(shutdownCtx)
+	shutdownErr := shutdownHTTP(shutdownCtx, s.server, s.private, s.probe)
 	stop()
 	if shutdownErr != nil {
-		result = errors.Join(result, fmt.Errorf("shutdown: %w", shutdownErr), s.server.Close())
+		result = errors.Join(result, fmt.Errorf("shutdown: %w", shutdownErr))
 	}
 	s.requests.Wait()
 	if engine != nil {
@@ -315,6 +399,29 @@ func (s *Server) supervise(served <-chan error, engine *engineHost, diag *diagno
 	s.done <- result
 	close(s.done)
 	close(s.stopped)
+}
+
+func shutdownHTTP(ctx context.Context, servers ...*http.Server) error {
+	results := make(chan error, len(servers))
+	for _, server := range servers {
+		if server == nil {
+			results <- nil
+			continue
+		}
+		// Start draining each listener before another can consume the deadline.
+		go func() {
+			err := server.Shutdown(ctx)
+			if err != nil {
+				err = errors.Join(err, server.Close())
+			}
+			results <- err
+		}()
+	}
+	var result error
+	for range servers {
+		result = errors.Join(result, <-results)
+	}
+	return result
 }
 
 // URL is the owned HTTP listener's URL. In PrivateAPI mode it is an internal

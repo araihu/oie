@@ -20,7 +20,7 @@ import (
 
 func TestResetDataThroughBFF(t *testing.T) {
 	dir := t.TempDir()
-	engine := testServer(t, Config{Role: "hosted", Listen: "127.0.0.1:0", DataDir: dir})
+	engine := testServer(t, Config{Role: "local", Listen: "127.0.0.1:0", DataDir: dir})
 	bff := testServer(t, Config{Role: "bff", Listen: "127.0.0.1:0", EngineURL: engine.URL()})
 	presentation := httptest.NewServer(bff.Handler())
 	defer presentation.Close()

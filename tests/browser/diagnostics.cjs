@@ -1,57 +1,33 @@
 // Exercise the real viewer, access check and exports on an isolated Oiê.
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const http = require('node:http');
-const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
-const { once } = require('node:events');
 const { chromium } = require('playwright');
+const { startOie } = require('./fixtures/oie-server.cjs');
+const { startHostedOie } = require('./fixtures/hosted-oie.cjs');
 
+const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
 const logPath = '/ui/diagnostics/log';
 const key = 'test-owner-key-sentinel';
-const widths = { local: 390, hosted: 1440 };
-
-async function ready(base) {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    try {
-      if ((await fetch(base + '/api/v1/health')).ok) return;
-    } catch {}
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-  throw new Error('Oiê did not become ready');
-}
 
 async function run(browser, mode) {
-  const data = await fs.mkdtemp(path.join(os.tmpdir(), 'oie-diagnostics-'));
-  const socket = http.createServer();
-  socket.listen(0, '127.0.0.1');
-  await once(socket, 'listening');
-  const listen = '127.0.0.1:' + socket.address().port;
-  await new Promise(resolve => socket.close(resolve));
-  const base = 'http://' + listen;
-  const child = spawn(process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie'),
-    ['--role', mode, '--listen', listen, '--data-dir', data], {
-      env: { ...process.env, OIE_DIAGNOSTICS_KEY: mode === 'hosted' ? key : '' },
-      stdio: ['ignore', 'ignore', 'pipe'],
-    });
-  const childExit = once(child, 'exit');
-  let stderr = '';
-  child.stderr.setEncoding('utf8').on('data', value => { stderr += value; });
+  const hosted = mode === 'hosted';
+  const server = hosted ? await startHostedOie(binary) : await startOie(binary, ['--role', 'local'], '/api/v1/health');
+  const {url: base, dir: data} = server;
   const context = await browser.newContext({
-    viewport: { width: widths[mode], height: 900 },
+    viewport: { width: hosted ? 1440 : 390, height: 900 },
     permissions: ['clipboard-read', 'clipboard-write'],
     reducedMotion: 'reduce',
+    ignoreHTTPSErrors: hosted,
   });
   try {
-    await ready(base);
     const log = path.join(data, 'diagnostics', 'oie-diagnostics.jsonl');
     const fixture = JSON.parse((await fs.readFile(log, 'utf8')).trim().split('\n').at(-1));
     const history = Array.from({ length: 300 }, (_, index) => JSON.stringify({
       ...fixture, event: 'upstream_http_error', component: 'presentation', level: 'warn',
       duration_ms: index + 1, http_status: 503,
     }));
-    history.push('{"message":"browser-private-message-sentinel","token":"browser-private-token-sentinel"}');
+    history.push(JSON.stringify({message: 'browser-private-message-sentinel', token: 'browser-private-token-sentinel', accessKey: key}));
     await fs.appendFile(log, history.join('\n') + '\n');
     const page = await context.newPage();
     const errors = [];
@@ -61,7 +37,13 @@ async function run(browser, mode) {
       if ([logPath, '/ui/diagnostics.js'].includes(new URL(request.url()).pathname)) requests++;
     });
     const pt = mode === 'local';
-    await page.goto(base + '/?lang=' + (pt ? 'pt-BR' : 'en'));
+    if (hosted) {
+      const denied = await context.request.get(base + logPath, {headers: {'X-Oie-Diagnostics': '1'}});
+      assert.equal(denied.status(), 401);
+      await server.signIn(page, '/?lang=en');
+    } else {
+      await page.goto(base + '/?lang=pt-BR');
+    }
     assert.equal(requests, 0, 'initial workspace must not read the diagnostics file');
     if (pt) await page.getByRole('button', { name: 'Abrir navegação', exact: true }).click();
     await page.locator('[data-navigation-settings]:visible').click();
@@ -81,20 +63,7 @@ async function run(browser, mode) {
     const download = viewer.getByRole('menuitem', { name: pt ? 'Baixar' : 'Download', exact: true });
     const refresh = viewer.getByRole('button', { name: pt ? 'Atualizar' : 'Refresh', exact: true });
     await viewer.waitFor();
-    if (!pt) {
-      const input = viewer.getByLabel('Diagnostics access key', { exact: true });
-      await input.waitFor();
-      await input.fill('wrong-owner-key-sentinel');
-      await Promise.all([
-        page.waitForResponse(response => response.url().includes(logPath) && response.status() === 403),
-        input.press('Enter'),
-      ]);
-      assert.equal(await records.textContent(), '');
-      assert.equal(await copy.isDisabled(), true);
-      assert.equal(await more.isDisabled(), true);
-      await input.fill(key);
-      await input.press('Enter');
-    }
+    if (hosted) assert.equal(await viewer.getByLabel('Diagnostics access key', {exact: true}).isVisible(), false);
     await readyEntry.waitFor();
     const firstReady = Date.now() - started;
     const loadTiming = await page.evaluate(path => {
@@ -202,12 +171,10 @@ async function run(browser, mode) {
     await viewer.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('[data-diagnostics-records]').textContent(), '');
     assert.deepEqual(errors, []);
-    assert(!stderr.includes(key));
+    assert(!server.stderr().includes(key));
   } finally {
     await context.close();
-    child.kill('SIGTERM');
-    await childExit;
-    await fs.rm(data, { recursive: true, force: true });
+    await server.stop();
   }
 }
 

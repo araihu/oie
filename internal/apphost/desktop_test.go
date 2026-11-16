@@ -18,17 +18,17 @@ import (
 )
 
 func TestDesktopEngineSelection(t *testing.T) {
-	remote := testServer(t, Config{Role: "hosted", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})
+	remote := testServer(t, Config{Role: "local", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})
 	remoteID := engineIdentity(t, remote)
 	dir := t.TempDir()
 	var saved atomic.Value
 	saved.Store("")
 	var saveFailure atomic.Bool
-	desktop, err := StartDesktop(t.Context(), dir, "", "", nil, func(address string) error {
+	desktop, err := StartDesktop(t.Context(), dir, "", DesktopEngine{}, "", nil, func(selection DesktopEngine) error {
 		if saveFailure.Load() {
 			return errors.New("test save failure")
 		}
-		saved.Store(address)
+		saved.Store(selection.URL)
 		return nil
 	})
 	if err != nil {
@@ -131,7 +131,7 @@ func TestDesktopEngineSelection(t *testing.T) {
 }
 
 func TestDesktopRestartsStoppedLocalEngine(t *testing.T) {
-	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", "", nil, func(string) error {
+	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", DesktopEngine{}, "", nil, func(DesktopEngine) error {
 		t.Error("automatic restart rewrote the selected engine")
 		return nil
 	})
@@ -171,7 +171,7 @@ func TestDesktopRestartsStoppedLocalEngine(t *testing.T) {
 			time.Sleep(20 * time.Millisecond)
 		}
 		current := desktop.active.Load()
-		if current == previous || current.engine == nil || current.selection != previous.selection {
+		if current == previous || current.engine == nil || current.token != previous.token {
 			t.Fatal("desktop did not restart the selected local engine")
 		}
 		if got := workspaceIdentity(); got != id {
@@ -192,8 +192,8 @@ func TestDesktopRestartsStoppedLocalEngine(t *testing.T) {
 
 func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 	dir := t.TempDir()
-	remote := testServer(t, Config{Role: "hosted", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})
-	desktop, err := StartDesktop(t.Context(), dir, "", remote.URL(), nil, func(string) error { return nil })
+	remote := testServer(t, Config{Role: "local", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})
+	desktop, err := StartDesktop(t.Context(), dir, "", DesktopEngine{URL: remote.URL()}, "", nil, func(DesktopEngine) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,5 +204,52 @@ func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 	}()
 	if _, err := os.Stat(filepath.Join(dir, "oie.sqlite")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("remote startup opened local data: %v", err)
+	}
+}
+
+func TestDesktopKeyStaysAtSelectedOrigin(t *testing.T) {
+	const token = "example-desktop-key"
+	for _, tc := range []struct {
+		selected, target string
+		sameOrigin       bool
+	}{
+		{"https://oie.example.test", "https://OIE.example.test:443", true},
+		{"https://oie.example.test", "https://oie.example.test:8443", false},
+		{"https://oie.example.test", "http://oie.example.test", false},
+		{"https://oie.example.test", "https://remote.example.test", false},
+		{"https://σ.example.test", "https://σ.example.test:443", true},
+		{"https://σ.example.test", "https://ς.example.test", false},
+		{"https://[fe80::1%25eth0]", "https://[fe80::1%25ETH0]", false},
+	} {
+		t.Run(tc.selected+" to "+tc.target, func(t *testing.T) {
+			first, second := desktopKeyOrigin(tc.selected), desktopKeyOrigin(tc.target)
+			if first == "" || (first == second) != tc.sameOrigin {
+				t.Fatal("incorrect origin comparison for reusing the saved key")
+			}
+			edit, err := desktopKeyEditor(DesktopEngine{URL: tc.selected, APIKey: token})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodGet, tc.target+"/api/v1/engine", nil)
+			if err := edit(t.Context(), r); err != nil {
+				t.Fatal(err)
+			}
+			header := r.Header.Get("Authorization")
+			if tc.sameOrigin && header != "Bearer "+token || !tc.sameOrigin && header != "" {
+				t.Fatal("incorrect authorization for the outbound request")
+			}
+		})
+	}
+	edit, err := desktopKeyEditor(DesktopEngine{URL: "https://oie.example.test", APIKey: token})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodGet, "https://oie.example.test/api/v1/engine", nil)
+	r.Host = "other.example.test"
+	if err := edit(t.Context(), r); err != nil || r.Header.Get("Authorization") != "" {
+		t.Fatal("sent a key with another HTTP authority")
+	}
+	if _, err := desktopKeyEditor(DesktopEngine{URL: "http://oie.example.test", APIKey: token}); err == nil {
+		t.Fatal("accepted an access key over HTTP")
 	}
 }

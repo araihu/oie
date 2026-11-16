@@ -122,6 +122,48 @@ paths:
           description: The requested page or conversation is unavailable, or the notification belongs to another engine.
         '503':
           description: The requested presentation data is unavailable.
+  /ui/access-keys:
+    post:
+      tags: [Settings]
+      operationId: createHostedAccessKey
+      summary: Create a full-access key for an Oiê client
+      description: Requires the hosted owner session and the settings form CSRF token. The uncached response contains the secret once.
+      requestBody:
+        required: true
+        description: A label that identifies where the key will be used.
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              name: Laptop
+              csrf: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI
+            schema:
+              type: object
+              required: [name, csrf]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 100, example: Laptop}
+                csrf: {type: string, minLength: 1, example: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI}
+      responses:
+        '201':
+          description: Full-access API key created with a 90-day lifetime.
+          content:
+            application/json:
+              example:
+                key: oie_example_access_key
+              schema:
+                type: object
+                required: [key]
+                properties:
+                  key: {type: string, format: password, example: oie_example_access_key}
+        '400':
+          description: The key label is invalid.
+        '401':
+          description: Hosted owner sign-in is required.
+        '403':
+          description: The settings form could not be verified.
+        '404':
+          description: Hosted key creation is unavailable.
+        '503':
+          description: The key could not be created.
   /ui/engine-mode:
     post:
       tags: [Settings]
@@ -152,6 +194,17 @@ paths:
                   description: Required in remote mode. Accepts HTTP or HTTPS base URLs.
                   maxLength: 2048
                   example: http://127.0.0.1:18084
+                apiKey:
+                  type: string
+                  format: password
+                  description: Optional hosted engine key. Only accepted for an HTTPS origin and with its matching apiKeyAddress. Omit to use the key already saved for this origin.
+                  maxLength: 512
+                  example: oie_example_access_key
+                apiKeyAddress:
+                  type: string
+                  description: Exact engine address at the time the key was entered.
+                  maxLength: 2048
+                  example: https://oie.example.com
                 selection:
                   type: string
                   description: Current selection token from the settings form.
@@ -166,6 +219,8 @@ paths:
         '204': {description: The selected engine is active.}
         '303': {description: The selected engine is active. Redirects a native form submission to the workspace.}
         '400': {description: Invalid settings or engine address.}
+        '401':
+          description: The remote engine requires a valid access key.
         '403': {description: CSRF verification failed.}
         '404': {description: Engine selection is unavailable on this host.}
         '409': {description: The engine selection has changed.}

@@ -12,13 +12,13 @@ volume to retain accounts, SQLite history, and media across container updates.
 docker run -d --name oie \
   --publish 127.0.0.1:8080:8080 \
   --volume oie-data:/data \
-  ghcr.io/araihu/oie:v0.0.1-rc.26
+  ghcr.io/araihu/oie:v0.0.1-rc.27
 ```
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
-account. Keep the port on localhost or use an authenticated proxy for remote
-access, since Oiê has no built-in login. Video playback depends on the
-client browser’s supported formats.
+account. This container command is for loopback access. See
+[hosting with OIDC and API keys](hosted-auth.md) for internet-facing
+configuration. Video playback depends on the client browser’s supported formats.
 
 To update, pull the image and recreate the container with the same `oie-data`
 volume. If the package is private, authenticate to `ghcr.io` with access to
@@ -28,7 +28,7 @@ CI builds and tests both architectures on pull requests and pushes to
 `main`. When both container tests pass on `main`, CI publishes
 `sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
-`v0.0.1-rc.26` publish a versioned image after the corresponding source is available on GitHub
+`v0.0.1-rc.27` publish a versioned image after the corresponding source is available on GitHub
 Releases. The image carries its source URL and checksum in `/licenses/SOURCE.txt`. `:latest` follows the highest
 canonical application version by SemVer, including prereleases. Use the
 published digest from the workflow summary to pin an exact image.
@@ -37,11 +37,12 @@ published digest from the workflow summary to pin an exact image.
 
 The [Oiê chart](../charts/oie) runs the engine and browser interface together.
 Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. Install
-the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.5):
+the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.6)
+from GHCR:
 
 ```sh
 helm upgrade --install oie \
-  https://github.com/araihu/oie/releases/download/helm-v0.2.5/oie-0.2.5.tgz \
+  oci://ghcr.io/araihu/charts/oie --version 0.2.6 \
   --namespace oie --create-namespace --wait --timeout 10m
 kubectl --namespace oie port-forward service/oie 8080:80
 ```
@@ -53,23 +54,28 @@ have a writable claim in the namespace, set `persistence.existingClaim` to
 its name. Use one Oiê instance per claim.
 
 The chart version and the application image version follow separate release
-cycles. Chart `0.2.5` uses image `v0.0.1-rc.26` by default. To update, use
-the URL for a newer chart archive or set `image.tag` to a published version.
+cycles. Chart `0.2.6` uses image `v0.0.1-rc.27` by default. To update, select
+a newer chart version with `--version` or set `image.tag` to a compatible image.
 An update that changes the pod briefly
 interrupts access while Kubernetes replaces it. Uninstalling the release
 retains its claim. Keep the claim and namespace to reuse the data.
 
-Oiê has no built-in login. The chart defaults to an internal Service. For
-remote access, protect both the browser interface and API with an authenticated
-HTTPS proxy. The chart supports [Ingress or Gateway API](../charts/oie/README.md#remote-access).
+For remote access, enable `hosted.enabled` to require OIDC in the browser and
+API keys for engine clients. Helm sets the OIDC configuration in the pod environment
+and mounts the client secret from an existing Kubernetes Secret. See
+[Ingress and Gateway API configuration](../charts/oie/README.md#remote-access).
 Starting with chart `0.2.2`, you can set `httpRoute.timeouts.request` to
 `"0s"` to keep live chat events streaming through a Gateway that applies a
 request timeout by default. See the [chart configuration](../charts/oie/README.md)
 for timeout, image and storage settings.
 
-To enable the hosted [Diagnostics viewer](diagnostics.md), set
-`diagnostics.existingSecret` to a Secret in the release namespace that contains
-the access key. The chart reads the `key` entry by default.
+With hosted authentication enabled, the owner can access the
+[Diagnostics viewer](diagnostics.md) after signing in. To use a separate
+Diagnostics key with an external authentication proxy, set
+`diagnostics.existingSecret` to a Secret containing the `key` entry.
+
+The kubelet probes the pod directly on port 8081. See
+[internal probes](hosted-auth.md#configure-internal-probes).
 
 ## Desktop installation on macOS and Linux
 
@@ -78,11 +84,11 @@ one application. In **Settings → General → Engine**, keep **Local** to run
 the engine on this device or choose **Remote** to use a hosted engine.
 Add an existing XMPP account after launching.
 
-The current release candidate is **v0.0.1-rc.26**. See the
-[release notes](releases/v0.0.1-rc.26.md) for changes since rc.25.
+The current release candidate is **v0.0.1-rc.27**. See the
+[release notes](releases/v0.0.1-rc.27.md) for changes since rc.26.
 
 Download packages and the installer from
-[v0.0.1-rc.26 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.26).
+[v0.0.1-rc.27 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.27).
 Source installation from the same immutable tag remains available.
 
 ## Install a release package
@@ -105,8 +111,8 @@ Save the release installer, then run it as your current user:
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output oie-install.sh \
-  https://github.com/araihu/oie/releases/download/v0.0.1-rc.26/install.sh &&
-sh ./oie-install.sh --version v0.0.1-rc.26
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.27/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.27
 ```
 
 You can inspect `oie-install.sh` before running the second command. Do not use
@@ -126,7 +132,7 @@ prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
 For example:
 
 ```sh
-sh ./oie-install.sh --version v0.0.1-rc.26 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --version v0.0.1-rc.27 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
@@ -134,14 +140,14 @@ The release assets are:
 
 | Asset | Contents |
 | --- | --- |
-| `oie_v0.0.1-rc.26_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
-| `oie_v0.0.1-rc.26_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
-| `oie_v0.0.1-rc.26_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
+| `oie_v0.0.1-rc.27_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.27_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.27_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
 | `install.sh` | Per-user installer for both targets |
 | `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
 | `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
 
-Both archives are built from the immutable `v0.0.1-rc.26` tag. The receipt
+Both archives are built from the immutable `v0.0.1-rc.27` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
 
