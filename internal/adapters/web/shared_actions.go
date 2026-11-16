@@ -37,7 +37,7 @@ func sharedActionFile(item engineapi.SharedContentItem) string {
 }
 
 func sharedActionDownload(v view, item engineapi.SharedContentItem) string {
-	if item.Kind == "video" || item.Kind == "audio" || item.Kind == "document" && documentFormat(item) != "unsupported" {
+	if item.Kind == "video" || item.Kind == "document" && documentFormat(item) != "unsupported" {
 		return documentSource(v, item)
 	}
 	return ""
