@@ -327,7 +327,7 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-message-content{display:flex;align-items:flex-end;gap:8px}
 .oie-message-content>.oie-bubble{min-width:0;flex:1}
 /* Preview content lives in public Card slots; all image URLs are local. */
-.oie-message-previews{max-width:340px;display:grid;gap:8px;margin-top:6px}
+.oie-message-previews{max-width:340px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:6px}
 .oie-message-previews:empty{display:none}
 
 .oie-message-own .oie-message-previews{margin-left:auto}
