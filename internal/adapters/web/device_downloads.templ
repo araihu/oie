@@ -2,13 +2,14 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/modal"
 	"github.com/araihu/goshtoso/expressions"
 )
 
 templ downloadRetentionSettings(v view) {
 	<section class="oie-settings-section oie-device-downloads" aria-labelledby="device-downloads-title" data-download-retention={downloadRetentionPath} data-engine={v.EngineID} data-days-label={v.Text.DownloadRetentionDays} data-saved={v.Text.DownloadRetentionSaved} data-cleared={v.Text.DownloadsRemoved} data-failed={v.Text.DownloadRetentionUnavailable}>
-		<h2 id="device-downloads-title">{v.Text.DownloadRetentionTitle}</h2>
+		<h2 id="device-downloads-title">@glyph(heroicons.Icon16SolidDocumentText)<span>{v.Text.DownloadRetentionTitle}</span></h2>
 		<div data-download-preferences>
 			<fieldset disabled>
 				<label for="device-download-days">{v.Text.DownloadRetentionPeriod}</label>
@@ -18,8 +19,10 @@ templ downloadRetentionSettings(v view) {
 					<option value="30">{downloadDaysLabel(v.Text.DownloadRetentionDays, "30")}</option>
 					<option value="90">{downloadDaysLabel(v.Text.DownloadRetentionDays, "90")}</option>
 				</select>
-				@button.Button(button.WithType("button"), button.WithSize(button.SizeSmall), button.WithAttrs(templ.Attributes{"data-save-download-retention":""})){ {v.Text.RetentionSave} }
-				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-remove-device-downloads": "", "aria-haspopup": "dialog"})){ {v.Text.RemoveDownloads} }
+				@button.Button(button.WithType("button"), button.WithTone(button.ToneWarning), button.WithAttrs(templ.Attributes{"data-remove-device-downloads": "", "aria-haspopup": "dialog"})) {
+					@glyph(heroicons.Icon16SolidTrash)
+					<span>{ v.Text.RemoveDownloads }</span>
+				}
 			</fieldset>
 		</div>
 		<p role="status" class="oie-download-feedback"></p>

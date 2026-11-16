@@ -119,3 +119,24 @@ sources:
     license: MIT
     licensePath: LICENSE
     licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+  - id: heroicons-key
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/key.svg
+    path: 16/solid/key.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+  - id: heroicons-fire
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/fire.svg
+    path: 16/solid/fire.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+  - id: heroicons-arrow-left-start-on-rectangle
+    kind: file
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-left-start-on-rectangle.svg
+    path: 16/solid/arrow-left-start-on-rectangle.svg
+    license: MIT
+    licensePath: LICENSE
+    licenseUrl: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE

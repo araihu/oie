@@ -213,6 +213,161 @@ window.OieRuntime.register('audio', life => {
   });
 });
 
+window.OieRuntime.register('engine-retention', life => {
+  const states = new WeakMap();
+  const snapshot = form => ({
+    revision: form.elements.revision.value,
+    room: Number(form.dataset.roomDays),
+    direct: Number(form.dataset.directDays),
+  });
+  const stateFor = form => {
+    if (!states.has(form)) {
+      const saved = snapshot(form);
+      states.set(form, {saved, observed: {...saved}, queued: new Map(), pending: null, uncertain: false, failed: false});
+    }
+    return states.get(form);
+  };
+  const statusFor = form => form.querySelector('[data-retention-status]');
+  const modeFor = choice => choice.querySelector('[name$="-mode"]');
+  const retryFor = form => form.querySelector('[data-retention-retry]');
+
+  function choiceValue(choice) {
+    if (modeFor(choice).value === 'unlimited') return 0;
+    const input = choice.querySelector('input[type=number]');
+    const days = input.valueAsNumber;
+    return input.validity.valid && Number.isInteger(days) && days > 0 ? days : null;
+  }
+
+  function syncChoice(choice, state) {
+    const key = choice.dataset.retentionChoice;
+    const days = state.saved[key];
+    if (state.uncertain || state.queued.has(key) || state.pending?.has(key) ||
+        choiceValue(choice) !== state.observed[key] || state.observed[key] === days) return;
+    const mode = modeFor(choice);
+    if (days > 0) choice.querySelector('input[type=number]').value = days;
+    mode.value = days === 0 ? 'unlimited' : 'finite';
+    mode.dispatchEvent(new Event('change', {bubbles: true}));
+    state.observed[key] = days;
+  }
+
+  function acceptSnapshot(form, state, saved) {
+    state.saved = saved;
+    for (const choice of form.querySelectorAll('[data-retention-choice]')) {
+      if (!choice.contains(document.activeElement)) syncChoice(choice, state);
+    }
+  }
+
+  async function save(form, state) {
+    if (state.pending || state.failed || state.queued.size === 0 || !form.isConnected || life.signal.aborted) return;
+    const changes = [...state.queued].filter(([key, days]) => state.uncertain || days !== state.saved[key]);
+    state.queued.clear();
+    if (changes.length === 0) {
+      finish(form, '');
+      return;
+    }
+    const desired = {...state.saved, ...Object.fromEntries(changes)};
+    const body = new URLSearchParams({
+      csrf: form.elements.csrf.value, engineId: form.elements.engineId.value, revision: desired.revision,
+      'room-mode': desired.room === 0 ? 'unlimited' : 'finite', 'room-days': desired.room,
+      'direct-mode': desired.direct === 0 ? 'unlimited' : 'finite', 'direct-days': desired.direct,
+    });
+    const status = statusFor(form);
+    const retry = retryFor(form);
+    state.pending = new Set(changes.map(([key]) => key));
+    status.textContent = form.dataset.saving;
+    retry.setAttribute('aria-disabled', 'true');
+    let error = form.dataset.unavailable;
+    let saved;
+    try {
+      const response = await life.fetch(form.action, {method: 'POST', body});
+      if (response.ok || response.status === 409) {
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const updated = doc.querySelector('[data-engine-retention]');
+        if (updated?.elements.engineId.value === form.elements.engineId.value) {
+          saved = snapshot(updated);
+          // A response can be lost after the engine saved the change.
+          if (response.ok || changes.every(([key, days]) => saved[key] === days)) error = '';
+        }
+        if (error && response.status === 409) error = form.dataset.conflict;
+      } else if (response.status === 422) {
+        error = form.dataset.invalid;
+      } else if (response.status === 403) {
+        error = form.dataset.forbidden;
+      }
+    } catch {}
+    if (life.signal.aborted || !form.isConnected) return;
+
+    state.pending = null;
+    // A failed response without a snapshot may hide a successful write.
+    state.uncertain = !saved;
+    if (error) {
+      for (const [key, days] of changes) {
+        if (state.observed[key] === days && !state.queued.has(key)) state.queued.set(key, days);
+      }
+    }
+    state.failed = error !== '' && state.queued.size > 0;
+    if (saved) acceptSnapshot(form, state, saved);
+    finish(form, state.failed ? error : '', state.failed);
+    if (!state.failed) void save(form, state);
+  }
+
+  function finish(form, error, failed = false) {
+    const status = statusFor(form);
+    const retry = retryFor(form);
+    status.textContent = error || (form.querySelector('[aria-invalid=true]') ? form.dataset.invalid : form.dataset.saved);
+    if (!failed && document.activeElement === retry) status.focus({preventScroll:true});
+    retry.hidden = !failed;
+    retry.removeAttribute('aria-disabled');
+  }
+
+  life.on(document, 'focusout', event => {
+    const field = event.target;
+    const choice = field.closest('[data-retention-choice]');
+    const form = choice?.closest('form[data-engine-retention]');
+    if (!form) return;
+    const input = choice.querySelector('input[type=number]');
+    if (field !== input && choice.contains(event.relatedTarget)) return;
+    const state = stateFor(form);
+    const key = choice.dataset.retentionChoice;
+    const days = choiceValue(choice);
+    if (days === null) {
+      if (field === input) {
+        input.setAttribute('aria-invalid', 'true');
+        statusFor(form).textContent = form.dataset.invalid;
+      }
+      state.queued.delete(key);
+      delete state.observed[key];
+      if (state.failed && state.queued.size === 0) {
+        state.failed = false;
+        finish(form, '');
+      }
+      return;
+    }
+    input.removeAttribute('aria-invalid');
+    if (state.observed[key] === days) {
+      // A concurrent update may have arrived while this unchanged choice had focus.
+      if (!choice.contains(event.relatedTarget)) syncChoice(choice, state);
+      return;
+    }
+    state.observed[key] = days;
+    state.queued.set(key, days);
+    void save(form, state);
+  });
+
+  life.on(document, 'click', event => {
+    const retry = event.target.closest('[data-retention-retry]');
+    if (!retry || retry.getAttribute('aria-disabled') === 'true') return;
+    const form = retry.form;
+    const state = stateFor(form);
+    state.failed = false;
+    void save(form, state);
+  });
+
+  life.on(document, 'submit', event => {
+    if (event.target.hasAttribute('data-engine-retention')) event.preventDefault();
+  });
+});
+
 window.OieRuntime.register('download-retention', life => {
   const section = document.querySelector('[data-download-retention]');
   if (!section) return;
@@ -222,53 +377,64 @@ window.OieRuntime.register('download-retention', life => {
   const select = form.querySelector('select');
   const status = section.querySelector('[role="status"]');
   const dialog = document.getElementById('remove-device-downloads-dialog');
-  const save = form.querySelector('[data-save-download-retention]');
   const remove = form.querySelector('[data-remove-device-downloads]');
   const confirm = dialog.querySelector('[data-confirm-remove-downloads]');
   const headers = {'X-Oie-Engine-ID':engine};
   let busy = false;
+  let confirmedDays = select.value;
+  let queuedDays;
 
-  async function update(action) {
+  async function update(action, days = confirmedDays) {
     if (busy) return;
     busy = true;
     form.setAttribute('aria-busy', 'true');
-    for (const button of [save, remove, confirm]) button.setAttribute('aria-disabled', 'true');
-    select.disabled = true;
+    for (const button of [remove, confirm]) button.setAttribute('aria-disabled', 'true');
+    if (action) status.textContent = '';
     const options = {credentials:'same-origin', cache:'no-store', headers};
     if (action) {
       options.method = 'POST';
-      options.body = new URLSearchParams({action, days:select.value});
+      options.body = new URLSearchParams({action, days});
       options.headers = {...headers, 'X-CSRF-Token':document.querySelector('meta[name="oie-csrf"]').content};
     }
+    let applied = false;
     try {
       const response = await life.fetch(downloadRetention, options);
       if (!response.ok) throw Error('retention_unavailable');
       const policy = await response.json();
       if (life.signal.aborted) return;
       if (!Number.isInteger(policy.days) || policy.days < 0 || policy.days > 3650) throw Error('retention_unavailable');
-      const days = String(policy.days);
-      if (![...select.options].some(option => option.value === days)) select.add(new Option(daysLabel.replace('{days}', days), days));
-      select.value = days;
-      fields.disabled = false;
+      confirmedDays = String(policy.days);
+      if (![...select.options].some(option => option.value === confirmedDays)) {
+        select.add(new Option(daysLabel.replace('{days}', confirmedDays), confirmedDays));
+      }
+      applied = true;
       status.textContent = action === 'clear' ? cleared : action === 'save' ? saved : '';
       if (action) document.dispatchEvent(new Event('oie:refresh-request'));
     } catch {
+      if (!life.signal.aborted) status.textContent = failed;
+    } finally {
+      busy = false;
       if (!life.signal.aborted) {
         fields.disabled = false;
-        status.textContent = failed;
-      }
-    } finally {
-      if (!life.signal.aborted) {
         form.removeAttribute('aria-busy');
-        for (const button of [save, remove, confirm]) button.removeAttribute('aria-disabled');
-        select.disabled = false;
+        for (const button of [remove, confirm]) button.removeAttribute('aria-disabled');
+        const next = queuedDays;
+        queuedDays = undefined;
+        if (next !== undefined && (!applied || next !== confirmedDays)) {
+          void update('save', next);
+        } else {
+          select.value = confirmedDays;
+        }
       }
-      busy = false;
     }
   }
 
   life.on(window, 'drawer:open', event => { if (event.detail?.id === 'settings') update(); });
-  life.on(save, 'click', () => update('save'));
+  life.on(select, 'change', () => {
+    const days = select.value;
+    if (busy) queuedDays = days;
+    else void update('save', days);
+  });
   const modal = type => window.dispatchEvent(new CustomEvent('modal:'+type, {detail:{id:dialog.id}}));
   life.on(remove, 'click', () => { if (!busy) modal('open'); });
   life.on(confirm, 'click', () => {

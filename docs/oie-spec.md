@@ -53,7 +53,9 @@ desktop profile. Check the remote engine before changing the active selection.
 Local mode runs the embedded engine and resumes its SQLite/media profile.
 Remote mode runs the desktop client against the configured engine, with the
 embedded engine stopped. For authenticated hosted engines, enter an API key
-alongside the HTTPS address in desktop settings. See [hosted access](hosted-auth.md).
+alongside the HTTPS address in desktop settings. If the selected server starts
+requiring authentication and offers a web workspace, the desktop links to
+browser sign-in and to the access key field. See [hosted access](hosted-auth.md).
 
 Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
 
@@ -612,8 +614,9 @@ Dismissing the card leaves the draft text intact.
 | Rooms | **180 days** by default. Choose a finite period or **Unlimited**. | Inherit the global room policy, set a finite period, or choose **Unlimited**. |
 | Direct conversations | **Unlimited** by default. Choose a finite period independently of the room policy. | Inherit the global direct-conversation policy, set a finite period, or choose **Unlimited**. |
 
-Place the global policies in **Settings → This device**. Open an override in the
-same **Conversation details** drawer for both rooms and direct conversations.
+Place the global policies in **Settings → Engine**. Save valid changes when
+the user leaves the edited field. Open an override in the same **Conversation
+details** drawer for both rooms and direct conversations.
 
 When choosing **Unlimited** for rooms, explain that messages will no longer
 expire by age, local storage can grow, and Oiê can recover all history that the
@@ -698,7 +701,7 @@ failed-preview retry explicit. Global and conversation media catalogs keep
 their responsive 4:3 preview frames. Preview cache retention and quotas remain
 open under O09.
 
-Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
+Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. With a local engine, change the period or remove downloaded files in **Settings → This device**. Changing the period saves the new preference immediately. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
 
 SQLite stores attachment references, metadata, and media integrity hashes; binary previews and full files are stored outside SQLite in native deployments. The phrase “only media hash” excludes media blobs from SQLite, not the retrieval/verification metadata the application needs.
 
@@ -837,7 +840,7 @@ See [message notifications](notifications.md) for platform behavior.
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
-**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The settings drawer keeps About in its footer. About shows the Oiê logo, license, and third-party attributions.
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The General tab groups About and Diagnostics with the other settings pages. In hosted settings, Sign out lives in the Engine tab and asks for confirmation. Signing out ends the session for that browser while the engine keeps running. About shows the Oiê logo, license, and third-party attributions.
 
 **AGREED:** the default conversation wallpaper uses a dense arrangement of subtle outline doodles. The artwork includes a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher, along with Brazilian motifs such as the berimbau, caju, mandacaru and jangada. Small details fill the spaces between larger drawings. The 480 × 480 CSS-pixel tile joins seamlessly in both directions and stays subtle behind messages in light and dark themes.
 

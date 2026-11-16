@@ -6,12 +6,20 @@ heroicons-archive
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/archive-box-arrow-down.svg
 License: MIT
 
+heroicons-arrow-left-start-on-rectangle
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-left-start-on-rectangle.svg
+License: MIT
+
 heroicons-check-badge
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/check-badge.svg
 License: MIT
 
 heroicons-emoji
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/24/outline/face-smile.svg
+License: MIT
+
+heroicons-fire
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/fire.svg
 License: MIT
 
 heroicons-forward
@@ -24,6 +32,10 @@ License: MIT
 
 heroicons-history
 Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/document-magnifying-glass.svg
+License: MIT
+
+heroicons-key
+Source: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/key.svg
 License: MIT
 
 heroicons-navigation

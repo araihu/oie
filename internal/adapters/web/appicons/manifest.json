@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-f3180696fe84",
+  "release": "iconpack-0744f667a7fa",
   "identityRevision": 1,
   "catalogSchemaVersion": 1,
-  "catalogSha256": "f3180696fe84d5ba69408dd2278ffd6b44a875bef4d02459a77efee732f6d6ee",
+  "catalogSha256": "0744f667a7fa5d45f273e1ffc0b14b043d6f5f66d402ec1ec6c03b0a2f110846",
   "releaseJsonSha256": "",
   "checksumsSha256": "",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "f3180696fe84d5ba69408dd2278ffd6b44a875bef4d02459a77efee732f6d6ee",
-  "sourceLockSha256": "9efc36e025139b44583dcd419233de67fb9f6bbfd5d5ce0f5c6aa6c92de5757b",
+  "sourceConfigSha256": "0744f667a7fa5d45f273e1ffc0b14b043d6f5f66d402ec1ec6c03b0a2f110846",
+  "sourceLockSha256": "025348b07e4727f731842483bb9a5c3f9488cbfbf88783d42f4fe55fc155511f",
   "package": "appicons",
   "constPrefix": "Icon",
   "spriteUrl": "/ui/icons/heroicons-extra.svg",
@@ -37,6 +37,16 @@
       "goIdentifier": "IconHeroiconsArchive16SolidArchiveBoxArrowDown"
     },
     {
+      "canonicalName": "heroicons-arrow-left-start-on-rectangle-16-solid-arrow-left-start-on-rectangle",
+      "namespace": "custom",
+      "product": "heroicons-arrow-left-start-on-rectangle",
+      "path": "heroicons-arrow-left-start-on-rectangle/16/solid/arrow-left-start-on-rectangle.svg",
+      "spriteSymbol": "heroicons-arrow-left-start-on-rectangle-16-solid-arrow-left-start-on-rectangle",
+      "colorBehavior": "currentColor",
+      "sha256": "2b7e8086b2e3bcde4aa34355c7f5245b386c4386c2c9abc7ebaacb74044fda3d",
+      "goIdentifier": "IconHeroiconsArrowLeftStartOnRectangle16SolidArrowLeftStartOnRectangle"
+    },
+    {
       "canonicalName": "heroicons-check-badge-16-solid-check-badge",
       "namespace": "custom",
       "product": "heroicons-check-badge",
@@ -55,6 +65,16 @@
       "colorBehavior": "currentColor",
       "sha256": "999b5368853f2566aaef668914a41018cf93900b1b1a77b18acbbbd648a1bd42",
       "goIdentifier": "IconHeroiconsEmoji24OutlineFaceSmile"
+    },
+    {
+      "canonicalName": "heroicons-fire-16-solid-fire",
+      "namespace": "custom",
+      "product": "heroicons-fire",
+      "path": "heroicons-fire/16/solid/fire.svg",
+      "spriteSymbol": "heroicons-fire-16-solid-fire",
+      "colorBehavior": "currentColor",
+      "sha256": "c65593dc48e03c2b7de894939862176f4625dfe1ff14cca651339f6caa8ff5a0",
+      "goIdentifier": "IconHeroiconsFire16SolidFire"
     },
     {
       "canonicalName": "heroicons-forward-16-solid-arrow-uturn-right",
@@ -85,6 +105,16 @@
       "colorBehavior": "currentColor",
       "sha256": "f840aac9570a7706b3a61ba8cdb1acae251e56000d4032af49c9201f367311e1",
       "goIdentifier": "IconHeroiconsHistory16SolidDocumentMagnifyingGlass"
+    },
+    {
+      "canonicalName": "heroicons-key-16-solid-key",
+      "namespace": "custom",
+      "product": "heroicons-key",
+      "path": "heroicons-key/16/solid/key.svg",
+      "spriteSymbol": "heroicons-key-16-solid-key",
+      "colorBehavior": "currentColor",
+      "sha256": "fd5c44708449b2dada5299dabd7952aafd8057a98559934e459db3dd0c0c75e2",
+      "goIdentifier": "IconHeroiconsKey16SolidKey"
     },
     {
       "canonicalName": "heroicons-navigation-16-solid-arrow-turn-right-down",
@@ -201,6 +231,12 @@
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
+      "path": "LICENSES/heroicons-arrow-left-start-on-rectangle-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
       "path": "LICENSES/heroicons-check-badge-LICENSE.txt",
       "mode": "0644",
       "bytes": 1071,
@@ -208,6 +244,12 @@
     },
     {
       "path": "LICENSES/heroicons-emoji-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "path": "LICENSES/heroicons-fire-LICENSE.txt",
       "mode": "0644",
       "bytes": 1071,
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
@@ -226,6 +268,12 @@
     },
     {
       "path": "LICENSES/heroicons-history-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "path": "LICENSES/heroicons-key-LICENSE.txt",
       "mode": "0644",
       "bytes": 1071,
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
@@ -293,38 +341,38 @@
     {
       "path": "NOTICE",
       "mode": "0644",
-      "bytes": 3042,
-      "sha256": "0f6c43db7f5b3c179aca81effa10398be940a81286a2f8e33290f2f76f4f70a3"
+      "bytes": 3579,
+      "sha256": "f6bdc7b0ee80796acad38bbbea0095bef27b0e6023e0e43719defe804513b64e"
     },
     {
       "path": "PROVENANCE/.iconpack.yaml",
       "mode": "0644",
-      "bytes": 6705,
-      "sha256": "f3180696fe84d5ba69408dd2278ffd6b44a875bef4d02459a77efee732f6d6ee"
+      "bytes": 7872,
+      "sha256": "0744f667a7fa5d45f273e1ffc0b14b043d6f5f66d402ec1ec6c03b0a2f110846"
     },
     {
       "path": "icons.json",
       "mode": "0644",
-      "bytes": 10295,
-      "sha256": "3b38fd18e09b651893f4a5b3199d000cdf8c4fab67d324d7f4aa740bb542d470"
+      "bytes": 12067,
+      "sha256": "1a09b542e8055c5b01a21af9496c292a5fcd2e9d2f6622203cac7b20a52e6d46"
     },
     {
       "path": "icons_gen.go",
       "mode": "0644",
-      "bytes": 9223,
-      "sha256": "8d0a9dc48452dd0fd15c84d9d3950be7216fa433db1503a61325b01a7fdfc5c0"
+      "bytes": 11326,
+      "sha256": "4f27c35736482472e329832cac51fe3118c608506649a23ca66fa1666a596596"
     },
     {
       "path": "provenance.json",
       "mode": "0644",
-      "bytes": 15856,
-      "sha256": "38c1dac8d28ef223a334cb84b45eca5b9c0f83af30f01d02a7cc482b47b3cd7d"
+      "bytes": 18574,
+      "sha256": "1a74ce2d88e5e11bc9acc2d02272bd34e3d90c8f6b5bf790de43dc91a3932b8c"
     },
     {
       "path": "sprite.svg",
       "mode": "0644",
-      "bytes": 9995,
-      "sha256": "12249878fc8748d4cda15bb33a05c7ff10889e3e55437097a201a03d8dd15512"
+      "bytes": 11710,
+      "sha256": "7b2c077209641b6dd0faf2dec5b3a41a377fcda0315e8515880e1541e8e7ee02"
     }
   ]
 }

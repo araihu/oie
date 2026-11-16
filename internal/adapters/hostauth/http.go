@@ -16,10 +16,10 @@ import (
 // while leaving room for the OIDC state in a browser cookie.
 const maxWorkspaceDestinationBytes = 2600
 
-type SignInPage func(http.ResponseWriter, *http.Request, int, string)
+type SignInPage func(w http.ResponseWriter, r *http.Request, status int, loginURL, destination string)
 
 func signInPage(w http.ResponseWriter, r *http.Request, page SignInPage, status int, destination string) {
-	page(w, r, status, authURL("/auth/login", destination))
+	page(w, r, status, authURL("/auth/login", destination), destination)
 }
 
 func authURL(path, destination string) string {

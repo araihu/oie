@@ -187,14 +187,14 @@ func (v view) retentionDrawerHref() string {
 		q.Set("infoView", "retention")
 	} else {
 		q.Set("open", "settings")
-		q.Set("settingsTab", "device")
+		q.Set("settingsTab", "engine")
 	}
 	return "/?" + q.Encode()
 }
 
 func retentionRegionID(id string) string {
 	if id == "" {
-		return "device-retention"
+		return "engine-retention"
 	}
 	return "conversation-retention"
 }

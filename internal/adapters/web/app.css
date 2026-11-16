@@ -197,6 +197,7 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 #settings-language [data-language-flag]::before{content:attr(data-language-flag) / "";margin-inline-end:.5em}
 #settings-language:has([data-value="en"][aria-selected="true"]) [data-combobox-trigger-label-outer]::before{content:"🇺🇸" / "";margin-inline-end:.5em}
 #settings-language:has([data-value="pt-BR"][aria-selected="true"]) [data-combobox-trigger-label-outer]::before{content:"🇧🇷" / "";margin-inline-end:.5em}
+.oie-engine-recovery{display:grid;justify-items:center;gap:.5rem;margin-block:.75rem}
 .oie-engine-mode:not(:has(#engine-mode-remote:checked)) [data-engine-address]{display:none}
 .oie-engine-mode-submit{display:inline-grid}
 .oie-engine-mode-submit>span{grid-area:1/1}
@@ -209,9 +210,9 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
   .oie-appearance-option{min-height:44px;justify-content:flex-start}
 }
 .oie-settings-section p,.oie-settings>.oie-settings-note{font-size:13px;line-height:1.6;color:var(--oie-muted)}
-:is(.oie-device-retention,.oie-notification-settings){border-block-start:1px solid var(--oie-border);margin-block-start:20px;padding-block-start:10px}
-.oie-device-retention h2{display:flex;align-items:center;gap:8px}
-.oie-device-retention h2 .oie-icon{width:16px;height:16px}
+.oie-notification-settings{border-block-start:1px solid var(--oie-border);margin-block-start:20px;padding-block-start:10px}
+:is(.oie-device-downloads,.oie-engine-retention,.oie-notification-settings)>h2{display:flex;align-items:center;gap:8px}
+:is(.oie-device-downloads,.oie-engine-retention,.oie-notification-settings)>h2 .oie-icon{width:16px;height:16px}
 .oie-info-retention{padding:16px 12px 24px}
 .oie-info-retention h2{font-size:19px;font-weight:650;line-height:1.3;margin:0 0 17px;outline-color:var(--oie-accent-text);outline-offset:4px;width:fit-content}
 :is(.oie-retention-form,.oie-retention-fields){display:grid;gap:16px;min-inline-size:0}
@@ -631,15 +632,20 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 
 #settings-body{display:flex;flex-direction:column;overflow:hidden}
 .oie-settings-scroll{flex:1;min-height:0;overflow-y:auto}
-.oie-settings-footer{display:grid;flex:none;padding:8px;border-top:1px solid var(--oie-border)}
+.oie-engine-sign-out{margin-block-start:20px;padding-block-start:16px;border-block-start:1px solid var(--oie-border)}
+.oie-engine-sign-out .oie-icon{width:18px;height:18px}
 .oie-reset-submit-label{display:grid}
 .oie-reset-submit-label>span{grid-area:1/1}
 .oie-reset-submit-label>span:last-child,
 #reset-data-form[aria-busy=true] .oie-reset-submit-label>span:first-child{visibility:hidden}
 #reset-data-form[aria-busy=true] .oie-reset-submit-label>span:last-child{visibility:visible}
+.oie-settings-links{display:grid;gap:4px}
 .oie-settings-entry{
- justify-content:space-between;min-height:44px;padding-inline:12px;color:var(--oie-text);font-weight:650
+ justify-content:flex-start;min-height:44px;padding-inline:12px;border-radius:8px;color:var(--oie-text);font-weight:650
 }
+.oie-settings-entry:hover{background:var(--oie-raised);text-decoration:none}
+.oie-settings-entry > .oie-icon{width:18px;height:18px}
+.oie-settings-entry > .oie-icon:last-child{width:16px;height:16px;margin-inline-start:auto}
 .oie-settings-subpage{padding:12px 20px}
 .oie-about{display:grid;gap:24px;padding:12px 24px 28px;color:var(--oie-text)}
 .oie-settings-back{justify-self:start;align-self:start;gap:6px;padding-inline:0;color:var(--oie-accent-text)}
@@ -991,7 +997,10 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
   :root[data-oie-keyboard] #register-account-form {padding-bottom:0}
 }
 
-.oie-device-downloads fieldset{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;border:0;padding:0}
-.oie-device-downloads fieldset>label{flex-basis:100%}
+.oie-device-downloads fieldset{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;border:0;padding:0}
 .oie-download-select{color:inherit;background:var(--oie-panel);border:1px solid var(--oie-line);border-radius:.375rem;padding:.375rem}
 .oie-download-feedback{min-height:1.4em;margin:0}
+
+.oie-engine-retention-status{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-block-size:44px}
+.oie-engine-retention-status [data-retention-retry][hidden]{display:inline-flex;visibility:hidden}
+.oie-engine-retention-status p{margin:0}

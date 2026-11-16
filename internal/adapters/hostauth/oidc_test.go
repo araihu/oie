@@ -35,7 +35,7 @@ func TestOIDCOwnerAndSessionRecovery(t *testing.T) {
 	}
 	auth.httpClient = fixture.Client()
 	target := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	handler := auth.Browser(target, func(w http.ResponseWriter, _ *http.Request, status int, loginURL string) {
+	handler := auth.Browser(target, func(w http.ResponseWriter, _ *http.Request, status int, loginURL, _ string) {
 		w.Header().Set("X-Fixture-Login", loginURL)
 		w.WriteHeader(status)
 	})
