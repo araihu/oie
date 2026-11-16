@@ -673,7 +673,9 @@ window.OieRuntime.register('live', life => {
     for (const status of root.querySelectorAll('[data-account-status]')) {
       const next = nextRoot.querySelector(`[data-account-status="${CSS.escape(status.dataset.accountStatus)}"]`);
       if (next && (status.dataset.connectionState !== next.dataset.connectionState ||
-          status.dataset.accountAvatarName !== next.dataset.accountAvatarName)) {
+          status.dataset.accountAvatarName !== next.dataset.accountAvatarName ||
+          status.dataset.accountAvatarBorder !== next.dataset.accountAvatarBorder)) {
+        status.dataset.accountAvatarBorder = next.dataset.accountAvatarBorder;
         status.dataset.accountAvatarName = next.dataset.accountAvatarName;
         status.dataset.connectionState = next.dataset.connectionState;
         status.title = next.title;
@@ -1030,7 +1032,9 @@ window.OieRuntime.register('live', life => {
       }
       const nextTrigger = page.querySelector('#live-account-trigger [data-account-switcher]');
       if (nextTrigger) for (const trigger of document.querySelectorAll('[data-account-switcher]')) {
-        if (trigger.dataset.activeAccountName !== nextTrigger.dataset.activeAccountName) {
+        if (trigger.dataset.activeAccountName !== nextTrigger.dataset.activeAccountName ||
+            trigger.dataset.accountAvatarBorder !== nextTrigger.dataset.accountAvatarBorder) {
+          trigger.dataset.accountAvatarBorder = nextTrigger.dataset.accountAvatarBorder;
           trigger.dataset.activeAccountName = nextTrigger.dataset.activeAccountName;
           mutateDOM(trigger, nextTrigger.innerHTML);
         }

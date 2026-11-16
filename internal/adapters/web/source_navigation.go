@@ -75,7 +75,7 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 	reads.Go(func() {
 		accounts, err := s.client.ListAccountsWithResponse(ctx, &engineapi.ListAccountsParams{Limit: &limit})
 		if err == nil && accounts.JSON200 != nil {
-			v.Accounts = accounts.JSON200.Items
+			v.setAccounts(accounts.JSON200.Items)
 			accountsOK = v.account(owner.AccountId).Address != ""
 		}
 	})

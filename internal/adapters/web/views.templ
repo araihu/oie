@@ -242,8 +242,9 @@ templ profile(v view,id string) {
 }
 
 templ accountTrigger(v view){
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":"","data-active-account-name":v.activeAccountName()})){
-@profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS})
+{{ border := v.AccountAvatarBorders[v.AccountFilter] }}
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":"","data-active-account-name":v.activeAccountName(),"data-account-avatar-border":border})){
+@profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS,Border:border!="",BorderColor:border})
 <span class="oie-profile-identity"><strong>{v.activeAccountName()}</strong><small>{v.activeAccountAddress()}</small></span>
 @glyph(heroicons.Icon16SolidEllipsisHorizontal)
 }
@@ -399,13 +400,14 @@ templ conversationRow(v view, c engineapi.Conversation) {
 	{{ attrs["data-conversation-id"] = c.Id }}
 	{{ attrs["aria-current"] = strconv.FormatBool(v.ChatID == c.Id) }}
 	{{ roomLabel, roomIndicator := v.roomStatusPresentation(c.RoomStatus) }}
+	{{ border := v.AccountAvatarBorders[c.AccountId] }}
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}
 		if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
 			data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
 		}
 	>
 		@link.Link(v.href("chat", c.Id,"message","","infoView","","infoType","","infoCursor","","infoQuery","","infoFocus","","lang",v.Locale,"theme",v.Theme), link.WithRootClass("oie-chat-link"), link.WithAttrs(attrs)) {
-			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar",Status:roomIndicator},true)
+			@avatarScope(v,c.AccountId,c.Address,avatar.Config{Name:c.Title,Initials:chatInitials(c),Size:avatar.SizeSM,RootClass:"oie-chat-avatar",Status:roomIndicator,Border:border!="",BorderColor:border},true)
 			<div class="oie-row-content">
 				<div class="oie-row-top"><strong>{ c.Title }</strong><time datetime={ c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ c.UpdatedAt.Format("15:04") }</time></div>
 				<div class="oie-row-bottom">
@@ -441,6 +443,7 @@ if len(v.Accounts)>1 {
 
 templ chatHeader(v view) {
 	{{ roomLabel, roomIndicator := v.roomStatusPresentation(v.selectedRoomStatus()) }}
+	{{ border := v.AccountAvatarBorders[v.Selected.AccountId] }}
 	<header class="oie-chat-header" id="chat-header" data-version={v.headerVersion()} x-data="{}">
 @conversationPreferenceData(v)
 if v.requestKind()=="" {
@@ -450,7 +453,7 @@ if v.requestKind()=="" {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
 		<div class="oie-chat-avatar">
-			@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS, Status: roomIndicator})
+			@profileAvatar(v,v.Selected.AccountId,v.Selected.Address,avatar.Config{Name: v.Selected.Title, Initials: chatInitials(*v.Selected), Size: avatar.SizeXS, Status: roomIndicator, Border:border!="", BorderColor:border})
 			if v.requestKind()=="" {
 				@button.Button(
 					button.WithType("button"),
@@ -805,8 +808,9 @@ templ accountEditorFeedback(v view,target string) {
  </div>
 }
 templ accountAvatar(v view,a engineapi.Account,size avatar.Size){
-<div class="inline-flex shrink-0" data-account-status={a.Id} data-account-avatar-name={a.Label} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
-@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:size,Status:connectionAvatarStatus(v,a.Id)})
+{{ border := v.AccountAvatarBorders[a.Id] }}
+<div class="inline-flex shrink-0" data-account-status={a.Id} data-account-avatar-name={a.Label} data-account-avatar-border={border} data-connection-state={connectionState(v,a.Id)} title={v.connectionLabel(a.Id)} role="img" aria-label={v.connectionLabel(a.Id)}>
+@profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:size,Status:connectionAvatarStatus(v,a.Id),Border:border!="",BorderColor:border})
 </div>
 }
 templ accountConnectionControls(v view,id string){

@@ -165,9 +165,10 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
-	EngineMode     *engineMode
-	StarredContent starredContent
-	PreviewScope   string
+	AccountAvatarBorders map[string]string
+	EngineMode           *engineMode
+	StarredContent       starredContent
+	PreviewScope         string
 
 	FavoritesPage                   *engineapi.StarredMessagePage
 	FavoritesCursor, FavoritesQuery string
@@ -1083,7 +1084,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		v.Unavailable = true
 		return
 	}
-	v.Accounts = accounts.JSON200.Items
+	v.setAccounts(accounts.JSON200.Items)
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
 		return
@@ -1407,7 +1408,7 @@ func (v view) headerVersion() string {
 		return ""
 	}
 	status, _ := v.roomStatusPresentation(v.selectedRoomStatus())
-	return v.Selected.Id + v.Selected.RevisionId + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
+	return v.Selected.Id + v.Selected.RevisionId + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.AccountAvatarBorders[v.Selected.AccountId] + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder
