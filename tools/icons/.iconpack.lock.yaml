@@ -80,6 +80,16 @@ files:
     path: .iconpack/sources/heroicons-retention/LICENSE
     size: 1071
     integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
+  - id: heroicons-room-entry/icon
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-left-end-on-rectangle.svg
+    path: .iconpack/sources/heroicons-room-entry/16/solid/arrow-left-end-on-rectangle.svg
+    size: 570
+    integrity: sha384-2cbR7dhQoNP9xVai+8XGQC0mjQiDPufpc/n/Nb1WZtfdqZua0pzkKKH/G8uPk4MI
+  - id: heroicons-room-entry/license
+    url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/LICENSE
+    path: .iconpack/sources/heroicons-room-entry/LICENSE
+    size: 1071
+    integrity: sha384-zZwI/O2prTGDEmLZ7zRQDU5uBHh0I9RcfsxxiBs8rVAEUeWHCkfZZuadqFVCMuoU
   - id: heroicons-room-exit/icon
     url: https://raw.githubusercontent.com/tailwindlabs/heroicons/0435d4ca364a608cc75e2f8683d374e55abbae26/optimized/16/solid/arrow-right-start-on-rectangle.svg
     path: .iconpack/sources/heroicons-room-exit/16/solid/arrow-right-start-on-rectangle.svg
