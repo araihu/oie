@@ -258,13 +258,8 @@ window.OieRuntime.register('scheduling', life => {
       drawerEditRequest = null;
     }, {capture: true});
   }
-  const messageForm = document.getElementById('send-message-form');
   const dialog = document.querySelector('[data-schedule-dialog]');
-  if (!dialog) {
-    const attachTrigger = messageForm?.querySelector('[data-attach-menu]');
-    if (attachTrigger) attachTrigger.disabled = true;
-    return;
-  }
+  if (!dialog) return;
   const composer = document.querySelector('[data-schedule-composer]');
   const picker = composer?.querySelector('[data-attachment-picker]');
   const attachments = composer?.querySelector('[data-composer-attachments]');
@@ -377,7 +372,10 @@ window.OieRuntime.register('scheduling', life => {
     const items = attachments.querySelector('[data-attachment-items]');
     const status = attachments.querySelector('[data-attachment-status]');
     const template = attachments.querySelector('template');
-    const attachTrigger = composer.querySelector('[data-attach-menu]');
+    const menu = composer.querySelector('#composer-split-menu');
+    const menuTrigger = menu.querySelector('[data-popover-trigger] button');
+    const scheduleAction = menu.querySelector('#composer-schedule-new');
+    const attachmentActions = menu.querySelectorAll('#composer-attach-image, #composer-attach-file');
     const pending = new Map();
     const videos = new Map();
     const playerDialog = attachments.querySelector('[data-draft-video-dialog]');
@@ -452,10 +450,8 @@ window.OieRuntime.register('scheduling', life => {
     function syncAttachmentControls() {
       const disabled = !available() || locked || !!nativeSelection ||
         (!!window.OieDesktop?.attachFiles && pending.size > 0);
-      attachTrigger.disabled = disabled;
-      for (const item of composer.querySelectorAll('#composer-attachments [role="menuitem"]')) {
-        item.disabled = disabled;
-      }
+      for (const action of attachmentActions) action.disabled = disabled;
+      menuTrigger.disabled = disabled && scheduleAction.disabled;
       for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked || !!nativeSelection;
       for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
     }

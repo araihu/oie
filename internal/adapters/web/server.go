@@ -654,7 +654,7 @@ type copy struct {
 	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
-	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
+	Preview, PreviewNote, Message, Send                                                                                                                                  string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string

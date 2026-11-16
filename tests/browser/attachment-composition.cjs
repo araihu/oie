@@ -62,39 +62,45 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     const remove = (name) => draftFiles.getByRole('button', {name:(pt ? 'Remover anexo' : 'Remove attachment') + ' · ' + name, exact:true});
     const original = pt ? 'Rascunho da conversa' : 'Independent text draft';
     const send = page.locator('#send-message-form [data-send-message]');
-    const attach = page.locator('[data-attach-menu]');
+    const actions = page.locator('#composer-split [data-popover-trigger] button');
+    const schedule = page.locator('#composer-schedule-new');
     await page.locator('body[data-oie-live-ready]').waitFor();
-    await until(() => attach.isEnabled(), 'file upload capability is available in current conversation');
+    await until(() => actions.isEnabled(), 'composer actions are available in current conversation');
     await composer.fill(original);
     await composer.evaluate(node => node.setSelectionRange(2, 5));
     page.on('request', track);
 
     for (const [label, accept] of [[pt ? 'Imagem' : 'Image', 'image/*'], [pt ? 'Arquivo' : 'File', '']]) {
-      await attach.click();
-      const menuItem = page.getByRole('menuitem', {name:label, exact:true});
+      await actions.click();
+      const menu = page.locator('#composer-split').getByRole('menu');
+      const menuItem = menu.getByRole('menuitem', {name:label, exact:true});
       await menuItem.waitFor();
-      const items = await page.getByRole('menuitem').allTextContents();
-      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Arquivo'] : ['Image', 'File']);
+      const items = await menu.getByRole('menuitem').allTextContents();
+      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Arquivo', 'Agendar mensagem'] : ['Image', 'File', 'Schedule message']);
       const chooser = page.waitForEvent('filechooser');
       await menuItem.click();
       assert.equal(await (await chooser).element().getAttribute('accept'), accept);
     }
     if (!pt) {
-      const uploadCapability = value => attach.evaluate((trigger, allowed) => {
+      const uploadCapability = value => actions.evaluate((trigger, allowed) => {
         const form = trigger.form;
         form.dataset.attachmentAllowed = allowed;
         form.dispatchEvent(new CustomEvent('oie:attachment-staging'));
       }, value);
-      await attach.click();
+      await actions.click();
       const imageAction = page.getByRole('menuitem', {name:'Image', exact:true});
       await imageAction.waitFor();
       await uploadCapability('false');
-      assert(await attach.isDisabled());
       await until(() => imageAction.isDisabled(), 'open attachment menu reflects the lost capability');
+      assert(await actions.isEnabled());
+      assert(await schedule.isEnabled());
       await page.keyboard.press('Escape');
       await imageAction.waitFor({state:'hidden'});
       await uploadCapability('true');
-      assert(await attach.isEnabled());
+      await actions.click();
+      assert(await imageAction.isEnabled());
+      await page.keyboard.press('Escape');
+      await imageAction.waitFor({state:'hidden'});
     }
     assert.equal(await dataEvent(page, 'paste', [], 'ordinary pasted text'), false);
     assert.equal(await draftFiles.isVisible(), false);
@@ -135,8 +141,8 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await draftFiles.getByText(pt ? 'Preparando anexos…' : 'Preparing attachments…', {exact:true}).first().waitFor();
     assert.equal(await page.locator('dialog[open]').count(), 0);
     assert(await send.isDisabled());
-    const scheduleMenu = page.locator('#composer-split [data-popover-trigger] button');
-    assert(await scheduleMenu.isDisabled());
+    assert(await schedule.isDisabled());
+    assert(await actions.isEnabled());
     assert.equal(await composer.inputValue(), original);
     assert.deepEqual(await composer.evaluate(el => [document.activeElement === el, el.selectionStart, el.selectionEnd]), [true,2,5]);
     await until(() => requestPaths.length === 1, 'file staging request reaches the browser');
@@ -153,7 +159,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       const frames = await page.evaluate(() => window.attachmentFrames);
       for (const frame of frames) assert(frame.every((value,i) => Math.abs(value-before[i]) <= 1), JSON.stringify({frame,before}));
       assert.deepEqual(requestPaths.splice(0), ['/ui/scheduling/stage']);
-      assert(await scheduleMenu.isEnabled());
+      assert(await schedule.isEnabled());
       await page.locator('[data-attachment-picker]').setInputFiles([file, percentFile]);
       for (const name of [file.name, percentFile.name]) {
         const link = draftFiles.getByRole('link', {name, exact:true});
@@ -229,7 +235,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
         await draftFiles.locator('[data-draft-attachment]').last().waitFor();
         assert.equal(await draftFiles.locator('[data-draft-attachment]').count(), 3);
         assert.equal(requestPaths.length, 2, 'only the first new file starts while the other waits');
-        assert(await scheduleMenu.isDisabled());
+        assert(await schedule.isDisabled());
         assert(await jump.evaluate(button => {
           const box = button.getBoundingClientRect();
           const panel = document.querySelector('.oie-composer-auxiliary').getBoundingClientRect();
@@ -241,7 +247,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       await draftFiles.getByRole('link', {name:longFile.name, exact:true}).waitFor();
       await draftFiles.getByRole('link', {name:file.name, exact:true}).waitFor();
       assert.deepEqual(await draftFiles.getByRole('link').allTextContents(), [image.name, file.name, longFile.name]);
-      assert(await scheduleMenu.isEnabled());
+      assert(await schedule.isEnabled());
       await Promise.all([page.waitForURL(url => !url.searchParams.has('message')), jump.click()]);
       await page.locator('body[data-oie-live-ready]').waitFor();
       await draftFiles.getByRole('link', {name:longFile.name, exact:true}).waitFor();

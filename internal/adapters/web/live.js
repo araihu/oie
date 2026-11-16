@@ -219,12 +219,8 @@ window.OieRuntime.register('live', life => {
       composer.hasAttribute('data-attachments-pending')||(composer.dataset.sendAllowed!=='true'&&!editingSchedule&&!locked);
     if(scheduleRetry){scheduleRetry.hidden=!locked||!journal.scheduledAt&&!editingSchedule;scheduleRetry.disabled=stopped||composer.dataset.busy==='true';}
     const composingLocked=compositionLocked();
-    const scheduleMenu=composer?.querySelector('#composer-split-menu');
-    if(scheduleMenu){
-      const disabled=scheduleBlocked(composingLocked);
-      scheduleMenu.querySelector('[data-popover-trigger] button').disabled=disabled;
-      for(const item of scheduleMenu.querySelectorAll('[role="menuitem"]'))item.disabled=disabled;
-    }
+    const scheduleDisabled=scheduleBlocked(composingLocked);
+    for(const action of composer?.querySelectorAll('#composer-schedule-new, #composer-schedule-reschedule')||[])action.disabled=scheduleDisabled;
     composer?.dispatchEvent(new Event('oie:composer-preview-change'));
     composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:composingLocked}}));
   }
