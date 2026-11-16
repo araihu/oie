@@ -123,29 +123,6 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   emit();
   // A rejected delayed preparation must never flash the picker or shift layout.
   state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:!document.querySelector('#oie-reaction-quick').hidden}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await openReact();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('#react-message-'+message).isEnabled(),'eligibility refreshed');
-  const keyboardBubble=page.locator('[data-message-bubble="'+message+'"]');
-  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.marginTop='500px');
-  await react();
-  const reactionSearch=modal.locator('#reaction-emoji-search');
-  await reactionSearch.fill('joinha');
-  await modal.locator('[data-emoji-family="👍"]').waitFor({state:'visible'});
-  await quick.locator('[data-reaction-more]').evaluate(button=>{
-   button.setAttribute('aria-expanded','true');
-   return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  });
-  assert.equal(await reactionSearch.inputValue(),'joinha','repeated open notifications preserve the query');
-  await page.evaluate(()=>{
-   const viewport=window.visualViewport;
-   Object.defineProperty(viewport,'height',{configurable:true,value:400});
-   viewport.dispatchEvent(new Event('resize'));
-  });
-  await until(async()=>await reactionSearch.evaluate(node=>{
-   const viewport=window.visualViewport,source=document.querySelector('[data-message-bubble]').getBoundingClientRect();
-   return source.top>=viewport.height&&node===document.activeElement&&node.getBoundingClientRect().bottom<=viewport.height;
-  }),'catalog search remains focused with the message behind the keyboard');
-  await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
-  await dismissCatalog();
-  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.removeProperty('margin-top'));
   // Missing acceptance can retry only the exact same command after a receipt GET.
   let abort=true;await page.route('**/ui/messages/reactions',r=>{if(abort){abort=false;return r.abort('connectionreset')}return r.continue()});await react();await pick('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});assert.equal(state.effects,2);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').getAttribute('aria-label')==='Try again','missing receipt exposes Retry');await region.locator('[data-reaction-check]').click();await own('😂',true);assert.equal(state.effects,3);await page.unroute('**/ui/messages/reactions');
   // Lost reply after acceptance must reconcile without another engine POST.
@@ -158,7 +135,66 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   // Cross-account and CSRF attempts are rejected before any mutation.
   const effects=state.effects,csrf=await page.locator('meta[name="oie-csrf"]').getAttribute('content'),bad=new URLSearchParams({csrf,engineId:engine,accountId:id(999),conversationId:chat,messageId:message,operationKey:id(901),expectedOwnRevisionId:state.ownRevision||'',emojis:'[]',lang:'en'});
   const foreign=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(foreign.status(),404);bad.set('accountId',account);bad.set('csrf','wrong');const denied=await context.request.post(base+'/ui/messages/reactions',{headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},data:bad.toString()});assert.equal(denied.status(),403);assert.equal(state.effects,effects);
-  state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();await react();await pick('😂');await own('😂',true);assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
+  state.max=1;state.allowed=['👍','😂','🙏','😮','😢','❤️','😀','😃','😄','😁','😆','😅'];emit();
+  const keyboardBubble=page.locator('[data-message-bubble="'+message+'"]');
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.marginTop='500px');
+  await react();
+  const reactionSearch=modal.locator('#reaction-emoji-search');
+  await reactionSearch.fill('joinha');
+  await modal.locator('[data-emoji-family="👍"]').waitFor({state:'visible'});
+  await quick.locator('[data-reaction-more]').evaluate(button=>{
+   button.setAttribute('aria-expanded','true');
+   return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  });
+  assert.equal(await reactionSearch.inputValue(),'joinha','repeated open notifications preserve the query');
+  await reactionSearch.fill('');
+  await page.evaluate(()=>{
+   const viewport=window.visualViewport;
+   Object.defineProperty(viewport,'height',{configurable:true,value:400});
+   viewport.dispatchEvent(new Event('resize'));
+  });
+  await until(async()=>await reactionSearch.evaluate(node=>{
+   const viewport=window.visualViewport,source=document.querySelector('[data-message-bubble]').getBoundingClientRect();
+   return source.top>=viewport.height&&node===document.activeElement&&node.getBoundingClientRect().bottom<=viewport.height;
+  }),'catalog search remains focused with the message behind the keyboard');
+  const catalogReaction=modal.locator('[data-emoji-pick="😂"]').first();
+  await catalogReaction.scrollIntoViewIfNeeded();
+  // WebKit can focus the workspace and resize the viewport before the click.
+  await catalogReaction.evaluate(button=>{
+   button.addEventListener('pointerdown',()=>{
+    const workspace=document.getElementById('main-content');
+    workspace.focus({preventScroll:true});
+    const viewport=window.visualViewport;
+    Object.defineProperty(viewport,'height',{configurable:true,value:550});
+    viewport.dispatchEvent(new Event('resize'));
+    window.catalogPointerFocus={
+     workspace:document.activeElement===workspace,
+     pickerOpen:!document.getElementById('oie-reaction-quick').hidden,
+    };
+   },{once:true});
+  });
+  const beforeCatalogChoice=state.posts;
+  const pressed=await catalogReaction.boundingBox();
+  await page.mouse.move(pressed.x+pressed.width/2,pressed.y+pressed.height/2);
+  await page.mouse.down();
+  assert.deepEqual(await page.evaluate(()=>window.catalogPointerFocus),{workspace:true,pickerOpen:true});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const held=await catalogReaction.boundingBox();
+  assert(Math.abs(held.x-pressed.x)<=1&&Math.abs(held.y-pressed.y)<=1,'the emoji stays under the pressed pointer during viewport resize');
+  await page.mouse.up();
+  await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
+  await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.removeProperty('margin-top'));
+  await own('😂',true);
+  assert.equal(state.posts,beforeCatalogChoice+1,'the catalog choice submits exactly once');
+  assert.deepEqual(state.own,['😂'],'single-selection restriction replaces previous own emoji');
+  assert.equal(await region.locator('[data-reaction-emoji="🙏"]').count(),0);
+  await removeReaction('😂');await until(()=>state.own.length===0,'single reaction clears');
+  const beforeSecondaryClick=state.posts;
+  await react();
+  await reactionSearch.click({button:'middle'});
+  await input.focus();
+  await quick.waitFor({state:'hidden'});
+  assert.equal(state.posts,beforeSecondaryClick,'a secondary click leaves focus dismissal active');
   const summary=region.locator('[data-reaction-summary]'),count=summary.locator('[data-reaction-summary-count]');
   const busySummary=region.locator('[data-reaction-summary][aria-busy="true"]');
   state.commandState='queued';await react();
@@ -255,11 +291,30 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
    await until(async()=>await shortcut.evaluate(n=>document.activeElement===n),'reaction source focus restored');assert.equal(await p.locator('#message-composer').inputValue(),'Draft retained');const readOnlyEffects=state.effects;await p.locator('[data-reaction-summary]').click();const details=p.locator('[data-reaction-details]');await details.locator('[data-reaction-filter="👍"]').waitFor({state:'visible'});await details.locator('[data-reaction-filter="👍"]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),2);assert.equal(await details.locator('[data-reaction-actor="alice@fixture"]').count(),0);await details.locator('[data-reaction-filter=""]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),3);await until(async()=>await details.locator('[data-reaction-actor="bob@fixture"] img').evaluate(n=>n.complete&&n.naturalWidth>0),'cached reaction actor avatar loaded');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] [x-text]').first().textContent(),'C');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] img').count(),0,'missing avatar has initials without an empty image');await p.screenshot({path:path.join(__dirname,`artifacts/reaction-summary-${width}-${lang}-${theme}.png`)});const panelAxe=await details.evaluate(n=>window.axe.run(n,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(panelAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.equal(state.effects,readOnlyEffects,'summary and filters are read-only');await p.keyboard.press('Escape');await details.waitFor({state:'hidden'});await bubble.locator('[data-rendered-message]').first().evaluate(n=>n.textContent='👍');const compact=await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}});await p.locator('[data-reaction-summary-emojis]').evaluate(n=>n.textContent='👍 ❤️ 😂');await p.locator('[data-reaction-summary-count]').evaluate(n=>n.textContent='99999');assert.deepEqual(await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}}),compact,'reaction capsule never widens a short message');await variant.close();findings.push({width,lang,theme,libraryTheme,axe:0});
   }
   source.isOwn=false;
-  const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-quick'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');const noWrites=state.effects;await text.tap();await text.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(state.effects,noWrites,'double tap only prepares a reaction');
+  const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-quick'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');
+  const cdp=await touch.newCDPSession(phone);
+  const startTouch=point=>cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+  const endTouch=()=>cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  const doubleTap=async target=>{
+   await target.scrollIntoViewIfNeeded();
+   const box=await target.boundingBox();
+   const point={x:box.x+box.width/2,y:box.y+box.height/2};
+   // Finish the first native tap before dispatching the next without another
+   // Playwright actionability wait between the two.
+   await startTouch(point);
+   await endTouch();
+   await startTouch(point);
+   await endTouch();
+  };
+  const noWrites=state.effects;
+  await doubleTap(text);
+  await phoneDialog.waitFor({state:'visible'});
+  assert.equal(state.effects,noWrites,'double tap only prepares a reaction');
   const phoneCatalog=phone.locator('#oie-reaction-picker-panel');
   const touchKeepsPickerFocus=await phoneDialog.locator('[data-reaction-quick-emoji]:visible').first().evaluate(button=>{
-   const touch=new PointerEvent('pointerdown',{pointerType:'touch',bubbles:true,cancelable:true});
-   button.dispatchEvent(touch);
+   const touch={pointerType:'touch',isPrimary:true,bubbles:true,cancelable:true};
+   button.dispatchEvent(new PointerEvent('pointerdown',touch));
+   button.dispatchEvent(new PointerEvent('pointerup',touch));
    document.getElementById('main-content').focus({preventScroll:true});
    return !button.closest('#oie-reaction-quick').hidden;
   });
@@ -268,9 +323,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await phoneCatalog.waitFor({state:'visible'});
   await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});
   await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
-  const cdp=await touch.newCDPSession(phone),r=await text.boundingBox(),point={x:r.x+Math.min(30,r.width/2),y:r.y+r.height/2};await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await until(async()=>await trigger.getAttribute('aria-expanded')==='true','long press opens message actions');await phone.locator('#copy-message-'+message).waitFor({state:'visible'});assert.equal(await phoneDialog.isVisible(),false);assert.equal(state.effects,noWrites,'long press performs no reaction mutation');await phone.keyboard.press('Escape');await phone.locator('#copy-message-'+message).waitFor({state:'hidden'});
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x,y:point.y-35}]});await phone.waitForTimeout(620);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.equal(await trigger.getAttribute('aria-expanded'),'false','drag cancels long press');assert.equal(await phoneDialog.isVisible(),false);assert.equal(await phone.locator('#message-composer').inputValue(),'Rascunho móvel');assert.equal(state.effects,noWrites);
-  await text.tap();await text.tap();
+  const r=await text.boundingBox(),point={x:r.x+Math.min(30,r.width/2),y:r.y+r.height/2};await startTouch(point);await phone.waitForTimeout(620);await endTouch();await until(async()=>await trigger.getAttribute('aria-expanded')==='true','long press opens message actions');await phone.locator('#copy-message-'+message).waitFor({state:'visible'});assert.equal(await phoneDialog.isVisible(),false);assert.equal(state.effects,noWrites,'long press performs no reaction mutation');await phone.keyboard.press('Escape');await phone.locator('#copy-message-'+message).waitFor({state:'hidden'});
+  await startTouch(point);await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x,y:point.y-35}]});await phone.waitForTimeout(620);await endTouch();assert.equal(await trigger.getAttribute('aria-expanded'),'false','drag cancels long press');assert.equal(await phoneDialog.isVisible(),false);assert.equal(await phone.locator('#message-composer').inputValue(),'Rascunho móvel');assert.equal(state.effects,noWrites);
+  await doubleTap(text);
   await phoneDialog.waitFor({state:'visible'});
   await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:2});
   const plus=phoneDialog.locator('[data-reaction-more]');
@@ -286,12 +341,20 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});
   await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
   await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:1});
-  await phone.evaluate(id=>{const body=document.querySelector('[data-message-bubble="'+id+'"]'),button=document.querySelector('[data-reaction-filter-template]').content.firstElementChild.cloneNode(true);button.removeAttribute('data-reaction-filter');button.dataset.previewExpand='';button.dataset.gestureImage='';button.style.cssText='display:block;width:120px;height:70px';button.textContent='Photo';window.gestureImageOpens=0;button.addEventListener('click',()=>gestureImageOpens++);body.append(button)},message);const image=phone.locator('[data-gesture-image]');await image.tap();await until(async()=>await phone.evaluate(()=>gestureImageOpens)===1,'single image tap retains primary action');await image.tap();await image.tap();await phoneDialog.waitFor({state:'visible'});assert.equal(await phone.evaluate(()=>gestureImageOpens),1,'double image tap suppresses viewer opening');await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});assert.equal(state.effects,noWrites);
+  await phone.evaluate(id=>{const body=document.querySelector('[data-message-bubble="'+id+'"]'),button=document.querySelector('[data-reaction-filter-template]').content.firstElementChild.cloneNode(true);button.removeAttribute('data-reaction-filter');button.dataset.previewExpand='';button.dataset.gestureImage='';button.style.cssText='display:block;width:120px;height:70px';button.textContent='Photo';window.gestureImageOpens=0;button.addEventListener('click',()=>gestureImageOpens++);body.append(button)},message);const image=phone.locator('[data-gesture-image]');await image.tap();await until(async()=>await phone.evaluate(()=>gestureImageOpens)===1,'single image tap retains primary action');await doubleTap(image);await phoneDialog.waitFor({state:'visible'});assert.equal(await phone.evaluate(()=>gestureImageOpens),1,'double image tap suppresses viewer opening');await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});assert.equal(state.effects,noWrites);
   await touch.close();findings.push('Touch double tap opens scoped picker without sending; hold opens the existing public Dropdown; dragging cancels both gestures and drafts survive');
   // Both entry points mount the same categorized selector and share device recents.
   await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-section]').first().waitFor();const categoryChoices=await modal.locator('[data-emoji-section]>.oie-emoji-grid>*').count();assert(categoryChoices>1000);await modal.locator('[data-emoji-jump="8"]').click();assert.equal(await modal.locator('[data-emoji-section]>.oie-emoji-grid>*').count(),categoryChoices,'category navigation scrolls the shared list without filtering');assert.equal(await modal.locator('[data-emoji-scroll]').evaluate(n=>n.scrollTop>100),true);await modal.locator('#reaction-emoji-search').fill('thumbs up');await modal.locator('[data-emoji-family="👍"]').waitFor();const englishFamilies=await modal.locator('[data-emoji-family]').count();await modal.locator('#reaction-emoji-search').fill('joinha');assert.equal(await modal.locator('[data-emoji-family]').count(),englishFamilies);await modal.locator('[data-emoji-family="👍"] [data-emoji-variants-trigger]').click();const tone=modal.locator('[data-emoji-variants] [data-emoji-pick="👍🏽"]');await tone.waitFor({state:'visible'});assert.equal(await modal.locator('[data-emoji-variant]').count(),6);await tone.focus();await page.keyboard.press('Escape');await tone.waitFor({state:'hidden'});assert.equal(await modal.isVisible(),true,'Escape closes only the tone submenu');assert.equal(await modal.locator('[data-emoji-variants-trigger]').evaluate(n=>document.activeElement===n),true);await modal.locator('[data-emoji-variants-trigger]').click();await tone.click();await own('👍🏽',true);assert.equal(await input.inputValue(),'Keep this unsent draft 😀','reacting with a tone never inserts it into the composer');
   const composeTrigger=page.locator('#oie-emoji-picker [data-emoji-trigger]');await composeTrigger.click();const composePicker=page.locator('#oie-emoji-picker-panel');await composePicker.waitFor({state:'visible'});await composePicker.locator('[data-emoji-jump=recent]').click();await composePicker.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').waitFor({state:'visible'});await composePicker.locator('#emoji-search').fill('rocket');await composePicker.locator('[data-emoji-pick="🚀"]').click();const composerDraft=await input.inputValue();assert(composerDraft.includes('🚀'));await react();await modal.waitFor({state:'visible'});await modal.locator('[data-emoji-jump=recent]').click();await modal.locator('#reaction-emoji-section-recent [data-emoji-pick="🚀"]').waitFor({state:'visible'});await dismissCatalog();assert.equal(await input.inputValue(),composerDraft);
-  state.max=2;emit();await react();await modal.locator('#reaction-emoji-search').fill('😂');await until(async()=>await modal.locator('[data-emoji-pick="😂"]').count()>0,'limit choice rendered');assert.equal(await modal.locator('[data-emoji-pick="😂"]').first().isDisabled(),true,'full multi-selection limit disables additional choices');await dismissCatalog();
+  state.max=2;emit();await react();await modal.locator('#reaction-emoji-search').fill('😂');
+  const disabledChoice=modal.locator('[data-emoji-pick="😂"]').first();
+  await disabledChoice.scrollIntoViewIfNeeded();
+  assert.equal(await disabledChoice.isDisabled(),true,'full multi-selection limit disables additional choices');
+  const disabledBox=await disabledChoice.boundingBox(),beforeDisabledClick=state.posts;
+  await page.mouse.click(disabledBox.x+disabledBox.width/2,disabledBox.y+disabledBox.height/2);
+  await input.focus();
+  await quick.waitFor({state:'hidden'});
+  assert.equal(state.posts,beforeDisabledClick,'a disabled choice leaves focus dismissal active');
   state.allowed=['👍🏽','😂'];state.max=1;emit();await openReact();
   await quick.waitFor({state:'visible'});
   assert.deepEqual(await quick.locator('[data-reaction-quick-emoji]:visible').allTextContents(),['😂']);
