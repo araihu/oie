@@ -16,7 +16,8 @@ const engine=id(1),account=id(2),chat=id(3);
   const write=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   const problem=(code,type,currentMessage)=>write(code,{type:'urn:oie:problem:'+type,title:'Problem',code:type,status:code,currentMessage});
   let raw='';for await(const chunk of req)raw+=chunk;let input={};try{if(raw)input=JSON.parse(raw)}catch{return problem(400,'invalid_request')}
-  if(u.pathname==='/api/v1/engine')return write(200,{id:engine,role:'hosted',apiVersion:'0.2.0',eventCursor:engine+':'+state.seq});
+  if(u.pathname==='/api/v1/engine')return state.engineDown ? problem(503,'unavailable') :
+   write(200,{id:engine,role:'hosted',apiVersion:'0.2.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return write(200,{items:[accountData]});
   if(u.pathname==='/api/v1/accounts/'+account)return write(200,accountData);
   if(u.pathname==='/api/v1/accounts/'+account+'/history')return write(200,{accountId:account,state:state.showRoom?'partial':'syncing',retainedMessages:state.messages.length,conversations:1,updatedAt:new Date().toISOString()});
@@ -170,6 +171,149 @@ const engine=id(1),account=id(2),chat=id(3);
   await until(async()=>state.effects===3&&!await page.locator('#message-composer').evaluate(e=>e.readOnly)&&await page.locator('[data-pending-send]').count()===0,'read-only acceptance receipt recovery');
   assert.equal(state.posts,postsBefore+1,'receipt recovery never dispatches another send');
   findings.push('A lost accepted response resolves through read-only receipt lookup before merging the canonical timeline, with exactly one send POST');
+
+  await page.unroute('**/ui/messages/send');
+  const offlineChat = base + '/?chat=' + chat + '&lang=en';
+  const offlineDraftKey = ['oie.draft.v1', engine, account, chat].join(':');
+  const offlinePending = page.locator('[data-pending-send]');
+  const offlineComposer = page.locator('#message-composer');
+  const offlineMessage = 'Explicit send from an offline browser';
+  await context.setOffline(true);
+  await offlineComposer.fill(offlineMessage);
+  await page.locator('[data-send-message]').click();
+  await offlinePending.locator('[role=img][aria-label="Waiting for connection"]').waitFor();
+  assert.equal(state.posts,postsBefore+1);
+  assert(await offlineComposer.evaluate(el=>el.readOnly));
+  const queued = await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),offlineDraftKey);
+  assert.equal(queued.offline,'waiting');
+  assert.equal(queued.text,offlineMessage);
+  await page.close();
+  await context.setOffline(false);
+  const inboxPage = await context.newPage();
+  inboxPage.on('pageerror',e=>errors.push(e.message));
+  await inboxPage.goto(base + '/?inbox=1&lang=en');
+  const reopened = await context.newPage();
+  reopened.on('pageerror',e=>errors.push(e.message));
+  await reopened.goto(offlineChat);
+  await until(()=>state.posts===postsBefore+2,'offline send resumes on app startup');
+  assert.equal(state.operations.get(queued.key).acceptedMessage.originalText,offlineMessage);
+  const offlineAccepted = state.operations.get(queued.key).acceptedMessage;
+  await reopened.locator('[data-message-id="'+offlineAccepted.id+'"]').waitFor();
+  await until(async()=>!await reopened.locator('#message-composer').evaluate(el=>el.readOnly),'offline acceptance unlocks the composer');
+  assert.equal(await reopened.locator('[data-pending-send]').count(),0);
+  assert.equal(state.messages.filter(message=>message.originalText===offlineMessage).length,1);
+  await inboxPage.close();
+  findings.push('Explicit offline Send survives a closed window and resumes once, including from the inbox');
+
+  const narrow = await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR'});
+  const narrowPage = await narrow.newPage();
+  narrowPage.on('pageerror',e=>errors.push(e.message));
+  await narrowPage.goto(base+'/?chat='+chat+'&lang=pt-BR');
+  const narrowComposer = narrowPage.locator('#message-composer');
+  const narrowPending = narrowPage.locator('[data-pending-send]');
+  const unsubmitted = 'Rascunho sem usar o botão Enviar';
+  await narrow.setOffline(true);
+  await narrowComposer.fill(unsubmitted);
+  await narrow.setOffline(false);
+  assert.equal(state.posts,postsBefore+2);
+  assert.equal(await narrowComposer.inputValue(),unsubmitted);
+  state.engineDown = true;
+  const narrowMessage = 'Confirmo depois do almoço.';
+  await narrowComposer.fill(narrowMessage);
+  await narrowPage.locator('[data-send-message]').click();
+  const waitingIcon = narrowPending.locator('[role=img][aria-label="Aguardando conexão"]');
+  await waitingIcon.waitFor();
+  assert.equal(state.posts,postsBefore+2);
+  await fs.mkdir(artifacts,{recursive:true});
+  await waitingIcon.hover();
+  await narrowPage.screenshot({path:path.join(artifacts,'offline-send-pt-BR.png')});
+  const rect = locator => locator.evaluate(el=>{
+   const {x,y,width,height}=el.getBoundingClientRect();
+   return {x,y,width,height};
+  });
+  const waitingBox = await rect(narrowPending.locator('.oie-message-content'));
+  const composerBox = await rect(narrowPage.locator('.oie-composer'));
+  await narrowPage.evaluate(()=>{
+   const measure = selector => {
+    const {x,y,width,height}=document.querySelector(selector).getBoundingClientRect();
+    return {x,y,width,height};
+   };
+   window.offlineSendFrames = [];
+   window.captureOfflineSend = true;
+   function sample() {
+    if (!window.captureOfflineSend) return;
+    window.offlineSendFrames.push({
+     bubble:measure('[data-pending-send] .oie-message-content'),composer:measure('.oie-composer'),
+    });
+    requestAnimationFrame(sample);
+   }
+   requestAnimationFrame(sample);
+  });
+  let unblock;
+  const blocked = new Promise(resolve=>unblock=resolve);
+  await narrowPage.route('**/ui/messages/send',async route=>{await blocked;await route.continue()});
+  state.engineDown = false;
+  await narrowComposer.focus();
+  await narrowPage.evaluate(()=>window.dispatchEvent(new Event('online')));
+  await narrowPending.locator('[data-pending-state=sending][role=img]').waitFor();
+  assert.deepEqual(await rect(narrowPending.locator('.oie-message-content')),waitingBox);
+  assert.deepEqual(await rect(narrowPage.locator('.oie-composer')),composerBox);
+  assert(await narrowComposer.evaluate(el=>document.activeElement===el));
+  await narrowPage.waitForFunction(()=>window.offlineSendFrames.length>=4);
+  const frames = await narrowPage.evaluate(()=>{
+   window.captureOfflineSend = false;
+   return window.offlineSendFrames;
+  });
+  for (const frame of frames) {
+   for (const [region, baseline] of [['bubble', waitingBox], ['composer', composerBox]]) {
+    for (const property of Object.keys(baseline)) {
+     assert(Math.abs(frame[region][property]-baseline[property])<=1,JSON.stringify({region, frame, baseline}));
+    }
+   }
+  }
+  unblock();
+  await until(()=>state.posts===postsBefore+3,'engine recovery releases a definitely unsent message');
+  await until(async()=>await narrowPending.count()===0,'engine recovery shows the accepted message');
+  assert.equal(await narrowComposer.inputValue(),'');
+  await narrow.close();
+  findings.push('A confirmed engine outage queues the message, preserves focus and geometry during the delayed retry, and a draft alone never sends');
+
+  const ambiguous = 'Keep the key after losing the first reconnect attempt';
+  await context.setOffline(true);
+  await reopened.locator('#message-composer').fill(ambiguous);
+  await reopened.locator('[data-send-message]').click();
+  await reopened.locator('[data-pending-send][data-pending-state=waiting]').waitFor();
+  let attempts = 0;
+  await reopened.route('**/ui/messages/send',async route=>{
+   attempts++;
+   if (attempts===1) await route.abort('connectionreset');
+   else await route.continue();
+  });
+  await context.setOffline(false);
+  const uncertain = reopened.locator('[data-pending-send][data-pending-state=uncertain]');
+  await uncertain.waitFor();
+  const originalKey = await uncertain.getAttribute('data-operation-key');
+  const checked = reopened.waitForRequest(request=>new URL(request.url()).pathname==='/ui/messages/reconcile');
+  await reopened.evaluate(()=>window.dispatchEvent(new Event('online')));
+  await checked;
+  assert.equal(attempts,1);
+  assert.equal(state.posts,postsBefore+3);
+  await uncertain.locator('[data-pending-send-retry]').click();
+  await until(()=>state.posts===postsBefore+4,'explicit retry of ambiguous reconnect attempt');
+  assert.equal(state.operations.get(originalKey).acceptedMessage.originalText,ambiguous);
+  findings.push('A missing response during reconnect preserves the send for read-only checks or explicit retry with the original key');
+
+  await mobile.setViewportSize({width:390,height:844});
+  await mobile.goto(base+'/?chat='+chat+'&lang=pt-BR');
+  await denied.setOffline(true);
+  const blockedText = 'Meu rascunho precisa continuar aqui';
+  await mobile.locator('#message-composer').fill(blockedText);
+  await mobile.locator('[data-send-message]').click();
+  await mobile.getByText('Não foi possível salvar a mensagem para envio. Seu rascunho continua aberto.',{exact:true}).waitFor();
+  assert.equal(await mobile.locator('#message-composer').inputValue(),blockedText);
+  assert.equal(await mobile.locator('[data-pending-send]').count(),0);
+  assert.equal(state.posts,postsBefore+4);
+  findings.push('Offline storage failure keeps the composer editable and never claims a queued send');
   assert.deepEqual(errors,[]);await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'live-adversarial-report.json'),JSON.stringify({backend:'independent HTTP fixture; actual XMPP is a separate observer',findings,pageErrors:errors,effects:state.effects,cancelEffects:state.cancelEffects},null,2));console.log('PASS: live UI CSRF, reload drafts, lost-response reconciliation, stale cancel, password hygiene, and denied storage');
  }finally{await browser.close();child.kill('SIGTERM');api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});

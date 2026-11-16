@@ -115,6 +115,10 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
 		message := text.PendingAcceptance
+		if r.URL.Path == "/ui/messages/send" && r.Form.Get("offlineCapable") == "1" {
+			s.mutationResponse(w, r, 503, mutationResult{Message: text.SendWaitingForConnection, Code: "engine_unavailable"})
+			return
+		}
 		if r.URL.Path == "/ui/conversations/preferences" {
 			s.mutationResponse(w, r, 503, mutationResult{Message: text.ConversationPreferenceUncertain, Code: "unavailable", PreferencesPending: true})
 			return

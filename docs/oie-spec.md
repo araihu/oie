@@ -443,6 +443,16 @@ Composing/saving a draft alone never auto-sends. Drafts remain device-specific e
 
 The closed browser is not assumed to run a persistent background dispatcher. Switching engines must not silently submit the same pending operation to another owner.
 
+**IMPLEMENTED:** a previously opened composer can save an immediate send when
+the browser is offline or Oiê confirms it could not reach the engine before
+submission. The pending bubble shows **Waiting for connection**. The device
+journal keeps the original operation, reply, mentions and previously staged
+attachments. Oiê checks the owning engine when the app is open again, including
+from the inbox. If an attempt may have reached the engine, Oiê checks its
+receipt and offers explicit retry when confirmation remains unavailable.
+If saving on the device fails, the composition stays editable. Opening cached
+conversations while offline remains part of section 11.4.
+
 ## 6. Sent-message actions and formatting
 
 Star or unstar a retained source message from the timeline, its image viewer,

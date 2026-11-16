@@ -3,6 +3,7 @@ window.OieRuntime.register('live', life => {
   const body = document.body;
   body.dataset.oieLiveReady='true';
   const labels = document.querySelector('#oie-live-copy')?.dataset || {};
+  const offlineCopy = document.querySelector('[data-pending-send-template]')?.dataset || {};
   const text = key => labels[key] || '';
   const status = document.querySelector('[data-live-status]');
   const announce = (message, quiet = false) => { if (status) { status.textContent = message; status.hidden = quiet || !message; } };
@@ -254,12 +255,16 @@ window.OieRuntime.register('live', life => {
     try { const raw = localStorage.getItem(draftKey); return raw ? JSON.parse(raw) : inMemory.get(draftKey)||null; }
     catch { storageWarning(); return inMemory.get(draftKey) || null; }
   }
-  function saveDraft(record) {
+  function saveDraft(record, resolvedOffline = false) {
     if (!draftKey) return;
     record = {...record, conversationKind: record.conversationKind || conversationKind};
     journal = record; inMemory.set(draftKey, record);
     const serialized = JSON.stringify(record);
-    try { localStorage.setItem(draftKey, serialized); }
+    try {
+      const stored = parseDraft(localStorage.getItem(draftKey));
+      if (stored?.offline && stored.pending && (stored.key !== record.key || (!record.pending && !resolvedOffline))) return;
+      localStorage.setItem(draftKey, serialized);
+    }
     catch {
       if (window.OieHostedSession) {
         try { sessionStorage.setItem(draftKey, serialized); return; } catch {}
@@ -269,19 +274,44 @@ window.OieRuntime.register('live', life => {
     }
     clearSessionDraft();
   }
+  function parseDraft(raw) {
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  function saveOfflineSend(record) {
+    const pending = {...record, pending: true, offline: 'waiting', conversationKind,
+      submittedAt: record.submittedAt || new Date().toISOString()};
+    try {
+      const stored = parseDraft(localStorage.getItem(draftKey));
+      if (stored?.pending && (stored.key !== pending.key || stored.offline)) return false;
+      localStorage.setItem(draftKey, JSON.stringify(pending));
+    } catch { return false; }
+    clearSessionDraft();
+    journal = pending;
+    inMemory.set(draftKey, pending);
+    input.value = '';
+    restoreMentions(pending.mentions);
+    lockComposer(true);
+    renderReply();
+    renderPendingSend('waiting');
+    return true;
+  }
   function clearSessionDraft() {
     if (window.OieHostedSession) {
       try { sessionStorage.removeItem(draftKey); } catch {}
     }
   }
-  function clearDraft(key) {
+  function clearDraft(key, nextKey) {
     if (!draftKey) return;
     const stored = readDraft();
     if (!stored || stored.key === key) {
       inMemory.delete(draftKey);
-      try { localStorage.removeItem(draftKey); } catch { storageWarning(); }
+      try {
+        if (nextKey) localStorage.setItem(draftKey, JSON.stringify({key: nextKey, text: ''}));
+        else localStorage.removeItem(draftKey);
+      } catch { storageWarning(); }
       clearSessionDraft();
     }
+    if (inMemory.get(draftKey)?.key === key) inMemory.delete(draftKey);
     journal = null;
     delete composer.dataset.privateMapLinks;
   }
@@ -388,7 +418,7 @@ window.OieRuntime.register('live', life => {
     if(error&&form.matches('[data-cancel-message]')){errorToast(message);return;}
     if(form.dataset.oieAction==='schedule-row'){if(error)errorToast(message);return;}
     const region = form.querySelector('[data-form-feedback]');
-    if(form===composer&&journal?.pending&&!journal.scheduledAt&&!editingSchedule){if(region)region.textContent='';renderPendingSend(error?'uncertain':'sending');announce(message,true);return;}
+    if(form===composer&&journal?.pending&&!journal.scheduledAt&&!editingSchedule){if(region)region.textContent='';renderPendingSend(journal.offline==='waiting'?'waiting':error?'uncertain':'sending');announce(message,true);return;}
     if (region) { region.textContent = message; region.dataset.error = String(error);region.setAttribute('role',error?'alert':'status'); if(error&&form.dataset.oieAction!=='send'){region.tabIndex=-1;region.focus({preventScroll:true});} }
     if (error && !region) errorToast(message);
     else announce(message);
@@ -454,6 +484,11 @@ window.OieRuntime.register('live', life => {
       journal = {...saved,key:canonicalID(saved.key)?saved.key:submissionKey.value}; input.value = saved.pending&&!saved.scheduledAt&&!editingSchedule?'':saved.text; submissionKey.value = journal.key; restoreMentions(saved.mentions);
       lockComposer(saved.pending === true);
       if (saved.pending) feedback(composer, text('pending'), true);
+      if (saved.offlineReturned) {
+        delete journal.offlineReturned;
+        saveDraft(journal);
+        life.timeout(() => errorToast(offlineCopy.returned), 0);
+      }
     }
   }
   if (input && submissionKey && draftKey && !mock) {
@@ -471,7 +506,7 @@ window.OieRuntime.register('live', life => {
     });
     life.on(window,'beforeunload', event => {
       if (window.OieHostedSession?.leaving) return;
-      if (journal?.pending || editSession?.submitted || (storageDenied && input.value)) { event.preventDefault(); event.returnValue = ''; }
+      if ((journal?.pending && !journal.offline) || editSession?.submitted || (storageDenied && input.value)) { event.preventDefault(); event.returnValue = ''; }
     });
   }
 
@@ -905,19 +940,126 @@ window.OieRuntime.register('live', life => {
     if(result.state==='expired'&&pendingBubble){
       window.Alpine?.destroyTree(pendingBubble);pendingBubble.remove();pendingBubble=null;
     }else if(!scheduled&&result.state!=='expired')acceptPendingSend(result.messageId);
-    clearDraft(key);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);renderReply();
+    clearDraft(key,journal.offline ? result.nextKey : undefined);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);renderReply();
     if(scheduled&&result.message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',message:result.message}}));
     if(editingSchedule&&result.redirect)finishScheduleEdit(result.redirect,result.nextKey);
     return true;
   }
   async function reconcilePending(signal){
-    if(editingSchedule||!journal?.pending||composer.dataset.busy==='true')return;
+    if(editingSchedule||!journal?.pending||journal.offline||composer.dataset.busy==='true')return;
     const key=journal.key,values=new URLSearchParams(new FormData(composer));
     values.set('operationKey',key);values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);
     try{
       const response=await life.fetch('/ui/messages/reconcile',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal});
       if(response.ok){const result=await response.json();if(!life.signal.aborted&&journal?.key===key&&composer.dataset.busy!=='true'&&result.ok)completeSubmission(result);}
     }catch{/* Keep the frozen submission and explicit retry on missing evidence. */}
+  }
+  const offlineEngine = body.dataset.engineId;
+  const offlinePrefix = 'oie.draft.v1:' + offlineEngine + ':';
+  let resumingOfflineSends = false;
+  function applyOfflineUpdate(key, previous, next, result) {
+    if (key !== draftKey || !previous?.offline || journal?.key !== previous.key || !journal.pending) return;
+    if (next?.pending && next.key === previous.key) {
+      journal = next;
+      inMemory.set(key, next);
+      renderPendingSend(next.offline === 'waiting' ? 'waiting' : 'uncertain');
+      return;
+    }
+    if (result && completeSubmission(result)) return;
+    if (pendingBubble) {
+      window.Alpine?.destroyTree(pendingBubble);
+      pendingBubble.remove();
+      pendingBubble = null;
+    }
+    inMemory.delete(key);
+    restoreDraft();
+    renderReply();
+    scheduleRefresh();
+  }
+  life.on(window, 'storage', event => {
+    if (event.storageArea !== localStorage || !event.key?.startsWith(offlinePrefix)) return;
+    const next = parseDraft(event.newValue);
+    // Ignore a stale event if another window has already advanced this draft.
+    if (localStorage.getItem(event.key) !== event.newValue) return;
+    applyOfflineUpdate(event.key, parseDraft(event.oldValue), next);
+    if (next?.offline === 'waiting') void resumeOfflineSends();
+  });
+  async function offlineRequest(action, values) {
+    const controller = new AbortController();
+    const timeout = life.timeout(() => controller.abort(), 12000);
+    try {
+      const response = await life.fetch('/ui/messages/' + action, {method: 'POST',
+        credentials: 'same-origin', headers: {Accept: 'application/json', 'X-CSRF-Token': csrf},
+        body: values, signal: controller.signal});
+      const result = await response.json();
+      if (!life.signal.aborted && !controller.signal.aborted) return result;
+    } catch {
+      // Preserve the intent. A write without a response needs a receipt check.
+    } finally { clearTimeout(timeout); }
+  }
+  async function resumeOfflineSend(key) {
+    const [accountId, conversationId, extra] = key.slice(offlinePrefix.length).split(':');
+    if (extra !== undefined || !canonicalID(accountId) || !canonicalID(conversationId)) return;
+    let raw = localStorage.getItem(key);
+    let record = parseDraft(raw);
+    if (!record?.pending || !['waiting', 'attempted'].includes(record.offline) ||
+        !canonicalID(record.key) || typeof record.text !== 'string') return;
+    if (key === draftKey && composer?.dataset.busy === 'true') return;
+    const values = new URLSearchParams({
+      engineId: offlineEngine, accountId, conversationId, operationKey: record.key,
+      originalText: record.text, expectedConversationKind: record.conversationKind || '',
+      replyToMessageId: record.reply?.messageId || '', mentions: JSON.stringify(record.mentions || []),
+      attachmentIds: JSON.stringify((Array.isArray(record.attachments) ? record.attachments : []).map(file => file?.id)),
+      offlineCapable: '1',
+    });
+    function update(next, result) {
+      if (life.signal.aborted || stopped || localStorage.getItem(key) !== raw) return false;
+      const previous = record;
+      raw = JSON.stringify(next);
+      localStorage.setItem(key, raw);
+      record = next;
+      applyOfflineUpdate(key, previous, next, result);
+      return true;
+    }
+    let result = await offlineRequest('reconcile', values);
+    if (record.offline === 'waiting' && result?.code === 'not_found' && navigator.onLine) {
+      // Persist before the write so a closed window cannot make the next
+      // window treat a lost response as a submission that never started.
+      if (!update({...record, offline: 'attempted'})) return;
+      if (key === draftKey && journal?.key === record.key) renderPendingSend('sending');
+      result = await offlineRequest('send', values);
+      if (result?.code === 'engine_unavailable') {
+        update({...record, offline: 'waiting'});
+        return;
+      }
+      if (!result?.accepted && key === draftKey && journal?.key === record.key) renderPendingSend('uncertain');
+    }
+    if (result?.accepted && canonicalID(result.messageId) && canonicalID(result.nextKey)) {
+      if (update({key: result.nextKey, text: ''}, result)) {
+        inbox.invalidate();
+        scheduleRefresh();
+      }
+    } else if (result?.rejected) {
+      const {offline, submittedAt, ...draft} = record;
+      update({...draft, pending: false, offlineReturned: true,
+        mentions: result.code === 'mention_unavailable' ? [] : draft.mentions});
+    }
+  }
+  async function resumeOfflineSends() {
+    if (mock || stopped || !canonicalID(offlineEngine) || !navigator.onLine || resumingOfflineSends) return;
+    resumingOfflineSends = true;
+    try {
+      const keys = Object.keys(localStorage).filter(key => key.startsWith(offlinePrefix));
+      for (const key of keys) {
+        if (life.signal.aborted || stopped || !navigator.onLine) break;
+        if (navigator.locks) {
+          await navigator.locks.request(key, {ifAvailable: true}, lock => lock && resumeOfflineSend(key));
+        } else {
+          await resumeOfflineSend(key);
+        }
+      }
+    } catch { /* The saved operation can be recovered when storage is available again. */ }
+    finally { resumingOfflineSends = false; }
   }
   async function refresh() {
     if (stopped || mock) return;
@@ -1235,8 +1377,10 @@ window.OieRuntime.register('live', life => {
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
       if (composer.hasAttribute('data-attachments-pending')||composer.hasAttribute('data-capturing-audio')||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
+      if (journal?.offline === 'waiting') return;
       const scheduledAt=journal?.pending?journal.scheduledAt:form.elements.namedItem('scheduledAt')?.value;
-      if(!journal?.pending&&needsReplyRefresh(journal?.reply)){
+      const offline = !journal?.pending && !scheduledAt && !editingSchedule && !navigator.onLine;
+      if(!offline&&!journal?.pending&&needsReplyRefresh(journal?.reply)){
         const reviewed = scheduledAt || editingSchedule ? scheduleReview(draftRecord()) : '';
         const requested = journal.reply.messageId, epoch = ++replyEpoch;
         preparingReply = true;
@@ -1268,7 +1412,14 @@ window.OieRuntime.register('live', life => {
       if ((!value.trim() && !journal?.attachments?.length) || Array.from(value).length > 16384) { feedback(form,text('invalidMessage'),true);input.focus();return; }
       if (journal?.pending) submissionKey.value=journal.key;
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
-      saveDraft({text:value,key:submissionKey.value,pending:true,reply:journal?.reply||null,mentions,attachments:journal?.attachments||[],privateMapLinks:privateMapLinks(),scheduledAt});if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
+      const record = {...draftRecord(true), text: value, mentions, scheduledAt,
+        privateMapLinks: journal?.pending ? journal.privateMapLinks : privateMapLinks(),
+        offline: journal?.offline, submittedAt: journal?.submittedAt};
+      if (offline) {
+        if (!saveOfflineSend(record)) errorToast(offlineCopy.storageFailed);
+        return;
+      }
+      saveDraft(record);if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
     const fields = new FormData(form);
     const photoInput = accountAvatar ? form.elements.namedItem('image') : null;
@@ -1303,7 +1454,10 @@ window.OieRuntime.register('live', life => {
     if(roomCommand==='join'&&roomCommandPassword)values.set('password',roomCommandPassword);
     if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),expectedConversationRevisionId:values.get('expectedConversationRevisionId')||'',nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
-    if(sending){values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);}
+    if(sending){
+      values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);
+      if (!retryingSend && !editingSchedule && !journal.scheduledAt) values.set('offlineCapable', '1');
+    }
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
     form.dataset.busy = 'true'; form.setAttribute('aria-busy','true');
@@ -1331,6 +1485,11 @@ window.OieRuntime.register('live', life => {
       if (signedOut && (!sending || retryingSend)) return;
       const result = signedOut ? {rejected: true} : await response.json();
       if(life.signal.aborted)return;
+      if (sending && result.code === 'engine_unavailable' && values.get('offlineCapable') === '1') {
+        if (saveOfflineSend(journal)) return;
+        result.rejected = true;
+        result.message = offlineCopy.storageFailed;
+      }
       if (form.dataset.oieAction === 'account-communication') {
         if (result.ok && result.accountCommunication) {
           form.elements.expectedRevisionId.value = result.accountCommunication.revisionId || '';
@@ -1367,9 +1526,10 @@ window.OieRuntime.register('live', life => {
           }
           const mentions=result.code==='mention_unavailable'?[]:journal.mentions;
           if(result.code==='mention_unavailable')form.dispatchEvent(new Event('oie:mentions-invalidated'));
-          input.value=journal.text;restoreMentions(mentions);saveDraft({...journal,mentions,pending:false});lockComposer(false);
+          const {offline, submittedAt, ...draft} = journal;
+          input.value=journal.text;restoreMentions(mentions);saveDraft({...draft,mentions,pending:false}, Boolean(offline));lockComposer(false);
           const message = result.code === 'reply_source_changed' ? scheduleReviewChanged : result.message || text('invalidMessage');
-          if (['media_too_large','reply_source_changed'].includes(result.code)) errorToast(message);
+          if (['media_too_large','reply_source_changed','engine_unavailable'].includes(result.code)) errorToast(message);
           else feedback(form, message, true);
           if (result.code === 'reply_source_changed') void refreshRejectedQuote();
         } else if (removingAccount) {
@@ -1566,7 +1726,7 @@ window.OieRuntime.register('live', life => {
     for (const type of events.eventTypes) {
       life.on(events.target,type,event=>{if(!stopped)(handlers[type]||scheduleRefresh)(event.detail);});
     }
-    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();}});
+    life.on(events.target,'open',()=>{if(!stopped){announce(text('liveReady'),true);scheduleRefresh();void resumeOfflineSends();}});
     life.on(events.target,'error',()=>{if(!stopped)announce(text('liveRetry'));});
     life.on(events.target,'engine-changed',()=>engineChanged());
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
@@ -1585,6 +1745,7 @@ window.OieRuntime.register('live', life => {
     if(mock||stopped)return;
     events.sync(body.dataset.engineId,body.dataset.eventCursor);
     scheduleRefresh();
+    void resumeOfflineSends();
   }
   life.interval(() => { if (!document.hidden) recoverLive(); },15000);
   function wakeLive(online){
@@ -1593,6 +1754,7 @@ window.OieRuntime.register('live', life => {
   }
   life.on(window,'online',()=>wakeLive(true));
   life.on(document,'visibilitychange',()=>{if(!document.hidden)wakeLive();});
+  life.timeout(resumeOfflineSends, 0);
   if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
   if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
