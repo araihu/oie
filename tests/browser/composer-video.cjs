@@ -148,7 +148,11 @@ async function launch() {
         const file = files.get(key);
         if (!file) return send(404,{status:404});
         const headers = {'Content-Type':'application/octet-stream','Content-Length':file.length};
-        if (name === audioAttachment.id) headers['X-Oie-Attachment-Type'] = 'audio/wav';
+        const metadata = name === audioAttachment.id ? audioAttachment : staged.get(key);
+        if (metadata) {
+          headers['X-Oie-Attachment-Type'] = metadata.mediaType;
+          headers['Content-Disposition'] = "attachment; filename*=UTF-8''" + encodeURIComponent(metadata.fileName);
+        }
         return response.writeHead(200,headers).end(file);
       }
       posts.push(key);
