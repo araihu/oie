@@ -1125,7 +1125,7 @@ templ messageEditStateIcon(label string,pending bool){
 if pending {
 @spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-edit-spinner"})
 }else{
-@glyph(heroicons.Icon16SolidPencilSquare)
+@historyIcon()
 }
 </span>
 }
