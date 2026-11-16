@@ -256,6 +256,8 @@
   "SendWaitingForConnection": "Aguardando conexão",
   "OfflineSendExplanation": "A mensagem será enviada quando a conexão voltar.",
   "OfflineSendCancelFailed": "Não foi possível cancelar o envio.",
+  "ViewOfflineSend": "Envio pendente",
+  "SwitchDraft": "Outro rascunho",
   "OfflineSendStorageFailed": "Não foi possível salvar a mensagem para envio. Seu rascunho continua aberto.",
   "OfflineSendReturned": "Não foi possível enviar a mensagem. Ela voltou para o rascunho.",
   "SendUnconfirmed": "Envio não confirmado",

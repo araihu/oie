@@ -260,6 +260,8 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
 [data-pending-state]:not([data-pending-state=waiting])>.oie-offline-send-actions{visibility:hidden}
 .oie-offline-send-actions button{border:0;background:transparent;padding:0;font:inherit;font-weight:600;color:inherit;text-decoration:underline;cursor:pointer;min-height:24px}
 #cancel-offline-send[hidden],#retry-pending-send[hidden]{display:none}
+.oie-draft-switch{position:absolute;inset-inline-start:12px;bottom:calc(100% + 6px);pointer-events:auto;background:var(--oie-panel);border:1px solid var(--oie-border)}
+.oie-draft-switch[hidden]{display:none}
 .oie-message-meta:empty{display:none}
 /* Enhanced cancellation lives in the message menu; keep the native form for
    browsers without scripting, without adding a transient row during dispatch. */

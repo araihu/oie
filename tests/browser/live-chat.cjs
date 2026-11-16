@@ -62,6 +62,12 @@ const engine=id(1),account=id(2),chat=id(3);
   if(process.env.OIE_SEND_GEOMETRY_ONLY==='1'){
     await require('./send-geometry.cjs')({browser,base,chat,state,emit,until,id});return;
   }
+  const checkOfflineConcurrency=()=>require('./offline-send-concurrency.cjs')({browser,base,chat,state,until,findings});
+  if(process.env.OIE_OFFLINE_CONCURRENCY_ONLY==='1'){
+    await checkOfflineConcurrency();
+    for(const finding of findings)console.log('PASS: '+finding);
+    return;
+  }
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en',timezoneId:'America/Sao_Paulo'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');await page.locator('#message-composer').waitFor();
   await page.locator('[data-account-switcher]:visible').click();
@@ -170,11 +176,13 @@ const engine=id(1),account=id(2),chat=id(3);
   await page.locator('#message-composer').fill('Recover this acceptance without another send');await page.locator('[data-send-message]').click();
   await until(async()=>state.effects===3&&!await page.locator('#message-composer').evaluate(e=>e.readOnly)&&await page.locator('[data-pending-send]').count()===0,'read-only acceptance receipt recovery');
   assert.equal(state.posts,postsBefore+1,'receipt recovery never dispatches another send');
+  assert(!await page.evaluate(()=>Object.keys(localStorage).some(key=>key.startsWith('oie.send-attempt.v1:') &&
+    localStorage.getItem(key)?.includes('Recover this acceptance without another send'))),
+    'the local attempt journal does not retain the message body after recovery');
   findings.push('A lost accepted response resolves through read-only receipt lookup before merging the canonical timeline, with exactly one send POST');
 
   await page.unroute('**/ui/messages/send');
   const offlineChat = base + '/?chat=' + chat + '&lang=en';
-  const offlineDraftKey = ['oie.draft.v1', engine, account, chat].join(':');
   const offlinePending = page.locator('[data-pending-send]');
   const offlineComposer = page.locator('#message-composer');
   const offlineMessage = 'Explicit send from an offline browser';
@@ -187,9 +195,8 @@ const engine=id(1),account=id(2),chat=id(3);
   assert(await offlinePending.getByText('This message will send when the connection returns.').isVisible());
   assert.equal(state.posts,postsBefore+1);
   assert(await offlineComposer.evaluate(el=>el.readOnly));
-  const queued = await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),offlineDraftKey);
-  assert.equal(queued.offline,'waiting');
-  assert.equal(queued.text,offlineMessage);
+  const queuedKey = await offlinePending.getAttribute('data-operation-key');
+  assert.equal(await offlinePending.locator('[data-pending-send-text]').textContent(),offlineMessage);
   await page.close();
   await context.setOffline(false);
   const inboxPage = await context.newPage();
@@ -199,8 +206,8 @@ const engine=id(1),account=id(2),chat=id(3);
   reopened.on('pageerror',e=>errors.push(e.message));
   await reopened.goto(offlineChat);
   await until(()=>state.posts===postsBefore+2,'offline send resumes on app startup');
-  assert.equal(state.operations.get(queued.key).acceptedMessage.originalText,offlineMessage);
-  const offlineAccepted = state.operations.get(queued.key).acceptedMessage;
+  const offlineAccepted = state.operations.get(queuedKey).acceptedMessage;
+  assert.equal(offlineAccepted.originalText,offlineMessage);
   await reopened.locator('[data-message-id="'+offlineAccepted.id+'"]').waitFor();
   await until(async()=>!await reopened.locator('#message-composer').evaluate(el=>el.readOnly),'offline acceptance unlocks the composer');
   assert.equal(await reopened.locator('[data-pending-send]').count(),0);
@@ -357,6 +364,7 @@ const engine=id(1),account=id(2),chat=id(3);
   assert.equal(await mobile.locator('[data-pending-send]').count(),0);
   assert.equal(state.posts,postsBefore+4);
   findings.push('Offline storage failure keeps the composer editable and never claims a queued send');
+  await checkOfflineConcurrency();
   assert.deepEqual(errors,[]);await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'live-adversarial-report.json'),JSON.stringify({backend:'independent HTTP fixture; actual XMPP is a separate observer',findings,pageErrors:errors,effects:state.effects,cancelEffects:state.cancelEffects},null,2));console.log('PASS: live UI CSRF, reload drafts, lost-response reconciliation, stale cancel, password hygiene, and denied storage');
  }finally{await browser.close();child.kill('SIGTERM');api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});

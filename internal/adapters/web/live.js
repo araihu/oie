@@ -64,6 +64,7 @@ window.OieRuntime.register('live', life => {
   const input = document.querySelector('#message-composer');
   const submissionKey = composer?.elements.namedItem('operationKey');
   const composerSend = composer?.querySelector('[data-send-message], #composer-send');
+  const draftSwitch = composer?.querySelector('[data-draft-switch]');
   if(composerSend) composerSend.dataset.sendMessage='';
   let editingSchedule = composer?.hasAttribute('data-editing-schedule');
   const readScheduledMessage = () => JSON.parse(document.getElementById('schedule-edit-data')?.textContent || 'null');
@@ -72,6 +73,13 @@ window.OieRuntime.register('live', life => {
   const scheduleReviewChanged = document.querySelector('[data-schedule-dialog]')?.dataset.reviewChanged;
   const ordinaryDraftKey = body.dataset.engineId && body.dataset.conversationId && body.dataset.accountId
     ? ['oie.draft.v1', body.dataset.engineId, body.dataset.accountId, body.dataset.conversationId].join(':') : '';
+  const offlineEngine = body.dataset.engineId;
+  const offlinePrefix = 'oie.offline-send.v1:' + offlineEngine + ':';
+  const acceptedSendPrefix = 'oie.send-accepted.v1:' + offlineEngine + ':';
+  const offlineKey = ordinaryDraftKey.replace('oie.draft.v1', 'oie.offline-send.v1');
+  const recoveredDraftPrefix = ordinaryDraftKey.replace('oie.draft.v1', 'oie.recovered-draft.v1') + ':';
+  let selectedRecoveredDraft = '';
+  try { selectedRecoveredDraft = sessionStorage.getItem(recoveredDraftPrefix) || ''; } catch {}
   const scheduleDraftKey = () => ordinaryDraftKey + ':scheduled:' + scheduledMessage.id + ':' + scheduledMessage.revisionId;
   let draftKey = editingSchedule ? scheduleDraftKey() : ordinaryDraftKey;
   const conversationKind = composer?.elements.namedItem('expectedConversationKind')?.value;
@@ -228,6 +236,7 @@ window.OieRuntime.register('live', life => {
     for(const action of composer?.querySelectorAll('#composer-schedule-new, #composer-schedule-reschedule')||[])action.disabled=scheduleDisabled;
     composer?.dispatchEvent(new Event('oie:composer-preview-change'));
     composer?.dispatchEvent(new CustomEvent('oie:composer-attachments',{detail:{files:journal?.attachments||[],locked:composingLocked,editingSent:!!editSession}}));
+    renderDraftSwitch();
   }
   function privateMapLinks() {
     try { return JSON.parse(composer?.dataset.privateMapLinks || '[]'); } catch { return []; }
@@ -244,50 +253,170 @@ window.OieRuntime.register('live', life => {
     storageDenied = true;
     announce(text('storageUnavailable'));
   }
-  function readDraft() {
-    if (!draftKey) return null;
+  function readStoredDraft(key) {
+    if (!key) return null;
     if (window.OieHostedSession) {
       try {
-        const saved = sessionStorage.getItem(draftKey);
+        const saved = sessionStorage.getItem(key);
         if (saved) return JSON.parse(saved);
       } catch {}
     }
-    try { const raw = localStorage.getItem(draftKey); return raw ? JSON.parse(raw) : inMemory.get(draftKey)||null; }
-    catch { storageWarning(); return inMemory.get(draftKey) || null; }
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : inMemory.get(key)||null; }
+    catch { storageWarning(); return inMemory.get(key) || null; }
   }
-  function saveDraft(record, resolvedOffline = false) {
-    if (!draftKey) return;
-    record = {...record, conversationKind: record.conversationKind || conversationKind};
-    journal = record; inMemory.set(draftKey, record);
-    const serialized = JSON.stringify(record);
-    try {
-      const stored = parseDraft(localStorage.getItem(draftKey));
-      if (stored?.offline && stored.pending && (stored.key !== record.key || (!record.pending && !resolvedOffline))) return;
-      localStorage.setItem(draftKey, serialized);
+  function hasDraft(record) {
+    return Boolean(record?.pending || record?.text || record?.reply || record?.attachments?.length);
+  }
+  function isOfflineIntent(record) {
+    return record?.pending && ['waiting', 'attempted'].includes(record.offline);
+  }
+  function readDraft() {
+    const regular = readStoredDraft(draftKey);
+    if (editingSchedule) return regular;
+    if (selectedRecoveredDraft === offlineKey || selectedRecoveredDraft.startsWith(recoveredDraftPrefix)) {
+      const recovered = readStoredDraft(selectedRecoveredDraft);
+      if (hasDraft(recovered) && !isOfflineIntent(recovered)) return recovered;
     }
+    selectRecoveredDraft('');
+    if (hasDraft(regular) && !regular.offline) return regular;
+    try {
+      const pending = parseDraft(localStorage.getItem(offlineKey));
+      if (hasDraft(pending)) {
+        if (!isOfflineIntent(pending)) selectRecoveredDraft(offlineKey);
+        return pending;
+      }
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith(recoveredDraftPrefix)) continue;
+        const recovered = readStoredDraft(key);
+        if (hasDraft(recovered)) {
+          selectRecoveredDraft(key);
+          return recovered;
+        }
+      }
+    } catch {}
+    return regular;
+  }
+  function selectRecoveredDraft(key) {
+    selectedRecoveredDraft = key;
+    try {
+      if (key) sessionStorage.setItem(recoveredDraftPrefix, key);
+      else sessionStorage.removeItem(recoveredDraftPrefix);
+    } catch {}
+  }
+  function draftStorageKey() {
+    return !editingSchedule && selectedRecoveredDraft ? selectedRecoveredDraft : draftKey;
+  }
+  function nextDraftChoice() {
+    if (!draftSwitch || mock || editingSchedule) return;
+    try {
+      const current = journal?.offline ? offlineKey : draftStorageKey();
+      const keys = [offlineKey, ordinaryDraftKey,
+        ...Object.keys(localStorage).filter(key => key.startsWith(recoveredDraftPrefix)).sort()];
+      const after = keys.indexOf(current) + 1;
+      for (const key of [...keys.slice(after), ...keys.slice(0, after)]) {
+        if (key === current) continue;
+        const record = readStoredDraft(key);
+        if (hasDraft(record) && (key === offlineKey || !record.offline)) return {key, record};
+      }
+    } catch {}
+  }
+  function renderDraftSwitch() {
+    if (!draftSwitch) return;
+    const choice = nextDraftChoice();
+    if (!choice && document.activeElement === draftSwitch) {
+      (pendingBubble || input).focus({preventScroll:true});
+    }
+    draftSwitch.hidden = !choice;
+    draftSwitch.disabled = stopped || preparingReply || !!editSession || editPreparing ||
+      composer.dataset.busy === 'true' || (journal?.pending && !journal.offline) ||
+      composer.hasAttribute('data-capturing-audio') || composer.hasAttribute('data-attachments-pending');
+    if (choice) draftSwitch.textContent = isOfflineIntent(choice.record) ? draftSwitch.dataset.pendingLabel : draftSwitch.dataset.draftLabel;
+  }
+  life.on(draftSwitch, 'click', () => {
+    renderDraftSwitch();
+    if (draftSwitch.disabled) return;
+    const choice = nextDraftChoice();
+    if (!choice) return;
+    composer.dispatchEvent(new Event('oie:attachment-draft-changing'));
+    if (pendingBubble) {
+      window.Alpine?.destroyTree(pendingBubble);
+      pendingBubble.remove();
+      pendingBubble = null;
+    }
+    selectRecoveredDraft(choice.key !== ordinaryDraftKey && !isOfflineIntent(choice.record) ? choice.key : '');
+    restoreDraft(submissionKey.value, '', choice.record);
+    renderReply();
+    renderEdit();
+    (pendingBubble || input).focus({preventScroll:true});
+  });
+  function saveDraft(record) {
+    const key = draftStorageKey();
+    if (!key) return;
+    record = {...record, conversationKind: record.conversationKind || conversationKind};
+    if (!editingSchedule && !record.pending && journal?.key === record.key && !journal.pending &&
+        compositionIdentity(journal) !== compositionIdentity(record)) {
+      // An editable draft may already be open or submitted in another tab.
+      record.key = localOperationKey();
+      submissionKey.value = record.key;
+    }
+    journal = record; inMemory.set(key, record);
+    const serialized = JSON.stringify(record);
+    try { localStorage.setItem(key, serialized); }
     catch {
       if (window.OieHostedSession) {
-        try { sessionStorage.setItem(draftKey, serialized); return; } catch {}
+        try { sessionStorage.setItem(key, serialized); return; } catch {}
       }
       storageWarning();
       return;
     }
-    clearSessionDraft();
+    clearSessionDraft(key);
   }
   function parseDraft(raw) {
     try { return JSON.parse(raw); } catch { return null; }
   }
-  function saveOfflineSend(record) {
+  function sameComposition(draft, record) {
+    return draft?.key === record.key && draft.text === record.text &&
+      compositionIdentity(draft) === compositionIdentity(record);
+  }
+  function compositionIdentity(record) {
+    return JSON.stringify([record.text, record.reply?.messageId || '', record.mentions || [],
+      (record.attachments || []).map(file => file.id), record.scheduledAt || '',
+      record.scheduledAt ? record.reply?.revisionId || '' : '']);
+  }
+  async function saveOfflineSend(record, reservation) {
+    const key = draftStorageKey();
     const pending = {...record, pending: true, offline: 'waiting', conversationKind,
       submittedAt: record.submittedAt || new Date().toISOString()};
     try {
-      const stored = parseDraft(localStorage.getItem(draftKey));
-      if (stored?.pending && (stored.key !== pending.key || stored.offline)) return false;
-      localStorage.setItem(draftKey, JSON.stringify(pending));
+      const saved = await withOfflineLock(offlineKey, () => {
+        if (life.signal.aborted || stopped || key !== draftStorageKey()) return false;
+        const queued = parseDraft(localStorage.getItem(offlineKey));
+        const accepted = readSendAcceptance(record.key);
+        if (accepted) return accepted;
+        const previous = parseDraft(localStorage.getItem(normalAttemptKey(record.key)));
+        if (hasDraft(queued) && (isOfflineIntent(queued) || key !== offlineKey || !sameComposition(queued, record))) return false;
+        if (reservation ? previous?.token !== reservation.token : previous) return false;
+        const source = parseDraft(localStorage.getItem(key));
+        // Keep another window's draft when it diverged from this composition.
+        localStorage.setItem(offlineKey, JSON.stringify(pending));
+        if (key !== offlineKey && sameComposition(source, record)) {
+          try { localStorage.removeItem(key); } catch {}
+        }
+        return true;
+      });
+      if (!saved) return false;
+      if (saved.accepted) {
+        if (!life.signal.aborted) consumeAcceptedDraft(record.key, saved);
+        return true;
+      }
     } catch { return false; }
-    clearSessionDraft();
+    if (life.signal.aborted) return true;
+    clearSessionDraft(key);
+    if (inMemory.get(key)?.key === record.key) inMemory.delete(key);
+    selectRecoveredDraft('');
+    if (pendingBubble?.dataset.operationKey === record.key) pendingBubble.dataset.operationKey = pending.key;
     journal = pending;
-    inMemory.set(draftKey, pending);
+    submissionKey.value = pending.key;
     input.value = '';
     restoreMentions(pending.mentions);
     lockComposer(true);
@@ -295,25 +424,37 @@ window.OieRuntime.register('live', life => {
     renderPendingSend('waiting');
     return true;
   }
-  function clearSessionDraft() {
+  function clearSessionDraft(key = draftStorageKey()) {
     if (window.OieHostedSession) {
-      try { sessionStorage.removeItem(draftKey); } catch {}
+      try { sessionStorage.removeItem(key); } catch {}
     }
   }
-  function clearDraft(key, nextKey) {
+  function clearDraft(key) {
     if (!draftKey) return;
-    const stored = readDraft();
+    const storageKey = draftStorageKey();
+    const stored = readStoredDraft(storageKey);
     if (!stored || stored.key === key) {
-      inMemory.delete(draftKey);
-      try {
-        if (nextKey) localStorage.setItem(draftKey, JSON.stringify({key: nextKey, text: ''}));
-        else localStorage.removeItem(draftKey);
-      } catch { storageWarning(); }
-      clearSessionDraft();
+      inMemory.delete(storageKey);
+      try { localStorage.removeItem(storageKey); } catch { storageWarning(); }
+      clearSessionDraft(storageKey);
     }
-    if (inMemory.get(draftKey)?.key === key) inMemory.delete(draftKey);
+    if (inMemory.get(storageKey)?.key === key) inMemory.delete(storageKey);
+    if (storageKey === selectedRecoveredDraft) selectRecoveredDraft('');
     journal = null;
     delete composer.dataset.privateMapLinks;
+  }
+  function consumeAcceptedDraft(key, receipt) {
+    if (journal?.pending && journal.key === key && completeSubmission(receipt)) {
+      scheduleRefresh();
+      return;
+    }
+    clearDraft(key);
+    input.value = '';
+    restoreMentions([]);
+    submissionKey.value = receipt.nextKey;
+    lockComposer(false);
+    renderReply();
+    scheduleRefresh();
   }
   let pendingBubble;
   const acceptedBubbles=new Set();
@@ -349,6 +490,7 @@ window.OieRuntime.register('live', life => {
 
   function renderPendingSend(state='sending'){
     if(!journal?.pending || journal.scheduledAt || editingSchedule)return;
+    if (journal.offline && state !== 'accepted') state = offlinePendingState(journal);
     const timeline=document.querySelector('#message-timeline'),template=composer?.querySelector('[data-pending-send-template]');
     if(!timeline||!template)return;
     if(!pendingBubble){
@@ -369,28 +511,33 @@ window.OieRuntime.register('live', life => {
       // Submitting is an explicit intent to view this outgoing message.
       scrollLatest();
     }
+    const focused = document.activeElement;
     pendingBubble.dataset.pendingState=state;
     // Keep an unresolved send readable while the retry action is available.
     pendingBubble.querySelector('[data-pending-send-content]').style.opacity=state==='uncertain'?'1':'';
-    for(const node of pendingBubble.querySelectorAll('[data-pending-state]'))node.hidden=node.dataset.pendingState!==state;
-    const disabled=state!=='uncertain'||stopped||composer.dataset.busy==='true';
-    for(const action of pendingBubble.querySelectorAll('[data-pending-send-retry],#retry-pending-send')){action.disabled=disabled;action.setAttribute('aria-disabled',String(disabled));}
     const actions = pendingBubble.querySelector('[data-offline-send-actions]');
     const cancelMenu = pendingBubble.querySelector('#cancel-offline-send');
     const retryMenu = pendingBubble.querySelector('#retry-pending-send');
     actions.hidden = !journal.offline;
-    if (state !== 'waiting' && (actions.contains(document.activeElement) || cancelMenu === document.activeElement)) {
-      document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+    const retryActions = pendingBubble.querySelectorAll('[data-pending-send-retry],#retry-pending-send');
+    const disabled=state!=='uncertain'||stopped||composer.dataset.busy==='true';
+    if ((state !== 'waiting' && (actions.contains(focused) || cancelMenu === focused)) ||
+        (disabled && [...retryActions].includes(focused))) {
+      focused.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
       pendingBubble.focus({preventScroll:true});
     }
+    for(const node of pendingBubble.querySelectorAll('[data-pending-state]'))node.hidden=node.dataset.pendingState!==state;
+    for(const action of retryActions){action.disabled=disabled;action.setAttribute('aria-disabled',String(disabled));}
     cancelMenu.hidden = cancelMenu.disabled = state !== 'waiting';
     actions.querySelector('button').disabled = state !== 'waiting';
     retryMenu.hidden = state === 'waiting';
   }
   function acceptPendingSend(id){
     if(!pendingBubble)return;
+    const hadFocus = pendingBubble.contains(document.activeElement);
     renderPendingSend('accepted');
     // Accepted placeholders have no retry action. The engine now owns delivery.
+    if(hadFocus)pendingBubble.focus({preventScroll:true});
     const menu=pendingBubble.querySelector('.oie-message-menu-slot');window.Alpine?.destroyTree(menu);menu.remove();
     pendingBubble.dataset.acceptedMessage=id;acceptedBubbles.add(pendingBubble);pendingBubble=null;retireAcceptedBubbles();
   }
@@ -414,7 +561,9 @@ window.OieRuntime.register('live', life => {
     }
     const action=event.target.closest('[data-pending-send-retry],#retry-pending-send');
     if(!action||!pendingBubble?.contains(action)||action.disabled||!journal?.pending)return;
-    event.preventDefault();composer.requestSubmit();
+    event.preventDefault();
+    if (journal.offline) retryOfflineSend();
+    else composer.requestSubmit();
   });
   function feedback(form, message, error = false) {
     if(form===composer&&(journal?.scheduledAt||editingSchedule)){
@@ -481,12 +630,12 @@ window.OieRuntime.register('live', life => {
       button.title = locked ? text('locked') : text('send');
     }
   }
-  function restoreDraft(nextKey = submissionKey?.value, initialText = '') {
+  function restoreDraft(nextKey = submissionKey?.value, initialText = '', chosenDraft) {
     journal = null;
     delete composer.dataset.privateMapLinks;
     input.value = initialText;
     submissionKey.value = nextKey;
-    let saved = readDraft();
+    let saved = chosenDraft ?? readDraft();
     if(!saved&&scheduledMessage){
       const m=scheduledMessage, composition=m.composition;
       saved={key:submissionKey.value,text:composition.originalText,mentions:composition.mentions,attachments:m.attachments||[],
@@ -534,13 +683,25 @@ window.OieRuntime.register('live', life => {
   if(editSession&&!editMessageBody(editSession.messageId)){const sourceID=editSession.messageId;life.timeout(async()=>{if(editSession?.messageId!==sourceID)return;await window.OieTimeline?.focus(sourceID,{focus:false});if(!life.signal.aborted)renderEditMarkers();},0);}
   life.on(document,'oie:actions-refreshed',()=>{renderReply();renderEdit();});
   const validExcerptDigest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  class ReplySourceUnavailable extends Error {}
   async function fetchReplySource(messageId, requireReview = false) {
     const controller = new AbortController(), timeout = life.timeout(() => controller.abort(), 12000);
     try {
       const query = new URLSearchParams({engineId:body.dataset.engineId, conversationId:body.dataset.conversationId, accountId:body.dataset.accountId, messageId});
-      const response = await life.fetch('/ui/reply-source?' + query, {credentials:'same-origin', cache:'no-store', signal:controller.signal});
-      const reply = await response.json();
-      if (!response.ok || reply.engineId !== body.dataset.engineId || reply.accountId !== body.dataset.accountId ||
+      let response;
+      try {
+        response = await life.fetch('/ui/reply-source?' + query, {credentials:'same-origin', cache:'no-store', signal:controller.signal});
+      } catch (error) {
+        if (controller.signal.aborted || error instanceof TypeError) throw new ReplySourceUnavailable();
+        throw error;
+      }
+      const reply = await response.json().catch(error => {
+        if (response.ok && error instanceof TypeError) throw new ReplySourceUnavailable();
+        return null;
+      });
+      const unavailable = [502, 503, 504].includes(response.status) && (!reply || reply.code === 'engine_unavailable');
+      if (controller.signal.aborted || unavailable) throw new ReplySourceUnavailable();
+      if (!response.ok || !reply || reply.engineId !== body.dataset.engineId || reply.accountId !== body.dataset.accountId ||
           reply.conversationId !== body.dataset.conversationId || reply.requestedMessageId !== messageId || !canonicalID(reply.messageId) ||
           typeof reply.senderName !== 'string' || typeof reply.excerpt !== 'string' || Array.from(reply.excerpt).length > 512 ||
           (requireReview && (!canonicalID(reply.revisionId) || !validExcerptDigest(reply.excerptSha256)))) throw Error('reply_unavailable');
@@ -957,7 +1118,16 @@ window.OieRuntime.register('live', life => {
     if(result.state==='expired'&&pendingBubble){
       window.Alpine?.destroyTree(pendingBubble);pendingBubble.remove();pendingBubble=null;
     }else if(!scheduled&&result.state!=='expired')acceptPendingSend(result.messageId);
-    clearDraft(key,journal.offline ? result.nextKey : undefined);input.value='';restoreMentions([]);submissionKey.value=result.nextKey;lockComposer(false);renderReply();
+    if (journal.offline) {
+      restoreDraft(result.nextKey);
+    } else {
+      clearDraft(key);
+      input.value='';
+      restoreMentions([]);
+      submissionKey.value=result.nextKey;
+      lockComposer(false);
+    }
+    renderReply();
     if(scheduled&&result.message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',message:result.message}}));
     if(editingSchedule&&result.redirect)finishScheduleEdit(result.redirect,result.nextKey);
     return true;
@@ -968,83 +1138,186 @@ window.OieRuntime.register('live', life => {
     values.set('operationKey',key);values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);
     try{
       const response=await life.fetch('/ui/messages/reconcile',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf},body:values,signal});
-      if(response.ok){const result=await response.json();if(!life.signal.aborted&&journal?.key===key&&composer.dataset.busy!=='true'&&result.ok)completeSubmission(result);}
+      if(response.ok){const result=await response.json();if(!life.signal.aborted&&journal?.key===key&&composer.dataset.busy!=='true'&&result.ok&&completeSubmission(result))void withOfflineLock(offlineKey,()=>rememberSendAcceptance(key,result)).catch(()=>{});}
     }catch{/* Keep the frozen submission and explicit retry on missing evidence. */}
   }
-  const offlineEngine = body.dataset.engineId;
-  const offlinePrefix = 'oie.draft.v1:' + offlineEngine + ':';
   let resumingOfflineSends = false;
   let cancellingOfflineSend = false;
-  function updateOfflineDraft(key, raw, next) {
-    const write = () => {
-      if (life.signal.aborted || stopped || localStorage.getItem(key) !== raw) return false;
-      localStorage.setItem(key, JSON.stringify(next));
-      return true;
-    };
+  function withOfflineLock(key, write) {
     if (navigator.locks) return navigator.locks.request(key, write);
     // IndexedDB read-write transactions serialize local transitions on origins
     // without Web Locks. The journal itself stays in the device draft store.
     return new Promise((resolve, reject) => {
       const open = indexedDB.open('oie.offline-sends', 1);
+      let blocked = false;
       open.onupgradeneeded = () => open.result.createObjectStore('draft-lock');
       open.onerror = () => reject(open.error);
+      open.onblocked = () => {
+        blocked = true;
+        reject(new Error('offline storage unavailable'));
+      };
       open.onsuccess = () => {
         const db = open.result;
-        const tx = db.transaction('draft-lock', 'readwrite');
-        const permit = tx.objectStore('draft-lock').get(key);
-        permit.onsuccess = () => {
-          try { resolve(write()); } catch (error) { reject(error); }
-        };
-        tx.onabort = () => reject(tx.error);
-        db.close();
+        try {
+          if (blocked) return;
+          const tx = db.transaction('draft-lock', 'readwrite');
+          const permit = tx.objectStore('draft-lock').get(key);
+          permit.onsuccess = () => {
+            try { resolve(write()); } catch (error) { reject(error); }
+          };
+          tx.onabort = () => reject(tx.error);
+        } catch (error) { reject(error); }
+        finally { db.close(); }
       };
     });
+  }
+  function offlinePendingState(record) {
+    if (record.offline === 'waiting') return 'waiting';
+    return record.attemptUntil > Date.now() ? 'sending' : 'uncertain';
+  }
+  function normalAttemptKey(operation) {
+    return offlineKey.replace('oie.offline-send.v1', 'oie.send-attempt.v1') + ':' + operation;
+  }
+  async function reserveNormalSend(record) {
+    try {
+      const digest = crypto.subtle && await crypto.subtle.digest('SHA-256', new TextEncoder().encode(compositionIdentity(record)));
+      const identity = digest ? Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('') : '';
+      return await withOfflineLock(offlineKey, () => {
+        if (life.signal.aborted || stopped) return false;
+        const accepted = readSendAcceptance(record.key);
+        if (accepted) return accepted;
+        const queued = parseDraft(localStorage.getItem(offlineKey));
+        const offline = isOfflineIntent(queued) ? queued : null;
+        let key = normalAttemptKey(record.key);
+        let previous = parseDraft(localStorage.getItem(key));
+        if (offline?.key === record.key) {
+          if (sameComposition(offline, record)) return false;
+        } else if (previous?.identity === identity && previous.until > Date.now()) {
+          return false;
+        }
+        if (offline?.key === record.key || previous && previous.identity !== identity) {
+          record.key = localOperationKey();
+          key = normalAttemptKey(record.key);
+          previous = null;
+        }
+        const token = localOperationKey();
+        localStorage.setItem(key, JSON.stringify({token, identity, until:Date.now() + 30000}));
+        return {key, token, operation:record.key, firstAttempt:!previous};
+      });
+    } catch {
+      // Sending online still works when the device cannot coordinate retries.
+      return null;
+    }
+  }
+  function settleNormalSend(reservation, release, accepted) {
+    return withOfflineLock(offlineKey, () => {
+      const attempt = parseDraft(localStorage.getItem(reservation.key));
+      if (attempt?.token !== reservation.token) return;
+      if (accepted) rememberSendAcceptance(reservation.operation, accepted);
+      else if (release) localStorage.removeItem(reservation.key);
+      else localStorage.setItem(reservation.key, JSON.stringify({...attempt, until:0}));
+    }).catch(() => {});
+  }
+  function readSendAcceptance(operation) {
+    const receipt = parseDraft(localStorage.getItem(acceptedSendPrefix + operation));
+    return receipt?.accepted && canonicalID(receipt.messageId) && canonicalID(receipt.nextKey) ? receipt : null;
+  }
+  function rememberSendAcceptance(operation, result, scope = offlineKey) {
+    if (!canonicalID(result.messageId) || !canonicalID(result.nextKey)) return;
+    try {
+      const records = Object.keys(localStorage).filter(key => key.startsWith(acceptedSendPrefix))
+        .map(key => ({key, at:parseDraft(localStorage.getItem(key))?.at || 0}))
+        .sort((a, b) => b.at - a.at);
+      for (const {key} of records.slice(63)) localStorage.removeItem(key);
+      localStorage.setItem(acceptedSendPrefix + operation, JSON.stringify({
+        accepted:true, messageId:result.messageId, nextKey:result.nextKey, at:Date.now(),
+      }));
+      localStorage.removeItem(scope.replace('oie.offline-send.v1', 'oie.send-attempt.v1') + ':' + operation);
+    } catch {}
+  }
+  function recoveredKey(key, operation) {
+    return key.replace('oie.offline-send.v1', 'oie.recovered-draft.v1') + ':' + operation;
+  }
+  async function updateOfflineDraft(key, raw, next, result) {
+    const previous = parseDraft(raw);
+    const changed = await withOfflineLock(key, () => {
+      if (life.signal.aborted || stopped || localStorage.getItem(key) !== raw) return false;
+      if (next) localStorage.setItem(key, JSON.stringify(next));
+      else {
+        if (result?.returned) {
+          const {offline, attempt, attemptUntil, submittedAt, ...draft} = previous;
+          const returned = {
+            ...draft, key: localOperationKey(), pending: false, offlineReturned: result.rejected,
+            mentions: result.code === 'mention_unavailable' ? [] : draft.mentions,
+          };
+          const serialized = JSON.stringify(returned);
+          try {
+            localStorage.setItem(recoveredKey(key, previous.key), serialized);
+          } catch {
+            // At quota, replacing the intent is smaller than copying it.
+            localStorage.setItem(key, serialized);
+            return true;
+          }
+        }
+        localStorage.removeItem(key);
+        if (result?.accepted) rememberSendAcceptance(previous.key, result, key);
+      }
+      return true;
+    });
+    if (changed && !life.signal.aborted) {
+      const latest = parseDraft(localStorage.getItem(key));
+      applyOfflineUpdate(key, latest, journal?.key === previous?.key ? result : null);
+    }
+    return changed;
   }
   async function cancelOfflineSend() {
     if (cancellingOfflineSend) return;
     cancellingOfflineSend = true;
-    const key = draftKey;
     try {
-      const raw = localStorage.getItem(key);
+      await migrateOfflineDraft(ordinaryDraftKey);
+      const raw = localStorage.getItem(offlineKey);
       const previous = parseDraft(raw);
       if (previous?.key === journal?.key && previous?.offline === 'waiting') {
-        const {offline, submittedAt, ...draft} = previous;
-        const next = {...draft, key: localOperationKey(), pending:false};
-        if (await updateOfflineDraft(key, raw, next)) {
-          applyOfflineUpdate(key, previous, next);
-          if (!life.signal.aborted) input.focus({preventScroll:true});
-          return;
-        }
+        if (await updateOfflineDraft(offlineKey, raw, null, {returned:true})) return;
       }
     } catch { /* Offer cancellation again if the send is still waiting. */ }
     finally { cancellingOfflineSend = false; }
     if (!life.signal.aborted) errorToast(offlineCopy.cancelFailed);
   }
-  function applyOfflineUpdate(key, previous, next, result) {
-    if (key !== draftKey || !previous?.offline || journal?.key !== previous.key || !journal.pending) return;
-    if (next?.pending && next.key === previous.key) {
+  function applyOfflineUpdate(key, next, result) {
+    if (key !== offlineKey || !composer || editingSchedule) return;
+    if (!journal?.offline) {
+      renderDraftSwitch();
+      return;
+    }
+    if (isOfflineIntent(next) && next.key === journal.key) {
       journal = next;
-      inMemory.set(key, next);
-      renderPendingSend(next.offline === 'waiting' ? 'waiting' : 'uncertain');
+      renderPendingSend();
       return;
     }
     if (result && completeSubmission(result)) return;
+    const hadFocus = pendingBubble?.contains(document.activeElement);
     if (pendingBubble) {
       window.Alpine?.destroyTree(pendingBubble);
       pendingBubble.remove();
       pendingBubble = null;
     }
-    inMemory.delete(key);
+    const recovered = recoveredKey(key, journal.key);
+    if (hasDraft(next) && !isOfflineIntent(next)) selectRecoveredDraft(offlineKey);
+    else if (hasDraft(readStoredDraft(recovered))) selectRecoveredDraft(recovered);
     restoreDraft();
     renderReply();
+    if (hadFocus) input.focus({preventScroll:true});
     scheduleRefresh();
   }
   life.on(window, 'storage', event => {
-    if (event.storageArea !== localStorage || !event.key?.startsWith(offlinePrefix)) return;
-    const next = parseDraft(event.newValue);
-    // Ignore a stale event if another window has already advanced this draft.
-    if (localStorage.getItem(event.key) !== event.newValue) return;
-    applyOfflineUpdate(event.key, parseDraft(event.oldValue), next);
+    if (event.storageArea !== localStorage) return;
+    if (!event.key?.startsWith(offlinePrefix)) {
+      if (event.key === ordinaryDraftKey || event.key?.startsWith(recoveredDraftPrefix)) renderDraftSwitch();
+      return;
+    }
+    const next = parseDraft(localStorage.getItem(event.key));
+    applyOfflineUpdate(event.key, next);
     if (next?.offline === 'waiting') void resumeOfflineSends();
   });
   async function offlineRequest(action, values) {
@@ -1060,14 +1333,16 @@ window.OieRuntime.register('live', life => {
       // Preserve the intent. A write without a response needs a receipt check.
     } finally { clearTimeout(timeout); }
   }
-  async function resumeOfflineSend(key) {
+  async function resumeOfflineSend(key, manual = false) {
     const [accountId, conversationId, extra] = key.slice(offlinePrefix.length).split(':');
     if (extra !== undefined || !canonicalID(accountId) || !canonicalID(conversationId)) return;
     let raw = localStorage.getItem(key);
     let record = parseDraft(raw);
     if (!record?.pending || !['waiting', 'attempted'].includes(record.offline) ||
         !canonicalID(record.key) || typeof record.text !== 'string') return;
-    if (key === draftKey && composer?.dataset.busy === 'true') return;
+    if (key === offlineKey && journal?.key === record.key) renderPendingSend();
+    if (!navigator.onLine || record.attemptUntil > Date.now() ||
+        (manual && record.offline !== 'attempted')) return;
     const values = new URLSearchParams({
       engineId: offlineEngine, accountId, conversationId, operationKey: record.key,
       originalText: record.text, expectedConversationKind: record.conversationKind || '',
@@ -1075,42 +1350,66 @@ window.OieRuntime.register('live', life => {
       attachmentIds: JSON.stringify((Array.isArray(record.attachments) ? record.attachments : []).map(file => file?.id)),
       offlineCapable: '1',
     });
-    async function update(next, result) {
+    async function advance(next) {
       if (!await updateOfflineDraft(key, raw, next)) return false;
-      const previous = record;
       raw = JSON.stringify(next);
       record = next;
-      if (!life.signal.aborted) applyOfflineUpdate(key, previous, next, result);
       return true;
     }
     let result = await offlineRequest('reconcile', values);
-    if (record.offline === 'waiting' && result?.code === 'not_found' && navigator.onLine) {
-      // Persist before the write so a closed window cannot make the next
-      // window treat a lost response as a submission that never started.
-      if (!await update({...record, offline: 'attempted'}) || life.signal.aborted) return;
-      if (key === draftKey && journal?.key === record.key) renderPendingSend('sending');
+    const waiting = record.offline === 'waiting';
+    if (!result?.accepted && !result?.rejected && navigator.onLine &&
+        ((waiting && result?.code === 'not_found') || manual)) {
+      // Claim every network attempt, including explicit retries in other tabs.
+      // An expired claim can be retried with the same idempotency key only.
+      if (!await advance({...record, offline:'attempted',
+        attempt:localOperationKey(), attemptUntil:Date.now() + 30000}) || life.signal.aborted) return;
+      if (localStorage.getItem(key) !== raw) return;
       result = await offlineRequest('send', values);
-      if (result?.code === 'engine_unavailable') {
-        await update({...record, offline: 'waiting'});
+      const {attempt, attemptUntil, ...settled} = record;
+      if (waiting && result?.code === 'engine_unavailable') {
+        await advance({...settled, offline:'waiting'});
         return;
       }
-      if (!result?.accepted && key === draftKey && journal?.key === record.key) renderPendingSend('uncertain');
+      if (!result?.accepted && !result?.rejected) {
+        await advance(settled);
+        return;
+      }
     }
     if (result?.accepted && canonicalID(result.messageId) && canonicalID(result.nextKey)) {
-      if (await update({key: result.nextKey, text: ''}, result)) {
+      if (await updateOfflineDraft(key, raw, null, result)) {
         inbox.invalidate();
         scheduleRefresh();
       }
     } else if (result?.rejected) {
-      const {offline, submittedAt, ...draft} = record;
-      await update({...draft, pending: false, offlineReturned: true,
-        mentions: result.code === 'mention_unavailable' ? [] : draft.mentions});
+      await updateOfflineDraft(key, raw, null, {...result, returned:true});
     }
   }
+  function retryOfflineSend() {
+    resumeOfflineSend(offlineKey, true).catch(() => {
+      if (!life.signal.aborted) errorToast(text('pending'));
+    });
+  }
+  async function migrateOfflineDraft(oldKey) {
+    if (!oldKey) return;
+    const raw = localStorage.getItem(oldKey);
+    const record = parseDraft(raw);
+    if (!record?.pending || !['waiting', 'attempted'].includes(record.offline)) return;
+    const key = oldKey.replace('oie.draft.v1', 'oie.offline-send.v1');
+    await withOfflineLock(key, () => {
+      if (life.signal.aborted || localStorage.getItem(oldKey) !== raw || localStorage.getItem(key)) return;
+      localStorage.setItem(key, raw);
+      localStorage.removeItem(oldKey);
+    });
+  }
   async function resumeOfflineSends() {
-    if (mock || stopped || !canonicalID(offlineEngine) || !navigator.onLine || resumingOfflineSends) return;
+    if (mock || stopped || !canonicalID(offlineEngine) || resumingOfflineSends) return;
     resumingOfflineSends = true;
     try {
+      const legacyPrefix = offlinePrefix.replace('oie.offline-send.v1', 'oie.draft.v1');
+      for (const key of Object.keys(localStorage).filter(key => key.startsWith(legacyPrefix))) {
+        await migrateOfflineDraft(key);
+      }
       const keys = Object.keys(localStorage).filter(key => key.startsWith(offlinePrefix));
       for (const key of keys) {
         if (life.signal.aborted || stopped || !navigator.onLine) break;
@@ -1426,6 +1725,9 @@ window.OieRuntime.register('live', life => {
     if (form.dataset.busy === 'true' || stopped) return;
     const sending = form.dataset.oieAction === 'send';
     const retryingSend = sending && journal?.pending === true;
+    let reservation;
+    let releaseReservation = false;
+    let normalAcceptance;
     const accountAvatar = form.dataset.oieAction === 'account-avatar';
     const removingAccount = form.dataset.oieAction === 'remove-account';
     const accountLabel = form.dataset.oieAction === 'account-label';
@@ -1435,9 +1737,12 @@ window.OieRuntime.register('live', life => {
     if (sending) {
       if(preparingReply){feedback(form,text('replyPreparing'));return}
       if (composer.hasAttribute('data-attachments-pending')||composer.hasAttribute('data-capturing-audio')||(form.dataset.sendAllowed !== 'true'&&!editingSchedule&&!journal?.pending)) return;
-      if (journal?.offline === 'waiting') return;
+      if (journal?.offline) {
+        if (offlinePendingState(journal) === 'uncertain') retryOfflineSend();
+        return;
+      }
       const scheduledAt=journal?.pending?journal.scheduledAt:form.elements.namedItem('scheduledAt')?.value;
-      const offline = !journal?.pending && !scheduledAt && !editingSchedule && !navigator.onLine;
+      let offline = !journal?.pending && !scheduledAt && !editingSchedule && !navigator.onLine;
       if(!offline&&!journal?.pending&&needsReplyRefresh(journal?.reply)){
         const reviewed = scheduledAt || editingSchedule ? scheduleReview(draftRecord()) : '';
         const requested = journal.reply.messageId, epoch = ++replyEpoch;
@@ -1457,12 +1762,16 @@ window.OieRuntime.register('live', life => {
             errorToast(scheduleReviewChanged);
             return;
           }
-        } catch {
-          if (!life.signal.aborted && epoch === replyEpoch) {
+        } catch (error) {
+          if (life.signal.aborted || epoch !== replyEpoch) return;
+          if (!reviewed && error instanceof ReplySourceUnavailable) {
+            // The failed lookup was a GET. Keep the selected quote for replay.
+            offline = true;
+          } else {
             if (reviewed) errorToast(text('replyUnavailable'));
             else feedback(form, text('replyUnavailable'), true);
+            return;
           }
-          return;
         }
         finally{finishReplyPreparation(epoch)}
       }
@@ -1472,10 +1781,37 @@ window.OieRuntime.register('live', life => {
       const mentions=journal?.pending?(journal.mentions||[]):readMentions();
       const record = {...draftRecord(true), text: value, mentions, scheduledAt,
         privateMapLinks: journal?.pending ? journal.privateMapLinks : privateMapLinks(),
-        offline: journal?.offline, submittedAt: journal?.submittedAt};
+        submittedAt: journal?.submittedAt};
       if (offline) {
-        if (!saveOfflineSend(record)) errorToast(offlineCopy.storageFailed);
+        form.dataset.busy = 'true';
+        lockComposer(true);
+        renderReply();
+        const saved = await saveOfflineSend(record);
+        if (!life.signal.aborted) {
+          form.dataset.busy = 'false';
+          lockComposer(Boolean(journal?.pending));
+          renderReply();
+          if (!saved) errorToast(offlineCopy.storageFailed);
+        }
         return;
+      }
+      if (!editingSchedule && draftKey === ordinaryDraftKey) {
+        form.dataset.busy = 'true';
+        lockComposer(true);
+        renderReply();
+        reservation = await reserveNormalSend(record);
+        if (life.signal.aborted) return;
+        form.dataset.busy = 'false';
+        if (reservation === false) {
+          lockComposer(Boolean(journal?.pending));
+          renderReply();
+          return;
+        }
+        if (reservation?.accepted) {
+          consumeAcceptedDraft(record.key, reservation);
+          return;
+        }
+        submissionKey.value = record.key;
       }
       saveDraft(record);if(!scheduledAt&&!editingSchedule)input.value='';restoreMentions(mentions);lockComposer(true);renderReply();
     }
@@ -1514,7 +1850,8 @@ window.OieRuntime.register('live', life => {
 
     if(sending){
       values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);
-      if (!retryingSend && !editingSchedule && !journal.scheduledAt) values.set('offlineCapable', '1');
+      if (!retryingSend && !editingSchedule && !journal.scheduledAt &&
+          (reservation?.firstAttempt || reservation === null)) values.set('offlineCapable', '1');
     }
     const buttons = [...form.querySelectorAll('input:not([type=hidden]),textarea,select,button')];
     const disabled = buttons.map(button => button.disabled);
@@ -1543,8 +1880,11 @@ window.OieRuntime.register('live', life => {
       if (signedOut && (!sending || retryingSend)) return;
       const result = signedOut ? {rejected: true} : await response.json();
       if(life.signal.aborted)return;
+      releaseReservation = result.accepted || reservation?.firstAttempt && result.rejected;
+      if (result.accepted) normalAcceptance = result;
       if (sending && result.code === 'engine_unavailable' && values.get('offlineCapable') === '1') {
-        if (saveOfflineSend(journal)) return;
+        releaseReservation = true;
+        if (reservation && await saveOfflineSend(journal, reservation) || life.signal.aborted) return;
         result.rejected = true;
         result.message = offlineCopy.storageFailed;
       }
@@ -1584,8 +1924,8 @@ window.OieRuntime.register('live', life => {
           }
           const mentions=result.code==='mention_unavailable'?[]:journal.mentions;
           if(result.code==='mention_unavailable')form.dispatchEvent(new Event('oie:mentions-invalidated'));
-          const {offline, submittedAt, ...draft} = journal;
-          input.value=journal.text;restoreMentions(mentions);saveDraft({...draft,mentions,pending:false}, Boolean(offline));lockComposer(false);
+          const {submittedAt, ...draft} = journal;
+          input.value=journal.text;restoreMentions(mentions);saveDraft({...draft,mentions,pending:false});lockComposer(false);
           const message = result.code === 'reply_source_changed' ? scheduleReviewChanged : result.message || text('invalidMessage');
           if (['media_too_large','reply_source_changed','engine_unavailable'].includes(result.code)) errorToast(message);
           else feedback(form, message, true);
@@ -1666,6 +2006,7 @@ window.OieRuntime.register('live', life => {
         errorToast(form.dataset.removeFailed);
       } else feedback(form,sending ? text('pending') : text('liveRetry'),true);
     } finally {
+      if (reservation) await settleNormalSend(reservation, releaseReservation, normalAcceptance);
       clearTimeout(timeout);
       if(!life.signal.aborted||form.isConnected){
         form.dataset.busy='false';form.removeAttribute('aria-busy');

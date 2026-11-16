@@ -448,9 +448,10 @@ the browser is offline or Oiê confirms it could not reach the engine before
 submission. The pending bubble shows a signal-slash warning. A short note and
 **Cancel send** appear directly below the bubble, and the message menu offers the
 same action. Cancelling before the first attempt returns the composition to the
-draft. Claiming the send and cancelling use the same exclusive transition. The device
-journal keeps the original operation, reply, mentions and previously staged
-attachments. Oiê checks the owning engine when the app is open again, including
+draft. If another draft exists, both remain available in the composer.
+Claiming a send, retrying and cancelling use the same exclusive transition.
+The device journal keeps the original operation, reply, mentions and previously
+staged attachments. Oiê checks the owning engine when the app is open again, including
 from the inbox. If an attempt may have reached the engine, Oiê checks its
 receipt and offers explicit retry when confirmation remains unavailable.
 If saving on the device fails, the composition stays editable. Opening cached

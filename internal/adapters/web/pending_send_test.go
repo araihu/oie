@@ -4,10 +4,82 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+func TestOfflineSendDistinguishesReadFailuresFromAttemptedWrites(t *testing.T) {
+	conversation := "/api/v1/conversations/" + testChat
+	for _, tc := range []struct {
+		name, method, path, action string
+		status                     int
+		drop, offline, wantWaiting bool
+	}{
+		{"engine unavailable", http.MethodGet, "/api/v1/engine", "send", 503, false, true, true},
+		{"engine unauthorized", http.MethodGet, "/api/v1/engine", "send", 401, false, true, false},
+		{"receipt unavailable", http.MethodGet, "receipt", "send", 503, false, true, true},
+		{"receipt transport lost", http.MethodGet, "receipt", "send", 0, true, true, true},
+		{"receipt forbidden", http.MethodGet, "receipt", "send", 403, false, true, false},
+		{"receipt unavailable on retry", http.MethodGet, "receipt", "send", 503, false, false, false},
+		{"receipt unavailable on reconcile", http.MethodGet, "receipt", "reconcile", 503, false, true, false},
+		{"conversation unavailable", http.MethodGet, conversation, "send", 503, false, true, true},
+		{"conversation missing", http.MethodGet, conversation, "send", 404, false, true, false},
+		{"write unavailable", http.MethodPost, conversation + "/messages", "send", 503, false, true, false},
+		{"write response lost", http.MethodPost, conversation + "/messages", "send", 0, true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key := newOperationKey()
+			path := tc.path
+			if path == "receipt" {
+				path = "/api/v1/operations/" + key
+			}
+			var fail atomic.Bool
+			var writes atomic.Int32
+			fixture := &liveFixture{}
+			ui, client, csrf := liveUI(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					writes.Add(1)
+				}
+				if fail.Load() && r.Method == tc.method && r.URL.Path == path {
+					if tc.drop {
+						conn, _, err := w.(http.Hijacker).Hijack()
+						if err != nil {
+							t.Error(err)
+							return
+						}
+						_ = conn.Close()
+						return
+					}
+					w.Header().Set("Content-Type", "application/problem+json")
+					w.WriteHeader(tc.status)
+					// An upstream body cannot forge the BFF's pre-dispatch evidence.
+					_ = json.NewEncoder(w).Encode(map[string]any{"code": "engine_unavailable", "status": tc.status})
+					return
+				}
+				fixture.ServeHTTP(w, r)
+			}))
+			fail.Store(true)
+			values := url.Values{"operationKey": {key}, "accountId": {testAccount}, "conversationId": {testChat}, "originalText": {"same body"}}
+			if tc.offline {
+				values.Set("offlineCapable", "1")
+			}
+			status, result := livePost(t, client, ui.URL, "/ui/messages/"+tc.action, csrf, values)
+			wantWrites := int32(0)
+			if tc.method == http.MethodPost {
+				wantWrites = 1
+			}
+			waiting := result.Code == "engine_unavailable"
+			// net/http can retry a lost POST that carries an idempotency key.
+			writesMatch := writes.Load() == wantWrites || tc.drop && wantWrites == 1 && writes.Load() > 1
+			if waiting != tc.wantWaiting || waiting && (status != http.StatusServiceUnavailable || result.Rejected) ||
+				result.Accepted || !writesMatch {
+				t.Fatalf("response %d %+v, POSTs %d, want waiting=%t and POSTs=%d", status, result, writes.Load(), tc.wantWaiting, wantWrites)
+			}
+		})
+	}
+}
 
 func TestSubmissionReceiptLookupNeverCreatesMessage(t *testing.T) {
 	f := &liveFixture{}

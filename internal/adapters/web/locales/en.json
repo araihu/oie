@@ -256,6 +256,8 @@
   "SendWaitingForConnection": "Waiting for connection",
   "OfflineSendExplanation": "This message will send when the connection returns.",
   "OfflineSendCancelFailed": "Couldn’t cancel the send.",
+  "ViewOfflineSend": "Pending send",
+  "SwitchDraft": "Other draft",
   "OfflineSendStorageFailed": "Couldn’t save the message for sending. Your draft is still open.",
   "OfflineSendReturned": "Couldn’t send the message. It’s back in your draft.",
   "SendUnconfirmed": "Send unconfirmed",
