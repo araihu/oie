@@ -1163,11 +1163,7 @@ templ messageHistoryLink(v view,m messageView){
 	}
 }}
 @link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(attrs)){
-	if m.Retraction!=nil {
-		@historyIcon()
-	} else {
-		@glyph(heroicons.Icon16SolidPencilSquare)
-	}
+	@glyph(heroicons.Icon16SolidPencilSquare)
 }
 }
 

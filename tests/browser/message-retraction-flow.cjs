@@ -81,7 +81,7 @@ async function messageRetractionFlow({base, api, until, send, alicePage, bobPage
   await incoming.getByText('Mensagem retraída', {exact: true}).waitFor();
   assert.equal(await incoming.getByText(original, {exact: true}).count(), 0);
   const reveal = incoming.getByRole('link', {name: 'Revelar original', exact: true});
-  assert.equal(await reveal.locator('use[href$="#heroicons-history-16-solid-document-magnifying-glass"]').count(), 1);
+  assert.equal(await reveal.locator('use').getAttribute('href'), '/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
   await reveal.click();
   const history = bobPage.getByRole('dialog', {name: 'Histórico da mensagem', exact: true});
   await history.locator('[data-history-retraction]').getByText('Mensagem retraída', {exact: true}).waitFor();
