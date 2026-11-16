@@ -56,6 +56,11 @@ func TestDesktopEngineSelection(t *testing.T) {
 		if err != nil || resp.StatusCode != http.StatusOK {
 			t.Fatalf("workspace: %s %v", resp.Status, err)
 		}
+		for _, control := range []string{`id="device-downloads-title"`, `id="remove-device-downloads-dialog"`} {
+			if present := strings.Contains(string(body), control); present != (mode == "local") {
+				t.Fatalf("download setting %s present in %s mode: %v", control, mode, present)
+			}
+		}
 		match := func(pattern string) string {
 			t.Helper()
 			value := regexp.MustCompile(pattern).FindSubmatch(body)

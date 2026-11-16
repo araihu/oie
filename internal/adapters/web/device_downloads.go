@@ -48,6 +48,11 @@ func (s *Server) currentDownloadDevice(r *http.Request) string {
 	return ""
 }
 
+func (v view) canManageLocalDownloads() bool {
+	return !v.Preview && v.EngineID != "" && v.Role == engineapi.EngineRoleLocal &&
+		(v.EngineMode == nil || v.EngineMode.url == "")
+}
+
 func (s *Server) downloadRetention(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

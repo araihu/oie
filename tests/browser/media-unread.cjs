@@ -40,7 +40,7 @@ const api = http.createServer(async (request, response) => {
     response.end(JSON.stringify(json));
   };
   const {pathname: endpoint} = url;
-  if (endpoint === '/api/v1/engine') return send(200, {id: engine, role: 'hosted', apiVersion: '0.38.0', eventCursor: engine + ':0'});
+  if (endpoint === '/api/v1/engine') return send(200, {id: engine, role: 'local', apiVersion: '0.38.0', eventCursor: engine + ':0'});
   if (endpoint === '/api/v1/events') {
     response.writeHead(200, {'Content-Type': 'text/event-stream'});
     response.write(': ready\n\n');

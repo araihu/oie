@@ -24,7 +24,7 @@ templ settings(v view) {
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
 	}
-	if !v.Preview && v.EngineID != "" {
+	if v.canManageLocalDownloads() {
 		@removeDownloadsDialog(v)
 	}
 	if v.EngineMode != nil {
@@ -160,8 +160,10 @@ templ deviceSettings(v view) {
 		@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
 		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
 	</div>
-	if !v.Preview && v.EngineID != "" {
+	if v.canManageLocalDownloads() {
 		@downloadRetentionSettings(v)
+	}
+	if !v.Preview && v.EngineID != "" {
 		@notificationSettings(v)
 	}
 }

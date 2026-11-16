@@ -148,6 +148,13 @@ async function create(api, endpoint, sequence, data) {
     await server.signIn(page, search);
 
     await page.goto(url + '/?open=settings&lang=en');
+    const settingsDrawer = page.getByRole('dialog', {name: 'Settings', exact: true});
+    await settingsDrawer.getByRole('tab', {name: 'This device', exact: true}).click();
+    const device = settingsDrawer.getByRole('tabpanel', {name: 'This device', exact: true});
+    await device.getByRole('heading', {name: 'Notifications', exact: true}).waitFor();
+    assert.equal(await device.locator('[data-download-retention]').count(), 0);
+    assert.equal(await page.locator('#remove-device-downloads-dialog').count(), 0);
+    await settingsDrawer.getByRole('tab', {name: 'General', exact: true}).click();
     const access = page.getByRole('button', {name: 'Access keys', exact: true});
     await access.click();
     const keyDrawer = page.getByRole('dialog', {name: 'Access keys', exact: true});
