@@ -157,5 +157,5 @@
     wake();
   });
 
-  window.OieEvents = {target, sync, wake, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
+  window.OieEvents = {target, sync, stop, wake, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
 })();

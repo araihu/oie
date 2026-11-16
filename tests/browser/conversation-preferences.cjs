@@ -126,13 +126,28 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert(await beforeArchiveNavigation.evaluate(node=>!node.isConnected),'legacy filter variants reuse the archive conversation route');
   assert.equal(await archiveScope.locator('[data-conversation-row]').count(),5);
   const draft='Keep this exact draft while preferences change 😀';await page.locator('#message-composer').fill(draft);
-  const geometry=await page.evaluate(sibling=>{
+  const geometry=await page.evaluate(async sibling=>{
    const timeline=document.getElementById('message-timeline'),list=document.getElementById('conversation-list');timeline.scrollTop=(timeline.scrollHeight-timeline.clientHeight)/2;list.scrollTop=180;
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
    const row=[...timeline.querySelectorAll('[data-message-id]')].find(value=>value.getBoundingClientRect().bottom>timeline.getBoundingClientRect().top);
    window.preferenceNodes={app:document.getElementById('oie-app'),pane:document.getElementById('conversation-pane'),timeline,list,composer:document.getElementById('message-composer'),sidebar:document.querySelector('.oie-sidebar'),sibling:document.querySelector('[data-conversation-row="'+sibling+'"]'),row};
+   const composer=window.preferenceNodes.composer.closest('form'),frames=[];
+   const sample=()=>{
+    const viewport=timeline.getBoundingClientRect(),box=composer.getBoundingClientRect();
+    frames.push([viewport.top,viewport.height,row.getBoundingClientRect().top-viewport.top,box.top,box.height]);
+    window.preferenceFrame=requestAnimationFrame(sample);
+   };
+   window.preferenceFrames=frames;
+   sample();
    return {rowId:row.dataset.messageId,top:row.getBoundingClientRect().top-timeline.getBoundingClientRect().top,listTop:list.scrollTop};
   },sibling.id);
-  await keyboardAction(page,'favorite');await until(()=>chat.favorite,'favorite commits');await settled(page,'favorite',true);
+  state.hold=true;
+  try{
+   await keyboardAction(page,'favorite');
+   await until(()=>!!state.release,'favorite waits for the engine');
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  }finally{state.hold=false;state.release?.();state.release=null}
+  await until(()=>chat.favorite,'favorite commits');await settled(page,'favorite',true);
   const heart='use[href$="#hi-16-solid-heart"]';
   await until(async()=>await page.locator('[data-conversation-row="'+chat.id+'"] .oie-conversation-favorite '+heart).count()===1,'favorite heart appears beside unread count');
   assert.equal(await page.locator('[data-filter="favorites"] svg').count(),0);
@@ -142,6 +157,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert(await page.evaluate(sibling=>{const n=window.preferenceNodes;return n.app===document.getElementById('oie-app')&&n.pane===document.getElementById('conversation-pane')&&n.timeline===document.getElementById('message-timeline')&&n.composer===document.getElementById('message-composer')&&n.sidebar===document.querySelector('.oie-sidebar')&&n.list===document.getElementById('conversation-list')&&n.sibling===document.querySelector('[data-conversation-row="'+sibling+'"]')},sibling.id),'preference changes preserve sibling and workspace identities');
   const after=await page.evaluate(rowId=>({top:document.querySelector('[data-message-id="'+rowId+'"]').getBoundingClientRect().top-document.getElementById('message-timeline').getBoundingClientRect().top,listTop:document.getElementById('conversation-list').scrollTop}),geometry.rowId);
   assert(Math.abs(after.top-geometry.top)<3,'preference metadata preserves the visible reading anchor');assert.equal(after.listTop,geometry.listTop);
+  const frames=await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{
+   cancelAnimationFrame(window.preferenceFrame);resolve(window.preferenceFrames);
+  })));
+  assert(frames.length>2,'favorite records frames before and after the delayed response');
+  for(const frame of frames)assert(frame.every((value,index)=>Math.abs(value-frames[0][index])<=1),JSON.stringify({before:frames[0],frame}));
   findings.push('App-owned favorite preserves the source conversation, unread badge, draft, sibling DOM, timeline and list/reading position');
 
   await clickAction(page,'archived');await settled(page,'archived',true);

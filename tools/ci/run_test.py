@@ -1,7 +1,10 @@
 """Exercise CI exit status and owned-resource cleanup without a real engine."""
+import fcntl
 import json
 import os
 from pathlib import Path
+import select
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -54,12 +57,17 @@ class RunnerLifecycleTest(unittest.TestCase):
         self.bin.mkdir()
         go = self.bin / 'go'
         go.write_text('#!/usr/bin/env python3\nimport os, sys\nfrom pathlib import Path\n'
+                      'previous = os.environ.get("CI_TEST_PREVIOUS_SNAPSHOT")\n'
+                      'if previous: assert not Path(previous).exists()\n'
                       'if "build" in sys.argv:\n'
                       ' p = Path(sys.argv[sys.argv.index("-o")+1]); p.write_text('+repr(DRIVER)+'); p.chmod(0o700)\n')
         go.chmod(0o700)
         self.capture = self.base / 'capture.json'
+        self.home = self.base / 'home'
         self.env = {**os.environ, 'PATH': str(self.bin)+os.pathsep+os.environ['PATH'],
-                    'CI_TEST_CAPTURE': str(self.capture), 'TMPDIR': str(self.base)}
+                    'CI_TEST_CAPTURE': str(self.capture), 'TMPDIR': str(self.base),
+                    'HOME': str(self.home)}
+        self.env.pop('GITHUB_ACTIONS', None)
         self.env.pop('OIE_CI_SSH_HOST', None)
         self.env.pop('OIE_CI_ARTIFACTS', None)
         self.env.pop('CI_TEST_WRITE_ARTIFACTS', None)
@@ -68,6 +76,66 @@ class RunnerLifecycleTest(unittest.TestCase):
         self.env.pop('CI_TEST_RESIST_TERM', None)
         self.env.pop('OIE_CI_CLEANUP_GRACE_SECONDS', None)
         self.command = ['sh', str(self.root / 'tools/ci/run.sh'), 'checks']
+
+    def start_background(self, command, **overrides):
+        child = subprocess.Popen(command, env={**self.env, **overrides}, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.PIPE, text=True, start_new_session=True)
+        self.addCleanup(child.stderr.close)
+        self.addCleanup(self.stop_background, child)
+        return child
+
+    @staticmethod
+    def stop_background(child):
+        if child.poll() is None:
+            os.killpg(child.pid, signal.SIGKILL)
+            child.wait(timeout=5)
+
+    def assert_waiting(self, child):
+        readable, _, _ = select.select([child.stderr], [], [], 5)
+        self.assertTrue(readable, 'waiting run did not report its status')
+        self.assertIn('waiting for the current local Oiê CI run', child.stderr.readline())
+
+    def test_local_runs_from_different_checkouts_wait_through_cleanup(self):
+        other_root = self.base / 'other'
+        shutil.copytree(self.root, other_root)
+        first = self.start_background(self.command, CI_TEST_SLEEP='1')
+        deadline = time.monotonic() + 10
+        while not self.capture.exists() and first.poll() is None and time.monotonic() < deadline:
+            time.sleep(.02)
+        self.assertTrue(self.capture.exists())
+        snapshot = Path(json.loads(self.capture.read_text())['source']).parent
+        other_capture = self.base / 'other.json'
+        temp_dirs = set(self.base.glob('tmp.*'))
+        second = self.start_background(
+            ['sh', str(other_root / 'tools/ci/run.sh'), 'desktop'],
+            CI_TEST_CAPTURE=str(other_capture), CI_TEST_PREVIOUS_SNAPSHOT=str(snapshot),
+        )
+        self.assert_waiting(second)
+        self.assertEqual(set(self.base.glob('tmp.*')), temp_dirs)
+        self.assertFalse(other_capture.exists())
+        first.terminate()
+        _, error = first.communicate(timeout=5)
+        self.assertEqual(first.returncode, 143, error)
+        _, error = second.communicate(timeout=10)
+        self.assertEqual(second.returncode, 0, error)
+        record = json.loads(other_capture.read_text())
+        self.assertEqual(record['args'][record['args'].index('-mode')+1], 'desktop')
+
+    def test_waiting_run_can_cancel_and_actions_job_bypasses_local_lock(self):
+        path = self.home / '.local/state/oie/ci.lock'
+        path.parent.mkdir(parents=True)
+        with path.open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            waiting = self.start_background(self.command)
+            self.assert_waiting(waiting)
+            waiting.send_signal(signal.SIGINT)
+            _, error = waiting.communicate(timeout=5)
+            self.assertEqual(waiting.returncode, 130, error)
+            self.assertFalse(self.capture.exists())
+            result = subprocess.run(self.command, env={**self.env, 'GITHUB_ACTIONS': 'true'},
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(self.capture.exists())
 
     def test_success_and_failure_keep_status_and_remove_snapshot(self):
         for code in [0, 23]:

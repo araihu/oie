@@ -1072,6 +1072,7 @@ if m.Moderation==nil {
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
 </div>
 }
+<div class="oie-message-body-content">
 if !m.IsOwn && !grouped {
 <div class="oie-message-heading"><strong class={v.messageAvatarBorder(m)}>{m.Sender.DisplayName}</strong></div>
 }
@@ -1084,6 +1085,7 @@ if m.Moderation.Reason!=nil {
 @messageBody(v,m)
 @outgoingAttachments(v,m.Message)
 }
+</div>
 <div class="oie-message-stamp">
 @messageLeadingIndicators(v,m)
 @messageSendIndicator(v,m)
