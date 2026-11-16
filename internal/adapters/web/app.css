@@ -29,7 +29,7 @@ html.dark {
 :root .text-primary,html.dark .dark\:text-primary-dark{color:var(--oie-accent-text)}
 html,body{margin:0;height:100%;font-family:var(--font-body);background:var(--oie-bg);color:var(--oie-text)}
 *{box-sizing:border-box} [x-cloak]{display:none!important}
-.oie-shell{height:var(--oie-workspace-height,100dvh);padding:var(--oie-safe-top) var(--oie-safe-right) var(--oie-safe-bottom) var(--oie-safe-left);min-height:0;overflow:hidden;background:var(--oie-bg);color:var(--oie-text)}
+.oie-shell{height:var(--oie-workspace-height,100dvh);padding:var(--oie-safe-top) var(--oie-safe-right) var(--oie-safe-bottom) var(--oie-safe-left);min-height:0;overflow:hidden;background:var(--oie-panel);color:var(--oie-text)}
 .oie-main{position:relative;padding:0;overflow:hidden;background:var(--oie-panel)}
 .oie-route{height:100%}
 .oie-sidebar{
