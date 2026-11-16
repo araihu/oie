@@ -241,18 +241,30 @@ templ scheduleControl(v view) {
 	@splitbutton.SplitButton(splitbutton.Config{
 		ID:"composer-split", Primary:schedulePrimaryAction(v),
 		MenuLabel:v.Text.More, MenuAlign:dropdown.AlignEnd,
-		Sections:[]dropdown.Section{{Items:[]dropdown.Item{{
-			ID:"composer-schedule-new",
-			Label:v.Text.Schedule,
-			Icon:glyph(heroicons.Icon16SolidClock),
-			OnClick:"$dispatch('oie:schedule-compose')",
-			Disabled:!v.sendAllowed(),
-		},{
-			ID:"composer-schedule-reschedule",
-			Label:v.Text.Reschedule,
-			Icon:glyph(heroicons.Icon16SolidClock),
-			OnClick:"$dispatch('oie:schedule-compose')",
-		}}}},
+		Sections:[]dropdown.Section{
+			{Items:[]dropdown.Item{{
+				ID:"composer-attach-image",
+				Label:v.Text.AttachImage,
+				Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsPhoto16SolidPhoto, Decorative:true, RootClass:"oie-icon"}),
+				OnClick:"$dispatch('oie:compose-add','image')",
+			},{
+				ID:"composer-attach-file",
+				Label:v.Text.AttachFile,
+				Icon:glyph(heroicons.Icon16SolidPaperClip),
+				OnClick:"$dispatch('oie:compose-add','file')",
+			}}},
+			{Items:[]dropdown.Item{{
+				ID:"composer-schedule-new",
+				Label:v.Text.Schedule,
+				Icon:glyph(heroicons.Icon16SolidClock),
+				OnClick:"$dispatch('oie:schedule-compose')",
+			},{
+				ID:"composer-schedule-reschedule",
+				Label:v.Text.Reschedule,
+				Icon:glyph(heroicons.Icon16SolidClock),
+				OnClick:"$dispatch('oie:schedule-compose')",
+			}}},
+		},
 		RootClass:"oie-schedule-split",
 	})
 }
@@ -278,26 +290,6 @@ templ scheduleEditor(v view) {
 		</div>
 	}
 	</div>
-}
-
-templ attachmentMenu(v view) {
-	if v.scheduleAllowed() {
-	@dropdown.Dropdown(dropdown.Config{
-		ID: "composer-attachments",
-		Label: v.Text.Attach,
-		Trigger: attachmentMenuTrigger(v),
-		Sections: []dropdown.Section{{Items: []dropdown.Item{
-			{ID:"composer-attach-image", Label:v.Text.AttachImage, Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsPhoto16SolidPhoto, Decorative:true, RootClass:"oie-icon"}), OnClick:"$dispatch('oie:compose-add','image')"},
-			{ID:"composer-attach-file", Label:v.Text.AttachFile, Icon:glyph(heroicons.Icon16SolidPaperClip), OnClick:"$dispatch('oie:compose-add','file')"},
-		}}},
-	})
-	} else {
-		@attachmentMenuTrigger(v)
-	}
-}
-
-templ attachmentMenuTrigger(v view) {
-	@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Attach,"data-attach-menu":"","disabled":!v.scheduleAllowed(),"x-ref":"trigger"})) { @glyph(heroicons.Icon16SolidPlus) }
 }
 
 templ composerAttachments(v view) {

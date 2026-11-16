@@ -3,6 +3,14 @@ SELECT m.* FROM shared_catalog_sources AS s CROSS JOIN messages AS m ON m.id=s.m
 WHERE s.parser_version<sqlc.arg(parser_version)
 ORDER BY s.parser_version,s.position_ms DESC,s.message_id DESC LIMIT sqlc.arg(batch_limit);
 
+-- name: ModeratedSharedContentCandidates :many
+SELECT DISTINCT m.* FROM shared_catalog_moderated_sources x JOIN messages m ON m.id=x.message_id
+JOIN conversations c ON c.id=m.conversation_id LEFT JOIN shared_content_state s ON s.message_id=m.id
+WHERE COALESCE(s.parser_version,-1)<sqlc.arg(parser_version)
+AND json_extract(c.payload,'$.Request') IS NULL
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+ORDER BY m.id LIMIT sqlc.arg(batch_limit);
+
 -- name: PutSharedContent :exec
 INSERT INTO shared_content(id,revision_id,message_id,url,kind,file_name) VALUES(?,?,?,?,?,?)
 ON CONFLICT(message_id,url) DO UPDATE SET revision_id=excluded.revision_id,kind=excluded.kind,file_name=excluded.file_name
@@ -45,11 +53,14 @@ AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value F
 AND json_extract(c.payload,'$.Request') IS NULL
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND NOT EXISTS (
+AND (CAST(sqlc.arg(include_retracted) AS INTEGER)=1 OR NOT EXISTS (
  SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
  ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
  WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
-)
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
 AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
 AND ((CAST(sqlc.arg(content_type) AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
  OR (CAST(sqlc.arg(content_type) AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
@@ -80,12 +91,15 @@ SELECT COUNT(*) FROM (
     AND json_extract(c.payload,'$.Request') IS NULL
     AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
     AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND NOT EXISTS (
+AND (CAST(sqlc.arg(include_retracted) AS INTEGER)=1 OR NOT EXISTS (
  SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
  ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
  WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
-)
-    AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
+AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
     AND ((CAST(sqlc.arg(content_type) AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
      OR (CAST(sqlc.arg(content_type) AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
      OR (CAST(sqlc.arg(content_type) AS TEXT)='audio' AND sc.kind='audio')
@@ -120,7 +134,11 @@ WITH page AS (
  AND position_ms<=CAST(sqlc.arg(before_ms) AS INTEGER)
  AND (position_ms,reference_id)<(CAST(sqlc.arg(before_ms) AS INTEGER),CAST(sqlc.arg(before_id) AS TEXT))
  AND EXISTS (SELECT 1 FROM shared_content sc JOIN shared_catalog_sources s ON s.message_id=sc.message_id
-             WHERE sc.id=o.reference_id AND s.parser_version>=sqlc.arg(parser_version))
+             WHERE sc.id=o.reference_id AND s.parser_version>=sqlc.arg(parser_version)
+             AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT sc.message_id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=sc.message_id)
+)))
  ORDER BY position_ms DESC,reference_id DESC LIMIT sqlc.arg(page_limit)
 )
 SELECT sc.id,sc.revision_id,
@@ -140,6 +158,10 @@ SELECT COUNT(*) FROM (
  JOIN shared_content sc ON sc.id=o.reference_id
  JOIN shared_catalog_sources s ON s.message_id=sc.message_id
  WHERE o.scope=sqlc.arg(scope) AND o.tab=sqlc.arg(tab) AND s.parser_version>=sqlc.arg(parser_version)
+ AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT sc.message_id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=sc.message_id)
+))
  LIMIT sqlc.arg(page_limit)
 );
 

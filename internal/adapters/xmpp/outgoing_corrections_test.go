@@ -192,10 +192,10 @@ func TestCorrectionLatestUsesDispatchOrderIncludingUnsupportedPayloads(t *testin
 					t.Fatal("accepted correction was rebound across a newer original", outcome)
 				}
 				_, err = m.PrepareCorrection(t.Context(), e.account, c, second)
-				if payload == "text" && err != nil {
-					t.Fatal("latest plain text lost eligibility because its wall-clock timestamp receded", err)
+				if payload != "mentions" && err != nil {
+					t.Fatal("latest supported payload lost eligibility because its wall-clock timestamp receded", err)
 				}
-				if payload != "text" && err == nil {
+				if payload == "mentions" && err == nil {
 					t.Fatal("latest unsupported payload became editable")
 				}
 			})

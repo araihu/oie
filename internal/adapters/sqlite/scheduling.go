@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -78,15 +77,11 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 		return application.MessageResult{}, err
 	}
 	if receipt != nil {
-		if receipt.Result == "null" {
-			return application.MessageResult{}, application.ErrNotFound
+		message, err := readMessageReceipt(ctx, q, receipt.Result)
+		if err != nil {
+			return application.MessageResult{}, err
 		}
-		var m domain.Message
-		err = json.Unmarshal([]byte(receipt.Result), &m)
-		if err == nil {
-			err = hydrateReply(ctx, q, &m)
-		}
-		return application.MessageResult{Message: m, Replayed: true}, err
+		return application.MessageResult{Message: message, Replayed: true}, nil
 	}
 	id := string(in.Operation.ResourceID)
 	row, err := q.GetMessage(ctx, id)
@@ -98,14 +93,14 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 		return application.MessageResult{}, err
 	}
 	if !m.IsOwn || m.SendState != "queued" || m.RevisionID != in.ExpectedRevisionID || (in.SendNow && m.ScheduledAt == nil) {
-		return application.MessageResult{}, application.StateConflict{Current: m}
+		return application.MessageResult{}, pendingMessageConflict(ctx, q, m)
 	}
 	outbox, err := q.GetOutbox(ctx, id)
 	if err != nil {
 		return application.MessageResult{}, err
 	}
 	if outbox.AttemptCount != 0 {
-		return application.MessageResult{}, application.StateConflict{Current: m}
+		return application.MessageResult{}, pendingMessageConflict(ctx, q, m)
 	}
 	next := in.Operation.CreatedAt
 	hideFromTimeline := in.ScheduledAt != nil && m.ScheduledAt == nil

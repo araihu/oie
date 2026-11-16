@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "tool": "goshtoso-iconpack",
-  "release": "iconpack-192f41fd4128",
+  "release": "iconpack-f3180696fe84",
   "identityRevision": 1,
   "catalogSchemaVersion": 1,
-  "catalogSha256": "192f41fd41284ecde661cb5cd418053fa53e11313a5fec46d0fde2ebfebc112d",
+  "catalogSha256": "f3180696fe84d5ba69408dd2278ffd6b44a875bef4d02459a77efee732f6d6ee",
   "releaseJsonSha256": "",
   "checksumsSha256": "",
   "sourceKind": "muamba-snapshot",
   "archiveSha256": "",
-  "sourceConfigSha256": "192f41fd41284ecde661cb5cd418053fa53e11313a5fec46d0fde2ebfebc112d",
-  "sourceLockSha256": "3b6266652230022aea110527c9314be41e92195b55a89f2bb134506f6423000f",
+  "sourceConfigSha256": "f3180696fe84d5ba69408dd2278ffd6b44a875bef4d02459a77efee732f6d6ee",
+  "sourceLockSha256": "9efc36e025139b44583dcd419233de67fb9f6bbfd5d5ce0f5c6aa6c92de5757b",
   "package": "appicons",
   "constPrefix": "Icon",
   "spriteUrl": "/ui/icons/heroicons-extra.svg",
@@ -47,6 +47,16 @@
       "goIdentifier": "IconHeroiconsCheckBadge16SolidCheckBadge"
     },
     {
+      "canonicalName": "heroicons-emoji-24-outline-face-smile",
+      "namespace": "custom",
+      "product": "heroicons-emoji",
+      "path": "heroicons-emoji/24/outline/face-smile.svg",
+      "spriteSymbol": "heroicons-emoji-24-outline-face-smile",
+      "colorBehavior": "currentColor",
+      "sha256": "999b5368853f2566aaef668914a41018cf93900b1b1a77b18acbbbd648a1bd42",
+      "goIdentifier": "IconHeroiconsEmoji24OutlineFaceSmile"
+    },
+    {
       "canonicalName": "heroicons-forward-16-solid-arrow-uturn-right",
       "namespace": "custom",
       "product": "heroicons-forward",
@@ -67,6 +77,16 @@
       "goIdentifier": "IconHeroiconsGroup16SolidUserGroup"
     },
     {
+      "canonicalName": "heroicons-history-16-solid-document-magnifying-glass",
+      "namespace": "custom",
+      "product": "heroicons-history",
+      "path": "heroicons-history/16/solid/document-magnifying-glass.svg",
+      "spriteSymbol": "heroicons-history-16-solid-document-magnifying-glass",
+      "colorBehavior": "currentColor",
+      "sha256": "f840aac9570a7706b3a61ba8cdb1acae251e56000d4032af49c9201f367311e1",
+      "goIdentifier": "IconHeroiconsHistory16SolidDocumentMagnifyingGlass"
+    },
+    {
       "canonicalName": "heroicons-navigation-16-solid-arrow-turn-right-down",
       "namespace": "custom",
       "product": "heroicons-navigation",
@@ -85,6 +105,16 @@
       "colorBehavior": "currentColor",
       "sha256": "a055d6e57eaf4049d2ba6600f2115eda57035403559da134f5dcf50f736ffbe3",
       "goIdentifier": "IconHeroiconsNoSymbol16SolidNoSymbol"
+    },
+    {
+      "canonicalName": "heroicons-pencil-16-solid-pencil",
+      "namespace": "custom",
+      "product": "heroicons-pencil",
+      "path": "heroicons-pencil/16/solid/pencil.svg",
+      "spriteSymbol": "heroicons-pencil-16-solid-pencil",
+      "colorBehavior": "currentColor",
+      "sha256": "077a8680e8c24d2557e7966ac350807ef440e621c4dedaea091a51871c8ac731",
+      "goIdentifier": "IconHeroiconsPencil16SolidPencil"
     },
     {
       "canonicalName": "heroicons-photo-16-solid-photo",
@@ -177,6 +207,12 @@
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
+      "path": "LICENSES/heroicons-emoji-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
       "path": "LICENSES/heroicons-forward-LICENSE.txt",
       "mode": "0644",
       "bytes": 1071,
@@ -189,6 +225,12 @@
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
     },
     {
+      "path": "LICENSES/heroicons-history-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
       "path": "LICENSES/heroicons-navigation-LICENSE.txt",
       "mode": "0644",
       "bytes": 1071,
@@ -196,6 +238,12 @@
     },
     {
       "path": "LICENSES/heroicons-no-symbol-LICENSE.txt",
+      "mode": "0644",
+      "bytes": 1071,
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "path": "LICENSES/heroicons-pencil-LICENSE.txt",
       "mode": "0644",
       "bytes": 1071,
       "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
@@ -245,38 +293,38 @@
     {
       "path": "NOTICE",
       "mode": "0644",
-      "bytes": 2516,
-      "sha256": "6153026f868378f7e625fb506622e6c5c04e6ada406d16b9a24d0e9f1c75b06b"
+      "bytes": 3042,
+      "sha256": "0f6c43db7f5b3c179aca81effa10398be940a81286a2f8e33290f2f76f4f70a3"
     },
     {
       "path": "PROVENANCE/.iconpack.yaml",
       "mode": "0644",
-      "bytes": 5542,
-      "sha256": "192f41fd41284ecde661cb5cd418053fa53e11313a5fec46d0fde2ebfebc112d"
+      "bytes": 6705,
+      "sha256": "f3180696fe84d5ba69408dd2278ffd6b44a875bef4d02459a77efee732f6d6ee"
     },
     {
       "path": "icons.json",
       "mode": "0644",
-      "bytes": 8830,
-      "sha256": "9b791ad82709637f8e8e7ce0f283980a458805aa7ee822707055250c825dea11"
+      "bytes": 10295,
+      "sha256": "3b38fd18e09b651893f4a5b3199d000cdf8c4fab67d324d7f4aa740bb542d470"
     },
     {
       "path": "icons_gen.go",
       "mode": "0644",
-      "bytes": 7823,
-      "sha256": "9488a94691a579288e3c5b821cb0e1be982e18eccd841803162d1693cb6e3468"
+      "bytes": 9223,
+      "sha256": "8d0a9dc48452dd0fd15c84d9d3950be7216fa433db1503a61325b01a7fdfc5c0"
     },
     {
       "path": "provenance.json",
       "mode": "0644",
-      "bytes": 13182,
-      "sha256": "e4b5f0c871b59dbe7ea2f0975e67c7443f51e20c20d2a97389e6d8e45127ca80"
+      "bytes": 15856,
+      "sha256": "38c1dac8d28ef223a334cb84b45eca5b9c0f83af30f01d02a7cc482b47b3cd7d"
     },
     {
       "path": "sprite.svg",
       "mode": "0644",
-      "bytes": 8559,
-      "sha256": "9bf8e4579deed517eba33e204bf06261b054dbfe57d4b169f0e5d931e5a075a4"
+      "bytes": 9995,
+      "sha256": "12249878fc8748d4cda15bb33a05c7ff10889e3e55437097a201a03d8dd15512"
     }
   ]
 }

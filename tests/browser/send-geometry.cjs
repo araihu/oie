@@ -9,6 +9,28 @@ module.exports=async({browser,base,chat,state,emit,until,id})=>{
   return {x:bubble.x,y:bubble.y,width:bubble.width,height:bubble.height,rowHeight:outer.height};
  });
  try{
+  await page.setViewportSize({width:838,height:1108});
+  await page.goto(base+'/?chat='+chat+'&lang=pt-BR&theme=dark');
+  const composer=page.getByRole('textbox',{name:'Digite uma mensagem',exact:true});
+  assert.equal(await composer.getAttribute('placeholder'),null);
+  await composer.focus();
+  const empty=await composer.evaluate(input=>({
+   overflowX:getComputedStyle(input).overflowX,
+   scrollWidth:input.scrollWidth,
+   clientWidth:input.clientWidth,
+   height:input.clientHeight
+  }));
+  assert.equal(empty.overflowX,'hidden','empty composer has no horizontal scrollbar');
+  assert.equal(empty.scrollWidth,empty.clientWidth,'empty composer has no horizontal overflow');
+  await composer.fill(Array(30).fill('Linha de teste').join('\n'));
+  const draft=await composer.evaluate(input=>{
+   input.scrollTop=input.scrollHeight;
+   return {height:input.clientHeight,scrollTop:input.scrollTop};
+  });
+  assert(draft.height>empty.height,'composer grows with the draft');
+  assert(draft.scrollTop>0,'long drafts scroll vertically');
+  await composer.fill('');
+
   for(const width of [390,1440])for(const mode of ['light','dark'])for(const libraryTheme of ['goshtoso','minimal'])for(const originalText of texts){
    await page.setViewportSize({width,height:900});await page.goto(base+'/?chat='+chat+'&lang=pt-BR&theme='+mode);await page.evaluate(theme=>document.documentElement.dataset.theme=theme,libraryTheme);await page.evaluate(()=>document.fonts.ready);
    const checkAccessibility=async(row,phase)=>{

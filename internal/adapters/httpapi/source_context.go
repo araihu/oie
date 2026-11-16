@@ -24,7 +24,7 @@ func (s *Server) GetMessageSourceContext(ctx context.Context, r engineapi.GetMes
 	out := engineapi.MessageSourceContext{
 		Engine:       identity,
 		Conversation: conversation(owner),
-		Context:      messageContext(window),
+		Context:      s.messageContext(ctx, owner, window),
 	}
 	s.sourceConversationMetadata(ctx, &out)
 	s.sourceMessageMetadata(ctx, &out)

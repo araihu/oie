@@ -25,7 +25,7 @@ func (v view) infoBackHref() string {
 	if v.InfoView == "stars" || v.InfoView == "participants" || v.InfoView == "retention" {
 		focus = v.InfoView
 	}
-	return v.infoHref("", "", "infoQuery", "", "infoFocus", focus)
+	return v.infoHref("", "", "infoQuery", "", "infoIncludeRetracted", "", "infoFocus", focus)
 }
 func (v view) infoSourceHref(m engineapi.Message) string {
 	return v.href("section", "chats", "chat", m.ConversationId, "message", m.Id, "account", m.AccountId, "q", "", "filter", "all", "open", "", "infoView", "", "infoType", "", "infoCursor", "", "infoQuery", "", "infoFocus", "", "lang", v.Locale, "theme", v.Theme)
@@ -36,6 +36,7 @@ func (v view) infoSharedView() view {
 	out.SharedContent = v.InfoShared
 	out.SharedType = v.InfoType
 	out.SharedCursor = v.InfoCursor
+	out.SharedIncludeRetracted = v.InfoIncludeRetracted
 	out.SharedConversation = v.Selected.Id
 	out.SharedInvalid = v.InfoInvalid
 	out.MessagePreviews = map[string][]engineapi.MessagePreview{}

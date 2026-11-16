@@ -34,6 +34,84 @@ func outboxFixture(t *testing.T) (*Store, *application.Engine, domain.Conversati
 	return store, e, result.Conversation
 }
 
+func TestWithdrawnMessageIsMaskedInReceiptsAndConflicts(t *testing.T) {
+	store, engine, chat := outboxFixture(t)
+	ctx := t.Context()
+	source, err := engine.SendMessage(ctx, migrationID(), chat.ID, "forwarded before retraction")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := migrationID()
+	forwarded, err := engine.ForwardMessage(ctx, key, source.Message.ID, source.Message.RevisionID, chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copiedID := forwarded.Message.ID
+	now := time.Now().UTC()
+	if _, err := store.TransitionMessage(ctx, copiedID, "queued", "dispatching", migrationID(), now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TransitionMessage(ctx, copiedID, "dispatching", "submitted", migrationID(), now, now); err != nil {
+		t.Fatal(err)
+	}
+	retraction := application.IncomingRetraction{
+		Scope: "xmpp:correct:sender:alice@localhost", RemoteID: string(copiedID), At: now.Add(time.Second),
+	}
+	if err := store.RecordMessageRetraction(ctx, chat.AccountID, chat.Kind, chat.Address, retraction); err != nil {
+		t.Fatal(err)
+	}
+	visible, err := engine.Message(ctx, copiedID)
+	if err != nil || visible.Retraction == nil {
+		t.Fatalf("fixture message was not retracted: %+v %v", visible, err)
+	}
+	assertMasked := func(t *testing.T, message domain.Message) {
+		t.Helper()
+		if message.ID != copiedID || message.AccountID != chat.AccountID || message.ConversationID != chat.ID ||
+			message.Retraction == nil || !message.Retraction.OriginalAvailable || !message.Retraction.At.Equal(retraction.At) ||
+			message.OriginalText != "" || message.Composition != nil {
+			t.Fatalf("withdrawn message escaped the retained-original path: %+v", message)
+		}
+	}
+	t.Run("forward replay", func(t *testing.T) {
+		replay, err := engine.ForwardMessage(ctx, key, source.Message.ID, source.Message.RevisionID, chat.ID)
+		if err != nil || !replay.Replayed {
+			t.Fatalf("forward replay: %+v %v", replay, err)
+		}
+		assertMasked(t, replay.Message)
+	})
+	t.Run("transactional send replay", func(t *testing.T) {
+		row, err := store.queries.GetOperation(ctx, string(key))
+		if err != nil {
+			t.Fatal(err)
+		}
+		replay, err := store.AcceptMessage(ctx, application.MessageMutation{
+			Operation:   application.Operation{ID: key, ResourceID: copiedID, Kind: "send_message", CreatedAt: now},
+			Fingerprint: row.Fingerprint, Message: forwarded.Message,
+		})
+		if err != nil || !replay.Replayed {
+			t.Fatalf("transactional send replay: %+v %v", replay, err)
+		}
+		assertMasked(t, replay.Message)
+	})
+	t.Run("cancel conflict", func(t *testing.T) {
+		_, err := engine.CancelMessage(ctx, migrationID(), copiedID, visible.RevisionID)
+		var conflict application.StateConflict
+		if !errors.As(err, &conflict) {
+			t.Fatalf("cancel conflict: %v", err)
+		}
+		assertMasked(t, conflict.Current)
+	})
+	t.Run("reschedule conflict", func(t *testing.T) {
+		at := now.Add(time.Hour)
+		_, err := engine.UpdatePendingMessage(ctx, migrationID(), copiedID, visible.RevisionID, nil, &at, false)
+		var conflict application.StateConflict
+		if !errors.As(err, &conflict) {
+			t.Fatalf("reschedule conflict: %v", err)
+		}
+		assertMasked(t, conflict.Current)
+	})
+}
+
 func TestProviderRejectionRacingDispatchCompletion(t *testing.T) {
 	store, engine, chat := outboxFixture(t)
 	ctx := t.Context()

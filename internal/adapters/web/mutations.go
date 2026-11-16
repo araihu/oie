@@ -170,6 +170,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		status, result = s.changeRoom(ctx, r, text, true)
 	case "/ui/conversations/preferences":
 		status, result = s.changeConversationPreferences(ctx, r, text)
+	case "/ui/messages/retract":
+		status, result = s.submitRetraction(ctx, r, text)
 	case "/ui/messages/forward":
 		status, result = s.submitForward(ctx, r, text)
 	case "/ui/messages/star":
@@ -354,6 +356,21 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	case "found":
 		if matchingComposition(*receipt, conversation, account, payload) {
 			return acceptedResult(text, *receipt)
+		}
+		if receipt.IsOwn && receipt.ConversationId == conversation && receipt.AccountId == account &&
+			(receipt.Retraction != nil || receipt.Moderation != nil) {
+			verify := true
+			params.XOieVerifyExpiredSend = &verify
+			response, err := s.client.SendMessageWithResponse(ctx, conversation, params, payload)
+			if err == nil {
+				switch response.StatusCode() {
+				case http.StatusNoContent:
+					return acceptedResult(text, *receipt)
+				case http.StatusConflict:
+					return response.StatusCode(), problemResult(text, response.StatusCode(), response.Body)
+				}
+			}
+			return 503, mutationResult{Message: text.PendingAcceptance, Code: "unavailable"}
 		}
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	case "expired":
@@ -569,7 +586,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/conversations/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/communication", "/ui/accounts/contacts", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/conversations/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/retract", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/communication", "/ui/accounts/contacts", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

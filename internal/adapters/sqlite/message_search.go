@@ -28,7 +28,7 @@ func (s *Store) searchMessages(ctx context.Context, query domain.MessageSearchQu
 	open func(context.Context, *Store) (*sql.Tx, *dbgen.Queries, error),
 	selectRows func(context.Context, *sql.Tx, *dbgen.Queries, dbgen.SearchMessagesParams) ([]dbgen.SearchMessagesRow, error),
 ) (domain.MessageSearchPage, error) {
-	page := domain.MessageSearchPage{Query: query.Search, AccountID: query.AccountID, AccountIDs: query.AccountIDs, ConversationID: query.ConversationID, IncludeEditHistory: query.IncludeEditHistory, Items: []domain.MessageSearchHit{}}
+	page := domain.MessageSearchPage{Query: query.Search, AccountID: query.AccountID, AccountIDs: query.AccountIDs, ConversationID: query.ConversationID, IncludeEditHistory: query.IncludeEditHistory, IncludeRetracted: query.IncludeRetracted, Items: []domain.MessageSearchHit{}}
 	cursor, err := application.ParseMessageSearchCursor(query.Cursor, query.ScopeHash)
 	if err != nil {
 		return page, err
@@ -42,8 +42,12 @@ func (s *Store) searchMessages(ctx context.Context, query domain.MessageSearchQu
 	if query.IncludeEditHistory {
 		history = 1
 	}
+	retracted := int64(0)
+	if query.IncludeRetracted {
+		retracted = 1
+	}
 	accountIDs := jsonText(nonNilIDs(query.AccountIDs))
-	rows, err := selectRows(ctx, tx, q, dbgen.SearchMessagesParams{AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), IncludeHistory: history, Search: query.Search, ParserVersion: application.SharedContentVersion, PageLimit: int64(query.Limit + 1), CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, CursorCurrent: cursor.Current, CursorRevisionAt: cursor.RevisionAt, CursorRevisionID: string(cursor.RevisionID)})
+	rows, err := selectRows(ctx, tx, q, dbgen.SearchMessagesParams{AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), IncludeHistory: history, IncludeRetracted: retracted, Search: query.Search, ParserVersion: application.SharedContentVersion, PageLimit: int64(query.Limit + 1), CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, CursorCurrent: cursor.Current, CursorRevisionAt: cursor.RevisionAt, CursorRevisionID: string(cursor.RevisionID)})
 	if err != nil {
 		return page, err
 	}

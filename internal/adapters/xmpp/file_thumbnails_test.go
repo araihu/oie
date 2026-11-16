@@ -40,7 +40,7 @@ func TestFileThumbnailsDecodeNamespacesAndUnsupportedSources(t *testing.T) {
 func TestAdvertisedOriginalDigestsUseOnlyFileMetadataHashes(t *testing.T) {
 	raw := `<message xmlns='jabber:client'>
 		<file-sharing xmlns='urn:xmpp:sfs:0'><file xmlns='urn:xmpp:file:metadata:0'>
-			<media-type>audio/mpeg</media-type>
+			<media-type>audio/mpeg</media-type><name>meeting recording.mp3</name>
 			<hash xmlns='urn:xmpp:hashes:2' algo='sha-256'>2XarmwTlNxDAMkvymloX3S5+VbylNrJt/l5QyPa+YoU=</hash>
 			<hash xmlns='urn:xmpp:hashes:2' algo='sha-512'>invalid</hash>
 			<hash xmlns='urn:xmpp:hashes:2' algo='sha-1'>2AfMGH8O7UNPTvUVAM9aK13mpCY=</hash>
@@ -59,6 +59,10 @@ func TestAdvertisedOriginalDigestsUseOnlyFileMetadataHashes(t *testing.T) {
 	urls := decodeAudioURLs(meta)
 	if len(urls) != 1 || urls[0] != digests[0].URL || attachmentBodyFallback("", meta) != urls[0] {
 		t.Fatal(urls)
+	}
+	refs := decodeFileReferences(meta)
+	if len(refs) != 1 || refs[0].Kind != "audio" || refs[0].URL != urls[0] || refs[0].FileName != "meeting recording.mp3" {
+		t.Fatal(refs)
 	}
 	if attachmentBodyFallback("caption", meta) != "caption" {
 		t.Fatal("an explicit wire caption was changed")

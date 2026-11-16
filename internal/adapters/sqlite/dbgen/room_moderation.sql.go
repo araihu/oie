@@ -96,12 +96,3 @@ func (q *Queries) ModeratedRoomMessageSources(ctx context.Context, arg Moderated
 	}
 	return items, nil
 }
-
-const removeModeratedSharedContent = `-- name: RemoveModeratedSharedContent :exec
-DELETE FROM shared_content WHERE message_id=?
-`
-
-func (q *Queries) RemoveModeratedSharedContent(ctx context.Context, messageID string) error {
-	_, err := q.db.ExecContext(ctx, removeModeratedSharedContent, messageID)
-	return err
-}

@@ -8,6 +8,7 @@ import (
  "github.com/araihu/goshtoso/components/popover"
  "github.com/araihu/goshtoso/components/textinput"
  "github.com/araihu/goshtoso/expressions"
+ "github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 templ emojiCompletion(v view) {
@@ -35,7 +36,9 @@ if !v.composeAllowed() {
 }
 
 templ emojiTrigger(v view) {
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-emoji-trigger":"","aria-label":v.Text.EmojiPicker,"title":v.Text.EmojiPicker,"disabled":!v.composeAllowed()})){@glyph(heroicons.Icon16SolidFaceSmile)}
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-emoji-trigger":"","aria-label":v.Text.EmojiPicker,"title":v.Text.EmojiPicker,"disabled":!v.composeAllowed()})){
+@appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsEmoji24OutlineFaceSmile,Decorative:true,RootClass:"oie-icon"})
+}
 }
 
 templ emojiContent(v view) {

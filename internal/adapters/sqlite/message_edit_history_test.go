@@ -21,7 +21,7 @@ import (
 
 func editHistory(t *testing.T, e *application.Engine, id domain.ID, cursor string, limit int) domain.MessageEditHistoryPage {
 	t.Helper()
-	page, err := e.MessageEditHistory(t.Context(), id, cursor, limit)
+	page, err := e.MessageEditHistory(t.Context(), id, cursor, limit, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestEditHistoryPagesVerifiedContentAndCanonicalAliases(t *testing.T) {
 		t.Fatal("unrelated activity invalidated history")
 	}
 	receiveCorrection(t, e, c, "fourth", "new latest source", "third", "proof:bob", "bob", at.Add(3*time.Second))
-	if _, err := e.MessageEditHistory(t.Context(), root.ID, first.NextCursor, 1); !errors.Is(err, application.ErrHistoryChanged) {
+	if _, err := e.MessageEditHistory(t.Context(), root.ID, first.NextCursor, 1, false); !errors.Is(err, application.ErrHistoryChanged) {
 		t.Fatal("stale content snapshot accepted", err)
 	}
 	fresh := editHistory(t, e, root.ID, "", 20)
@@ -136,11 +136,11 @@ func TestEditHistoryRejectsForeignMalformedAndOversizedCursors(t *testing.T) {
 	root := correctionMessages(t, e, c)[0]
 	page := editHistory(t, e, root.ID, "", 1)
 	other := replySeed(t, s, c, "other message", at, nil, nil)
-	if _, err := e.MessageEditHistory(t.Context(), other.ID, page.NextCursor, 1); !errors.Is(err, application.ErrInvalid) {
+	if _, err := e.MessageEditHistory(t.Context(), other.ID, page.NextCursor, 1, false); !errors.Is(err, application.ErrInvalid) {
 		t.Fatal("cursor escaped canonical message", err)
 	}
 	for _, cursor := range []string{"!", base64.RawURLEncoding.EncodeToString([]byte(`{"unknown":1}`)), base64.RawURLEncoding.EncodeToString([]byte(`{} {}`)), string(make([]byte, 2049))} {
-		if _, err := e.MessageEditHistory(t.Context(), root.ID, cursor, 1); !errors.Is(err, application.ErrInvalid) {
+		if _, err := e.MessageEditHistory(t.Context(), root.ID, cursor, 1, false); !errors.Is(err, application.ErrInvalid) {
 			t.Fatal("malformed cursor accepted", err)
 		}
 	}
@@ -169,7 +169,7 @@ func TestEditHistoryRejectsForeignMalformedAndOversizedCursors(t *testing.T) {
 		}
 		changed[mutation.field] = mutation.value
 		data, _ := json.Marshal(changed)
-		if _, err = e.MessageEditHistory(t.Context(), root.ID, base64.RawURLEncoding.EncodeToString(data), 1); !errors.Is(err, mutation.want) {
+		if _, err = e.MessageEditHistory(t.Context(), root.ID, base64.RawURLEncoding.EncodeToString(data), 1, false); !errors.Is(err, mutation.want) {
 			t.Fatalf("%s cursor alteration: %v", mutation.field, err)
 		}
 	}
@@ -177,18 +177,18 @@ func TestEditHistoryRejectsForeignMalformedAndOversizedCursors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = otherEngine.MessageEditHistory(t.Context(), root.ID, page.NextCursor, 1); !errors.Is(err, application.ErrInvalid) {
+	if _, err = otherEngine.MessageEditHistory(t.Context(), root.ID, page.NextCursor, 1, false); !errors.Is(err, application.ErrInvalid) {
 		t.Fatal("history cursor crossed engine identity", err)
 	}
 	for _, limit := range []int{0, 51} {
-		if _, err := e.MessageEditHistory(t.Context(), root.ID, "", limit); !errors.Is(err, application.ErrInvalid) {
+		if _, err := e.MessageEditHistory(t.Context(), root.ID, "", limit, false); !errors.Is(err, application.ErrInvalid) {
 			t.Fatal("unbounded limit accepted", err)
 		}
 	}
-	if _, err := e.MessageEditHistory(t.Context(), migrationID(), "", 20); !errors.Is(err, application.ErrNotFound) {
+	if _, err := e.MessageEditHistory(t.Context(), migrationID(), "", 20, false); !errors.Is(err, application.ErrNotFound) {
 		t.Fatal("missing source accepted", err)
 	}
-	if _, err := e.MessageEditHistory(t.Context(), "bad", "", 20); !errors.Is(err, application.ErrInvalid) {
+	if _, err := e.MessageEditHistory(t.Context(), "bad", "", 20, false); !errors.Is(err, application.ErrInvalid) {
 		t.Fatal("invalid source accepted", err)
 	}
 }

@@ -29,6 +29,9 @@ type sentCorrectionWire struct {
 	Replacements []struct {
 		ID string `xml:"id,attr"`
 	} `xml:"urn:xmpp:message-correct:0 replace"`
+	Retractions []struct {
+		ID string `xml:"id,attr"`
+	} `xml:"urn:xmpp:message-retract:1 retract"`
 }
 
 func TestOwnSentCorrectionsDirectAndSavedRoom(t *testing.T) {
@@ -204,7 +207,7 @@ func TestOwnSentCorrectionsDirectAndSavedRoom(t *testing.T) {
 					if t.Failed() {
 						command, ce := engine.MessageEdit(ctx, key)
 						current, me := engine.Message(ctx, accepted.Message.ID)
-						history, he := engine.MessageEditHistory(ctx, accepted.Message.ID, "", 20)
+						history, he := engine.MessageEditHistory(ctx, accepted.Message.ID, "", 20, false)
 						t.Logf("correction diagnostics command=%+v err=%v current=%+v err=%v history=%+v err=%v", command, ce, current, me, history, he)
 					}
 				})
@@ -231,7 +234,7 @@ func TestOwnSentCorrectionsDirectAndSavedRoom(t *testing.T) {
 				if err != nil || !replay.Replayed || replay.Command.ID != key {
 					t.Fatal("correction operation replay changed", err)
 				}
-				history, err := engine.MessageEditHistory(ctx, accepted.Message.ID, "", 20)
+				history, err := engine.MessageEditHistory(ctx, accepted.Message.ID, "", 20, false)
 				if err != nil || len(history.Items) != n+2 {
 					t.Fatal("own echo duplicated retained revision", len(history.Items), err)
 				}
@@ -255,6 +258,16 @@ func TestOwnSentCorrectionsDirectAndSavedRoom(t *testing.T) {
 			}
 			if _, err = engine.EditMessage(ctx, id(), previous.MessageID, previous.CurrentRevisionID, "Stale conflicting edit"); err == nil {
 				t.Fatal("stale content revision accepted")
+			}
+			if conversation.Kind == "direct" {
+				retracted, err := engine.RetractMessage(ctx, target.MessageID, target.CurrentRevisionID)
+				if err != nil || retracted.Retraction == nil || retracted.OriginalText != "" {
+					t.Fatalf("direct retraction did not reach account server submission: %+v %v", retracted, err)
+				}
+				wire := awaitWire("A message was retracted.")
+				if len(wire.Retractions) != 1 || wire.Retractions[0].ID != originalWire.ID || wire.ID == originalWire.ID {
+					t.Fatalf("retraction of an edited message did not target the original stanza: %+v", wire)
+				}
 			}
 		})
 	}

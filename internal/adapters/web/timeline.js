@@ -114,6 +114,25 @@ window.OieRuntime.register('timeline',life=>{
   return previous.ms!==item.ms&&item.node.hasAttribute('data-timeline-release')&&previous.node.classList.contains('oie-message-own')&&
    ['queued','dispatching'].includes(previous.node.dataset.sendState)&&previous.node.dataset.messageRevision!==item.node.dataset.messageRevision;
  }
+ function reconcileRow(node,item){
+  if(node.dataset.messageVersion===item.version)return;
+  const withdrawal='[data-message-retracted],[data-message-moderated]';
+  const newlyWithdrawn=item.node.querySelector(withdrawal)&&!node.querySelector(withdrawal);
+  const protectedUpdate=!newlyWithdrawn&&interactionProtected(node);
+  if(protectedUpdate&&!canReconcileVideo(node))return;
+  if(!newlyWithdrawn&&item.node.dataset.messagePreviewsKnown!=='true'&&node.dataset.messageRevision===item.node.dataset.messageRevision)return;
+  const active=node.contains(document.activeElement)?document.activeElement:null,activeID=active?.id;
+  if(newlyWithdrawn)window.OieVideos?.release(node);
+  const swapped=!newlyWithdrawn&&window.OieVideos?.swap(node,item.node.innerHTML);
+  if(!swapped){
+   if(protectedUpdate)return;
+   for(const child of node.children)window.Alpine?.destroyTree(child);
+   node.innerHTML=item.node.innerHTML;
+   for(const child of node.children)window.Alpine?.initTree(child);
+  }
+  for(const attribute of item.node.attributes)node.setAttribute(attribute.name,attribute.value);
+  if(active&&!active.isConnected)(activeID&&node.querySelector('#'+CSS.escape(activeID))||node).focus({preventScroll:true});
+ }
  function merge(page,{direction='update',authoritative=false,starGeneration=Number(document.body.dataset.starGeneration||0),aliases=[],reset=false,retired=new Set()}={}){
   const old=current(),logical=normalizedRows(old,aliases);for(const plan of aliases){const original=old.find(item=>item.id===plan.previous);if(original&&interactionProtected(original.node)){failed='paused';retryDirection=direction==='older'?'older':'newer';controls();return false}}
   const entries=page.entries.filter(item=>!expired.has(item.id)&&hiddenRevisions.get(item.id)!==item.node.dataset.messageRevision);
@@ -143,7 +162,7 @@ window.OieRuntime.register('timeline',life=>{
   }
   const apply=()=>{
    for(const item of old)if(!keep.has(item.id)||relocated.has(item.id)){window.OieVideos?.release(item.node);window.Alpine?.destroyTree(item.node);item.node.remove()}
-   const after=edge('newer');for(const item of ordered){let node=existing.get(item.id);if(node?.isConnected){if(node.dataset.messageVersion!==item.version&&(!interactionProtected(node)||canReconcileVideo(node))&&!(item.node.dataset.messagePreviewsKnown!=='true'&&node.dataset.messageRevision===item.node.dataset.messageRevision)){const active=node.contains(document.activeElement)?document.activeElement:null,activeID=active?.id,protectedUpdate=interactionProtected(node),swapped=window.OieVideos?.swap(node,item.node.innerHTML);if(!swapped&&!protectedUpdate){for(const child of node.children)window.Alpine?.destroyTree(child);node.innerHTML=item.node.innerHTML;for(const child of node.children)window.Alpine?.initTree(child)}if(swapped||!protectedUpdate){for(const attribute of item.node.attributes)node.setAttribute(attribute.name,attribute.value);if(active&&!active.isConnected)(activeID&&node.querySelector('#'+CSS.escape(activeID))||node).focus({preventScroll:true})}}}else{node=item.node.cloneNode(true);const next=ordered.slice(ordered.indexOf(item)+1).map(value=>existing.get(value.id)).find(value=>value?.isConnected)||after;root.insertBefore(node,next);window.Alpine?.initTree(node);existing.set(item.id,node)}}
+   const after=edge('newer');for(const item of ordered){let node=existing.get(item.id);if(node?.isConnected){reconcileRow(node,item)}else{node=item.node.cloneNode(true);const next=ordered.slice(ordered.indexOf(item)+1).map(value=>existing.get(value.id)).find(value=>value?.isConnected)||after;root.insertBefore(node,next);window.Alpine?.initTree(node);existing.set(item.id,node)}}
   };
   if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply();avatarGroups();
   if(trimmed.length){if(direction==='older'){newer=true;liveAttached=false}else older=true}

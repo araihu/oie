@@ -26,6 +26,7 @@ templ infoSharedContent(v view){
 <form action="/" method="get" id="info-shared-search-form" class="oie-info-search" data-info-search role="search" hx-sync="this:replace">
 @infoSearchFields(v)
 @textinput.TextInput(textinput.Config{ID:"info-shared-search",Name:"infoQuery",Value:v.InfoQuery,Label:v.Text.SharedSearch,RootClass:"oie-info-search-input",Type:textinput.TypeSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#info-shared-search-form","hx-target":"#info-shared-search-results","hx-select":"#info-shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","hx-headers":`{"X-Oie-Fragment":"info"}`,"aria-controls":"info-shared-search-results"}})
+@sharedRetractionFilter(scoped,"info-include-retracted","infoIncludeRetracted")
 </form>
 <div id="info-shared-search-results" data-search-query={v.InfoQuery}>
 <nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>

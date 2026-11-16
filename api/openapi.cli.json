@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.37.0",
+    "version": "0.38.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -354,6 +354,15 @@
             }
           },
           {
+            "name": "includeRetracted",
+            "in": "query",
+            "description": "Include retained content from retracted messages.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "description": "Opaque keyset cursor bound to this engine, trimmed query, account, conversation and history filter. Reuse with changed scope is invalid.",
@@ -471,6 +480,15 @@
             "schema": {
               "type": "string",
               "maxLength": 200
+            }
+          },
+          {
+            "name": "includeRetracted",
+            "in": "query",
+            "description": "Include retained content from retracted messages.",
+            "schema": {
+              "type": "boolean",
+              "default": false
             }
           },
           {
@@ -5066,7 +5084,7 @@
             "$ref": "#/components/responses/Unavailable"
           },
           "204": {
-            "description": "Exact expired send receipt verified without replaying the write."
+            "description": "Exact expired or withdrawn send receipt verified without replaying the write."
           },
           "200": {
             "description": "Original acceptance replayed",
@@ -5106,7 +5124,7 @@
           {
             "name": "X-Oie-Verify-Expired-Send",
             "in": "header",
-            "description": "Verify the exact intent of an expired send receipt. With true, this request has no send side effects.",
+            "description": "Verify the exact intent of an expired or withdrawn send receipt. With true, this request has no send side effects.",
             "schema": {
               "type": "boolean"
             }
@@ -5683,6 +5701,15 @@
         "parameters": [
           {
             "in": "query",
+            "name": "includeRetracted",
+            "description": "Explicitly reveal the retained revisions of a retracted message.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "description": "Maximum content revisions in this page.",
             "schema": {
@@ -5869,6 +5896,90 @@
         "x-cli-name": "get"
       }
     },
+    "/api/v1/messages/{messageId}/retraction": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "post": {
+        "operationId": "retractMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Request retraction of an own sent message",
+        "description": "Sends a provider retraction for the reviewed revision and keeps the retained original hidden. A successful request does not establish removal from the recipient's copies.",
+        "requestBody": {
+          "required": true,
+          "description": "Reviewed message revision.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetractMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current retracted message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-ignore": true
+      }
+    },
+    "/api/v1/messages/{messageId}/retracted-original": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getRetractedOriginal",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Reveal retained content of a retracted message",
+        "responses": {
+          "200": {
+            "description": "Explicitly requested retained original.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-ignore": true
+      }
+    },
     "/api/v1/messages/{messageId}/forward": {
       "parameters": [
         {
@@ -5880,8 +5991,8 @@
         "tags": [
           "Messages"
         ],
-        "summary": "Forward a retained message to a room",
-        "description": "Creates a new outgoing message through the destination room's account. Copies the authored body and stages source attachments for a new upload. Replies and mentions are copied as text without references or attribution. A matching operation key replays the original acceptance, including after the source changes. Use one stable key per destination.",
+        "summary": "Forward a retained message to a conversation",
+        "description": "Creates a new outgoing message through the destination conversation's account. Copies the authored body and stages source attachments for a new upload. Replies and mentions are copied as text without references or attribution. A matching operation key replays the original acceptance, including after the source changes. Use one stable key per destination.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -5895,7 +6006,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Source revision reviewed by the user and the selected destination room.",
+          "description": "Source revision reviewed by the user and the selected destination direct conversation or room.",
           "content": {
             "application/json": {
               "schema": {
@@ -7178,7 +7289,8 @@
               "0.34.0",
               "0.35.0",
               "0.36.0",
-              "0.37.0"
+              "0.37.0",
+              "0.38.0"
             ]
           },
           "eventCursor": {
@@ -8600,6 +8712,10 @@
           },
           "conversationId": {
             "$ref": "#/components/schemas/ID"
+          },
+          "includeRetracted": {
+            "type": "boolean",
+            "description": "Whether the request included retained retracted content."
           },
           "includeEditHistory": {
             "type": "boolean",
@@ -10148,6 +10264,21 @@
             "description": "Exact retained source text including authored Markdown and compatibility fallback.",
             "example": "Corrected text"
           },
+          "attachments": {
+            "type": "array",
+            "description": "Local files retained with this explicitly revealed version.",
+            "items": {
+              "$ref": "#/components/schemas/StagedAttachment"
+            }
+          },
+          "attachmentLinks": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Provider file links retained with this explicitly revealed version.",
+            "items": {
+              "$ref": "#/components/schemas/MessageHistoryAttachmentLink"
+            }
+          },
           "sender": {
             "$ref": "#/components/schemas/Sender"
           },
@@ -10169,6 +10300,28 @@
               "$ref": "#/components/schemas/ID"
             },
             "example": []
+          }
+        }
+      },
+      "MessageHistoryAttachmentLink": {
+        "type": "object",
+        "description": "A provider file link from an explicitly revealed retained message version.",
+        "additionalProperties": false,
+        "required": [
+          "fileName",
+          "url"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "maxLength": 300,
+            "example": "recording.ogg"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 4096,
+            "example": "https://files.example.test/recording"
           }
         }
       },
@@ -10200,6 +10353,9 @@
           },
           "currentRevisionId": {
             "$ref": "#/components/schemas/ID"
+          },
+          "retraction": {
+            "$ref": "#/components/schemas/MessageRetraction"
           },
           "snapshot": {
             "type": "string",
@@ -10464,6 +10620,27 @@
           "hasNewer": true
         }
       },
+      "MessageRetraction": {
+        "type": "object",
+        "description": "Withdrawal time and whether Oiê still has content that can be revealed.",
+        "example": {
+          "at": "2026-11-16T15:00:00Z",
+          "originalAvailable": true
+        },
+        "required": [
+          "at",
+          "originalAvailable"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "originalAvailable": {
+            "type": "boolean"
+          }
+        }
+      },
       "MessageModeration": {
         "type": "object",
         "additionalProperties": false,
@@ -10501,6 +10678,13 @@
           "sendState"
         ],
         "properties": {
+          "retraction": {
+            "$ref": "#/components/schemas/MessageRetraction"
+          },
+          "canRetract": {
+            "type": "boolean",
+            "description": "Current provider and ownership evidence permits requesting retraction."
+          },
           "moderation": {
             "$ref": "#/components/schemas/MessageModeration"
           },
@@ -11458,9 +11642,21 @@
           }
         }
       },
+      "RetractMessage": {
+        "type": "object",
+        "description": "Request retraction for the reviewed retained message revision.",
+        "required": [
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      },
       "ForwardMessage": {
         "type": "object",
-        "description": "Copy one retained source revision into a new send for the destination room.",
+        "description": "Copy one retained source revision into a new send for the destination conversation.",
         "additionalProperties": false,
         "required": [
           "expectedRevisionId",

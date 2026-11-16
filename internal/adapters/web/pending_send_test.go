@@ -59,14 +59,25 @@ func TestSubmissionReceiptLookupNeverCreatesMessage(t *testing.T) {
 	}
 }
 
-func TestExpiredSendReceiptReconcilesOnlyTheExactIntent(t *testing.T) {
+func TestMaskedSendReceiptReconcilesOnlyTheExactIntent(t *testing.T) {
+	t.Run("expired", func(t *testing.T) { testMaskedSendReceipt(t, true) })
+	t.Run("withdrawn", func(t *testing.T) { testMaskedSendReceipt(t, false) })
+}
+
+func testMaskedSendReceipt(t *testing.T, expired bool) {
+	t.Helper()
 	key := newOperationKey()
 	fixture := &liveFixture{}
 	ui, client, csrf := liveUI(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/operations/"+key {
 			w.Header().Set("Content-Type", "application/json")
-			expired := true
-			_ = json.NewEncoder(w).Encode(engineapi.Operation{Id: key, ResourceId: testMessage, Kind: "send_message", Status: "succeeded", AcceptedMessageExpired: &expired})
+			receipt := engineapi.Operation{Id: key, ResourceId: testMessage, Kind: "send_message", Status: "succeeded"}
+			if expired {
+				receipt.AcceptedMessageExpired = &expired
+			} else {
+				receipt.AcceptedMessage = &engineapi.Message{Id: testMessage, IsOwn: true, SendState: "queued", AccountId: testAccount, ConversationId: testChat, Retraction: &engineapi.MessageRetraction{}}
+			}
+			_ = json.NewEncoder(w).Encode(receipt)
 			return
 		}
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/conversations/"+testChat+"/messages" {
@@ -90,8 +101,12 @@ func TestExpiredSendReceiptReconcilesOnlyTheExactIntent(t *testing.T) {
 	}))
 	values := url.Values{"operationKey": {key}, "accountId": {testAccount}, "conversationId": {testChat}, "originalText": {"Same immutable body"}}
 	status, result := livePost(t, client, ui.URL, "/ui/messages/reconcile", csrf, values)
-	if status != 200 || !result.Accepted || result.State != "expired" || result.MessageID != testMessage || !validOperationKey(result.NextKey) {
-		t.Fatalf("exact expired receipt: %d %+v", status, result)
+	expectedState := "queued"
+	if expired {
+		expectedState = "expired"
+	}
+	if status != 200 || !result.Accepted || result.State != expectedState || result.MessageID != testMessage || !validOperationKey(result.NextKey) {
+		t.Fatalf("exact masked receipt: %d %+v", status, result)
 	}
 	values.Set("originalText", "Another body")
 	status, result = livePost(t, client, ui.URL, "/ui/messages/reconcile", csrf, values)

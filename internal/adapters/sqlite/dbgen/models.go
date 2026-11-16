@@ -146,6 +146,24 @@ type DeviceDownload struct {
 	DownloadedAtMs    int64
 }
 
+type DirectFactRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
+}
+
+type DirectSentRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
+}
+
 type DiscardedMessageReference struct {
 	AccountID string
 	Address   string
@@ -330,6 +348,24 @@ type MessageReply struct {
 	Payload   string
 }
 
+type MessageRetraction struct {
+	AccountID   string
+	Kind        string
+	Address     string
+	Scope       string
+	RemoteID    string
+	RetractedAt string
+}
+
+type MessageRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
+}
+
 type MessageRevision struct {
 	ID        string
 	EntityID  string
@@ -416,6 +452,11 @@ type PreviewRevision struct {
 	CreatedAt string
 }
 
+type RetainedMessageRetraction struct {
+	SourceID    string
+	RetractedAt string
+}
+
 type Revision struct {
 	ID        string
 	EntityID  string
@@ -468,6 +509,15 @@ type RoomReactionPrivacy struct {
 	Public       int64
 	IdentityMode string
 	Epoch        int64
+}
+
+type RoomRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
 }
 
 type SharedCatalogCount struct {

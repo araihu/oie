@@ -34,6 +34,27 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],findings=[];
  const until=async(fn,label)=>{for(let n=0;n<180;n++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50))}throw Error('Timed out: '+label+'\n'+log)};
  const route=(conversation=chat,locale='en',theme='dark')=>`${base}/?chat=${conversation}&lang=${locale}&theme=${theme}`;
+ const assertComposerTriggerPosition=async input=>{
+  const geometry=()=>input.evaluate(field=>{
+   const trigger=field.closest('.oie-composer-field').querySelector('[data-emoji-trigger]').getBoundingClientRect();
+   const bounds=field.getBoundingClientRect();
+   return {height:bounds.height,rightGap:bounds.right-trigger.right,
+    bottomGap:bounds.bottom-trigger.bottom,topGap:trigger.top-bounds.top,
+    textEnd:bounds.right-parseFloat(getComputedStyle(field).paddingInlineEnd),triggerStart:trigger.left};
+  });
+  const empty=await geometry();
+  assert(empty.rightGap>0&&Math.abs(empty.bottomGap-empty.topGap)<=1,'empty composer centers the trigger inside the field');
+  for(const [value,singleLine] of [['One short line',true],['Two lines\nwith a break',false],['A message that wraps across multiple lines. '.repeat(18),false]]){
+   await input.fill(value);
+   const actual=await geometry();
+   assert(Math.abs(actual.bottomGap-empty.bottomGap)<=1,'trigger stays against the bottom edge');
+   assert(Math.abs(actual.rightGap-empty.rightGap)<=1&&actual.textEnd<=actual.triggerStart,'text and trigger have separate space');
+   if(singleLine)assert(Math.abs(actual.topGap-actual.bottomGap)<=1,'one line centers the trigger');
+   else assert(actual.height>empty.height&&actual.topGap>actual.bottomGap,'multiline composer keeps the trigger in the lower corner');
+  }
+  await input.fill('');
+  assert.deepEqual(await geometry(),empty,'clearing the draft restores the single-line layout');
+ };
  let active;
  try {
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF ready');
@@ -41,6 +62,9 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   page.on('pageerror',error=>errors.push(error.message));let reads=0;
   page.on('request',request=>{if(request.url().includes('/ui/emoji/en.json'))reads++});
   await page.goto(route());const input=page.locator('#message-composer'),trigger=page.locator('#oie-emoji-picker [data-emoji-trigger]'),search=page.locator('#emoji-search');
+  await page.locator('body[data-oie-live-ready]').waitFor();
+  assert.equal(await trigger.locator('use').getAttribute('href'),'/ui/icons/heroicons-extra.svg#heroicons-emoji-24-outline-face-smile');
+  await assertComposerTriggerPosition(input);
   await input.fill('A😀B');await input.evaluate(node=>{node.focus();node.setSelectionRange(1,3);node.dispatchEvent(new Event('select'))});
   const originalKey=await page.locator('#send-message-form [name=operationKey]').inputValue(),originalURL=page.url();assert.equal(reads,0,'catalog should load lazily');
   await trigger.click();await search.waitFor({state:'visible'});await until(async()=>await search.evaluate(node=>node===document.activeElement),'search focus');
@@ -135,7 +159,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   const mobileContext=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR',isMobile:true,hasTouch:true});
   await mobileContext.addInitScript(()=>{for(const name of ['getItem','setItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});
   const mobile=await mobileContext.newPage();active=mobile;mobile.on('pageerror',error=>errors.push(error.message));
-  await mobile.goto(route(chat,'pt-BR','light'));await mobile.locator('#oie-emoji-picker [data-emoji-trigger]').click();await mobile.locator('#emoji-grid [data-emoji-pick]').first().waitFor();const mobilePicker=mobile.getByRole('dialog',{name:'Escolher emoji',exact:true}),mobileHeight=await mobilePicker.evaluate(async node=>{await Promise.all(node.getAnimations().map(animation=>animation.finished.catch(()=>{})));return node.offsetHeight});
+  await mobile.goto(route(chat,'pt-BR','light'));
+  await mobile.locator('body[data-oie-live-ready]').waitFor();
+  await assertComposerTriggerPosition(mobile.locator('#message-composer'));
+  await mobile.locator('#oie-emoji-picker [data-emoji-trigger]').click();await mobile.locator('#emoji-grid [data-emoji-pick]').first().waitFor();const mobilePicker=mobile.getByRole('dialog',{name:'Escolher emoji',exact:true}),mobileHeight=await mobilePicker.evaluate(async node=>{await Promise.all(node.getAnimations().map(animation=>animation.finished.catch(()=>{})));return node.offsetHeight});
   await mobile.getByText('Nenhum emoji recente ainda.',{exact:true}).waitFor();await mobile.screenshot({path:path.join(__dirname,'artifacts','emoji-picker-browse-mobile.png')});assert(Math.abs(await mobilePicker.evaluate(node=>node.offsetHeight)-mobileHeight)<2,'empty mobile recents collapsed the picker');await mobile.locator('#oie-emoji-picker [data-emoji-jump="8"]').tap();assert.equal(await mobile.locator('#oie-emoji-picker [data-emoji-section]').count(),10);
   await mobile.locator('#emoji-search').fill('thumbs up');await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"]').waitFor();const mobileEnglish=await mobile.locator('#emoji-grid').evaluate(node=>[...node.querySelectorAll('[data-emoji-section]>.oie-emoji-grid')].flatMap(group=>[...group.children].map(child=>child.dataset.emojiFamily||child.dataset.emojiPick)));
   await mobile.locator('#emoji-search').fill('joinha');await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"]').waitFor();assert.deepEqual(await mobile.locator('#emoji-grid').evaluate(node=>[...node.querySelectorAll('[data-emoji-section]>.oie-emoji-grid')].flatMap(group=>[...group.children].map(child=>child.dataset.emojiFamily||child.dataset.emojiPick))),mobileEnglish);assert.equal(await mobile.locator('#oie-emoji-picker [data-emoji-family="👍"] > [data-emoji-pick]').getAttribute('aria-label'),'polegar para cima');

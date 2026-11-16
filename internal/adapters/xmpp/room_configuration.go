@@ -11,9 +11,10 @@ import (
 )
 
 type roomConfiguration struct {
-	revision uint64
-	pending  bool
-	mode     string
+	revision   uint64
+	pending    bool
+	mode       string
+	retraction retractionSupport
 }
 
 func currentRoomConfiguration(e *entry, room string) roomConfiguration {
@@ -64,6 +65,7 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 			slot.pendingOwnOccupantID = ""
 		}
 		configuration.pending, configuration.mode = false, mode
+		configuration.retraction = readRetractionSupport(info)
 		if e.roomConfigurations == nil {
 			e.roomConfigurations = make(map[string]roomConfiguration)
 		}

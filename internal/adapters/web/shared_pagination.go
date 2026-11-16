@@ -23,7 +23,7 @@ func (v view) sharedPageScope() string {
 	if len(accounts) == 0 {
 		accounts = nil
 	}
-	data, _ := json.Marshal([]any{v.EngineID, v.SharedInDetails, accounts, conversation, v.SharedType, query, v.Locale})
+	data, _ := json.Marshal([]any{v.EngineID, v.SharedInDetails, accounts, conversation, v.SharedType, query, v.SharedIncludeRetracted, v.Locale})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }

@@ -519,10 +519,10 @@ def main():
                     findings.append("actual GTK Save chooser writes exact original bytes; Cancel creates no file")
                     try:
                         app.wait(lambda: app.js("""return document.body.hasAttribute('data-oie-live-ready') &&
-                            document.querySelector('[data-attach-menu]')?.disabled === false;"""), "live attachment composer")
+                            document.querySelector('#composer-attach-file')?.disabled === false;"""), "live attachment composer")
                     except AssertionError:
                         state = app.js("""const form = document.querySelector('#send-message-form');
-                            const attach = form?.querySelector('[data-attach-menu]');
+                            const attach = form?.querySelector('#composer-attach-file');
                             return {ready: document.body.hasAttribute('data-oie-live-ready'),
                                 disabled: attach?.disabled, allowed: form?.dataset.attachmentAllowed,
                                 schedule: !!document.querySelector('[data-schedule-dialog]'),

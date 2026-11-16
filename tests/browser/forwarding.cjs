@@ -60,7 +60,7 @@ const messages = [source, message(12, 'Message with a rejected destination')];
     if (url.pathname === '/api/v1/accounts') return send(200, { items: [account] });
     if (url.pathname.endsWith('/connection')) return send(200, { accountId: account.id, state: 'connected' });
     if (url.pathname === '/api/v1/conversations') {
-      const items = url.searchParams.get('archived') === 'true' ? [] : rooms;
+      const items = url.searchParams.get('archived') === 'true' ? [] : [...rooms, direct];
       return send(200, { items });
     }
     if (url.pathname.endsWith('/avatars')) return send(200, { items: [] });
@@ -90,11 +90,11 @@ const messages = [source, message(12, 'Message with a rejected destination')];
     for (const fixture of [
       {
         lang: 'en', width: 1440, forward: 'Forward', retry: 'Try again', success: 'Messages queued for forwarding.',
-        sourceChanged: 'The message or room has changed. Reopen forwarding to try again.',
+        sourceChanged: 'The message or the destination changed. Open forwarding again to try again.',
       },
       {
         lang: 'pt-BR', width: 390, forward: 'Encaminhar', retry: 'Tentar novamente', success: 'Mensagens na fila para encaminhamento.',
-        sourceChanged: 'A mensagem ou a sala mudou. Abra o encaminhamento novamente para tentar.',
+        sourceChanged: 'A mensagem ou o destino mudou. Abra o encaminhamento novamente para tentar.',
       },
     ]) {
       const context = await browser.newContext({
@@ -154,6 +154,8 @@ const messages = [source, message(12, 'Message with a rejected destination')];
           await route.abort();
         };
         await open(source);
+        const directDescription = await checkbox(direct).evaluate(input => document.getElementById(input.getAttribute('aria-describedby')).textContent);
+        assert(directDescription.includes(direct.address), 'direct destination exposes its address alongside the account');
         await choose(alpha);
         const drop = '**/ui/messages/forward';
         await page.route(drop, loseResponse);
@@ -187,10 +189,11 @@ const messages = [source, message(12, 'Message with a rejected destination')];
         assert(await checkbox(bravo).isChecked());
         await status(bravo).waitFor();
         await choose(bravo);
-        await choose(charlie);
+        await choose(direct);
         await button.click();
         await dialog.waitFor({ state: 'hidden' });
         await page.getByText(fixture.success, { exact: true }).last().waitFor();
+        assert.equal(requests.at(-1).conversationId, direct.id);
         await open(messages[1]);
         assert.equal(await checkbox(bravo).isChecked(), false);
         await close();
