@@ -5,7 +5,7 @@ window.OieRuntime.register('timeline',life=>{
  const rows=()=>[...root.querySelectorAll(':scope>[data-message-id][data-message-source]')];
  const identity={engine:document.body.dataset.engineId,account:document.body.dataset.accountId,conversation:document.body.dataset.conversationId};
  const jump=document.querySelector('[data-jump-latest]');
- const labels=document.getElementById('oie-live-copy')?.dataset;
+ const unreadBadge=jump?.querySelector('[data-jump-latest-badge]');
  let disposed=false,busy=false,epoch=0,controller,observer,resizer,anchor,follow=false,failed='',retryDirection='',refreshAgain=false,refreshPage,refreshStartedAt=0,liveAttached=false,older=false,newer=false,retryMode='page',retryTarget='',focusEpoch=0,focusPending=false;
  let unseenLiveMessages=false;
  let sourceSelected=!!document.body.dataset.focusMessage;
@@ -86,8 +86,15 @@ window.OieRuntime.register('timeline',life=>{
   if(!jump)return;
   const unreadAnchor=!!document.body.dataset.firstUnread;
   jump.hidden=needsLatestPage()?bottom&&!newer:bottom||!unseenLiveMessages&&!unreadAnchor;
-  const label=liveAttached&&!unreadAnchor?labels?.newMessages:labels?.latest;
-  if(label&&jump.textContent!==label)jump.textContent=label;
+ }
+ function updateJumpUnread({data}){
+  if(!unreadBadge)return;
+  const count=Number(data.unread);
+  if(!Number.isSafeInteger(count)||count<0)return;
+  unreadBadge.hidden=count===0;
+  unreadBadge.textContent=count>99?'+99':String(count);
+  if(count>0)jump.setAttribute('aria-description',jump.dataset.unreadLabel+': '+count);
+  else jump.removeAttribute('aria-description');
  }
  function scrollLatest(){if(!newer)delete document.body.dataset.firstUnread;root.scrollTop=root.scrollHeight;capture();syncJump()}
  function correct(){
@@ -303,7 +310,9 @@ window.OieRuntime.register('timeline',life=>{
   controls();
  }
  function refresh(page,startedAt=performance.now()){
-  if(disposed)return;let snapshot;try{snapshot=parse(page.querySelector('#live-timeline')||page)}catch{return}if(!snapshot)return;snapshot.startedAt=startedAt;refreshPage=page;refreshStartedAt=startedAt;if(busy){refreshAgain=true;return}
+  if(disposed)return;let snapshot;try{snapshot=parse(page.querySelector('#live-timeline')||page)}catch{return}if(!snapshot)return;
+  updateJumpUnread(snapshot);
+  snapshot.startedAt=startedAt;refreshPage=page;refreshStartedAt=startedAt;if(busy){refreshAgain=true;return}
   rememberLatest(snapshot);
   const before=current();if(!before.length){if(snapshot.entries.length){older=snapshot.data.hasOlder==='true';newer=snapshot.data.hasNewer==='true';merge(snapshot,{direction:'newer'});controls()}return}
   // A snapshot may update overlapping rows, but never bridge a historical gap.
@@ -328,7 +337,7 @@ window.OieRuntime.register('timeline',life=>{
   if(!completeCoverage&&!failed)request('window','older');controls();
  }
  let initial;try{initial=parse(root,50)}catch{return}if(!initial)return;older=initial.data.hasOlder==='true';newer=initial.data.hasNewer==='true';liveAttached=!newer&&!document.body.dataset.focusMessage;
- rememberLatest(initial);
+ rememberLatest(initial);updateJumpUnread(initial);
  // Search uses the same bounded context parser/merge path as reply navigation.
  // A newer target invalidates an unfinished request before it can mount rows.
  function cancelFocus(){focusEpoch++;if(focusPending){epoch++;controller?.abort()}focusPending=false}
@@ -373,7 +382,7 @@ window.OieRuntime.register('timeline',life=>{
   anchor=null;failed='';refreshAgain=false;refreshPage=null;
   older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';liveAttached=true;
   sourceSelected=false;
-  latestSnapshot=null;rememberLatest(page);
+  latestSnapshot=null;rememberLatest(page);updateJumpUnread(page);
   hooks(event.detail.page||document,event.detail.generation,performance.now());
   scrollLatest();controls();observe();
   // Arrivals can outpace the latest fragment while it is in flight.

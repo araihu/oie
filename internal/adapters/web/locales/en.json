@@ -247,7 +247,6 @@
   "LiveConnecting": "Connecting live updates…",
   "LiveReady": "Live updates connected",
   "LiveRetry": "Live updates interrupted; retrying. Your draft is kept.",
-  "NewMessages": "New messages · jump to latest",
   "QueueHelp": "This account is offline. Sends are kept in the engine queue until it reconnects.",
   "DraftStorageUnavailable": "Device draft storage is unavailable. Keep this window open until your submission is confirmed.",
   "DraftLocked": "This submission is awaiting confirmation. Reconcile it before changing its content.",
