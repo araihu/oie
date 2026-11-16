@@ -100,3 +100,11 @@ Set `OIE_XMPP_ENDPOINT` to the development Prosody endpoint to also exercise the
 room indicator through a disconnect and reconnect of the fixture Bob account.
 The check creates and deletes a fixture room and removes a failed entry from
 the preview's chat lists.
+
+To exercise confirmation, keyboard focus, removal across tabs and links to
+retained messages with a disposable profile, run:
+
+```sh
+make build
+node tests/browser/conversation-removal.cjs
+```

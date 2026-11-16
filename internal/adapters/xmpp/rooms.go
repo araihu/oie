@@ -482,6 +482,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	if self {
 		observeRoomManagement(slot, p, true)
 	}
+	destroyed := p.MUC != nil && p.MUC.Destroy != nil
 	if p.Type == stanza.ErrorPresence {
 		if slot.snapshot.State != "joining" {
 			e.mu.Unlock()
@@ -504,7 +505,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		}
 		slot.snapshot = roomSnapshot(slot.conversation, "failed", slot.snapshot.Nickname, code, slot.snapshot.IntentRevisionID)
 		slot.snapshot.Revoked = slot.creationName != nil || code == "forbidden" || code == "not_authorized" || code == "registration_required" || code == "room_not_found" || code == "nickname_conflict"
-	} else if self && p.Type == stanza.UnavailablePresence {
+	} else if p.Type == stanza.UnavailablePresence && (self || (destroyed && slot.snapshot.State == "joined")) {
 		code := ""
 		if p.MUC != nil {
 			for _, status := range p.MUC.Status {
@@ -520,7 +521,7 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 				}
 			}
 		}
-		if p.MUC != nil && p.MUC.Destroy != nil {
+		if destroyed {
 			code = "room_destroyed"
 		}
 		state := "not_joined"

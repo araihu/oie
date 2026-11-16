@@ -42,7 +42,7 @@ func (v view) messagingImplemented(feature string) bool {
 	return false
 }
 func (v view) composeAllowed() bool {
-	return !v.Preview && !v.Unavailable && v.Selected != nil && v.account(v.Selected.AccountId).Address != "" && (v.Selected.Kind == "direct" || v.RoomSession != nil)
+	return !v.Preview && !v.Unavailable && v.Selected != nil && !v.conversationRemoved() && v.account(v.Selected.AccountId).Address != "" && (v.Selected.Kind == "direct" || v.RoomSession != nil)
 }
 func (v view) attachmentAllowed() bool {
 	if !v.scheduleAllowed() || !v.sendAllowed() {

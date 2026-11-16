@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
+	discoinfo "mellium.im/xmpp/disco/info"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
@@ -22,6 +24,12 @@ func isTextRoom(info disco.Info) bool {
 		}
 	}
 	return false
+}
+
+func supportsRoomCreation(info disco.Info) bool {
+	return isTextRoom(info) && slices.ContainsFunc(info.Features, func(feature discoinfo.Feature) bool {
+		return feature.Var == "http://jabber.org/protocol/muc"
+	})
 }
 
 func sameRoomEntry(slot *roomSlot, name *string, revision domain.ID) bool {
@@ -55,7 +63,7 @@ func (m *Manager) CheckRoomCreation(ctx context.Context, a domain.Account, addre
 		}
 		return application.ErrRoomCreationUnavailable
 	}
-	if !isTextRoom(info) {
+	if !supportsRoomCreation(info) {
 		return application.ErrInvalidRoomService
 	}
 	_, err = m.readHistoryIQ(lookup, e, session, room.String(), stanza.GetIQ, discoInfoQuery)
@@ -86,7 +94,7 @@ func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *
 		return "room_exists"
 	case errors.Is(err, errArchiveCursor) && create:
 		info, err := m.queryInfo(ctx, e, session, room.Domain().String())
-		if err == nil && isTextRoom(info) {
+		if err == nil && supportsRoomCreation(info) {
 			return ""
 		}
 		return "creation_failed"

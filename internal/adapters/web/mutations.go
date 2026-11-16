@@ -405,6 +405,9 @@ func (s *Server) send(ctx context.Context, r *http.Request, text copy) (int, mut
 	if owner.JSON200.AccountId != account {
 		return 409, mutationResult{Message: text.OperationConflict, Code: "idempotency_conflict"}
 	}
+	if removedConversation(owner.JSON200) {
+		return 409, mutationResult{Message: text.ConversationRemoved, Code: "state_conflict", Rejected: true}
+	}
 	if expectedKind != "" && string(owner.JSON200.Kind) != string(expectedKind) {
 		return 409, mutationResult{Message: text.ConversationChanged, Code: "state_conflict", Rejected: true}
 	}

@@ -334,7 +334,7 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 	if err != nil {
 		return application.MessageResult{}, err
 	}
-	if c.Request != "" || (in.ExpectedConversationKind != "" && c.Kind != in.ExpectedConversationKind) {
+	if c.RemovedFromChats || c.Request != "" || (in.ExpectedConversationKind != "" && c.Kind != in.ExpectedConversationKind) {
 		return application.MessageResult{}, application.ErrStateConflict
 	}
 	if c.Kind == "room" {

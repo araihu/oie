@@ -20,7 +20,7 @@ templ conversationRemovalForm(v view) {
 		<input type="hidden" name="accountId" value={ v.Selected.AccountId }/>
 		<input type="hidden" name="expectedRevisionId" value={ v.Selected.RevisionId }/>
 		<input type="hidden" name="lang" value={ v.Locale }/>
-		<strong>{ v.Selected.Title }</strong>
+		<strong data-removal-title>{ v.Selected.Title }</strong>
 		if v.Selected.Kind == "room" {
 			<p>{ v.Text.RoomRemoveWarning }</p>
 		} else {

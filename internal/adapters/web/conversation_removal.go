@@ -25,6 +25,11 @@ func (s *Server) removeConversationFromChats(ctx context.Context, r *http.Reques
 		result.Message = text.RemoveFromChatsUnavailable
 		if status == http.StatusConflict {
 			result.Message = text.RemoveFromChatsConflict
+			result.Rejected = true
+			current, err := s.client.GetConversationWithResponse(ctx, id)
+			if err == nil && current.JSON200 != nil && current.JSON200.Id == id && current.JSON200.AccountId == account {
+				result.Conversation = current.JSON200
+			}
 		}
 		return status, result
 	}
@@ -58,7 +63,11 @@ func (s *Server) requestConversationRemoval(ctx context.Context, path, id, accou
 }
 
 func (v view) canRemoveFromChats() bool {
-	return v.Selected != nil && !v.Preview && !removedConversation(v.Selected)
+	return v.Selected != nil && !v.Preview && !v.conversationRemoved()
+}
+
+func (v view) conversationRemoved() bool {
+	return removedConversation(v.Selected)
 }
 
 func (v view) conversationRemovalPath() string {
@@ -71,7 +80,7 @@ func (v view) conversationRemovalPath() string {
 func (v view) removeFromChatsItem(id string) dropdown.Item {
 	return dropdown.Item{
 		ID: id, Label: v.Text.RemoveFromChats, Icon: glyph(heroicons.Icon16SolidTrash),
-		OnClick: "close(); $dispatch('modal:open', {id: 'conversation-removal'})",
+		OnClick: "$dispatch('oie:conversation-remove-open')",
 	}
 }
 

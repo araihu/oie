@@ -249,6 +249,8 @@ type view struct {
 }
 
 type copy struct {
+	ConversationRemoved string
+
 	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting string
 	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                      string
 
@@ -1226,10 +1228,6 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		}
 		return
 	}
-	if removedConversation(c) {
-		v.NotFound = true
-		return
-	}
 	if c == nil {
 		if conversation.StatusCode() == 400 || conversation.StatusCode() == 404 {
 			v.NotFound = true
@@ -1408,7 +1406,7 @@ func (v view) headerVersion() string {
 		return ""
 	}
 	status, _ := v.roomStatusPresentation(v.selectedRoomStatus())
-	return v.Selected.Id + v.Selected.RevisionId + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.AccountAvatarBorders[v.Selected.AccountId] + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
+	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.conversationRemoved()) + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.AccountAvatarBorders[v.Selected.AccountId] + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

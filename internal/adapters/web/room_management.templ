@@ -25,7 +25,7 @@ import (
 )
 
 templ roomManagementDrawer(v view) {
-	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview {
+	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview && !v.conversationRemoved() {
 		@workspaceDrawer(drawer.Config{ID: "room-management", Title: v.Text.RoomManage, PanelClass: "oie-conversation-details-drawer"}) {
 			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-unavailable={ v.Text.RoomManagementUnavailable }>
 				@roomManagementSkeleton(v, "oie-room-management-skeleton")

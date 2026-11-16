@@ -79,6 +79,9 @@ its address to add it back. A joined owner can instead delete the server room
 for everyone from **Manage room**. After the server confirms deletion, Oiê
 removes the room from that account’s chat lists and retains saved history.
 Other participants can remove their saved conversations independently.
+Links to retained messages open the conversation in read-only mode while it
+is removed. A tab already displaying the conversation switches to that mode
+when another tab removes it.
 
 | Route or state | Action | Expected response | Context and focus | Effects |
 | --- | --- | --- | --- | --- |

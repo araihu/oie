@@ -67,6 +67,10 @@ func TestDirectRemovalHidesUntilExplicitOpenOrNewLiveMessage(t *testing.T) {
 	assertListed(c.AccountID, c.ID, false, false)
 	assertListed(c.AccountID, c.ID, true, false)
 	assertListed(other.AccountID, other.ID, false, true)
+	status, data := request(t, server.URL, http.MethodPost, "/api/v1/conversations/"+string(c.ID)+"/messages", string(id()), `{"originalText":"Sent from a stale tab"}`)
+	if status != http.StatusConflict {
+		t.Fatalf("removed conversation accepted a new send: %d (%s)", status, data)
+	}
 
 	if err := e.Receive(ctx, inbound); err != nil {
 		t.Fatal(err)

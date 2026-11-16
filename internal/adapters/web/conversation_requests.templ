@@ -32,7 +32,7 @@ templ conversationRequestContent(v view) {
    @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest,button.TonePrimary,heroicons.Icon16SolidCheck)
   }
   if v.canRemoveFromChats() {
-   @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('modal:open',{id:'conversation-removal'})"})){
+   @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('oie:conversation-remove-open')"})){
     {v.Text.RemoveFromChats}
    }
   }

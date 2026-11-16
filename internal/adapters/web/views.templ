@@ -468,16 +468,22 @@ if v.requestKind()=="" {
 			<h2>{ v.Selected.Title }</h2>
 			if roomLabel != "" && v.requestKind() == "" {
 				<p title={ roomLabel }><span data-room-status-label>{ roomLabel }</span> · { v.accountLabel(v.Selected.AccountId) }</p>
+			} else if v.conversationRemoved() {
+				<p>{ v.Text.ConversationRemoved } · { v.accountLabel(v.Selected.AccountId) }</p>
 			} else {
 				<p>{ v.accountLabel(v.Selected.AccountId) } · { v.connectionLabel(v.Selected.AccountId) }</p>
 			}
 		</div>
 if v.requestKind()=="" {
-{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{ID:"chat-conversation-details",Label:v.Text.Details,Icon:glyph(heroicons.Icon16SolidInformationCircle),OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}},v.conversationPreferenceSection(),{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}} }}
+{{ sections:=[]dropdown.Section{{Items:[]dropdown.Item{{ID:"chat-conversation-details",Label:v.Text.Details,Icon:glyph(heroicons.Icon16SolidInformationCircle),OnClick:"$dispatch('oie:conversation-drawer-open','details')"}}}} }}
+if !v.conversationRemoved() {
+{{ sections=append(sections,v.conversationPreferenceSection()) }}
+}
+{{ sections=append(sections,dropdown.Section{Items:[]dropdown.Item{{ID:"chat-search-messages",Label:v.Text.SearchMessages,Icon:glyph(heroicons.Icon16SolidMagnifyingGlass),OnClick:"$dispatch('oie:conversation-search-open')"}}}) }}
 if v.conversationSchedulesAvailable() {
 {{ sections[0].Items=append(sections[0].Items,dropdown.Item{Label:v.Text.Scheduled,Icon:glyph(heroicons.Icon16SolidClock),OnClick:"$dispatch('oie:conversation-drawer-open','conversation-schedules')"}) }}
 }
-if v.Selected.Kind=="room" {
+if v.Selected.Kind=="room" && !v.conversationRemoved() {
 {{ roomItems:=[]dropdown.Item{{ID:"chat-manage-room",Label:v.Text.RoomManage,Icon:glyph(heroicons.Icon16SolidCog6Tooth),OnClick:"void 0"}} }}
 if v.canInviteToRoom() {
 {{ roomItems=append(roomItems,dropdown.Item{ID:"chat-invite-room",Label:v.Text.RoomInvitePeople,Icon:glyph(heroicons.Icon16SolidUsers),OnClick:"void 0"}) }}
@@ -894,7 +900,7 @@ templ liveCopy(v view){
 <div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-latest={v.Text.JumpToLatest} data-new-messages={v.Text.NewMessages} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
 templ liveRegions(v view){
-<div id="oie-live-regions" data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)
