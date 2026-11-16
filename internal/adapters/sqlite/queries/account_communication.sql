@@ -1,5 +1,10 @@
 -- name: GetAccountCommunicationPreferences :one
-SELECT revision_id,presence,send_typing FROM account_communication_preferences WHERE account_id=?;
+SELECT CAST(COALESCE(p.revision_id, '') AS TEXT) AS revision_id,
+       CAST(COALESCE(p.presence, 'available') AS TEXT) AS presence,
+       CAST(COALESCE(p.send_typing, 1) AS INTEGER) AS send_typing
+FROM accounts a
+LEFT JOIN account_communication_preferences p ON p.account_id = a.id
+WHERE a.id = sqlc.arg(account_id);
 
 -- name: PutAccountCommunicationPreferences :exec
 INSERT INTO account_communication_preferences(account_id,revision_id,presence,send_typing)

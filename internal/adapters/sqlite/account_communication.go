@@ -17,7 +17,7 @@ func (s *Store) AccountCommunicationPreferences(ctx context.Context, account dom
 func accountCommunicationPreferences(ctx context.Context, q *dbgen.Queries, account domain.ID) (domain.AccountCommunicationPreferences, error) {
 	row, err := q.GetAccountCommunicationPreferences(ctx, string(account))
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.AccountCommunicationPreferences{Presence: "available", SendTyping: true}, nil
+		return domain.AccountCommunicationPreferences{}, application.ErrNotFound
 	}
 	return domain.AccountCommunicationPreferences{RevisionID: domain.ID(row.RevisionID), Presence: row.Presence, SendTyping: row.SendTyping != 0}, err
 }
@@ -39,11 +39,11 @@ func (s *Store) SaveAccountCommunicationPreferences(ctx context.Context, account
 	if typing != nil {
 		next.SendTyping = *typing
 	}
-	if current.Presence == next.Presence && current.SendTyping == next.SendTyping {
-		return current, nil
-	}
 	if current.RevisionID != expected {
 		return current, application.ErrStateConflict
+	}
+	if current.Presence == next.Presence && current.SendTyping == next.SendTyping {
+		return current, nil
 	}
 	if err := q.PutAccountCommunicationPreferences(ctx, dbgen.PutAccountCommunicationPreferencesParams{
 		AccountID: string(account), RevisionID: string(next.RevisionID), Presence: next.Presence, SendTyping: number(next.SendTyping),
