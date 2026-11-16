@@ -590,6 +590,12 @@ async function run() {
     const tonePage = await toneProfile.newPage();
     tonePage.on('pageerror', error => errors.push(error.message));
     await tonePage.addInitScript(() => {
+      // Render the Web Audio graph without relying on the host's audio device.
+      window.AudioContext = class extends AudioContext {
+        constructor() {
+          super({sinkId: {type: 'none'}});
+        }
+      };
       window.tonePreviews = [];
       const start = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...args) {
