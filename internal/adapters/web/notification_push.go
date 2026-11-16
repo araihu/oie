@@ -55,7 +55,7 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		if !s.pushService.ClaimForeground(session, request.EngineId.String(), request.MessageId.String(), request.Complete != nil && *request.Complete) {
+		if !s.pushService.ClaimForeground(session, request.EngineId.String(), request.MessageId.String(), request.Complete) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}

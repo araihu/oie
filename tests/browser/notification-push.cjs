@@ -163,6 +163,36 @@ async function check() {
 
     const [worker] = context.serviceWorkers().filter(worker => worker.url().includes('notification-worker'));
     assert(worker);
+    await worker.evaluate(() => {
+      self.foregroundDisplays = 0;
+      self.registration.showNotification = async () => { self.foregroundDisplays++; };
+    });
+    const reserve = messageId => page.request.post(hosted.url + pushPath + '/foreground', {
+      headers: {Origin: hosted.url, 'X-CSRF-Token': csrf},
+      data: {engineId: enabled.engineId, messageId, complete: false},
+    });
+    const completeInWorker = message => page.evaluate(async payload => {
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      const channel = new MessageChannel();
+      try {
+        return await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(Error('Worker did not handle completion')), 5000);
+          channel.port1.onmessage = event => { clearTimeout(timer); resolve(event.data); };
+          registration.active.postMessage(payload, [channel.port2]);
+        });
+      } finally {
+        channel.port1.close();
+      }
+    }, {
+      type: 'oie:foreground-notification', engine: enabled.engineId, account: fixedID(2),
+      conversation: fixedID(3), message, title: 'Oiê', body: 'Mensagem nova', lang: 'pt-BR', csrf,
+    });
+    const localMessage = fixedID(10);
+    assert.equal((await reserve(localMessage)).status(), 204);
+    assert.equal((await reserve(localMessage)).status(), 409);
+    assert.equal(await completeInWorker(localMessage), true);
+    assert.equal(await completeInWorker(fixedID(11)), false);
+    assert.equal(await worker.evaluate(() => self.foregroundDisplays), 1);
     await page.close();
     assert.equal(context.pages().length, 0);
     const destination = hosted.url + '/?' + new URLSearchParams({

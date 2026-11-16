@@ -710,7 +710,7 @@ type copy struct {
 	DiagnosticsSource, DiagnosticsDevice, DiagnosticsServer, DiagnosticsUnlock             string
 	DiagnosticsDebug, DiagnosticsInfo, DiagnosticsWarning, DiagnosticsError                string
 
-	NotificationBackground, NotificationBackgroundFailed                                             string
+	NotificationBackground, NotificationBackgroundFailed, NotificationBackgroundPaused               string
 	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview                string
 	NotificationTone, NotificationToneChoose, NotificationToneReset                                  string
 	NotificationToneUnsaved, NotificationToneInvalid, NotificationToneLarge, NotificationToneTrimmed string

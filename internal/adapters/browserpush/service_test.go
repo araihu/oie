@@ -29,7 +29,7 @@ type testRegistry struct {
 }
 
 func (r *testRegistry) PushRecipients(string) (hostauth.PushKeys, []hostauth.PushRecipient, error) {
-	return r.keys, r.recipients, nil
+	return r.keys, slices.Clone(r.recipients), nil
 }
 
 func (r *testRegistry) CurrentPushRecipient(_, session string) (*hostauth.PushRecipient, error) {
@@ -92,6 +92,10 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 		OriginalText:   "private text", Sender: domain.Sender{DisplayName: "private sender"}, SendState: "received",
 	}
 	var calls []string
+	source := testSource{message: message, conversation: domain.Conversation{
+		ID: message.ConversationID, AccountID: message.AccountID, Kind: "direct",
+	}}
+	withdrawAfterSend := false
 	registered := &testRegistry{keys: testKey(t)}
 	for _, id := range []string{"ready", "gone", "focused", "muted", "new", "revoked", "late-mute"} {
 		entry := hostauth.PushRecipient{SessionID: id, PushSubscription: hostauth.PushSubscription{
@@ -111,6 +115,9 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 		client: transportFunc(func(request *http.Request) (*http.Response, error) {
 			calls = append(calls, request.URL.Path)
 			if request.URL.Path == "/ready" {
+				if withdrawAfterSend {
+					source.message.Retraction = &domain.MessageRetraction{}
+				}
 				registered.recipients = slices.DeleteFunc(registered.recipients, func(recipient hostauth.PushRecipient) bool {
 					return recipient.SessionID == "revoked"
 				})
@@ -135,33 +142,39 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 			return &http.Response{StatusCode: status, Body: http.NoBody}, nil
 		}),
 	}}
-	if !service.ClaimForeground("focused", engineID, string(message.ID), false) ||
-		!service.ClaimForeground("focused", engineID, string(message.ID), true) {
+	if !service.ClaimForeground("focused", engineID, string(message.ID), new(false)) ||
+		!service.ClaimForeground("focused", engineID, string(message.ID), new(true)) {
 		t.Fatal("foreground delivery unable to claim an unsent message")
 	}
-	source := testSource{message: message, conversation: domain.Conversation{
-		ID: message.ConversationID, AccountID: message.AccountID, Kind: "direct",
-	}}
 	job := delivery{message.ID, time.Now().Add(-2 * time.Second)}
-	service.deliver(t.Context(), source, engineID, job)
+	service.deliver(t.Context(), &source, engineID, job)
 	if strings.Join(calls, ",") != "/ready,/gone" || strings.Join(registered.expired, ",") != "gone" {
 		t.Fatalf("delivery attempts %v, expired endpoints %v", calls, registered.expired)
 	}
-	if service.ClaimForeground("ready", engineID, string(message.ID), false) {
+	if service.ClaimForeground("ready", engineID, string(message.ID), new(false)) {
 		t.Fatal("foreground delivery would duplicate an issued Web Push")
 	}
 	service.claims = make(map[deliveryKey]deliveryClaim)
 	source.presence = "dnd"
-	service.deliver(t.Context(), source, engineID, job)
+	service.deliver(t.Context(), &source, engineID, job)
 	source.presence, source.read = "", true
-	service.deliver(t.Context(), source, engineID, job)
+	service.deliver(t.Context(), &source, engineID, job)
 	source.read, source.message.Retraction = false, &domain.MessageRetraction{}
-	service.deliver(t.Context(), source, engineID, job)
+	service.deliver(t.Context(), &source, engineID, job)
 	source.message.Retraction = nil
 	source.message.ReceivedAt = time.Now().Add(-time.Minute)
-	service.deliver(t.Context(), source, engineID, job)
+	service.deliver(t.Context(), &source, engineID, job)
 	if len(calls) != 2 {
 		t.Fatalf("sent an alert for a DND account, read message or retracted/stale message: %v", calls)
+	}
+
+	service.claims = make(map[deliveryKey]deliveryClaim)
+	calls = nil
+	source.message = message
+	withdrawAfterSend = true
+	service.deliver(t.Context(), &source, engineID, job)
+	if strings.Join(calls, ",") != "/ready" {
+		t.Fatalf("sent to a later recipient after message withdrawal: %v", calls)
 	}
 
 	data, err := payload("https://oie.example", engineID, message, registered.recipients[0], false)
@@ -227,8 +240,11 @@ func TestPushEndpointAndEncryptionKeyValidation(t *testing.T) {
 func TestAbandonedForegroundReservationAllowsWebPush(t *testing.T) {
 	service := &Service{claims: make(map[deliveryKey]deliveryClaim)}
 	key := deliveryKey{"session", engineID, "message"}
-	if !service.ClaimForeground(key.session, key.engine, key.message, false) {
+	if !service.ClaimForeground(key.session, key.engine, key.message, new(false)) {
 		t.Fatal("unable to reserve foreground delivery")
+	}
+	if service.ClaimForeground(key.session, key.engine, key.message, new(false)) {
+		t.Fatal("a second window joined the first window's reservation")
 	}
 	if ok, until := service.claim(key, remoteClaimed); ok || until.IsZero() {
 		t.Fatal("remote path did not wait for the foreground reservation")
@@ -236,7 +252,7 @@ func TestAbandonedForegroundReservationAllowsWebPush(t *testing.T) {
 	service.claims[key] = deliveryClaim{
 		expires: time.Now().Add(time.Minute), reservedUntil: time.Now().Add(-time.Millisecond), state: foregroundPending,
 	}
-	if service.ClaimForeground(key.session, key.engine, key.message, true) {
+	if service.ClaimForeground(key.session, key.engine, key.message, new(true)) {
 		t.Fatal("foreground completed an expired reservation")
 	}
 	if ok, _ := service.claim(key, remoteClaimed); !ok {

@@ -266,11 +266,11 @@
 
   function notificationWorker() {
     if (!worker) {
-      const script = window.OieHostedSession ? '/ui/notification-worker.js?hosted=1' : '/ui/notification-worker.js';
+      const script = window.OieHostedSession ? '/ui/notification-worker.js?hosted=1&foreground=1' : '/ui/notification-worker.js';
       const options = settings()?.querySelector('[data-notification-background]')
         ? {scope: '/'} : undefined;
       worker = navigator.serviceWorker.register(script, options).then(registration => {
-        if (registration.active) return registration;
+        if (registration.active?.scriptURL === new URL(script, location.origin).href) return registration;
         const candidate = registration.installing || registration.waiting;
         if (!candidate) throw Error('No notification worker');
         return new Promise((resolve, reject) => {
@@ -296,6 +296,10 @@
 
   function pushEnabled(engine = app()?.dataset.engineId) {
     return Boolean(uuid(engine) && read(pushStateKey) === engine);
+  }
+
+  function pushPaused(engine = app()?.dataset.engineId) {
+    return Boolean(uuid(engine) && read(pushStateKey) === engine + ':expired');
   }
 
   async function pushRequest(method, body, suffix = '', expected) {
@@ -404,7 +408,8 @@
           active = true;
         }
       }
-      write(pushStateKey, active ? status.engineId : null);
+      const optedIn = status.enabled && read(bannerKey) === '1' && window.Notification?.permission !== 'denied';
+      write(pushStateKey, active ? status.engineId : optedIn && status.expired ? status.engineId + ':expired' : null);
       pushStatus = status;
       if (notice === 'backgroundFailed') notice = '';
     }).catch(() => {
@@ -416,7 +421,7 @@
     return pushCheck;
   }
 
-  async function setPush(desired) {
+  async function setPush(desired, clearBanner = false) {
     if (pushPending || (pending && desired)) {
       renderSettings();
       return false;
@@ -440,19 +445,20 @@
           }
           const status = await readPushStatus();
           const previous = read(bannerKey);
-          const subscribed = pushEnabled(engine);
+          const subscribed = read(pushStateKey);
           try {
             if (!write(bannerKey, '1') || !write(pushStateKey, engine)) throw Error('Notification storage unavailable');
             await savePush(current, engine, status.subscriptionTag);
           } catch (error) {
             write(bannerKey, previous);
-            write(pushStateKey, subscribed ? engine : null);
+            write(pushStateKey, subscribed);
             if (!status.enabled || status.expired) await unsubscribePush(current);
             throw error;
           }
         });
       } else {
         await serializePush(async () => {
+          if (clearBanner && !write(bannerKey, null)) throw Error('Notification storage unavailable');
           const subscription = await boundedPush(pushManager?.getSubscription()).catch(() => null);
           await pushRequest('DELETE');
           write(pushStateKey, null);
@@ -477,12 +483,19 @@
       const engine = app()?.dataset.engineId;
       if (!pushEnabled(engine)) return true;
       try {
-        const status = await readPushStatus();
-        if (!status.enabled || status.engineId !== engine) return true;
-        const subscription = await boundedPush(pushManager?.getSubscription());
-        if (status.expired && (!subscription || await matchesPush(subscription, status))) return true;
-        if (!subscription) throw Error('Background notifications unavailable');
-        await savePush(subscription, engine, status.subscriptionTag);
+        const save = async () => {
+          const status = await readPushStatus();
+          if (!status.enabled || status.engineId !== engine) return;
+          const subscription = await boundedPush(pushManager?.getSubscription());
+          if (status.expired && (!subscription || await matchesPush(subscription, status))) return;
+          if (!subscription) throw Error('Background notifications unavailable');
+          await savePush(subscription, engine, status.subscriptionTag);
+        };
+        try { await save(); }
+        catch (error) {
+          if (error.status !== 409) throw error;
+          await save();
+        }
         return true;
       } catch {
         if (read(key) === value) write(key, previous);
@@ -535,6 +548,26 @@
     return read(bannerKey) === '1' && Boolean(desktop() || window.Notification?.permission === 'granted');
   }
 
+  async function showHostedForeground(engine, message, eligible) {
+    const registration = await boundedPush(notificationWorker());
+    const title = settings()?.dataset.messageTitle;
+    if (!title || !registration.active || !eligible()) return false;
+    const channel = new MessageChannel();
+    try {
+      return await boundedPush(new Promise(resolve => {
+        channel.port1.onmessage = event => resolve(event.data === true);
+        registration.active.postMessage({
+          type: 'oie:foreground-notification', engine, account: message.accountId,
+          conversation: message.conversationId, message: message.id, title,
+          body: (message.sender?.displayName || '').slice(0, 120), lang: document.documentElement.lang,
+          csrf: settings()?.dataset.csrf ?? '',
+        }, [channel.port2]);
+      }));
+    } finally {
+      channel.port1.close();
+    }
+  }
+
   function onMessage({detail: {engine, event}}) {
     let message;
     try { message = JSON.parse(event.data).message; } catch { return; }
@@ -558,10 +591,13 @@
     };
     if (pushEnabled(engine)) {
       const visible = () => !document.hidden && canNotify() && wantsBanner();
-      if (!visible()) return;
+      if (!visible()) {
+        if (canPlaySound()) void playMessageSound(engine, message, canPlaySound);
+        return;
+      }
       void notificationContext(engine, message).then(async context => {
         if (!context || context.doNotDisturb || !visible()) return;
-        const request = {engineId: engine, messageId: message.id};
+        const request = {engineId: engine, messageId: message.id, complete: false};
         const started = performance.now();
         const reserved = () => visible() && performance.now() - started < 1750;
         try {
@@ -574,11 +610,11 @@
           return;
         }
         if (!reserved()) return;
-        if (!viewing(engine, conversation) && !await claim(engine, message.id)) return;
-        if (!reserved()) return;
-        const shown = canShowBanner() && await showBanner(engine, message, () => reserved() && canShowBanner());
-        if (!shown && (!reserved() || !viewing(engine, conversation))) return;
-        await pushRequest('POST', {...request, complete: true}, '/foreground');
+        if (viewing(engine, conversation)) {
+          await pushRequest('POST', {...request, complete: true}, '/foreground');
+        } else {
+          if (!await claim(engine, message.id) || !await showHostedForeground(engine, message, () => reserved() && canShowBanner())) return;
+        }
         if (canPlaySound()) await playMessageSound(engine, message, canPlaySound);
       }).catch(() => {});
       return;
@@ -650,7 +686,7 @@
     const background = root.querySelector('[data-notification-background]');
     if (background) {
       background.closest('[data-notification-background-option]').hidden = !canPush();
-      background.checked = pushEnabled();
+      background.checked = pushEnabled() || pushPaused();
       background.disabled = !canPush() || (!background.checked && pushStatus?.engineId !== app()?.dataset.engineId);
       background.setAttribute('aria-disabled', String(pending || pushPending || background.disabled));
     }
@@ -670,7 +706,7 @@
     syncSelect(root.querySelector('[data-notification-room-sound]'), roomSound());
     root.querySelector('[data-notification-preview]').disabled = !canSound;
     root.querySelector('[role="status"]').textContent =
-      root.dataset[notice] || (!canBanner() ? root.dataset.unavailable :
+      root.dataset[notice] || (pushPaused() ? root.dataset.backgroundPaused : !canBanner() ? root.dataset.unavailable :
         window.Notification?.permission === 'denied' && !desktop() ? root.dataset.denied : '');
   }
 
@@ -728,8 +764,8 @@
     renderSettings();
     try {
       if (!desired) {
-        if (canPush() && !await setPush(false)) return;
-        if (!write(bannerKey, null)) notice = 'unavailable';
+        if (canPush()) await setPush(false, true);
+        else if (!write(bannerKey, null)) notice = 'unavailable';
       } else {
         const granted = desktop()
           ? await desktop().request()
@@ -827,7 +863,7 @@
     document.addEventListener(name, sync);
   }
   window.addEventListener('oie:desktop-ready', sync);
-  window.addEventListener('focus', sync);
+  window.addEventListener('focus', () => { sync(); void preparePush(true); });
   window.addEventListener('online', () => void preparePush(true));
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) void preparePush(true);

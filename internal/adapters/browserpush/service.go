@@ -26,6 +26,7 @@ type claimState uint8
 const (
 	foregroundPending claimState = iota
 	foregroundHandled
+	legacyForeground
 	remoteClaimed
 )
 
@@ -54,9 +55,12 @@ func New(auth *hostauth.Auth, origin string) *Service {
 
 // ClaimForeground reserves a short window for the browser to finish handling
 // a message. An abandoned reservation leaves the message eligible for push.
-func (s *Service) ClaimForeground(session, engine, message string, complete bool) bool {
+func (s *Service) ClaimForeground(session, engine, message string, complete *bool) bool {
 	state := foregroundPending
-	if complete {
+	if complete == nil {
+		// Pre-reservation browser tabs handle the alert after a single POST.
+		state = legacyForeground
+	} else if *complete {
 		state = foregroundHandled
 	}
 	ok, _ := s.claim(deliveryKey{session, engine, message}, state)
@@ -85,7 +89,7 @@ func (s *Service) claim(key deliveryKey, state claimState) (bool, time.Time) {
 				previous.state = state
 				s.claims[key] = previous
 			}
-			return true, time.Time{}
+			return state == foregroundHandled, time.Time{}
 		case previous.state == foregroundPending && state == remoteClaimed:
 			previous.state = state
 			s.claims[key] = previous
@@ -196,25 +200,11 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 	if err != nil || len(recipients) == 0 {
 		return
 	}
-	message, err := source.Message(ctx, job.messageID)
-	if err != nil || message.IsWithdrawn() || time.Since(message.ReceivedAt) > freshEventWindow {
-		return
-	}
-	conversation, err := source.Conversation(ctx, message.ConversationID)
-	if err != nil || conversation.AccountID != message.AccountID || conversation.RemovedFromChats {
-		return
-	}
-	replyToYou := false
-	if message.Reply != nil && message.Reply.Available && conversation.Kind == "room" {
-		target, err := source.Message(ctx, message.Reply.MessageID)
-		replyToYou = err == nil && target.AccountID == message.AccountID &&
-			target.ConversationID == message.ConversationID && target.IsOwn
-	}
 	for _, candidate := range recipients {
-		if ctx.Err() != nil || time.Since(message.ReceivedAt) > freshEventWindow {
+		if ctx.Err() != nil {
 			return
 		}
-		key := deliveryKey{candidate.SessionID, engineID, string(message.ID)}
+		key := deliveryKey{candidate.SessionID, engineID, string(job.messageID)}
 		ok, pendingUntil := s.claim(key, remoteClaimed)
 		if !pendingUntil.IsZero() && wait(ctx, time.Until(pendingUntil)) {
 			ok, _ = s.claim(key, remoteClaimed)
@@ -222,13 +212,27 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 		if !ok {
 			continue
 		}
+		message, err := source.Message(ctx, job.messageID)
+		if err != nil || message.IsWithdrawn() || time.Since(message.ReceivedAt) > freshEventWindow {
+			return
+		}
+		conversation, err := source.Conversation(ctx, message.ConversationID)
+		if err != nil || conversation.AccountID != message.AccountID || conversation.RemovedFromChats {
+			return
+		}
 		read, err := source.HasMessageRead(ctx, message.ID)
-		if err != nil || read || time.Since(message.ReceivedAt) > freshEventWindow {
+		if err != nil || read {
 			return
 		}
 		preferences, err := source.AccountCommunicationPreferences(ctx, message.AccountID)
 		if err != nil || preferences.Presence == "dnd" {
 			return
+		}
+		replyToYou := false
+		if message.Reply != nil && message.Reply.Available && conversation.Kind == "room" {
+			target, err := source.Message(ctx, message.Reply.MessageID)
+			replyToYou = err == nil && target.AccountID == message.AccountID &&
+				target.ConversationID == message.ConversationID && target.IsOwn
 		}
 		recipient, err := s.auth.CurrentPushRecipient(engineID, candidate.SessionID)
 		if err != nil || recipient == nil || recipient.StartedAt.After(message.ReceivedAt) ||
@@ -237,7 +241,7 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 		}
 		silent := !soundsFor(recipient.PushSubscription, conversation, message.MentionsYou || replyToYou)
 		data, err := payload(s.sender.origin, engineID, message, *recipient, silent)
-		if err != nil {
+		if err != nil || time.Since(message.ReceivedAt) > freshEventWindow {
 			continue
 		}
 		expired, err := s.sender.send(ctx, keys, *recipient, data, message.ID)

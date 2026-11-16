@@ -18,7 +18,8 @@ type PushSubscription struct {
 	Endpoint, Auth, PublicKey, EngineID, Language string
 	MutedConversations                            []string
 	RoomSound                                     string
-	StartedAt                                     time.Time
+	StartedAt, BoundAt                            time.Time
+	Revision                                      string
 	Sound, DirectSound, ArchivedSound             bool
 	Expired                                       bool `json:"expired,omitempty"`
 }
@@ -41,7 +42,18 @@ type PushStatus struct {
 
 func (p *PushSubscription) tag() string {
 	hash := sha256.Sum256([]byte(p.Endpoint + "\n" + p.Auth + "\n" + p.PublicKey))
-	return hex.EncodeToString(hash[:]) + "." + strconv.FormatInt(p.StartedAt.UnixNano(), 10)
+	revision := p.Revision
+	if revision == "" {
+		revision = strconv.FormatInt(p.StartedAt.UnixNano(), 10)
+	}
+	return hex.EncodeToString(hash[:]) + "." + revision
+}
+
+func (p *PushSubscription) boundAt() time.Time {
+	if p.BoundAt.IsZero() {
+		return p.StartedAt
+	}
+	return p.BoundAt
 }
 
 // BrowserSessionID returns the verifier, never the bearer value in the cookie.
@@ -110,12 +122,19 @@ func (a *Auth) SaveBrowserPush(ctx context.Context, sessionID string, push *Push
 			return ErrPushChanged
 		}
 		if push != nil {
-			same := previous != nil && !previous.Expired && previous.EngineID == push.EngineID && previous.Endpoint == push.Endpoint &&
+			same := previous != nil && previous.EngineID == push.EngineID && previous.Endpoint == push.Endpoint &&
 				previous.Auth == push.Auth && previous.PublicKey == push.PublicKey
-			if same {
+			if same && previous.Expired {
+				return ErrPushChanged
+			}
+			now := time.Now().UTC()
+			push.StartedAt, push.BoundAt = now, now
+			push.Revision = newCredential()
+			if previous != nil && previous.EngineID == push.EngineID && (same || expected != "") {
 				push.StartedAt = previous.StartedAt
-			} else {
-				push.StartedAt = time.Now().UTC()
+			}
+			if same {
+				push.BoundAt = previous.boundAt()
 			}
 			for i := range current.Sessions {
 				other := current.Sessions[i].Push
@@ -169,8 +188,9 @@ func (a *Auth) ExpirePush(ctx context.Context, recipient PushRecipient) error {
 			push := current.Sessions[index].Push
 			if push != nil && push.Endpoint == recipient.Endpoint && push.Auth == recipient.Auth &&
 				push.PublicKey == recipient.PublicKey && push.EngineID == recipient.EngineID &&
-				push.StartedAt.Equal(recipient.StartedAt) {
+				!push.Expired && push.boundAt().Equal(recipient.boundAt()) {
 				push.Expired = true
+				push.Revision = newCredential()
 			}
 		}
 		return nil

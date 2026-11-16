@@ -1,6 +1,39 @@
 const hosted = new URL(self.location.href).searchParams.get('hosted') === '1';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+self.addEventListener('install', event => {
+  if (hosted) event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('message', event => {
+  const data = event.data;
+  const port = event.ports[0];
+  if (!hosted || !port || data?.type !== 'oie:foreground-notification' || event.source?.type !== 'window') return;
+  const {engine, account, conversation, message, title, body, lang, csrf} = data;
+  if (![engine, account, conversation, message].every(id => typeof id === 'string' && uuid.test(id))) return;
+  event.waitUntil((async () => {
+    let shown = false;
+    try {
+      const client = await self.clients.get(event.source.id);
+      if (client?.visibilityState !== 'visible') return;
+      const response = await fetch('/ui/notification-push/foreground', {
+        method: 'POST', cache: 'no-store', keepalive: true,
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
+        body: JSON.stringify({engineId: engine, messageId: message, complete: true}),
+      });
+      if (!response.ok) return;
+      await self.registration.showNotification(title, {
+        body, lang, tag: engine + ':' + message, silent: true,
+        data: {engine, account, conversation, message},
+      });
+      shown = true;
+    } catch {} finally {
+      port.postMessage(shown);
+      port.close();
+    }
+  })());
+});
+
 self.addEventListener('push', event => {
   if (!hosted) return;
   let data, destination;

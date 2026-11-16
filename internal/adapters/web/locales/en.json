@@ -853,6 +853,7 @@
   "CapabilitySendCorrectionsNote": "Only the latest own engine-origin sent plain text can be edited, in a known current session. Replies and structured mentions are not editable yet. The engine rechecks eligibility and the selected content revision.",
   "NotificationBackground": "Notify when Oiê is closed",
   "NotificationBackgroundFailed": "Couldn’t save background notifications. Try again.",
+  "NotificationBackgroundPaused": "Background alerts are paused. Turn the option off and on to resume.",
   "NotificationSettings": "Notifications",
   "NotificationBanners": "Message notifications",
   "NotificationDirectSound": "Sound for direct messages",

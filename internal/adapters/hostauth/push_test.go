@@ -47,6 +47,9 @@ func TestPushFollowsTheBrowserSession(t *testing.T) {
 	if err != nil || len(recipients) != 1 || recipients[0].Language != "pt-BR" || !recipients[0].StartedAt.Equal(started) {
 		t.Fatalf("preference update reset the subscription: %v", err)
 	}
+	if err := auth.SaveBrowserPush(ctx, id, subscription, tag); !errors.Is(err, ErrPushChanged) {
+		t.Fatalf("stale preferences overwrote a newer save: %v", err)
+	}
 	_, recipients, err = auth.PushRecipients("different-engine")
 	if err != nil || len(recipients) != 0 {
 		t.Fatalf("wrong engine has push recipients: %v", err)
@@ -80,12 +83,18 @@ func TestPushFollowsTheBrowserSession(t *testing.T) {
 	if recipient, err := auth.CurrentPushRecipient("engine", id); err != nil || recipient != nil {
 		t.Fatalf("expired endpoint was still eligible: %+v (%v)", recipient, err)
 	}
+	for _, tag := range []string{replacement.tag(), expired.SubscriptionTag} {
+		if err := auth.SaveBrowserPush(ctx, id, subscription, tag); !errors.Is(err, ErrPushChanged) {
+			t.Fatalf("preference write reactivated a known expired endpoint: %v", err)
+		}
+	}
 	renewed := *subscription
 	renewed.Endpoint += "-renewed"
 	if err := auth.SaveBrowserPush(ctx, id, &renewed, expired.SubscriptionTag); err != nil {
 		t.Fatal(err)
 	}
-	if recipient, err := auth.CurrentPushRecipient("engine", id); err != nil || recipient == nil || recipient.Endpoint != renewed.Endpoint {
+	if recipient, err := auth.CurrentPushRecipient("engine", id); err != nil || recipient == nil ||
+		recipient.Endpoint != renewed.Endpoint || !recipient.StartedAt.Equal(replacement.StartedAt) {
 		t.Fatalf("renewal did not restore delivery: %+v (%v)", recipient, err)
 	}
 	if err := store.revokeSession(ctx, session); err != nil {
