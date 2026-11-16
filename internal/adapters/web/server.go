@@ -228,6 +228,7 @@ type view struct {
 
 	Contacts             *engineapi.ContactPage
 	ContactRequests      *engineapi.ContactRequests
+	ContactCursor        string
 	AccountCommunication *engineapi.AccountCommunicationPreferences
 
 	AccountUnread                                                                                 map[string]int
@@ -538,7 +539,7 @@ type copy struct {
 	DetailsObservedAt            string
 	UnknownParticipant           string
 
-	AccountPresence, AccountPresenceSave, AccountPresenceSaved, AccountPresenceConflict, AccountPresenceFailed string
+	AccountPresence, AccountPresenceSave, AccountPresenceSaved, AccountPresenceConflict, AccountPresenceFailed, AccountCommunicationReload string
 
 	PresenceAvailable                                                                               string
 	PresenceAway                                                                                    string
@@ -633,7 +634,7 @@ type copy struct {
 	NotFoundBody, Chats, Favorites, Archived, ArchivedBackToChats, SharedMedia                      string
 	HistorySyncing, HistoryPartial, HistoryUnsupported, HistoryComplete, HistoryCount, RoomReadOnly string
 
-	ContactsTitle, ContactAdd, ContactRemove, ContactRequestsTitle, ContactAccept, ContactDecline, ContactEmpty, ContactConnect, ContactChangeFailed, ContactChangeSaved, SendTyping, TypingNotice string
+	ContactsTitle, ContactAdd, ContactRemove, ContactRequestsTitle, ContactAccept, ContactDecline, ContactEmpty, ContactConnect, ContactChangeFailed, ContactChangeSaved, ContactRefreshFailed, SendTyping, TypingNotice string
 
 	SwitchAccount, ManageAccounts                                                                                                                                        string
 	BackToAccounts, AdvancedConnection, AccountMissing, AddAccountHelp                                                                                                   string
@@ -1597,9 +1598,6 @@ func (s *Server) accountUnread(ctx context.Context) map[string]int {
 			for _, c := range response.JSON200.Items {
 				if !seen[c.Id] {
 					totals[c.AccountId] += c.UnreadCount
-					if c.UnreadCount == 0 && hasUnread(c) {
-						totals[c.AccountId]++
-					}
 					seen[c.Id] = true
 				}
 			}

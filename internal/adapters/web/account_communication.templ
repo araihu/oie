@@ -3,6 +3,7 @@ package web
 import (
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/form"
+	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/toggle"
 	selectfield "github.com/araihu/goshtoso/components/select"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -13,15 +14,18 @@ templ accountCommunication(v view, account string, preferences engineapi.Account
 		@mutationFieldsAt(v,"account-communication","",v.accountsHref(account))
 		<input type="hidden" name="accountId" value={account}/>
 		<input type="hidden" name="lang" value={v.Locale}/>
-		if preferences.RevisionId != nil {
-			<input type="hidden" name="expectedRevisionId" value={*preferences.RevisionId}/>
-		} else {
-			<input type="hidden" name="expectedRevisionId" value=""/>
-		}
 		{{ selected := preferences.Presence }}
-		if choice := engineapi.AccountCommunicationPreferencesPresence(v.field("presence")); v.FormTarget == "account-communication" && choice.Valid() {
-			{{ selected = choice }}
+		{{ choice := engineapi.AccountCommunicationPreferencesPresence(v.field("presence")) }}
+		{{ restoreDraft := v.FormTarget == "account-communication" && choice.Valid() }}
+		{{ revision := "" }}
+		if preferences.RevisionId != nil {
+			{{ revision = *preferences.RevisionId }}
 		}
+		if restoreDraft {
+			{{ selected = choice }}
+			{{ revision = v.field("expectedRevisionId") }}
+		}
+		<input type="hidden" name="expectedRevisionId" value={revision}/>
 		@selectfield.Select(selectfield.Config{
 			ID:"account-presence",Name:"presence",Label:v.Text.AccountPresence,
 			Options:[]selectfield.Option{
@@ -32,7 +36,7 @@ templ accountCommunication(v view, account string, preferences engineapi.Account
 		})
 		if preferences.SendTyping != nil {
 			<input type="hidden" name="sendTypingField" value="true"/>
-			@toggle.Toggle(toggle.Config{ID:"account-send-typing",Name:"sendTyping",Value:"on",Label:v.Text.SendTyping,Checked:v.FormTarget=="account-communication" && v.field("sendTyping")=="on" || v.FormTarget!="account-communication" && *preferences.SendTyping})
+			@toggle.Toggle(toggle.Config{ID:"account-send-typing",Name:"sendTyping",Value:"on",Label:v.Text.SendTyping,Checked:restoreDraft && v.field("sendTyping")=="on" || !restoreDraft && *preferences.SendTyping})
 		}
 		@button.Button(button.WithType("submit"),button.WithSize(button.SizeSmall)){ {v.Text.AccountPresenceSave} }
 		<p data-form-feedback role="status" aria-live="polite">
@@ -40,5 +44,8 @@ templ accountCommunication(v view, account string, preferences engineapi.Account
 				{v.ErrorMessage}
 			}
 		</p>
+		<div hidden data-communication-refresh>
+			@link.Link(v.accountsHref(account)) { {v.Text.AccountCommunicationReload} }
+		</div>
 	}
 }

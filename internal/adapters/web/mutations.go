@@ -549,6 +549,10 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "read", "presence", "sendTyping", "contactAction", "lang"} {
 		v.Values[key] = r.Form.Get(key)
 	}
+	if r.URL.Path == "/ui/accounts/communication" && result.Code == "revision_conflict" {
+		delete(v.Values, "presence")
+		delete(v.Values, "sendTyping")
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	s.load(ctx, clone, &v)

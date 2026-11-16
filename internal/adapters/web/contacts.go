@@ -19,8 +19,9 @@ func (s *Server) loadContacts(ctx context.Context, r *http.Request, v *view) {
 	}
 	limit := 30
 	params := &engineapi.ListContactsParams{AccountId: &account, Limit: &limit, IncludePresence: new(true)}
-	if cursor := r.URL.Query().Get("contactCursor"); cursor != "" {
-		params.Cursor = &cursor
+	v.ContactCursor = r.URL.Query().Get("contactCursor")
+	if v.ContactCursor != "" {
+		params.Cursor = &v.ContactCursor
 	}
 	page, err := s.client.ListContactsWithResponse(ctx, params)
 	if err == nil && page.JSON200 != nil {

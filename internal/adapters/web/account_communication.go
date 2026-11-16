@@ -25,11 +25,7 @@ func (s *Server) changeAccountCommunication(ctx context.Context, r *http.Request
 		return http.StatusOK, mutationResult{OK: true, Message: text.AccountPresenceSaved, Communication: saved.JSON200}
 	}
 	if err == nil && saved.StatusCode() == http.StatusConflict {
-		result := mutationResult{Message: text.AccountPresenceConflict}
-		if latest, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, account); err == nil {
-			result.Communication = latest.JSON200
-		}
-		return http.StatusConflict, result
+		return http.StatusConflict, mutationResult{Code: "revision_conflict", Message: text.AccountPresenceConflict}
 	}
 	return http.StatusServiceUnavailable, mutationResult{Message: text.AccountPresenceFailed}
 }

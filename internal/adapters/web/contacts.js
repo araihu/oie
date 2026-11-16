@@ -9,12 +9,14 @@
     const panel = form.closest('[data-account-contacts]');
     if (!panel || !form.action.endsWith('/ui/accounts/contacts')) return;
     event.preventDefault();
-    if (pending.has(panel)) return;
+    const refresh = panel.querySelector('[data-contact-refresh]');
+    if (pending.has(panel) || !refresh.hidden) return;
     pending.add(panel);
     const values = new URLSearchParams(new FormData(form));
     const controls = [...panel.querySelectorAll('button[type="submit"]:enabled')];
     for (const control of controls) control.setAttribute('aria-disabled', 'true');
     panel.setAttribute('aria-busy', 'true');
+    let saved = false;
     try {
       const response = await fetch(form.action, {
         method: 'POST',
@@ -26,6 +28,7 @@
       if (!panel.isConnected) return;
       status(result.message || panel.dataset.contactFailed, result.ok === true);
       if (!response.ok || result.ok !== true) return;
+      saved = true;
       const input = form.querySelector('#add-contact-address');
       if (input?.value === values.get('address')) input.value = '';
       const current = panel.querySelector('[data-account-contact-list]');
@@ -44,12 +47,22 @@
       }
       const restoreFocus = current.contains(document.activeElement);
       current.replaceWith(list);
+      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));
       if (restoreFocus) panel.querySelector('#add-contact-address,[data-contact-title]')?.focus({preventScroll: true});
     } catch {
-      if (panel.isConnected) status(panel.dataset.contactFailed, false);
+      if (panel.isConnected) {
+        if (saved) {
+          refresh.hidden = false;
+          refresh.querySelector('a')?.focus({preventScroll: true});
+        } else {
+          status(panel.dataset.contactFailed, false);
+        }
+      }
     } finally {
       panel.removeAttribute('aria-busy');
-      for (const control of controls) control.removeAttribute('aria-disabled');
+      if (refresh.hidden) {
+        for (const control of controls) control.removeAttribute('aria-disabled');
+      }
       pending.delete(panel);
     }
   });

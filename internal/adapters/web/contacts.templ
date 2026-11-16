@@ -34,6 +34,10 @@ templ accountContacts(v view) {
 				}
 			}
 			@accountContactList(v,a.Id)
+			<div hidden data-contact-refresh>
+				<p role="alert">{v.Text.ContactRefreshFailed}</p>
+				@link.Link(v.contactsHref(a.Id,v.ContactCursor)) { {v.Text.Retry} }
+			</div>
 		</section>
 	} else {
 		@emptystate.EmptyState(emptystate.Config{Title:v.Text.AccountMissing})
@@ -44,7 +48,7 @@ templ accountContactList(v view, account string) {
 	<section data-account-contact-list>
 		if v.ContactRequests == nil {
 			<p>{v.Text.ContactConnect}</p>
-			@link.Link(v.contactsHref(account,"")) { {v.Text.Retry} }
+			@link.Link(v.contactsHref(account,v.ContactCursor)) { {v.Text.Retry} }
 		} else if len(v.ContactRequests.Items) > 0 {
 			<h3>{v.Text.ContactRequestsTitle}</h3>
 			<ul class="oie-account-list">
@@ -61,7 +65,7 @@ templ accountContactList(v view, account string) {
 		}
 		if v.Contacts == nil {
 			@emptystate.EmptyState(emptystate.Config{Title:v.Text.Unavailable})
-			@link.Link(v.contactsHref(account,"")) { {v.Text.Retry} }
+			@link.Link(v.contactsHref(account,v.ContactCursor)) { {v.Text.Retry} }
 		} else if len(v.Contacts.Items) == 0 {
 			@emptystate.EmptyState(emptystate.Config{Title:v.Text.ContactEmpty})
 		} else {
@@ -90,7 +94,7 @@ templ accountContactList(v view, account string) {
 }
 
 templ contactFields(v view, account, action string) {
-	@mutationFieldsAt(v,"contact-action","",v.contactsHref(account,""))
+	@mutationFieldsAt(v,"contact-action","",v.contactsHref(account,v.ContactCursor))
 	<input type="hidden" name="lang" value={v.Locale}/>
 	<input type="hidden" name="accountId" value={account}/>
 	<input type="hidden" name="contactAction" value={action}/>

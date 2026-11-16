@@ -3640,7 +3640,7 @@ func composer(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if !v.Preview && v.Selected.Kind == "direct" && v.Selected.Request == nil && v.composeAllowed() && v.messagingImplemented("typing") {
+		if !v.Preview && v.Selected.Kind == "direct" && v.Selected.Request == nil && !removedConversation(v.Selected) && v.composeAllowed() && v.messagingImplemented("typing") {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 254, "<span class=\"oie-typing-notice\" data-typing-notice role=\"status\" hidden>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
