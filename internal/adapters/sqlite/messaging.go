@@ -322,7 +322,7 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 		if err != nil {
 			return application.MessageResult{}, err
 		}
-		if m.ID != source.MessageID || m.RevisionID != source.RevisionID || m.SendState == "cancelled" {
+		if m.ID != source.MessageID || m.RevisionID != source.RevisionID || m.SendState == "cancelled" || m.IsWithdrawn() {
 			return application.MessageResult{}, application.StateConflict{Current: m}
 		}
 	}

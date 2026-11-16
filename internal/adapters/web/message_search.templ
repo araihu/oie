@@ -92,6 +92,7 @@ if v.NativeMessageSearch {
 @checkbox.Checkbox(checkbox.Config{ID:"message-search-history",Name:"includeEditHistory",Value:"true",Label:v.Text.IncludeEditHistory,Checked:v.MessageSearch.IncludeHistory})
 @tooltip.Tooltip("message-search-history-help",v.Text.IncludeEditHistory,tooltip.WithDescription(v.Text.SearchHistoryHelp),tooltip.WithTrigger(searchHistoryInfo(v)),tooltip.WithActivation(tooltip.ActivationClick),tooltip.WithPortal(true),tooltip.WithPosition(tooltip.PositionBottom))
 </div>
+@checkbox.Checkbox(checkbox.Config{ID:"message-search-retracted",Name:"includeRetracted",Value:"true",Label:v.Text.IncludeRetracted,Checked:v.MessageSearch.IncludeRetracted})
 <noscript>@button.Button(button.WithType("submit")){ {v.Text.SearchMessages} }</noscript>
 </form>
 <div class="oie-message-search-feedback" data-message-search-loading hidden role="status">@spinner.Spinner(spinner.Config{Size:spinner.SizeSM})<span>{v.Text.SearchResultsLoading}</span></div>
@@ -125,7 +126,7 @@ for _,a:=range v.Accounts {
 }
 
 templ messageSearchResponse(v view){
-<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-type={v.MessageSearch.Category} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
+<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-retracted={strconv.FormatBool(v.MessageSearch.IncludeRetracted)} data-search-type={v.MessageSearch.Category} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
 <div data-message-search-items>
 if v.MessageSearch.Category=="" {
 if v.MessageSearch.ConversationID==""&&v.MessageSearch.Query!=""&&v.MessageSearch.Page!=nil&&len(v.MessageSearch.Page.Items)==0&&len(v.MessageSearch.Conversations)==0&&len(v.MessageSearch.Contacts)==0&&!v.MessageSearch.ContactsKnown {
@@ -201,7 +202,7 @@ templ messageSearchHit(v view,hit engineapi.MessageSearchHit,searchPattern *sear
 		ranges = roomSearchRanges(hit.Message.OriginalText,excerpt,excerptSpans)
 	}
 }}
-<article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-match-kind={string(hit.MatchKind)}
+<article data-message-search-hit={hit.Message.Id+":"+hit.MatchedRevisionId} data-search-message={hit.Message.Id} data-search-revision={hit.MatchedRevisionId} data-search-historical={strconv.FormatBool(hit.Historical)} data-search-hit-retracted={strconv.FormatBool(hit.Message.Retraction!=nil || hit.Message.Moderation!=nil)} data-search-match-kind={string(hit.MatchKind)}
 if ranges != "" {
 	data-search-ranges={ranges} data-search-content-revision={hit.Message.RevisionId} data-search-source-digest={searchSourceDigest(hit.Message.OriginalText)}
 }
@@ -227,6 +228,9 @@ if conversationDomain != "" {
 <span class="oie-search-domain">{ " (" + conversationDomain + ")" }</span>
 }
 </small>
+if hit.Message.Retraction != nil || hit.Message.Moderation != nil {
+@badge.Badge(badge.Config{Label:v.Text.MessageRetracted,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
+}
 if hit.Historical {
 @badge.Badge(badge.Config{Label:v.Text.SearchPriorVersion,Size:badge.SizeSM,Appearance:badge.AppearanceSoft})
 }
@@ -243,7 +247,7 @@ if preview != nil && !hit.Historical {
 </div>
 <time data-message-search-time={v.Text.Today} datetime={position.Format(time.RFC3339)}>{position.Format("2006-01-02 15:04")}</time>
 }
-if v.MessageSearch.ConversationHighlight && (hit.Historical || hit.MatchKind == "metadata") {
+if v.MessageSearch.ConversationHighlight && (hit.Historical || hit.Message.Retraction != nil || hit.Message.Moderation != nil || hit.MatchKind == "metadata") {
 	<template data-search-result-excerpt>@highlightSearchText(hit.Excerpt,searchPattern,false)</template>
 }
 </article>

@@ -28,4 +28,13 @@ type PendingMessageEdit struct {
 	Command           MessageEditCommand
 	Plan              OutgoingCorrection
 	ContentRevisionID ID
+	Reply             *OutboundReply `json:",omitempty"`
+	WireText          string         `json:",omitempty"`
+}
+
+func (p PendingMessageEdit) WireBody() string {
+	if p.WireText != "" {
+		return p.WireText
+	}
+	return p.Command.OriginalText
 }

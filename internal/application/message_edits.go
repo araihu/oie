@@ -156,7 +156,14 @@ func (e *Engine) EditMessage(ctx context.Context, key, id, expected domain.ID, t
 	}
 	now := e.now().UTC()
 	command := domain.MessageEditCommand{ID: key, RevisionID: revision, MessageID: candidate.Target.MessageID, AccountID: candidate.Target.AccountID, ConversationID: candidate.Target.ConversationID, ExpectedRevisionID: expected, OriginalText: text, State: "queued", CreatedAt: now, UpdatedAt: now}
-	result, err := r.AcceptMessageEdit(ctx, MessageEditMutation{Pending: domain.PendingMessageEdit{Command: command, Plan: plan, ContentRevisionID: content}, Fingerprint: digest})
+	pending := domain.PendingMessageEdit{Command: command, Plan: plan, ContentRevisionID: content}
+	if candidate.Source.OutboundReply != nil {
+		reply := *candidate.Source.OutboundReply
+		reply.BodyText = text
+		pending.Reply = &reply
+		pending.WireText = quotedReplyBody(&reply)
+	}
+	result, err := r.AcceptMessageEdit(ctx, MessageEditMutation{Pending: pending, Fingerprint: digest})
 	if err == nil {
 		e.outgoingWorkCommitted()
 	}
@@ -236,7 +243,9 @@ func (e *Engine) dispatchMessageEdits(ctx context.Context) error {
 		}
 		if outcome == "" {
 			sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			outcome = e.protocols.Send(sendCtx, a, Outgoing{ID: claimed.Command.ID, Address: c.Address, OriginalText: claimed.Command.OriginalText, Kind: c.Kind, RoomIntentRevisionID: claimed.Plan.RoomIntentRevisionID, Correction: &claimed.Plan})
+			out := outgoingMessage(domain.Message{ID: claimed.Command.ID, OriginalText: claimed.WireBody(), OutboundReply: claimed.Reply}, c)
+			out.RoomIntentRevisionID, out.Correction = claimed.Plan.RoomIntentRevisionID, &claimed.Plan
+			outcome = e.protocols.Send(sendCtx, a, out)
 			cancel()
 		}
 		state := outcome

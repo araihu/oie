@@ -43,6 +43,21 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		out.Target = t
 		return out, nil
 	}
+	if err := hydrateMessageWithdrawal(ctx, q, &m); err != nil {
+		return out, err
+	}
+	if m.IsWithdrawn() {
+		t.OriginalText = ""
+		return deny("unsupported_payload")
+	}
+	if m.OutboundReply != nil {
+		if err := hydrateReply(ctx, q, &m); err != nil {
+			return out, err
+		}
+		if m.OutboundReply.Reference == nil || m.Reply.OriginalExpired {
+			return deny("unsupported_payload")
+		}
+	}
 	history, err := readMessageEditHistory(ctx, q, m.ID)
 	if err != nil {
 		return out, err
@@ -98,9 +113,12 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if err != nil {
 			return out, err
 		}
-		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.Command.OriginalText != t.OriginalText {
+		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBody() != t.OriginalText {
 			return deny("foreign_source")
 		}
+		t.OriginalText = p.Command.OriginalText
+	} else if m.OutboundReply != nil {
+		t.OriginalText = m.OutboundReply.BodyText
 	}
 	if len(history.Items) >= 128 {
 		return deny("history_unavailable")
@@ -113,7 +131,7 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 	if err != nil {
 		return out, err
 	}
-	if (c.Kind != "direct" && c.Kind != "room") || original.OutboundReply != nil || len(original.Mentions) > 0 || len(m.Mentions) > 0 || m.OutboundReply != nil || len(m.MediaThumbnails) > 0 || len(m.Attachments) > 0 {
+	if (c.Kind != "direct" && c.Kind != "room") || len(original.Mentions) > 0 || len(m.Mentions) > 0 || len(m.MediaThumbnails) > 0 || len(m.Attachments) > 0 {
 		return deny("unsupported_payload")
 	}
 	if active, err := q.GetActiveMessageEdit(ctx, string(m.ID)); err == nil && active.ID != string(ignore) {
@@ -400,7 +418,7 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 	if err != nil {
 		return false, err
 	}
-	if m.OriginalText != p.Command.OriginalText {
+	if m.OriginalText != p.WireBody() {
 		return false, nil
 	}
 	facts, err := q.GetCorrectionFacts(ctx, row.ID)
@@ -411,7 +429,7 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 		return false, nil
 	}
 	f := facts[0]
-	return f.Scope == p.Plan.Scope && f.Author == p.Plan.Author && f.RemoteID == string(p.Command.ID) && f.TargetID == p.Plan.OriginalWireID && f.SourceHash == bodyHash(p.Command.OriginalText), nil
+	return f.Scope == p.Plan.Scope && f.Author == p.Plan.Author && f.RemoteID == string(p.Command.ID) && f.TargetID == p.Plan.OriginalWireID && f.SourceHash == bodyHash(p.WireBody()), nil
 }
 
 func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provider string, proof domain.MessageCorrection, text string, revision domain.ID, at time.Time) error {
@@ -438,7 +456,7 @@ func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provi
 	if err != nil {
 		return err
 	}
-	if p.Command.AccountID != account || p.Command.OriginalText != text || p.Command.State == "submitted" || proof.Scope != p.Plan.Scope || proof.Author != p.Plan.Author || proof.ID != string(id) || proof.TargetID != p.Plan.OriginalWireID {
+	if p.Command.AccountID != account || p.WireBody() != text || p.Command.State == "submitted" || proof.Scope != p.Plan.Scope || proof.Author != p.Plan.Author || proof.ID != string(id) || proof.TargetID != p.Plan.OriginalWireID {
 		return nil
 	}
 	observed, err := hasVerifiedEditEcho(ctx, q, p)
@@ -520,7 +538,7 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 		if err != nil {
 			return err
 		}
-		if source.OriginalText != p.Command.OriginalText || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
+		if source.OriginalText != p.WireBody() || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
 			return application.ErrStateConflict
 		}
 		source.Correction = proof
@@ -529,7 +547,7 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	source := domain.Message{ID: p.Command.ID, RevisionID: p.ContentRevisionID, AccountID: p.Command.AccountID, ConversationID: p.Command.ConversationID, Sender: base.Sender, OriginalText: p.Command.OriginalText, CreatedAt: at, IsOwn: true, SendState: "submitted", ProviderID: string(p.Command.ID), Correction: proof}
+	source := domain.Message{ID: p.Command.ID, RevisionID: p.ContentRevisionID, AccountID: p.Command.AccountID, ConversationID: p.Command.ConversationID, Sender: base.Sender, OriginalText: p.WireBody(), OutboundReply: p.Reply, CreatedAt: at, IsOwn: true, SendState: "submitted", ProviderID: string(p.Command.ID), Correction: proof}
 	return insertMessage(ctx, q, source)
 }
 
@@ -550,7 +568,7 @@ func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.
 	if err != nil {
 		return "", "", false, err
 	}
-	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.Command.OriginalText != source.OriginalText || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
+	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.WireBody() != source.OriginalText || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
 		return "", "", false, nil
 	}
 	op, err := q.GetOperation(ctx, remote)

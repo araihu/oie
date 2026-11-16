@@ -1462,7 +1462,7 @@ window.OieRuntime.register('live', life => {
     }
     if (filterRemoved) q.delete('account');
     if (chatRemoved || filterRemoved) {
-      for (const key of ['chat','message','infoView','infoType','infoCursor','infoQuery','chatSearch','chatQuery','chatIncludeHistory','chatSearchRevision','contentConversation','contentCursor','favoritesCursor','scheduleCursor']) q.delete(key);
+      for (const key of ['chat','message','infoView','infoType','infoCursor','infoQuery','chatSearch','chatQuery','chatIncludeHistory','chatIncludeRetracted','chatSearchRevision','contentConversation','contentCursor','favoritesCursor','scheduleCursor']) q.delete(key);
       if (['sender','details'].includes(q.get('open'))) q.delete('open');
       q.set('inbox','1');
     }

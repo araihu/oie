@@ -38,7 +38,17 @@ type MediaThumbnail struct {
 	ThumbnailURL string
 }
 
+type MessageRetraction struct {
+	At                time.Time
+	OriginalAvailable bool
+}
+
+func (m Message) IsWithdrawn() bool {
+	return m.Moderation != nil || m.Retraction != nil
+}
+
 type Message struct {
+	Retraction                                *MessageRetraction `json:",omitempty"`
 	Moderation                                *MessageModeration `json:",omitempty"`
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender

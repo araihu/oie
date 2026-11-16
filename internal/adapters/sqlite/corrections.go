@@ -77,6 +77,26 @@ func resolveMessageAlias(ctx context.Context, q *dbgen.Queries, id domain.ID) (d
 	return domain.ID(canonical), err
 }
 func hydrateMessageProjection(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	if err := hydrateMessageContent(ctx, q, m); err != nil {
+		return err
+	}
+	return maskWithdrawnProjection(ctx, q, m)
+}
+
+func maskWithdrawnProjection(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	if err := hydrateMessageWithdrawal(ctx, q, m); err != nil {
+		return err
+	}
+	if m.IsWithdrawn() {
+		m.OriginalText, m.AttachmentWireText = "", ""
+		m.MediaThumbnails, m.Attachments, m.Mentions = nil, nil, nil
+		m.Composition, m.OutboundReply, m.Reply, m.ReplyReference = nil, nil, nil, nil
+		m.Edited, m.MentionsYou = false, false
+	}
+	return nil
+}
+
+func hydrateMessageContent(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
 	id, err := resolveMessageAlias(ctx, q, m.ID)
 	if err != nil {
 		return err
@@ -93,7 +113,7 @@ func hydrateMessageProjection(ctx context.Context, q *dbgen.Queries, m *domain.M
 	}
 	head, err := q.GetContentHead(ctx, string(m.ID))
 	if errors.Is(err, sql.ErrNoRows) {
-		return hydrateRoomModeration(ctx, q, m)
+		return nil
 	}
 	if err != nil {
 		return err
@@ -112,7 +132,7 @@ func hydrateMessageProjection(ctx context.Context, q *dbgen.Queries, m *domain.M
 	projected.Historical = m.Historical
 	projected.ProjectionSourceID = domain.ID(head.SourceID)
 	*m = projected
-	return hydrateRoomModeration(ctx, q, m)
+	return nil
 }
 func recordCorrectionMetadata(ctx context.Context, q *dbgen.Queries, id string, in domain.Message) error {
 	if !correctionValid(in.Correction) {

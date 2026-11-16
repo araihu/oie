@@ -181,10 +181,12 @@ func favoriteActions(v view, message engineapi.Message, scope string) []dropdown
 	prefix := scope + "-" + message.Id
 	items := []dropdown.Item{
 		{ID: "favorite-source-" + prefix, Label: v.Text.SharedGoToMessage, Href: v.infoSourceHref(message), Icon: goToMessageIcon()},
-		{ID: "favorite-copy-" + prefix, Label: v.Text.CopyOriginal, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)},
 	}
-	if !v.Preview && message.SendState != "cancelled" {
-		items = append(items, forwardAction(v, "favorite-"+scope+"-", message.Id))
+	if message.Retraction == nil && message.Moderation == nil {
+		items = append(items, dropdown.Item{ID: "favorite-copy-" + prefix, Label: v.Text.CopyOriginal, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)})
+		if !v.Preview && message.SendState != "cancelled" {
+			items = append(items, forwardAction(v, "favorite-"+scope+"-", message.Id))
+		}
 	}
 	return []dropdown.Section{{Items: items}}
 }

@@ -1273,6 +1273,9 @@ type SearchBrowserMessagesParams struct {
 	// ConversationId Optional conversation scope, validated within account when both are supplied.
 	ConversationId *openapi_types.UUID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
 
+	// IncludeRetracted Include retained content from retracted messages.
+	IncludeRetracted *bool `form:"includeRetracted,omitempty" json:"includeRetracted,omitempty"`
+
 	// IncludeEditHistory Include retained earlier content versions, explicitly labelled as prior versions.
 	IncludeEditHistory *bool `form:"includeEditHistory,omitempty" json:"includeEditHistory,omitempty"`
 

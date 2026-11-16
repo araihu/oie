@@ -174,6 +174,15 @@
             }
           },
           {
+            "name": "includeRetracted",
+            "in": "query",
+            "description": "Include retained content from retracted messages.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "description": "Opaque keyset cursor bound to this engine, trimmed query, account, conversation and history filter. Reuse with changed scope is invalid.",
@@ -287,6 +296,15 @@
             "schema": {
               "type": "string",
               "maxLength": 200
+            }
+          },
+          {
+            "name": "includeRetracted",
+            "in": "query",
+            "description": "Include retained content from retracted messages.",
+            "schema": {
+              "type": "boolean",
+              "default": false
             }
           },
           {
@@ -5125,6 +5143,90 @@
         "x-cli-name": "get"
       }
     },
+    "/api/v1/messages/{messageId}/retraction": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "post": {
+        "operationId": "retractMessage",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Request retraction of an own sent message",
+        "description": "Sends a provider retraction for the reviewed revision and keeps the retained original hidden. A successful request does not establish removal from the recipient's copies.",
+        "requestBody": {
+          "required": true,
+          "description": "Reviewed message revision.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetractMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current retracted message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-ignore": true
+      }
+    },
+    "/api/v1/messages/{messageId}/retracted-original": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        }
+      ],
+      "get": {
+        "operationId": "getRetractedOriginal",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Reveal retained content of a retracted message",
+        "responses": {
+          "200": {
+            "description": "Explicitly requested retained original.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-ignore": true
+      }
+    },
     "/api/v1/messages/{messageId}/forward": {
       "parameters": [
         {
@@ -5136,8 +5238,8 @@
         "tags": [
           "Messages"
         ],
-        "summary": "Forward a retained message to a room",
-        "description": "Creates a new outgoing message through the destination room's account. Copies the authored body and stages source attachments for a new upload. Replies and mentions are copied as text without references or attribution. A matching operation key replays the original acceptance, including after the source changes. Use one stable key per destination.",
+        "summary": "Forward a retained message to a conversation",
+        "description": "Creates a new outgoing message through the destination conversation's account. Copies the authored body and stages source attachments for a new upload. Replies and mentions are copied as text without references or attribution. A matching operation key replays the original acceptance, including after the source changes. Use one stable key per destination.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -5151,7 +5253,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Source revision reviewed by the user and the selected destination room.",
+          "description": "Source revision reviewed by the user and the selected destination direct conversation or room.",
           "content": {
             "application/json": {
               "schema": {
@@ -7552,6 +7654,10 @@
           "conversationId": {
             "$ref": "#/components/schemas/ID"
           },
+          "includeRetracted": {
+            "type": "boolean",
+            "description": "Whether the request included retained retracted content."
+          },
           "includeEditHistory": {
             "type": "boolean",
             "description": "Applied earlier-content filter."
@@ -9362,6 +9468,23 @@
           "hasNewer": true
         }
       },
+      "MessageRetraction": {
+        "type": "object",
+        "description": "Withdrawal time and whether Oiê still has content that can be revealed.",
+        "required": [
+          "at",
+          "originalAvailable"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "originalAvailable": {
+            "type": "boolean"
+          }
+        }
+      },
       "MessageModeration": {
         "type": "object",
         "additionalProperties": false,
@@ -9399,6 +9522,13 @@
           "sendState"
         ],
         "properties": {
+          "retraction": {
+            "$ref": "#/components/schemas/MessageRetraction"
+          },
+          "canRetract": {
+            "type": "boolean",
+            "description": "Current provider and ownership evidence permits requesting retraction."
+          },
           "moderation": {
             "$ref": "#/components/schemas/MessageModeration"
           },
@@ -10336,9 +10466,21 @@
           }
         }
       },
+      "RetractMessage": {
+        "type": "object",
+        "description": "Request retraction for the reviewed retained message revision.",
+        "required": [
+          "expectedRevisionId"
+        ],
+        "properties": {
+          "expectedRevisionId": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      },
       "ForwardMessage": {
         "type": "object",
-        "description": "Copy one retained source revision into a new send for the destination room.",
+        "description": "Copy one retained source revision into a new send for the destination conversation.",
         "additionalProperties": false,
         "required": [
           "expectedRevisionId",

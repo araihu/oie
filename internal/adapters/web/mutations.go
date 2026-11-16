@@ -164,6 +164,8 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		status, result = s.changeRoom(ctx, r, text, true)
 	case "/ui/conversations/preferences":
 		status, result = s.changeConversationPreferences(ctx, r, text)
+	case "/ui/messages/retract":
+		status, result = s.submitRetraction(ctx, r, text)
 	case "/ui/messages/forward":
 		status, result = s.submitForward(ctx, r, text)
 	case "/ui/messages/star":
@@ -559,7 +561,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/conversations/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/conversations/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/retract", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

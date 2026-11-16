@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const {chromium} = require('playwright');
 const {attachmentComposition} = require('./attachment-composition.cjs');
 const {schedulingFlow} = require('./scheduling-flow.cjs');
+const {messageRetractionFlow} = require('./message-retraction-flow.cjs');
 
 (async () => {
   const base = process.env.OIE_LIVE_URL || 'http://127.0.0.1:18087';
@@ -551,6 +552,8 @@ const {schedulingFlow} = require('./scheduling-flow.cjs');
     await attachmentComposition({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation,
       expectTransportFailure:value => {expectedLostReply = value;}, prefix});
     evidence.workflows.push('Paste and drop files directly into the draft, wrap previews, remove and retry staged attachments. Explicit send reaches the receiver with caption and file URL.');
+    await messageRetractionFlow({base, api, until, send, alicePage, bobPage, alice, bob, aliceConversation, bobConversation, prefix});
+    evidence.workflows.push('Retract a sent message over XMPP, preserve the composer through a delayed request, and reveal or search the retained original explicitly.');
     for(let index=evidence.consoleErrors.length-1;index>=0;index--){
       const url=consoleLocations[index],message=evidence.consoleErrors[index];
       const [conflicts,status,label]=message.endsWith('412 (Precondition Failed)')

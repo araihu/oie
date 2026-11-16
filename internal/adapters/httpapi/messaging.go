@@ -42,6 +42,9 @@ func conversation(c domain.Conversation) engineapi.Conversation {
 }
 func message(m domain.Message) engineapi.Message {
 	out := engineapi.Message{Id: string(m.ID), RevisionId: string(m.RevisionID), AccountId: string(m.AccountID), ConversationId: string(m.ConversationID), Sender: engineapi.Sender{Id: string(m.Sender.ID), DisplayName: m.Sender.DisplayName}, OriginalText: m.OriginalText, CreatedAt: m.CreatedAt, TimelineAt: m.TimelineAt, IsOwn: m.IsOwn, SendState: engineapi.MessageSendState(m.SendState)}
+	if m.Retraction != nil {
+		out.Retraction = &engineapi.MessageRetraction{At: m.Retraction.At, OriginalAvailable: m.Retraction.OriginalAvailable}
+	}
 	if m.Moderation != nil {
 		out.Moderation = &engineapi.MessageModeration{At: m.Moderation.At, Reason: optionalRoomText(m.Moderation.Reason)}
 	}
@@ -285,8 +288,10 @@ func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesReque
 	if newer {
 		slices.Reverse(list)
 	}
+	c, _ := s.engine.Conversation(ctx, domain.ID(r.ConversationId))
+	a, _ := s.engine.Account(ctx, c.AccountID)
 	for _, m := range list {
-		page.Items = append(page.Items, message(m))
+		page.Items = append(page.Items, s.messagePageItem(ctx, a, c, m))
 	}
 	return engineapi.ListMessages200JSONResponse(page), nil
 }

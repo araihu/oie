@@ -33,6 +33,12 @@ actions:
   - target: $.paths['/api/v1/messages/{messageId}/forward'].post
     update:
       x-cli-ignore: true
+  - target: $.paths['/api/v1/messages/{messageId}/retraction'].post
+    update:
+      x-cli-ignore: true
+  - target: $.paths['/api/v1/messages/{messageId}/retracted-original'].get
+    update:
+      x-cli-ignore: true
   # accounts
   - target: $.paths['/api/v1/accounts/{accountId}/label'].put
     update:

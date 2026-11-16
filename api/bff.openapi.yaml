@@ -953,6 +953,12 @@ paths:
           type: string
           format: uuid
       - in: query
+        name: includeRetracted
+        description: Include retained content from retracted messages.
+        schema:
+          type: boolean
+          default: false
+      - in: query
         name: includeEditHistory
         description: Include retained earlier content versions, explicitly labelled as prior versions.
         schema:

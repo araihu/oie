@@ -16,6 +16,8 @@ import (
 const roomRetractionNS = "urn:xmpp:message-retract:1"
 
 type roomRetraction struct {
+	Other     []struct{} `xml:",any"`
+	Text      string     `xml:",chardata"`
 	ID        string     `xml:"id,attr"`
 	Stamp     string     `xml:"stamp,attr"`
 	Moderated []struct{} `xml:"urn:xmpp:message-moderate:1 moderated"`

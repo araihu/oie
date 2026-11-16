@@ -186,7 +186,7 @@ window.OieRuntime.register('shared-search', life => {
    const values=new FormData(form),root=info?form.closest('#chat-info-content'):form.closest('#workspace');
    for(const link of root?.querySelectorAll('[data-shared-tab]')||[]){
     const url=new URL(link.href);
-    for(const key of info?['infoQuery']:['q','account','contentAccount']){
+    for(const key of info?['infoQuery','infoIncludeRetracted']:['q','account','contentAccount','contentIncludeRetracted']){
      url.searchParams.delete(key);
      for(const value of values.getAll(key).sort())if(value||key==='contentAccount')url.searchParams.append(key,value);
     }
@@ -202,6 +202,12 @@ window.OieRuntime.register('shared-search', life => {
   on(input,'compositionstart',()=>{composing=true;clearTimeout(pending)});
   on(input,'compositionend',()=>{composing=false;alignTabs();schedule()});
   on(form,'submit',()=>clearTimeout(pending),{capture:true});
+  on(form,'change',event=>{
+   if(!event.target.matches('[data-shared-retraction-filter]')||!connected())return;
+   alignTabs();
+   cancel();
+   input.dispatchEvent(new CustomEvent('oie:shared-search',{bubbles:true}));
+  });
   on(form,'combobox:change',event=>{
    if(info||event.detail?.id!=='shared-account'||!connected())return;
    const all=form.querySelector('[data-shared-all-accounts]');

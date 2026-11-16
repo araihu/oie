@@ -48,12 +48,6 @@ func (s *Store) RecordRoomModeration(ctx context.Context, account domain.ID, roo
 		if err != nil {
 			return err
 		}
-		if err := q.RemoveModeratedSharedContent(ctx, row.ID); err != nil {
-			return err
-		}
-		if err := q.InvalidateSharedContent(ctx, row.ID); err != nil {
-			return err
-		}
 		if _, err := emitCanonicalMessageEvent(ctx, q, "message.updated", message, in.At); err != nil {
 			return err
 		}
@@ -80,9 +74,5 @@ func hydrateRoomModeration(ctx context.Context, q *dbgen.Queries, m *domain.Mess
 		return err
 	}
 	m.Moderation = &domain.MessageModeration{At: at, Reason: row.Reason}
-	m.OriginalText, m.AttachmentWireText = "", ""
-	m.MediaThumbnails, m.Attachments, m.Mentions = nil, nil, nil
-	m.Composition, m.OutboundReply, m.Reply, m.ReplyReference = nil, nil, nil, nil
-	m.Edited, m.MentionsYou = false, false
 	return nil
 }

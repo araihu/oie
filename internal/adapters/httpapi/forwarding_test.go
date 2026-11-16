@@ -72,11 +72,14 @@ func TestForwardMessageCreatesScopedOutboxCopies(t *testing.T) {
 	post(original.Message, key, second.Conversation.ID, original.Message.RevisionID, 409)
 	crossAccount := post(original.Message, id(), second.Conversation.ID, original.Message.RevisionID, 202)
 	post(original.Message, id(), second.Conversation.ID, id(), 409)
-	post(original.Message, id(), source.ID, original.Message.RevisionID, 409)
+	direct := post(original.Message, id(), other.ID, original.Message.RevisionID, 202)
+	if direct == nil || direct.ConversationId != string(other.ID) || direct.AccountId != string(other.AccountID) {
+		t.Fatalf("direct destination lost scope: %+v", direct)
+	}
 	if copied == nil || repeated == nil || crossAccount == nil || copied.Id != repeated.Id || copied.Id == crossAccount.Id || crossAccount.AccountId != string(other.AccountID) {
 		t.Fatalf("copy or replay scope was lost: %+v %+v %+v", copied, repeated, crossAccount)
 	}
-	for _, copy := range []*engineapi.Message{copied, crossAccount} {
+	for _, copy := range []*engineapi.Message{copied, crossAccount, direct} {
 		if copy.Id == string(original.Message.ID) || copy.OriginalText != "**Copy this**" || copy.Reply != nil || copy.Mentions != nil || copy.SendState != "queued" || copy.Attachments == nil || len(*copy.Attachments) != 1 || (*copy.Attachments)[0].Id == string(stagedID) {
 			t.Fatalf("invalid copied composition: %+v", copy)
 		}

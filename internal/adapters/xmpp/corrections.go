@@ -34,8 +34,7 @@ func decodeCorrectionMetadata(meta correctionMetadata, msg stanza.Message, room,
 			return nil
 		}
 		author = msg.From.String()
-		sum := sha256.Sum256([]byte(author + "\x00" + occupant))
-		scope = "xmpp:correct:room:" + msg.From.Bare().String() + ":" + hex.EncodeToString(sum[:])
+		scope = roomCorrectionScope(msg.From.Bare().String(), author, occupant)
 	}
 	result := &domain.MessageCorrection{Scope: scope, Author: author, ID: msg.ID}
 	if len(meta.Replacements) != 1 {
@@ -46,6 +45,11 @@ func decodeCorrectionMetadata(meta correctionMetadata, msg stanza.Message, room,
 		result.TargetID = replace.ID
 	}
 	return result
+}
+
+func roomCorrectionScope(room, author, occupant string) string {
+	sum := sha256.Sum256([]byte(author + "\x00" + occupant))
+	return "xmpp:correct:room:" + room + ":" + hex.EncodeToString(sum[:])
 }
 
 func verifiedOccupantID(occupants []wireID) string {

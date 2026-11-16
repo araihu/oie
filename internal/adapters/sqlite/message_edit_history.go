@@ -44,10 +44,15 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 	if row.AccountID != requestedRow.AccountID || row.ConversationID != requestedRow.ConversationID {
 		return page, application.ErrNotFound
 	}
-	if _, err := q.GetRoomMessageModeration(ctx, string(canonical)); err == nil {
-		return page, application.ErrNotFound
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	message, err := decodeMessage(row)
+	if err != nil {
 		return page, err
+	}
+	if err := hydrateMessageWithdrawal(ctx, q, &message); err != nil {
+		return page, err
+	}
+	if message.IsWithdrawn() {
+		return page, application.ErrNotFound
 	}
 	page.MessageID = canonical
 	page.AccountID = domain.ID(row.AccountID)

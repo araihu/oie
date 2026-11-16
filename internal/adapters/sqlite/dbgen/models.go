@@ -300,6 +300,24 @@ type MessageReply struct {
 	Payload   string
 }
 
+type MessageRetraction struct {
+	AccountID   string
+	Kind        string
+	Address     string
+	Scope       string
+	RemoteID    string
+	RetractedAt string
+}
+
+type MessageRetractionTarget struct {
+	SourceID  string
+	AccountID string
+	Kind      string
+	Address   string
+	Scope     string
+	RemoteID  string
+}
+
 type MessageRevision struct {
 	ID        string
 	EntityID  string
@@ -384,6 +402,11 @@ type PreviewRevision struct {
 	Parents   string
 	Payload   string
 	CreatedAt string
+}
+
+type RetainedMessageRetraction struct {
+	SourceID    string
+	RetractedAt string
 }
 
 type Revision struct {

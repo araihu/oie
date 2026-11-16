@@ -1,0 +1,44 @@
+package web
+
+import (
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/modal"
+	"github.com/araihu/goshtoso/expressions"
+)
+
+templ retractMessageDialog(v view) {
+	@modal.Dialog(modal.DialogConfig{ID: "retract-message-dialog", Title: v.Text.RetractMessage, Content: retractMessageForm(v)}).WithExpressions(expressions.Modal{DialogCloseAriaLabel: v.Text.Close})
+}
+
+templ retractMessageForm(v view) {
+	<form data-retract-form data-pending={v.Text.RetractionPending} data-failed={v.Text.RetractionUnconfirmed}>
+		<p>{v.Text.RetractionConfirm}</p>
+		<p data-retract-status role="status"></p>
+		@button.Button(button.WithType("submit")){ {v.Text.RetractMessage} }
+	</form>
+}
+
+templ retractedOriginal(v view, m messageView) {
+	<div data-retracted-content={m.Id} data-retracted-conversation={m.ConversationId}>
+		@messageBody(v,m)
+		@outgoingAttachments(v,m.Message)
+	</div>
+}
+
+templ withdrawnMessageBody(v view, m messageView) {
+if m.Moderation!=nil {
+<p data-message-moderated><em>{v.Text.RoomMessageModerated}</em></p>
+if m.Moderation.Reason!=nil {
+<p>{*m.Moderation.Reason}</p>
+}
+}else{
+<p data-message-retracted><em>{v.Text.MessageRetracted}</em></p>
+}
+if m.Retraction != nil && m.Retraction.OriginalAvailable {
+<details data-reveal-retracted={m.Id} data-reveal-conversation={m.ConversationId} data-reveal-loading={v.Text.RevealLoading} data-reveal-failed={v.Text.RevealFailed}>
+<summary>{v.Text.RevealOriginal}</summary>
+<p role="status"></p>
+<div data-reveal-result></div>
+</details>
+}
+}

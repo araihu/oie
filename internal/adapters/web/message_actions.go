@@ -36,6 +36,9 @@ func messageActions(v view, id string) []dropdown.Section {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "edit-message-" + id, Icon: glyph(heroicons.Icon16SolidPencilSquare), Label: v.Text.EditMessage, Href: v.editTargetHref(id)}}})
 	}
 	for _, message := range v.Messages {
+		if message.Id == id && !v.Preview && message.CanRetract != nil && *message.CanRetract {
+			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "retract-message-" + id, Icon: glyph(heroicons.Icon16SolidTrash), Label: v.Text.RetractMessage, OnClick: "void 0"}}})
+		}
 		if message.Id == id && v.Selected != nil && v.Selected.Kind == "room" && !v.Preview &&
 			!message.IsOwn && message.Moderation == nil && v.roomState() == "joined" &&
 			v.ConversationInfo != nil && v.ConversationInfo.CanModerateMessages != nil && *v.ConversationInfo.CanModerateMessages {

@@ -72,6 +72,7 @@ type Querier interface {
 	GetMessageReactionCommand(ctx context.Context, id string) (MessageReactionCommand, error)
 	GetMessageReferences(ctx context.Context, arg GetMessageReferencesParams) ([]GetMessageReferencesRow, error)
 	GetMessageReply(ctx context.Context, arg GetMessageReplyParams) (string, error)
+	GetMessageRetraction(ctx context.Context, messageID string) (string, error)
 	GetMessageSearchIndex(ctx context.Context) (MessageSearchIndex, error)
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
@@ -108,6 +109,7 @@ type Querier interface {
 	InsertMessageRead(ctx context.Context, arg InsertMessageReadParams) (int64, error)
 	InsertMessageReference(ctx context.Context, arg InsertMessageReferenceParams) (int64, error)
 	InsertMessageReply(ctx context.Context, arg InsertMessageReplyParams) (int64, error)
+	InsertMessageRetraction(ctx context.Context, arg InsertMessageRetractionParams) (int64, error)
 	InsertMessageRevision(ctx context.Context, arg InsertMessageRevisionParams) error
 	InsertMessageSenderIdentity(ctx context.Context, arg InsertMessageSenderIdentityParams) (int64, error)
 	InsertMessageStarRevision(ctx context.Context, arg InsertMessageStarRevisionParams) error
@@ -172,11 +174,13 @@ type Querier interface {
 	MarkAcceptedDirectHistory(ctx context.Context, conversationID string) error
 	MarkOutboxWireStarted(ctx context.Context, messageID string) error
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
+	MessageRetractionSources(ctx context.Context, arg MessageRetractionSourcesParams) ([]string, error)
 	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
 	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAtOrBeforeTarget(ctx context.Context, arg MessagesAtOrBeforeTargetParams) ([]Message, error)
 	ModeratedRoomMessageSources(ctx context.Context, arg ModeratedRoomMessageSourcesParams) ([]string, error)
+	ModeratedSharedContentCandidates(ctx context.Context, arg ModeratedSharedContentCandidatesParams) ([]Message, error)
 	OriginalSendReceipt(ctx context.Context, resourceID string) (Operation, error)
 	PendingDirectHistoryChecks(ctx context.Context, accountID string) ([]Conversation, error)
 	PendingMessageEditCommands(ctx context.Context, nextAttemptAt string) ([]MessageEditCommand, error)
@@ -210,7 +214,6 @@ type Querier interface {
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveMessageSearchException(ctx context.Context, messageID string) error
-	RemoveModeratedSharedContent(ctx context.Context, messageID string) error
 	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
 	ResetAccountDiscoveryCheckpoints(ctx context.Context) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error

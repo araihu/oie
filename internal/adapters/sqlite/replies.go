@@ -123,7 +123,7 @@ func unavailableExpiredQuote(ctx context.Context, q *dbgen.Queries, account, con
 }
 
 func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
-	if m.Moderation != nil {
+	if m.IsWithdrawn() {
 		return nil
 	}
 	if m.OutboundReply != nil {
@@ -147,10 +147,16 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		m.Reply.MessageID = targetID
 		m.Reply.Available = target.AccountID == string(m.AccountID) && target.ConversationID == string(m.ConversationID)
 		if m.Reply.Available {
-			if _, err := q.GetRoomMessageModeration(ctx, target.ID); err == nil {
-				m.Reply.Excerpt = ""
-			} else if !errors.Is(err, sql.ErrNoRows) {
+			withdrawn, err := decodeMessage(target)
+			if err != nil {
 				return err
+			}
+			if err = hydrateMessageWithdrawal(ctx, q, &withdrawn); err != nil {
+				return err
+			}
+			if withdrawn.IsWithdrawn() {
+				m.Reply.Excerpt = ""
+				m.Reply.OriginalExpired = true
 			}
 		}
 		return nil
@@ -223,11 +229,12 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 	for _, candidate := range candidates {
 		target = candidate
 	}
-	if target.Moderation != nil {
+	if target.IsWithdrawn() {
 		m.Reply.Available = true
 		m.Reply.MessageID = target.ID
 		m.Reply.SenderName = boundedText(target.Sender.DisplayName, 300)
 		m.Reply.Excerpt = ""
+		m.Reply.OriginalExpired = true
 		return nil
 	}
 	excerpt := target.OriginalText

@@ -926,7 +926,10 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.host.Reject(ctx, application.Rejected{AccountID: e.account.ID, MessageID: msg.ID, Address: address, FromServer: fromServer, FromParticipant: msg.From.Resourcepart() != ""})
 		}
 		if len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 {
-			return m.receiveRoomModeration(ctx, e, msg.Message, msg.roomModerationMetadata, msg.Delay.Stamp, msg.Delay.From)
+			if msg.Type == stanza.GroupChatMessage && msg.From.Resourcepart() == "" {
+				return m.receiveRoomModeration(ctx, e, msg.Message, msg.roomModerationMetadata, msg.Delay.Stamp, msg.Delay.From)
+			}
+			return m.receiveSenderRetraction(ctx, e, msg.Message, msg.roomModerationMetadata, msg.correctionMetadata, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage && msg.Subject != nil && strings.TrimSpace(msg.Body) == "" {
 			m.observeRoomTopic(e, msg.Message, *msg.Subject)

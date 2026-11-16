@@ -49,10 +49,10 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 	if err != nil {
 		return MessageResult{}, err
 	}
-	if source.ID != sourceID || source.RevisionID != revisionID || source.SendState == "cancelled" {
+	if source.ID != sourceID || source.RevisionID != revisionID || source.SendState == "cancelled" || source.IsWithdrawn() {
 		return MessageResult{}, StateConflict{Current: source}
 	}
-	if _, err = e.messageDestination(ctx, destinationID, "room"); err != nil {
+	if _, err = e.messageDestination(ctx, destinationID, ""); err != nil {
 		return MessageResult{}, err
 	}
 	body := domain.DisplayBody(source)
@@ -87,7 +87,7 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 		}
 	}
 	return e.sendComposition(ctx, key, destinationID, composition, nil, ReplyReview{}, compositionAcceptance{
-		expectedKind: "room", fingerprint: requestFingerprint,
+		fingerprint:   requestFingerprint,
 		forwardSource: &ForwardSource{MessageID: sourceID, RevisionID: revisionID},
 	})
 }

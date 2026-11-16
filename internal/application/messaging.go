@@ -26,6 +26,7 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
 	Moderation                                *IncomingRoomModeration
+	Retraction                                *IncomingRetraction
 	ModerationTombstone                       bool
 	CheckDirectHistory                        bool
 	DirectArchiveID                           string
@@ -520,6 +521,9 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 		}
 		return e.ReceiveReaction(ctx, *in.Reaction)
 	}
+	if in.Retraction != nil {
+		return e.receiveRetraction(ctx, in)
+	}
 	if in.Moderation != nil {
 		return e.receiveRoomModeration(ctx, in)
 	}
@@ -569,7 +573,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 				if editErr != nil && !errors.Is(editErr, ErrNotFound) {
 					return editErr
 				}
-				if editErr == nil && pending.Command.AccountID == a.ID && pending.Command.OriginalText == in.OriginalText {
+				if editErr == nil && pending.Command.AccountID == a.ID && pending.WireBody() == in.OriginalText {
 					chat, err := r.Conversation(ctx, pending.Command.ConversationID)
 					if err != nil {
 						return err

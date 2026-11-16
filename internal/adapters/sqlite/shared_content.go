@@ -27,16 +27,30 @@ func (s *Store) SharedContentCandidates(ctx context.Context, version, limit int)
 	if err != nil {
 		return nil, err
 	}
+	if len(rows) < limit {
+		moderated, err := s.queries.ModeratedSharedContentCandidates(ctx, dbgen.ModeratedSharedContentCandidatesParams{
+			ParserVersion: int64(version), BatchLimit: int64(limit - len(rows)),
+		})
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, moderated...)
+	}
 	items, err := decodeMessages(rows)
 	if err != nil {
 		return nil, err
 	}
 	for i := range items {
-		if err := hydrateMessageProjection(ctx, s.queries, &items[i]); err != nil {
+		if err := hydrateMessageContent(ctx, s.queries, &items[i]); err != nil {
 			return nil, err
 		}
 	}
-	return s.hydrateReplies(ctx, items)
+	for i := range items {
+		if err := hydrateReply(ctx, s.queries, &items[i]); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
 }
 func (s *Store) IndexSharedContent(ctx context.Context, batch []domain.SharedContentMutation) error {
 	tx, q, err := begin(ctx, s)
@@ -56,7 +70,7 @@ func (s *Store) IndexSharedContent(ctx context.Context, batch []domain.SharedCon
 		if err != nil {
 			return err
 		}
-		if err = hydrateMessageProjection(ctx, q, &current); err != nil {
+		if err = hydrateMessageContent(ctx, q, &current); err != nil {
 			return err
 		}
 		if err = hydrateReply(ctx, q, &current); err != nil {
@@ -98,6 +112,9 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 		AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID),
 		ContentType: query.Type, CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds,
 		Search: strings.TrimSpace(query.Search), PageLimit: int64(query.Limit + 1),
+	}
+	if query.IncludeRetracted {
+		params.IncludeRetracted = 1
 	}
 	scope, browse := catalogBrowseScope(query, params.Search)
 	var rows []dbgen.ListSharedContentRow
@@ -152,10 +169,13 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 			return page, err
 		}
 		item.ConversationTitle = conversation.Title
-		if err = hydrateMessageProjection(ctx, queries, &item.Message); err != nil {
+		if err = hydrateMessageContent(ctx, queries, &item.Message); err != nil {
 			return page, err
 		}
 		if err = hydrateReply(ctx, queries, &item.Message); err != nil {
+			return page, err
+		}
+		if err = hydrateMessageWithdrawal(ctx, queries, &item.Message); err != nil {
 			return page, err
 		}
 		if row.PreviewPayload != nil {
@@ -196,7 +216,7 @@ func (s *Store) SharedContent(ctx context.Context, query domain.SharedContentQue
 }
 
 func catalogBrowseScope(query domain.SharedContentQuery, search string) (string, bool) {
-	if search != "" || len(query.MessageIDs) != 0 || query.Type == "video" || len(query.AccountIDs) > 1 {
+	if query.IncludeRetracted || search != "" || len(query.MessageIDs) != 0 || query.Type == "video" || len(query.AccountIDs) > 1 {
 		return "", false
 	}
 	if query.ConversationID != "" {
@@ -238,7 +258,7 @@ func sharedContentFirstPageCounts(ctx context.Context, queries *dbgen.Queries, a
 	params := dbgen.CountSharedContentFirstPageParams{
 		ParserVersion: active.ParserVersion, MessageIds: active.MessageIds,
 		AccountID: active.AccountID, AccountIds: active.AccountIds, ConversationID: active.ConversationID,
-		Search: active.Search, PageLimit: int64(limit),
+		Search: active.Search, IncludeRetracted: active.IncludeRetracted, PageLimit: int64(limit),
 	}
 	for _, tab := range []struct {
 		kind  string

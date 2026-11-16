@@ -93,6 +93,14 @@ WITH candidate_ids AS (
  WHERE NOT EXISTS(SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=m.id)
  AND json_extract(c.payload,'$.Request') IS NULL
  AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+ AND (CAST(sqlc.arg(include_retracted) AS INTEGER)=1 OR NOT EXISTS (
+ SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+ ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+ WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
@@ -125,6 +133,14 @@ WITH page AS (
  AND EXISTS(SELECT 1 FROM message_revisions r WHERE r.entity_id=m.id)
  AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
  AND NOT EXISTS(SELECT 1 FROM hidden_scheduled_messages x WHERE x.message_id=m.id)
+ AND (CAST(sqlc.arg(include_retracted) AS INTEGER)=1 OR NOT EXISTS (
+ SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+ ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+ WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
@@ -152,6 +168,14 @@ WITH page AS (
  AND EXISTS(SELECT 1 FROM message_revisions r WHERE r.entity_id=m.id)
  AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
  AND NOT EXISTS(SELECT 1 FROM hidden_scheduled_messages x WHERE x.message_id=m.id)
+ AND (CAST(sqlc.arg(include_retracted) AS INTEGER)=1 OR NOT EXISTS (
+ SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+ ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+ WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT)

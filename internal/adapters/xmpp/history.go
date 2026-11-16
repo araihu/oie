@@ -123,15 +123,18 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 }
 func archivedIncoming(account domain.Account, scope string, r *archiveResult, trust archiveTrust) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
-	if msg != nil && (len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 || len(msg.LegacyTombstones) != 0) {
+	withdrawal := msg != nil && (len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 || len(msg.LegacyTombstones) != 0)
+	if withdrawal {
 		in, ok := archivedRoomModeration(account, scope, r)
-		return in, ok, nil
+		if ok || len(msg.LegacyTombstones) != 0 || (msg.Type == stanza.GroupChatMessage && msg.From.Resourcepart() == "") {
+			return in, ok, nil
+		}
 	}
-	if msg != nil && len(msg.Reactions) != 0 {
+	if !withdrawal && msg != nil && len(msg.Reactions) != 0 {
 		reaction, ok, err := archivedReaction(account, scope, r, trust)
 		return application.Incoming{AccountID: account.ID, Reaction: reaction}, ok, err
 	}
-	if msg == nil || strings.TrimSpace(msg.Body) == "" {
+	if msg == nil || (!withdrawal && strings.TrimSpace(msg.Body) == "") {
 		return application.Incoming{}, false, nil
 	}
 	if len(msg.DirectInvitations) != 0 {
@@ -211,6 +214,10 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 	if in.ProviderID == "" {
 		h := sha256.Sum256([]byte(scope + "\x00" + r.ID))
 		in.ProviderID = "archive:" + hex.EncodeToString(h[:])
+	}
+	if withdrawal {
+		in.OriginalText = ""
+		return archivedSenderRetraction(in, r, verified && occupantVerified)
 	}
 	return in, true, nil
 }

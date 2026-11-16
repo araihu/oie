@@ -53,7 +53,11 @@ type outboundCorrectionElement struct {
 	ID      string   `xml:"id,attr"`
 }
 
-func (m *Manager) SelectReplyReference(a domain.Account, c domain.Conversation, target domain.Message) (domain.MessageReference, bool) {
+func (*Manager) SelectReplyReference(a domain.Account, c domain.Conversation, target domain.Message) (domain.MessageReference, bool) {
+	return selectReplyReference(a, c, target)
+}
+
+func selectReplyReference(a domain.Account, c domain.Conversation, target domain.Message) (domain.MessageReference, bool) {
 	if c.AccountID != a.ID || target.AccountID != a.ID || target.ConversationID != c.ID {
 		return domain.MessageReference{}, false
 	}
