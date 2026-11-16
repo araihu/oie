@@ -270,7 +270,9 @@
       const options = settings()?.querySelector('[data-notification-background]')
         ? {scope: '/'} : undefined;
       worker = navigator.serviceWorker.register(script, options).then(registration => {
-        if (registration.active?.scriptURL === new URL(script, location.origin).href) return registration;
+        if (registration.active && (!window.OieHostedSession || registration.active.scriptURL === new URL(script, location.origin).href)) {
+          return registration;
+        }
         const candidate = registration.installing || registration.waiting;
         if (!candidate) throw Error('No notification worker');
         return new Promise((resolve, reject) => {
