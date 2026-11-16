@@ -258,7 +258,7 @@ window.OieRuntime.register('engine-retention', life => {
     const changes = [...state.queued].filter(([key, days]) => days !== state.saved[key]);
     state.queued.clear();
     if (changes.length === 0) {
-      if (!retryFor(form).hidden) finish(form, '');
+      finish(form, '');
       return;
     }
     const desired = {...state.saved, ...Object.fromEntries(changes)};
@@ -304,7 +304,7 @@ window.OieRuntime.register('engine-retention', life => {
   function finish(form, error, failed = false) {
     const status = statusFor(form);
     const retry = retryFor(form);
-    status.textContent = error || form.dataset.saved;
+    status.textContent = error || (form.querySelector('[aria-invalid=true]') ? form.dataset.invalid : form.dataset.saved);
     if (!failed && document.activeElement === retry) status.focus({preventScroll:true});
     retry.hidden = !failed;
     retry.removeAttribute('aria-disabled');

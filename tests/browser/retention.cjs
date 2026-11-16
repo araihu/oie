@@ -100,6 +100,11 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
     await direct.focus();
     assert.equal(await room.getAttribute('aria-invalid'), 'true');
     assert.equal(writes, 2, 'an invalid period never reaches the engine');
+    await room.fill('90');
+    await direct.focus();
+    assert.equal(await room.getAttribute('aria-invalid'), null);
+    assert.equal(await feedback.textContent(), await form.getAttribute('data-saved'));
+    assert.equal(writes, 2, 'reverting to the saved period clears validation without writing');
 
     await page.route(formPath, route => route.fulfill({status: 503}), {times: 1});
     await room.fill('120');
