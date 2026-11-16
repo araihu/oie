@@ -8,7 +8,11 @@
     'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated',
     'conversation.room_session_changed', 'message.star_changed'
   ];
-  const inboxEvents = new Set(['account.registered', 'account.removed', 'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated']);
+  const inboxEvents = new Set([
+    'account.registered', 'account.removed', 'account.connection_changed',
+    'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'conversation.room_session_changed',
+    'message.created', 'message.updated'
+  ]);
   let source, engine = '', cursor = '', connected = false, replaced = false;
 
   function emit(type, detail) {

@@ -96,5 +96,7 @@ OIE_LIVE_URL=http://127.0.0.1:8080 node tests/browser/room-lifecycle.cjs
 ```
 
 Set `OIE_ENGINE_URL` separately when the engine and BFF use different ports.
+Set `OIE_XMPP_ENDPOINT` to the development Prosody endpoint to also exercise the
+room indicator through a disconnect and reconnect of the fixture Bob account.
 The check creates and deletes a fixture room and removes a failed entry from
 the preview's chat lists.

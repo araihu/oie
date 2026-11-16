@@ -7,9 +7,10 @@ const {chromium} = require('playwright');
 const base = process.env.OIE_LIVE_URL || 'http://127.0.0.1:18854';
 const engine = process.env.OIE_ENGINE_URL || base;
 const artifacts = process.env.OIE_ROOM_ARTIFACTS;
+const xmppEndpoint = process.env.OIE_XMPP_ENDPOINT;
 const operationKey = () => randomUUID().replace(/^(.{14})4/, (_, prefix) => prefix + '7');
-async function api(path, body, method = 'POST') {
-  const response = await fetch(engine + '/api/v1' + path, body && {
+async function api(path, body, method = body ? 'POST' : 'GET') {
+  const response = await fetch(engine + '/api/v1' + path, {
     method, headers: {'Content-Type': 'application/json', 'Idempotency-Key': operationKey()}, body: JSON.stringify(body)
   });
   assert(response.ok, path + ': ' + response.status);
@@ -116,6 +117,18 @@ async function until(test, label) {
     await participant.goto(participantURL);
     await statusLabel.getByText('Na sala', {exact:true}).waitFor();
     await roomRow.locator('[data-room-status-label]').getByText('Na sala', {exact:true}).waitFor({state:'attached'});
+    if (xmppEndpoint) {
+      const connection = '/accounts/' + bob + '/connection';
+      await api(connection, undefined, 'DELETE');
+      try {
+        await statusLabel.getByText('Conta desconectada', {exact:true}).waitFor();
+        await roomRow.getByText('Conta desconectada', {exact:true}).waitFor();
+      } finally {
+        await api(connection, {password:'bob-local-only', endpoint:xmppEndpoint}, 'PUT');
+      }
+      await statusLabel.getByText('Na sala', {exact:true}).waitFor();
+      await roomRow.locator('[data-room-status-label]').getByText('Na sala', {exact:true}).waitFor({state:'attached'});
+    }
     const layoutSelectors = ['[data-conversation-row="' + bobRoom.id + '"]', '#chat-header', '#message-composer'];
     const sampleLayout = await participant.evaluateHandle(selectors => {
       const samples = [];
