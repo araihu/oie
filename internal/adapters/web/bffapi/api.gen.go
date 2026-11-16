@@ -1228,6 +1228,9 @@ type GetBrowserMessageEditHistoryParams struct {
 	// MessageId Requested retained source, allowing engine-validated canonical aliases.
 	MessageId openapi_types.UUID `form:"messageId" json:"messageId"`
 
+	// IncludeRetracted Explicitly reveal retained revisions and show the retraction in the history.
+	IncludeRetracted *bool `form:"includeRetracted,omitempty" json:"includeRetracted,omitempty"`
+
 	// Cursor Engine-issued older-page cursor for the exact history snapshot.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 

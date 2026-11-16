@@ -15,17 +15,17 @@
   let url;try{url=new URL(value,location.origin)}catch{return null}
   const q=url.searchParams;if(url.origin!==location.origin||url.pathname!=='/ui/message-history'||!['engineId','accountId','conversationId','messageId'].every(key=>uuid(q.get(key)))||(q.get('cursor')||'').length>2048)return null;
   if(q.get('engineId')!==document.body.dataset.engineId||q.get('accountId')!==document.body.dataset.accountId||q.get('conversationId')!==document.body.dataset.conversationId)return null;
-  if(wanted&&['engineId','accountId','conversationId','messageId'].some(key=>q.get(key)!==wanted.url.searchParams.get(key)))return null;
+  if(wanted&&['engineId','accountId','conversationId','messageId','includeRetracted'].some(key=>q.get(key)!==wanted.url.searchParams.get(key)))return null;
   return url;
  }
- function sourceVersion(id){const row=id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"][data-message-source]`);return row?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||'']):null;}
+ function sourceVersion(id){const row=id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"][data-message-source]`);return row?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||row.querySelector('[data-message-history-retracted]')?.dataset.messageHistoryRetracted||'']):null;}
  function cancel(){generation++;request?.abort();request=null;loading.hidden=true;root.removeAttribute('aria-busy');}
  function currentOpener(){
   if(opener?.isConnected)return opener;
   const id=canonical||scope?.url.searchParams.get('messageId');if(!uuid(id))return null;
   const row=document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`);if(!row)return null;
   const trigger=row.querySelector('[data-message-menu-trigger]');
-  return openerKind==='menu'?trigger:row.querySelector('[data-open-message-history][data-message-edited]')||trigger;
+  return openerKind==='menu'?trigger:row.querySelector('[data-open-message-history]')||trigger;
  }
  function close(restore=true){
   const wasActive=active;active=false;cancel();results.replaceChildren();
@@ -37,7 +37,7 @@
 
  function matches(page,url,wanted){
   const d=page?.dataset,q=url.searchParams;
-  if(!d||d.historyEngine!==q.get('engineId')||d.historyAccount!==q.get('accountId')||d.historyConversation!==q.get('conversationId')||d.historyRequested!==q.get('messageId')||d.historyCursor!==(q.get('cursor')||'')||!uuid(d.historyMessage)||!uuid(d.historyCurrentRevision)||!digest(d.historySnapshot))return false;
+  if(!d||d.historyEngine!==q.get('engineId')||d.historyAccount!==q.get('accountId')||d.historyConversation!==q.get('conversationId')||d.historyRequested!==q.get('messageId')||d.historyCursor!==(q.get('cursor')||'')||(d.historyRetracted==='true')!==(q.get('includeRetracted')==='true')||!uuid(d.historyMessage)||!uuid(d.historyCurrentRevision)||!digest(d.historySnapshot))return false;
   if(wanted!==scope||snapshot&&(d.historySnapshot!==snapshot||d.historyCurrentRevision!==currentRevision||d.historyMessage!==canonical))return false;
   const rows=[...page.querySelectorAll('[data-history-revision]')];if(rows.length>20||new Set(rows.map(row=>row.dataset.historyRevision)).size!==rows.length)return false;
   return rows.every(row=>uuid(row.dataset.historyRevision)&&uuid(row.dataset.historySource)&&['true','false'].includes(row.dataset.historyIsCurrent)&&['true','false'].includes(row.dataset.historyIsOriginal)&&(row.dataset.historyIsCurrent==='true')===(row.dataset.historyRevision===d.historyCurrentRevision));

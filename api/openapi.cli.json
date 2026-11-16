@@ -4966,6 +4966,15 @@
         "parameters": [
           {
             "in": "query",
+            "name": "includeRetracted",
+            "description": "Explicitly reveal the retained revisions of a retracted message.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "description": "Maximum content revisions in this page.",
             "schema": {
@@ -9152,6 +9161,13 @@
             "description": "Exact retained source text including authored Markdown and compatibility fallback.",
             "example": "Corrected text"
           },
+          "attachments": {
+            "type": "array",
+            "description": "Local files retained with this explicitly revealed version.",
+            "items": {
+              "$ref": "#/components/schemas/StagedAttachment"
+            }
+          },
           "sender": {
             "$ref": "#/components/schemas/Sender"
           },
@@ -9204,6 +9220,9 @@
           },
           "currentRevisionId": {
             "$ref": "#/components/schemas/ID"
+          },
+          "retraction": {
+            "$ref": "#/components/schemas/MessageRetraction"
           },
           "snapshot": {
             "type": "string",
@@ -9471,6 +9490,10 @@
       "MessageRetraction": {
         "type": "object",
         "description": "Withdrawal time and whether Oiê still has content that can be revealed.",
+        "example": {
+          "at": "2026-11-16T15:00:00Z",
+          "originalAvailable": true
+        },
         "required": [
           "at",
           "originalAvailable"

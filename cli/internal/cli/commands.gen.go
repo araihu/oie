@@ -698,6 +698,9 @@ func build61(server string, input cliruntime.Input) (*http.Request, error) {
 		return nil, err
 	}
 	var params api.GetMessageEditHistoryParams
+	if err := input.Decode("query", "includeRetracted", &params.IncludeRetracted); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "limit", &params.Limit); err != nil {
 		return nil, err
 	}

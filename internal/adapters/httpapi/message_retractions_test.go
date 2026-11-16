@@ -71,6 +71,15 @@ func TestRetractionHidesContentUntilExplicitlyRequested(t *testing.T) {
 	if err != nil || revealed.JSON200 == nil || revealed.JSON200.OriginalText != secret {
 		t.Fatalf("retained original: %+v, %v", revealed, err)
 	}
+	hiddenHistory, err := client.GetMessageEditHistoryWithResponse(ctx, string(m.ID), nil)
+	if err != nil || hiddenHistory.StatusCode() != 404 {
+		t.Fatalf("withdrawn history without explicit opt-in: %+v, %v", hiddenHistory, err)
+	}
+	include := true
+	history, err := client.GetMessageEditHistoryWithResponse(ctx, string(m.ID), &engineapi.GetMessageEditHistoryParams{IncludeRetracted: &include})
+	if err != nil || history.JSON200 == nil || history.JSON200.Retraction == nil || len(history.JSON200.Items) != 1 || history.JSON200.Items[0].OriginalText != secret {
+		t.Fatalf("retained revision and retraction status: %+v, %v", history, err)
+	}
 	conversation := string(c.ID)
 	for _, includeEditHistory := range []bool{false, true} {
 		for _, includeRetracted := range []bool{false, true} {

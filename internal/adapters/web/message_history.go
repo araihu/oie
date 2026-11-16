@@ -12,6 +12,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 //go:embed message-history.js
@@ -35,13 +36,28 @@ type historyPageView struct {
 	Page                     engineapi.MessageEditHistoryPage
 	Items                    []historyItemView
 	EngineID, Cursor, Locale string
+	WithdrawalLabel, Reason  string
+}
+
+func historyIcon() templ.Component {
+	return appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsHistory16SolidDocumentMagnifyingGlass, Decorative: true, RootClass: "oie-icon"})
+}
+
+func (v view) historyLabel(m messageView) string {
+	if m.Retraction != nil {
+		return v.Text.RevealOriginal
+	}
+	return v.Text.Edited + " · " + v.Text.ViewEditHistory
 }
 
 func (v view) editHistoryHref(m messageView) string {
-	return historyHref(v.EngineID, m.AccountId, m.ConversationId, m.Id, "", v.Locale)
+	return historyHref(v.EngineID, m.AccountId, m.ConversationId, m.Id, "", v.Locale, m.Retraction != nil)
 }
-func historyHref(engine, account, conversation, message, cursor, locale string) string {
+func historyHref(engine, account, conversation, message, cursor, locale string, includeRetracted bool) string {
 	q := url.Values{"engineId": {engine}, "accountId": {account}, "conversationId": {conversation}, "messageId": {message}, "lang": {locale}}
+	if includeRetracted {
+		q.Set("includeRetracted", "true")
+	}
 	if cursor != "" {
 		q.Set("cursor", cursor)
 	}
@@ -51,7 +67,7 @@ func (h historyPageView) nextHref() string {
 	if h.Page.NextCursor == nil || *h.Page.NextCursor == "" {
 		return ""
 	}
-	return historyHref(h.EngineID, h.Page.AccountId, h.Page.ConversationId, h.Page.RequestedMessageId, *h.Page.NextCursor, h.Locale)
+	return historyHref(h.EngineID, h.Page.AccountId, h.Page.ConversationId, h.Page.RequestedMessageId, *h.Page.NextCursor, h.Locale, h.Page.Retraction != nil)
 }
 func validHistorySnapshot(snapshot string) bool {
 	return len(snapshot) == 64 && strings.Trim(snapshot, "0123456789abcdef") == ""
@@ -147,8 +163,16 @@ func (s *Server) messageEditHistory(w http.ResponseWriter, r *http.Request) {
 		fail(404)
 		return
 	}
+	includeRetracted := q.Get("includeRetracted") == "true"
+	if includeRetracted && m.Retraction == nil {
+		fail(409)
+		return
+	}
 	limit := messageHistoryPageSize
 	params := &engineapi.GetMessageEditHistoryParams{Limit: &limit}
+	if includeRetracted {
+		params.IncludeRetracted = &includeRetracted
+	}
 	if cursor != "" {
 		params.Cursor = &cursor
 	}
@@ -166,11 +190,15 @@ func (s *Server) messageEditHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := *response.JSON200
-	if !validHistoryPage(page, *m, message, account, conversation) {
+	if (page.Retraction != nil) != includeRetracted || !validHistoryPage(page, *m, message, account, conversation) {
 		fail(503)
 		return
 	}
-	h := historyPageView{Page: page, EngineID: engine, Cursor: cursor, Locale: v.Locale}
+	h := historyPageView{Page: page, EngineID: engine, Cursor: cursor, Locale: v.Locale, WithdrawalLabel: v.Text.MessageRetracted}
+	if page.Retraction != nil && m.Moderation != nil {
+		h.WithdrawalLabel = v.Text.RoomMessageModerated
+		h.Reason = previewValue(m.Moderation.Reason)
+	}
 	// The bounded engine read also limits optional formatting. Render the
 	// validated page under the request context so exhausted formatting time
 	// leaves exact plain-text versions available.

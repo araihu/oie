@@ -46,8 +46,8 @@ retraction without asserting what other clients retained.
 Retraction observations are scoped by account, conversation and author.
 An observation can arrive before its source. The regular timeline, reply
 quotes, favorites excerpts and default search and catalog queries hide
-withdrawn content. Reveal original reads the retained content in a separate
-request. Include retracted applies independently
+withdrawn content. Reveal original opens the message history. The history shows the retraction as
+the current state and lists the retained content revisions underneath. Include retracted applies independently
 of Include edit history. It retrieves only content still available under
 the retention policy.
 

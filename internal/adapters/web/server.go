@@ -377,7 +377,7 @@ type copy struct {
 	RoomAffiliationMember                                                                                                                                                                                    string
 	RoomAffiliationOutcast                                                                                                                                                                                   string
 	RoomAffiliationNone                                                                                                                                                                                      string
-	RetractMessage, MessageRetracted, RevealOriginal, RetractionConfirm, RetractionPending, RetractionFailed, RetractionUnconfirmed, RetractionRequested, RevealLoading, RevealFailed, IncludeRetracted      string
+	RetractMessage, MessageRetracted, RevealOriginal, RetractionConfirm, RetractionPending, RetractionFailed, RetractionUnconfirmed, RetractionRequested, IncludeRetracted                                   string
 	RoomModerateMessage                                                                                                                                                                                      string
 	RoomMessageModerated                                                                                                                                                                                     string
 	RoomUserAddress                                                                                                                                                                                          string
@@ -789,10 +789,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/settings/retention" && r.Method == http.MethodGet {
 		http.Redirect(w, r, s.baseView(r).retentionDrawerHref(), http.StatusSeeOther)
-		return
-	}
-	if r.URL.Path == "/ui/messages/retracted-original" && r.Method == http.MethodGet {
-		s.revealRetracted(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/messages/forward" && r.Method == http.MethodGet {

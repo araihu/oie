@@ -54,39 +54,4 @@ window.OieRuntime.register('message-retractions', life => {
       if (!life.signal.aborted) submit.removeAttribute('aria-disabled');
     }
   });
-
-  const reveals = new WeakMap();
-  life.on(document, 'toggle', async event => {
-    const details = event.target;
-    if (!details.matches?.('[data-reveal-retracted]')) return;
-    const result = details.querySelector('[data-reveal-result]');
-    reveals.get(details)?.abort();
-    if (!details.open) {
-      result.replaceChildren();
-      return;
-    }
-    const request = new AbortController();
-    reveals.set(details, request);
-    const scope = {
-      messageId: details.dataset.revealRetracted,
-      conversationId: details.dataset.revealConversation,
-      engineId: document.body.dataset.engineId
-    };
-    const status = details.querySelector('[role=status]');
-    status.textContent = details.dataset.revealLoading;
-    const active = () => !life.signal.aborted && !request.signal.aborted && details.isConnected && details.open && document.body.dataset.engineId === scope.engineId;
-    try {
-      const params = new URLSearchParams({...scope, lang: document.documentElement.lang});
-      const response = await life.fetch('/ui/messages/retracted-original?' + params, {signal: request.signal, cache: 'no-store'});
-      if (!response.ok) throw Error();
-      const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-      const content = page.querySelector('[data-retracted-content]');
-      if (content?.dataset.retractedContent !== scope.messageId || content.dataset.retractedConversation !== scope.conversationId) throw Error();
-      if (!active()) return;
-      status.textContent = '';
-      result.replaceChildren(content);
-    } catch {
-      if (active()) status.textContent = details.dataset.revealFailed;
-    }
-  }, true);
 });

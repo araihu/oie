@@ -7,6 +7,7 @@ type MessageEditHistoryItem struct {
 	RevisionID, SourceMessageID ID
 	CreatedAt                   time.Time
 	OriginalText                string
+	Attachments                 []StagedAttachment
 	Sender                      Sender
 	IsCurrent, IsOriginal       bool
 	ParentRevisionIDs           []ID
@@ -14,6 +15,7 @@ type MessageEditHistoryItem struct {
 
 type MessageEditHistoryPage struct {
 	RequestedMessageID, MessageID, AccountID, ConversationID, CurrentRevisionID ID
+	Retraction                                                                  *MessageRetraction
 	Snapshot, NextCursor                                                        string
 	Items                                                                       []MessageEditHistoryItem
 }

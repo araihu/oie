@@ -1081,7 +1081,7 @@ if m.Moderation==nil && m.Retraction==nil {
 
 templ messageLeadingIndicators(v view,m messageView){
 {{ mentioned := !m.IsOwn && v.Selected!=nil && v.Selected.Kind=="room" && m.mentionsYou() }}
-if mentioned || m.IsOwn || messageEdited(m) {
+if mentioned || m.IsOwn || messageEdited(m) || (m.Retraction!=nil && m.Retraction.OriginalAvailable) {
 <div class="oie-message-leading-indicators">
 if mentioned {
 <span class="oie-message-mention" data-message-mention role="img" aria-label={v.Text.MentionedYou} title={v.Text.MentionedYou}>{ "@" }</span>
@@ -1094,10 +1094,8 @@ if m.IsOwn {
 @tooltip.Tooltip("message-edit-pending-tip-"+m.Id,v.Text.EditPending,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditPending,true)),tooltip.WithPortal(true))
 </span>
 }
-if messageEdited(m) {
-<span class="oie-message-edit-history">
-@tooltip.Tooltip("message-edited-tip-"+m.Id,v.Text.Edited+" · "+v.Text.ViewEditHistory,tooltip.WithTrigger(messageEditedIcon(v,m)),tooltip.WithPortal(true))
-</span>
+if messageEdited(m) || (m.Retraction!=nil && m.Retraction.OriginalAvailable) {
+@messageHistoryIndicator(v,m)
 }
 </div>
 }
@@ -1132,8 +1130,23 @@ if pending {
 </span>
 }
 
-templ messageEditedIcon(v view,m messageView){
-@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(templ.Attributes{"data-message-edited":"","data-open-message-history":"","data-edited-at":messageEditedAt(m),"aria-label":v.Text.Edited+" · "+v.Text.ViewEditHistory})){@glyph(heroicons.Icon16SolidPencilSquare)}
+templ messageHistoryIndicator(v view,m messageView){
+<span class="oie-message-edit-history">
+@tooltip.Tooltip("message-edited-tip-"+m.Id,v.historyLabel(m),tooltip.WithTrigger(messageHistoryLink(v,m)),tooltip.WithPortal(true))
+</span>
+}
+
+templ messageHistoryLink(v view,m messageView){
+{{
+	attrs:=templ.Attributes{"data-open-message-history":"","aria-label":v.historyLabel(m)}
+	if m.Retraction!=nil {
+		attrs["data-message-history-retracted"] = m.Retraction.At.Format("2006-01-02T15:04:05.999999999Z07:00")
+	} else {
+		attrs["data-message-edited"] = ""
+		attrs["data-edited-at"] = messageEditedAt(m)
+	}
+}}
+@link.Link(v.editHistoryHref(m),link.WithRootClass("oie-message-edited"),link.WithAttrs(attrs)){@historyIcon()}
 }
 
 templ messageStarIndicator(v view,id string){

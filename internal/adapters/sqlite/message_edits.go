@@ -58,7 +58,7 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 			return deny("unsupported_payload")
 		}
 	}
-	history, err := readMessageEditHistory(ctx, q, m.ID)
+	history, err := readMessageEditHistory(ctx, q, m.ID, false)
 	if err != nil {
 		return out, err
 	}

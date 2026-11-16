@@ -41,7 +41,7 @@ async function messageRetractionFlow({base, api, until, send, alicePage, bobPage
     await route.continue();
   };
   await alicePage.route(endpoint, delay);
-  const response = alicePage.waitForResponse(result => result.url().endsWith('/ui/messages/retract'));
+  const response = alicePage.waitForResponse(result => result.url().endsWith('/ui/messages/retract')).catch(error => error);
   try {
     await composer.evaluate(async () => {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -68,6 +68,7 @@ async function messageRetractionFlow({base, api, until, send, alicePage, bobPage
     release();
   }
   const result = await response;
+  if (result instanceof Error) throw result;
   assert.equal(result.status(), 200, await result.text());
   await dialog.waitFor({state: 'hidden'});
   await alicePage.unroute(endpoint, delay);
@@ -79,12 +80,16 @@ async function messageRetractionFlow({base, api, until, send, alicePage, bobPage
   const incoming = bobPage.locator('[data-message-id="' + received.id + '"]');
   await incoming.getByText('Mensagem retraída', {exact: true}).waitFor();
   assert.equal(await incoming.getByText(original, {exact: true}).count(), 0);
-  const reveal = incoming.getByText('Revelar original', {exact: true});
+  const reveal = incoming.getByRole('link', {name: 'Revelar original', exact: true});
+  assert.equal(await reveal.locator('use[href$="#heroicons-history-16-solid-document-magnifying-glass"]').count(), 1);
   await reveal.click();
-  await incoming.getByText(original, {exact: true}).first().waitFor();
-  await incoming.screenshot({path: 'artifacts/' + prefix + '-retracted-original.png'});
-  await reveal.click();
-  await incoming.locator('[data-retracted-content]').waitFor({state: 'detached'});
+  const history = bobPage.getByRole('dialog', {name: 'Histórico da mensagem', exact: true});
+  await history.locator('[data-history-retraction]').getByText('Mensagem retraída', {exact: true}).waitFor();
+  await history.getByText(original, {exact: true}).first().waitFor();
+  await history.screenshot({path: 'artifacts/' + prefix + '-retracted-original.png'});
+  await bobPage.keyboard.press('Escape');
+  await history.waitFor({state: 'hidden'});
+  await bobPage.locator('[data-history-retraction]').waitFor({state: 'detached'});
   await bobPage.goto(base + '/search?lang=pt-BR&accountId=' + bob.id + '&q=' + encodeURIComponent(original));
   assert.equal(await bobPage.locator('[data-search-message="' + received.id + '"]').count(), 0);
   await bobPage.getByRole('checkbox', {name: 'Incluir retraídas', exact: true}).check();

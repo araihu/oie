@@ -18,13 +18,6 @@ templ retractMessageForm(v view) {
 	</form>
 }
 
-templ retractedOriginal(v view, m messageView) {
-	<div data-retracted-content={m.Id} data-retracted-conversation={m.ConversationId}>
-		@messageBody(v,m)
-		@outgoingAttachments(v,m.Message)
-	</div>
-}
-
 templ withdrawnMessageBody(v view, m messageView) {
 if m.Moderation!=nil {
 <p data-message-moderated><em>{v.Text.RoomMessageModerated}</em></p>
@@ -33,12 +26,5 @@ if m.Moderation.Reason!=nil {
 }
 }else{
 <p data-message-retracted><em>{v.Text.MessageRetracted}</em></p>
-}
-if m.Retraction != nil && m.Retraction.OriginalAvailable {
-<details data-reveal-retracted={m.Id} data-reveal-conversation={m.ConversationId} data-reveal-loading={v.Text.RevealLoading} data-reveal-failed={v.Text.RevealFailed}>
-<summary>{v.Text.RevealOriginal}</summary>
-<p role="status"></p>
-<div data-reveal-result></div>
-</details>
 }
 }

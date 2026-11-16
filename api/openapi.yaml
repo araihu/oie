@@ -3025,6 +3025,10 @@ paths:
       description: Read-only bounded history of canonical content sources. Resolves retained aliases and excludes delivery-state revisions and unverified correction relationships. Versions never observed cannot be recovered by this query. Newest authored timestamp first with revision UUID tie-breaking; isCurrent is authoritative regardless of timestamp order. Cursor binds engine, account, conversation, canonical message and the exact observed-history snapshot. No provider history/profile/media requests, read receipts, sends or mutations occur.
       parameters:
       - in: query
+        name: includeRetracted
+        description: Explicitly reveal the retained revisions of a retracted message.
+        schema: {type: boolean, default: false}
+      - in: query
         name: limit
         description: Maximum content revisions in this page.
         schema: {type: integer, minimum: 1, maximum: 50, default: 20}
@@ -5638,6 +5642,11 @@ components:
           type: string
           description: Exact retained source text including authored Markdown and compatibility fallback.
           example: Corrected text
+        attachments:
+          type: array
+          description: Local files retained with this explicitly revealed version.
+          items:
+            $ref: '#/components/schemas/StagedAttachment'
         sender:
           $ref: '#/components/schemas/Sender'
         isCurrent:
@@ -5671,6 +5680,8 @@ components:
           $ref: '#/components/schemas/ID'
         currentRevisionId:
           $ref: '#/components/schemas/ID'
+        retraction:
+          $ref: '#/components/schemas/MessageRetraction'
         snapshot:
           type: string
           minLength: 64
@@ -5842,6 +5853,9 @@ components:
     MessageRetraction:
       type: object
       description: Withdrawal time and whether Oiê still has content that can be revealed.
+      example:
+        at: '2026-11-16T15:00:00Z'
+        originalAvailable: true
       required: [at, originalAvailable]
       properties:
         at:
