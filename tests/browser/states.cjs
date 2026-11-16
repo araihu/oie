@@ -6,6 +6,7 @@ const {spawn}=require('node:child_process');
 const {once}=require('node:events');
 const {chromium}=require('playwright');
 const fs=require('node:fs/promises');
+const { presentationVariants } = require('./fixtures/presentation-variants.cjs');
 (async()=>{
  const api=http.createServer((req,res)=>{
   res.setHeader('Content-Type','application/json');
@@ -22,7 +23,7 @@ const fs=require('node:fs/promises');
   assert(started,'isolated BFF did not start');
   for(const state of ['empty','unavailable','unavailableSelected','notFound']){
    if(state==='unavailable')await new Promise(r=>api.close(r));
-   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
+   for(const {width,theme,mode,locale} of presentationVariants()){
     const page=await browser.newPage({viewport:{width,height:900},locale});const errors=[];page.on('pageerror',e=>errors.push(e.message));
     const route=state==='notFound'?'/missing':'/';const selected=state==='unavailableSelected'?'&chat=019a5df0-0000-7000-8000-000000000102':'';const response=await page.goto(base+route+`?theme=${mode}&lang=${locale}`+selected);assert.equal(response.status(),state==='empty'?200:state==='notFound'?404:503);
     await page.waitForFunction(()=>window.Alpine&&window.htmx);await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
@@ -34,10 +35,10 @@ const fs=require('node:fs/promises');
     assert.deepEqual(a11y.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${state}/${width}/${theme}/${mode}/${locale}`);
     assert.deepEqual(errors,[]);
     findings.push({state,width,theme,mode,locale,status:response.status(),accessibilityViolations:a11y.violations.length});
-    if(theme==='goshtoso'&&mode==='dark'&&locale==='pt-BR')await page.screenshot({path:`artifacts/${state}-${width}.png`,fullPage:true});
+    if(theme==='goshtoso'&&mode==='dark')await page.screenshot({path:`artifacts/${state}-${width}-${locale}.png`,fullPage:true});
     await page.close();
    }
   }
-  await fs.writeFile('artifacts/states-report.json',JSON.stringify({findings},null,2));console.log('PASS: 64 empty/transport-failure/selected-chat/missing-route presentation states');
+  await fs.writeFile('artifacts/states-report.json',JSON.stringify({findings},null,2));console.log(`PASS: ${findings.length} empty/transport-failure/selected-chat/missing-route presentation states`);
  }finally{await browser.close();child.kill('SIGTERM');if(api.listening)await new Promise(r=>api.close(r))}
 })().catch(e=>{console.error(e);process.exitCode=1});
