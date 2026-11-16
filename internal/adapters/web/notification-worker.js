@@ -23,7 +23,9 @@ self.addEventListener('message', event => {
         body: JSON.stringify({engineId: engine, accountId: account, conversationId: conversation, messageId: message, phase}),
       });
       const grant = await request('display');
-      if (!grant.ok || performance.now() - started >= 2000) return;
+      if (!grant.ok) return;
+      const current = await self.clients.get(event.source.id);
+      if (current?.visibilityState !== 'visible' || performance.now() - started >= 2000) return;
       await self.registration.showNotification(title, {
         body, lang, tag: engine + ':' + message, silent: true,
         data: {engine, account, conversation, message},

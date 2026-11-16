@@ -104,6 +104,8 @@ func (s *Service) claim(key deliveryKey, state claimState) (bool, time.Time) {
 		case state == foregroundHandled && active && previous.state == foregroundDisplaying,
 			state == foregroundSuppress && active && previous.state == foregroundPending:
 			previous.state = foregroundHandled
+		case state == foregroundHandled && previous.state == foregroundHandled:
+			return true, time.Time{}
 		default:
 			return false, time.Time{}
 		}
