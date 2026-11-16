@@ -110,6 +110,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   await trigger.click();await search.waitFor({state:'visible'});await until(async()=>await search.evaluate(node=>node===document.activeElement),'search focus');
   const picker=page.getByRole('dialog',{name:'Choose emoji',exact:true});await page.locator('#emoji-grid [data-emoji-pick]').first().waitFor();await picker.evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished.catch(()=>{}))));const fullHeight=await picker.evaluate(node=>node.offsetHeight);
   await page.getByText('No recent emojis yet.',{exact:true}).waitFor();assert(Math.abs(await picker.evaluate(node=>node.offsetHeight)-fullHeight)<2,'empty recent section changed picker height');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-category],#oie-emoji-picker [role=tablist]').count(),0,'picker uses section navigation rather than filtering tabs');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-section]').count(),10);const browseArtifacts=path.join(__dirname,'artifacts');await fs.mkdir(browseArtifacts,{recursive:true});await page.screenshot({path:path.join(browseArtifacts,'emoji-picker-browse-desktop.png')});
+  await page.evaluate(()=>{window.browseSmileys=document.querySelector('#emoji-section-0')});
   const footer=picker.locator('.oie-emoji-footer');
   const symbols=footer.locator('[data-emoji-jump="7"]');
   await symbols.hover();
@@ -152,8 +153,22 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     emoji+' is centered in the hover highlight: '+JSON.stringify(offset));
   }
   await search.fill('');
+  assert(await page.locator('#emoji-section-0').evaluate(section=>section===window.browseSmileys),'leaving search reuses the browse catalog');
   await assertStablePickerScroll(picker);
   await picker.screenshot({path:path.join(browseArtifacts,'emoji-picker-scroll-desktop.png')});
+  const scrolledFamily=picker.locator('#emoji-section-1 [data-emoji-family="👍"]');
+  const scrolledVariants=scrolledFamily.locator('[data-emoji-variants-trigger]');
+  await scrolledVariants.press('Enter');
+  const scrolledDialog=page.getByRole('dialog',{name:'Emoji variants',exact:true});
+  await scrolledDialog.waitFor({state:'visible'});
+  await until(()=>scrolledDialog.evaluate(dialog=>dialog.contains(document.activeElement)),'variant focus before scrolling');
+  await scrolledFamily.evaluate(anchor=>{
+   const scroll=anchor.closest('[data-emoji-scroll]');
+   scroll.scrollTop+=anchor.getBoundingClientRect().bottom-scroll.getBoundingClientRect().top+40;
+  });
+  await scrolledDialog.waitFor({state:'hidden'});
+  assert(await search.evaluate(node=>node===document.activeElement),'scrolling the variant anchor out restores focus to search');
+
   const totalChoices=await page.locator('#oie-emoji-picker [data-emoji-section]>.oie-emoji-grid>[data-emoji-pick],[data-emoji-section]>.oie-emoji-grid>[data-emoji-family]').count();
   await page.locator('#oie-emoji-picker [data-emoji-jump="8"]').click();await until(async()=>await page.locator('#oie-emoji-picker [data-emoji-scroll]').evaluate(node=>node.scrollTop>100),'footer jumps down the long list');assert.equal(await page.locator('#oie-emoji-picker [data-emoji-section]>.oie-emoji-grid>[data-emoji-pick],[data-emoji-section]>.oie-emoji-grid>[data-emoji-family]').count(),totalChoices,'footer jump must not filter emojis');assert.equal(await search.inputValue(),'');
   await search.fill('heart');await page.locator('#oie-emoji-picker [data-emoji-pick="❤️"]').click();
@@ -173,8 +188,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const variantAxe=await page.evaluate(()=>window.axe.run(document.querySelector('#oie-emoji-picker-panel'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(variantAxe.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>node.target)})),[]);
   await page.keyboard.press('Escape');await variants.waitFor({state:'hidden'});assert(await search.isVisible(),'Escape must close only the subpicker');await until(async()=>await variantsToggle.evaluate(node=>node===document.activeElement),'subpicker restores its trigger focus');
   await variantsToggle.click();await variants.locator('[data-emoji-pick="👍🏽"]').hover();assert(!(await variants.locator('[data-emoji-pick="👍🏽"]').evaluate(node=>getComputedStyle(node).textDecorationLine)).includes('underline'));await variants.locator('[data-emoji-pick="👍🏽"]').click();assert((await input.inputValue()).includes('👍🏽'));assert(await input.evaluate(node=>node===document.activeElement));assert.equal(writes,0);
-  // Hold the cached opener's deferred work after the public popover has
-  // positioned. Freezing the library's opening frames would keep it hidden.
+  // Keep pending popover frames from moving focus after ArrowDown enters results.
   await trigger.click();await search.waitFor({state:'visible'});
   await page.evaluate(()=>{
    const raf=window.requestAnimationFrame,cancel=window.cancelAnimationFrame,pending=new Map();let next=-1;
@@ -186,7 +200,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   const keyboardChoice=page.locator('#emoji-grid .oie-emoji-grid > [data-emoji-family] > [data-emoji-pick]').first();
   assert(await keyboardChoice.evaluate(node=>node===document.activeElement),'ArrowDown enters the filtered emoji result');
   await page.evaluate(()=>window.releaseEmojiOpenFrames());
-  assert(await keyboardChoice.evaluate(node=>node.isConnected&&node===document.activeElement),'cached opener rendering preserves the focused emoji result');
+  assert(await keyboardChoice.evaluate(node=>node.isConnected&&node===document.activeElement),'pending popover work preserves the focused emoji result');
   await page.keyboard.press('Enter');assert((await input.inputValue()).includes('👍🏽'));
   await trigger.click();await search.fill('');await page.locator('#oie-emoji-picker [data-emoji-jump=recent]').click();assert(await page.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').isVisible());await page.locator('#emoji-section-recent [data-emoji-pick="👍🏽"]').hover();await picker.screenshot({path:path.join(__dirname,'artifacts','emoji-recent-hover.png')});await page.keyboard.press('Escape');await until(async()=>await trigger.evaluate(node=>node===document.activeElement),'Escape restores trigger focus');
   await trigger.click();await search.fill('no-such-emoji-qwerty');await page.getByText('No emojis found.',{exact:true}).waitFor({state:'visible'});assert(Math.abs(await picker.evaluate(node=>node.offsetHeight)-fullHeight)<2,'empty search collapsed the picker');await search.fill('');
@@ -197,7 +211,10 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   findings.push('Continuous categorized list, footer scroll-only navigation, global bilingual search, grouped tone variants, no underline, accessible keyboard and scoped drafts without writes');
   await context.close();
   const mobileContext=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR',isMobile:true,hasTouch:true});
-  await mobileContext.addInitScript(()=>{for(const name of ['getItem','setItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});
+  await mobileContext.addInitScript(()=>{
+   for(const name of ['getItem','setItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}});
+   CanvasRenderingContext2D.prototype.getImageData=()=>{throw new DOMException('Denied','SecurityError')};
+  });
   // This sequence renders as several symbols, like an emoji missing from the device font.
   const wideFallback='👩‍🚶‍🦽‍➡️';
   await mobileContext.route('**/ui/emoji/pt-BR.json',async route=>{
@@ -233,15 +250,86 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   findings.push('pt-BR accent-insensitive search, light mobile layout, denied-storage insertion, bilingual aliases, touch variant choice and zero picker WCAG A/AA violations');
   await mobileContext.close();
   const failure=await browser.newPage({viewport:{width:1180,height:850}});active=failure;failure.on('pageerror',error=>errors.push(error.message));let fail=true;
-  await failure.route('**/ui/emoji/en.json',route=>fail?route.abort('failed'):route.continue());await failure.goto(route());
+  let releaseRetry;
+  const retryGate=new Promise(resolve=>{releaseRetry=resolve});
+  await failure.route('**/ui/emoji/en.json',async request=>{
+   if(fail)return request.abort('failed');
+   await retryGate;
+   return request.continue();
+  });
+  await failure.goto(route());
   const failedRequest=failure.waitForEvent('requestfailed',{predicate:request=>request.url().endsWith('/ui/emoji/en.json')});
   const literal=failure.locator('#message-composer');
   await literal.fill(':heart');
   await failedRequest;
   await failure.locator('#oie-emoji-completion').waitFor({state:'hidden'});
   assert.equal(await literal.inputValue(),':heart');
-  await failure.locator('#oie-emoji-picker [data-emoji-trigger]').click();await failure.getByText('Could not load emojis. Try again.',{exact:true}).waitFor();fail=false;await failure.locator('#oie-emoji-picker [data-emoji-retry]').click();await failure.locator('#emoji-search').fill('flag brazil');await failure.locator('#oie-emoji-picker [data-emoji-pick="🇧🇷"]').waitFor();assert.equal(writes,0);
-  findings.push('Failed local catalog can retry without changing or sending the draft');
+  const retryTrigger=failure.locator('#oie-emoji-picker [data-emoji-trigger]'),retrySearch=failure.locator('#emoji-search');
+  // Delay the popover's public open signal independently of its painted panel.
+  await retryTrigger.evaluate(button=>{
+   const set=button.setAttribute;
+   button.setAttribute=function(name,value){
+    if(name==='aria-expanded'&&value==='true')return;
+    set.call(this,name,value);
+   };
+   window.releasePickerOpenSignal=()=>{
+    delete button.setAttribute;
+    button.setAttribute('aria-expanded','true');
+   };
+  });
+  await retryTrigger.click();
+  await retrySearch.waitFor({state:'visible'});
+  await failure.evaluate(()=>window.releasePickerOpenSignal());
+  const retryPicker=failure.locator('#oie-emoji-picker-panel');
+  await retryPicker.getByText('Could not load emojis. Try again.',{exact:true}).waitFor();
+  await retryPicker.evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished.catch(()=>{}))));
+  await failure.evaluate(()=>{
+   const picker=document.querySelector('#oie-emoji-picker-panel');
+   const region=picker.querySelector('[data-emoji-scroll]');
+   const controls=[picker.querySelector('[data-emoji-search]'),region,picker.querySelector('.oie-emoji-footer')];
+   const sample=()=>controls.flatMap(node=>{
+    const {x,y,width,height}=node.getBoundingClientRect();
+    return [x,y,width,height];
+   });
+   const paint=CanvasRenderingContext2D.prototype.fillText;
+   window.retryGeometry={frames:[],sample,active:true,measured:0};
+   function frame(){
+    if(!window.retryGeometry.active)return;
+    window.retryGeometry.frames.push(sample());
+    requestAnimationFrame(frame);
+   }
+   requestAnimationFrame(frame);
+   CanvasRenderingContext2D.prototype.fillText=function(...args){
+    if(window.retryGeometry.measured++===0)setTimeout(()=>{
+     const search=controls[0];
+     window.retryGeometry.queryEnteredBeforeGrid=!region.querySelector('[data-emoji-pick]');
+     search.focus();
+     search.value='flag brazil';
+     search.dispatchEvent(new Event('input',{bubbles:true}));
+    },0);
+    return paint.apply(this,args);
+   };
+  });
+  fail=false;
+  await failure.locator('#oie-emoji-picker [data-emoji-retry]').click();
+  await retryPicker.getByText('Loading emojis…',{exact:true}).waitFor();
+  await failure.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  releaseRetry();
+  const flag=failure.locator('#oie-emoji-picker [data-emoji-pick="🇧🇷"]');
+  await flag.waitFor({state:'visible'});
+  assert.equal(await retrySearch.inputValue(),'flag brazil');
+  assert.equal(await failure.locator('#emoji-grid [data-emoji-pick]').count(),1,'the latest query supersedes the full catalog render');
+  const retryGeometry=await failure.evaluate(()=>{
+   window.retryGeometry.active=false;
+   return {beforeGrid:window.retryGeometry.queryEnteredBeforeGrid,frames:[...window.retryGeometry.frames,window.retryGeometry.sample()]};
+  });
+  assert(retryGeometry.beforeGrid,'the cold catalog accepts a search before publishing its grid');
+  assert(retryGeometry.frames.length>=3);
+  const offsets=retryGeometry.frames.map(frame=>frame.map((value,index)=>Math.abs(value-retryGeometry.frames[0][index])));
+  assert(offsets.every(frame=>frame.every(offset=>offset<=1)),
+   'retry, loading and results keep the picker controls in the same positions '+JSON.stringify(offsets));
+  assert.equal(writes,0);
+  findings.push('A failed catalog can retry, accept a newer search during measurement and keep the picker controls stable');
   await failure.close();
 
   const inlineContext=await browser.newContext({viewport:{width:1440,height:900},locale:'en'});

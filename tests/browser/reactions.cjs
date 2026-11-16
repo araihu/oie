@@ -107,7 +107,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await keyboardBubble.evaluate(node=>node.closest('.oie-message').style.marginTop='500px');
   await react();
   const reactionSearch=modal.locator('#reaction-emoji-search');
-  await reactionSearch.focus();
+  await reactionSearch.fill('joinha');
+  await modal.locator('[data-emoji-family="👍"]').waitFor({state:'visible'});
+  await quick.locator('[data-reaction-more]').evaluate(button=>{
+   button.setAttribute('aria-expanded','true');
+   return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  });
+  assert.equal(await reactionSearch.inputValue(),'joinha','repeated open notifications preserve the query');
   await page.evaluate(()=>{
    const viewport=window.visualViewport;
    Object.defineProperty(viewport,'height',{configurable:true,value:400});

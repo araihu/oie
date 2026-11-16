@@ -15,7 +15,7 @@ window.OieRuntime.register('reactions',life=>{
  const selected=glyph=>preparation?.emojis.includes(glyph)===true;
  const enabled=glyph=>{const s=activeSnapshot();return !!s&&(s.maxEmojis===1||selected(glyph)||preparation.emojis.length<s.maxEmojis)};
  const selector=window.OieEmojiPicker.mount(catalog,life,{
-  available:()=>!quick.hidden&&activeSnapshot()?.eligible===true,allowed,selected,enabled,
+  opened:()=>!quick.hidden&&more.getAttribute('aria-expanded')==='true',available:()=>!quick.hidden&&activeSnapshot()?.eligible===true,allowed,selected,enabled,
   choose:glyph=>!!preparation&&!quick.hidden&&choose(preparation,glyph)
  });
  function notify(message){if(message)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message}}))}
@@ -283,8 +283,12 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
   const emojis=intent.emojis.includes(emoji)?intent.emojis.filter(e=>e!==emoji):s.maxEmojis===1?[emoji]:[...intent.emojis,emoji];if(emojis.length>s.maxEmojis){notify(labels.unavailable);return false}
   close();void submit({...intent,emojis},false);return true;
  }
+ let catalogOpen=false;
  const catalogObserver=new MutationObserver(()=>{
-  if(!quick.hidden&&more.getAttribute('aria-expanded')==='true'){
+  const open=!quick.hidden&&more.getAttribute('aria-expanded')==='true';
+  if(open===catalogOpen)return;
+  catalogOpen=open;
+  if(open){
    selector.open(true);
    selector.focusSearch(more);
   }else selector.close();
