@@ -53,6 +53,7 @@ type entry struct {
 	reactionCommands    map[string]reactionDestination
 	state               domain.Connection
 	session             *mx.Session
+	suspended           *mx.Session
 	raw                 net.Conn
 	historyMu           sync.Mutex
 	archives            map[string]*archiveQuery
@@ -160,14 +161,21 @@ func (m *Manager) Close() {
 	m.workers.Wait()
 }
 func (e *entry) stop() {
+	e.mu.Lock()
+	// A queued writer must see the transport detach before the worker exits.
+	raw, session := e.raw, e.session
+	e.raw = nil
+	e.mu.Unlock()
+	if raw != nil && session != nil && session.StreamManagement().Enabled {
+		// End the logical stream on an intentional disconnect. Bound the
+		// handshake on stalled transports and during an interrupted replay.
+		timeout := time.AfterFunc(500*time.Millisecond, func() { _ = raw.Close() })
+		_ = session.Close()
+		timeout.Stop()
+	}
 	if e.cancel != nil {
 		e.cancel()
 	}
-	e.mu.Lock()
-	// A queued writer must see the transport detach before the worker exits.
-	raw := e.raw
-	e.raw = nil
-	e.mu.Unlock()
 	if raw != nil {
 		_ = raw.Close()
 	}
@@ -179,12 +187,8 @@ func (m *Manager) validate(a domain.Account, cfg configuration) error {
 	if cfg.Password == "" || len(cfg.Password) > 4096 || strings.ContainsRune(cfg.Password, 0) {
 		return application.ErrInvalid
 	}
-	if cfg.Endpoint != "" {
-		host, port, err := net.SplitHostPort(cfg.Endpoint)
-		n, parseErr := strconv.Atoi(port)
-		if err != nil || parseErr != nil || host == "" || n < 1 || n > 65535 {
-			return application.ErrInvalid
-		}
+	if cfg.Endpoint != "" && !validEndpoint(cfg.Endpoint) {
+		return application.ErrInvalid
 	}
 	return nil
 }
@@ -342,32 +346,36 @@ func (m *Manager) publish(ctx context.Context, e *entry, state, code string, sto
 	e.mu.Lock()
 	e.state = domain.Connection{AccountID: e.account.ID, State: state, LastErrorCode: code, UpdatedAt: time.Now().UTC()}
 	e.workerStopped = stopped
-	e.historyMu.Lock()
-	e.occupantScopes = nil
-	e.semianonymousRooms = nil
-	e.roomConfigurations = nil
-	e.historyMu.Unlock()
+	preserve := e.suspended != nil || state == "connected" && e.session != nil && e.session.StreamManagement().Resumed
+	if !preserve {
+		e.historyMu.Lock()
+		e.occupantScopes = nil
+		e.semianonymousRooms = nil
+		e.roomConfigurations = nil
+		e.historyMu.Unlock()
+		e.peerPresence = nil
+		e.reactionCommands = nil
+	}
 	if state != "connected" {
 		e.discovery = domain.CapabilityDiscovery{State: "not_connected", Services: []domain.DiscoveredService{}}
 		e.discoveryPartial = false
 		e.details = nil
-		e.peerPresence = nil
 		e.reactionLimits = nil
 		e.uploadLimits = nil
 		e.attachmentUploads = nil
-		e.reactionCommands = nil
 	} else {
 		e.discovery = domain.CapabilityDiscovery{State: "pending", Services: []domain.DiscoveredService{}}
 		e.detailsWake = make(chan struct{}, 1)
 		e.discoveryPartial = false
 		e.details = nil
-		e.peerPresence = nil
 	}
 	snapshot := e.state
 	e.mu.Unlock()
 	return m.host.ConnectionChanged(ctx, snapshot)
 }
 func (m *Manager) run(ctx context.Context, e *entry) {
+	management := new(mx.StreamManagement)
+	defer m.discardSuspendedSession(ctx, e)
 	delay := time.Second
 	attempt := 0
 	for ctx.Err() == nil {
@@ -376,7 +384,17 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 		}
 		attempt++
 		started := time.Now()
-		session, raw, err := m.connect(ctx, e)
+		session, raw, err := m.connect(ctx, e, management)
+		if err == nil && !session.StreamManagement().Resumed {
+			m.discardSuspendedSession(ctx, e)
+			announceCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(avatarCaps().TokenReader()))
+			cancel()
+			if err != nil {
+				_ = raw.Close()
+				management = new(mx.StreamManagement)
+			}
+		}
 		connected := err == nil
 		if connected {
 			e.mu.Lock()
@@ -384,13 +402,23 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.session = session
 			e.archiveSessionCtx = historyCtx
 			e.raw = raw
-			e.correctionSession = randomQueryID()
-			e.correctionSources = map[string]ownCorrectionSource{}
-			e.correctionLatest = map[string]domain.ID{}
+			previous := e.suspended
+			if previous == nil {
+				e.correctionSession = randomQueryID()
+				e.correctionSources = map[string]ownCorrectionSource{}
+				e.correctionLatest = map[string]domain.ID{}
+			} else {
+				// Resumption keeps the server resource and its memberships.
+				for _, slot := range e.rooms {
+					if slot.session == previous && !slot.configuring && !slot.cleaningUp && slot.creationName == nil {
+						slot.session = session
+					}
+				}
+				e.suspended = nil
+			}
 			e.reactionLimits = nil
 			e.uploadLimits = nil
 			e.attachmentUploads = nil
-			e.reactionCommands = nil
 			e.contactsWake = make(chan struct{}, 1)
 			e.historyWake = make(chan struct{}, 1)
 			e.requestsWake = make(chan struct{}, 1)
@@ -400,12 +428,13 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.historyMu.Unlock()
 			contactsWake := e.contactsWake
 			e.mu.Unlock()
-			if ctx.Err() != nil {
-				historyCancel()
-				_ = raw.Close()
-				return
+			if previous != nil {
+				// The former transport's room setup workers were canceled.
+				m.resetRoomSessions(ctx, e, previous)
 			}
+			served := false
 			if err = m.publish(ctx, e, "connected", "", false); err == nil {
+				served = true
 				m.workers.Add(4)
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
 				go func() { defer m.workers.Done(); m.avatarLoop(historyCtx, e, session) }()
@@ -439,11 +468,21 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.mu.Lock()
 			e.session = nil
 			e.raw = nil
-			e.correctionSession = ""
-			e.correctionSources = nil
-			e.correctionLatest = nil
+			resumable := served && ctx.Err() == nil && session.StreamManagement().Resumable
+			if resumable {
+				e.suspended = session
+			} else {
+				e.correctionSession = ""
+				e.correctionSources = nil
+				e.correctionLatest = nil
+			}
 			e.mu.Unlock()
-			m.resetRoomSessions(ctx, e, session)
+			if !resumable {
+				m.resetRoomSessions(ctx, e, session)
+			}
+			if !served {
+				management = new(mx.StreamManagement)
+			}
 		}
 		if ctx.Err() != nil {
 			return
@@ -471,6 +510,16 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 		if delay > 30*time.Second {
 			delay = 30 * time.Second
 		}
+	}
+}
+
+func (m *Manager) discardSuspendedSession(ctx context.Context, e *entry) {
+	e.mu.Lock()
+	previous := e.suspended
+	e.suspended = nil
+	e.mu.Unlock()
+	if previous != nil {
+		m.resetRoomSessions(ctx, e, previous)
 	}
 }
 
@@ -525,7 +574,7 @@ func temporarySASLFailure(err error) bool {
 	return xml.NewTokenDecoder(failure.TokenReader()).Decode(&payload) == nil && payload.Temporary != nil
 }
 
-func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, *activityConn, error) {
+func (m *Manager) connect(ctx context.Context, e *entry, management *mx.StreamManagement) (*mx.Session, *activityConn, error) {
 	j, err := jid.Parse(e.account.Address)
 	if err != nil {
 		return nil, nil, err
@@ -536,19 +585,40 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, *activity
 	}
 	attempt, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	var conn net.Conn
+	dialer := net.Dialer{KeepAlive: 30 * time.Second}
 	if e.config.Endpoint != "" {
-		conn, err = (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext(attempt, "tcp", e.config.Endpoint)
-	} else {
-		conn, err = dial.Client(attempt, "tcp", j)
+		conn, err := dialer.DialContext(attempt, "tcp", e.config.Endpoint)
+		if err != nil {
+			return nil, nil, err
+		}
+		return m.negotiate(attempt, e, management, j, conn)
 	}
+	if location := management.ResumeLocation(); validEndpoint(location) {
+		preferred, cancel := context.WithTimeout(attempt, 3*time.Second)
+		conn, err := dialer.DialContext(preferred, "tcp", location)
+		if err == nil {
+			session, raw, err := m.negotiate(preferred, e, management, j, conn)
+			if err == nil {
+				cancel()
+				return session, raw, nil
+			}
+		}
+		cancel()
+	}
+	conn, err := dial.Client(attempt, "tcp", j)
 	if err != nil {
 		return nil, nil, err
 	}
+	return m.negotiate(attempt, e, management, j, conn)
+}
+
+func (m *Manager) negotiate(attempt context.Context, e *entry, management *mx.StreamManagement, j jid.JID, conn net.Conn) (*mx.Session, *activityConn, error) {
 	raw := &activityConn{Conn: conn, lastRead: time.Now()}
 	stop := context.AfterFunc(attempt, func() { _ = raw.Close() })
 	defer stop()
-	_ = raw.SetDeadline(time.Now().Add(10 * time.Second))
+	if deadline, ok := attempt.Deadline(); ok {
+		_ = raw.SetDeadline(deadline)
+	}
 	auth := mx.SASL("", e.config.Password, sasl.ScramSha256Plus, sasl.ScramSha256, sasl.ScramSha1Plus, sasl.ScramSha1, sasl.Plain)
 	negotiate := auth.Negotiate
 	auth.Negotiate = func(ctx context.Context, s *mx.Session, data interface{}) (mx.SessionState, io.ReadWriter, error) {
@@ -558,12 +628,9 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, *activity
 		}
 		return state, rw, err
 	}
-	session, err := mx.NewClientSession(attempt, j, raw, mx.StartTLS(&tls.Config{ServerName: j.Domainpart(), RootCAs: m.roots, MinVersion: tls.VersionTLS12}), auth, mx.BindResource())
+	session, err := management.Connect(attempt, j, raw, mx.StartTLS(&tls.Config{ServerName: j.Domainpart(), RootCAs: m.roots, MinVersion: tls.VersionTLS12}), auth, mx.BindResource())
 	if err == nil && session.State()&mx.Secure == 0 {
 		err = errors.New("TLS required")
-	}
-	if err == nil {
-		err = session.Send(attempt, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(avatarCaps().TokenReader()))
 	}
 	if err != nil {
 		_ = raw.Close()
@@ -572,6 +639,12 @@ func (m *Manager) connect(ctx context.Context, e *entry) (*mx.Session, *activity
 	_ = raw.SetDeadline(time.Time{})
 	return session, raw, nil
 }
+func validEndpoint(address string) bool {
+	host, port, err := net.SplitHostPort(address)
+	n, parseErr := strconv.Atoi(port)
+	return err == nil && parseErr == nil && host != "" && n >= 1 && n <= 65535
+}
+
 func (*Manager) RequiresOriginalWireAttempt(domain.Account) bool { return true }
 
 func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Outgoing) (outcome string) {

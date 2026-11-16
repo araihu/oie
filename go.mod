@@ -84,3 +84,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
+
+replace mellium.im/xmpp => github.com/araihu/xmpp v0.24.0-araihu.1
