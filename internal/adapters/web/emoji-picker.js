@@ -62,15 +62,19 @@ window.OieEmojiPicker=(()=>{
  // measurement by font so composer and reaction pickers can share it.
  const glyphLayouts=new Map(),sampleSize=48,samplesPerRow=4,batchSize=samplesPerRow**2;
  let ink,canReadInk=true;
- function getGlyphLayout(content,template){
+ function getGlyphLayout(button){
+  const style=getComputedStyle(button);
+  const font=[style.fontWeight,style.fontSize,style.fontFamily].join(' '),fontSize=parseFloat(style.fontSize);
+  if(!glyphLayouts.has(font))glyphLayouts.set(font,{font,fontSize,glyphs:new Map()});
+  return glyphLayouts.get(font);
+ }
+ function getCatalogGlyphLayout(content,template){
   const probe=template.content.firstElementChild.cloneNode(true);
   probe.hidden=true;
   content.append(probe);
-  const style=getComputedStyle(probe);
-  const font=[style.fontWeight,style.fontSize,style.fontFamily].join(' '),fontSize=parseFloat(style.fontSize);
+  const layout=getGlyphLayout(probe);
   probe.remove();
-  if(!glyphLayouts.has(font))glyphLayouts.set(font,{font,fontSize,glyphs:new Map()});
-  return glyphLayouts.get(font);
+  return layout;
  }
  function getInk(){
   if(ink!==undefined)return ink;
@@ -147,6 +151,31 @@ window.OieEmojiPicker=(()=>{
    }while(start<missing.length&&performance.now()<deadline);
   }
  }
+ function createGlyph(emoji,layout){
+  const glyph=document.createElement('span');
+  glyph.className='oie-emoji-glyph';
+  glyph.setAttribute('aria-hidden','true');
+  glyph.textContent=emoji;
+  const bounds=layout.glyphs.get(emoji);
+  if(bounds){
+   glyph.style.setProperty('--oie-emoji-left',bounds.left);
+   glyph.style.setProperty('--oie-emoji-top',bounds.top);
+   if(bounds.width>layout.fontSize){
+    glyph.dataset.emojiWide='';
+    glyph.style.setProperty('--oie-emoji-width',bounds.width+'px');
+    glyph.style.setProperty('--oie-emoji-fit',layout.fontSize/bounds.width);
+   }
+  }
+  return glyph;
+ }
+ function alignQuickGlyphs(buttons){
+  const unaligned=buttons.filter(button=>!button.firstElementChild);
+  if(!unaligned.length)return;
+  const layout=getGlyphLayout(unaligned[0]);
+  const missing=unaligned.map(button=>button.dataset.reactionQuickEmoji).filter(emoji=>!layout.glyphs.has(emoji));
+  if(missing.length)measureGlyphBatch(missing,layout);
+  for(const button of unaligned)button.replaceChildren(createGlyph(button.dataset.reactionQuickEmoji,layout));
+ }
  function mount(root,life,options){
  'use strict';
  options=options||{};
@@ -167,20 +196,7 @@ window.OieEmojiPicker=(()=>{
   }
  }
  function setButton(button,item){
-  const glyph=document.createElement('span');
-  glyph.className='oie-emoji-glyph';
-  glyph.textContent=item.glyph;
-  const bounds=layout.glyphs.get(item.glyph);
-  if(bounds){
-   glyph.style.setProperty('--oie-emoji-left',bounds.left);
-   glyph.style.setProperty('--oie-emoji-top',bounds.top);
-   if(bounds.width>layout.fontSize){
-    glyph.dataset.emojiWide='';
-    glyph.style.setProperty('--oie-emoji-width',bounds.width+'px');
-    glyph.style.setProperty('--oie-emoji-fit',layout.fontSize/bounds.width);
-   }
-  }
-  button.append(glyph);
+  button.append(createGlyph(item.glyph,layout));
   button.dataset.emojiPick=item.glyph;
   button.setAttribute('aria-label',item.name);
   button.title=item.name;
@@ -203,7 +219,7 @@ window.OieEmojiPicker=(()=>{
  function jumpTo(key){const section=sections.get(key)?.element;if(!section)return;scroll.scrollTop+=section.getBoundingClientRect().top-scroll.getBoundingClientRect().top;section.querySelector('h3').focus({preventScroll:true});updateFooter()}
  async function render(){
   if(!catalog||!opened())return;
-  layout??=getGlyphLayout(content,cell);
+  layout??=getCatalogGlyphLayout(content,cell);
   const version=++renderVersion,current=()=>version===renderVersion&&opened();
   const terms=fold(search.value).split(/\s+/).filter(Boolean),exact=catalog.items.get(search.value.trim()),preferred=new Map();
   for(const glyph of recent){const item=catalog.items.get(glyph);if(item&&allowed(item.glyph)&&!preferred.has(item.family))preferred.set(item.family,item)}
@@ -362,12 +378,11 @@ window.OieEmojiPicker=(()=>{
  });
  return {search,focusSearch:trigger=>focusWhenOpen(trigger,search),open(resetSearch=false){recent=readRecent();if(resetSearch)search.value='';void load()},close:closeVariants,escape(){const toggle=root.querySelector('[data-emoji-variants-trigger][aria-expanded="true"]');if(!toggle)return false;closeVariants();toggle.focus({preventScroll:true});return true}};
  }
- return {mount,loadCatalog,fold,insert,remember};
+ return {mount,loadCatalog,fold,insert,remember,alignQuickGlyphs};
 })();
 window.OieRuntime.register('emoji-picker',life=>{
  const root=document.getElementById('oie-emoji-picker'),input=document.getElementById('message-composer'),form=document.getElementById('send-message-form');if(!root||!input||!form)return;
  const trigger=root.querySelector('[data-emoji-trigger]');let selection={start:input.selectionStart||0,end:input.selectionEnd||0};
- const opened=()=>root.isConnected&&!life.signal.aborted&&options.opened();
  const writable=()=>input.isConnected&&!input.disabled&&!input.readOnly&&form.dataset.busy!=='true'&&form.dataset.composeAllowed==='true';
  function rememberSelection(){selection={start:input.selectionStart,end:input.selectionEnd}}
  for(const name of ['select','keyup','pointerup','input'])life.on(input,name,rememberSelection);life.on(trigger,'pointerdown',rememberSelection);

@@ -78,7 +78,27 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   assert.equal(await quick.locator('[data-reaction-quick-emoji]:visible').count(),7);
   assert.equal(state.effects,0);
   await quick.getByRole('button',{name:'Thumbs up'}).press('ArrowRight');
-  assert.equal(await quick.getByRole('button',{name:'Red heart'}).evaluate(n=>n===document.activeElement),true);
+  const quickHeart=quick.getByRole('button',{name:'Red heart'});
+  assert(await quickHeart.evaluate(node=>node===document.activeElement&&node.matches(':focus-visible')));
+  assert.equal(await quick.locator('[data-reaction-quick-emoji] > .oie-emoji-glyph').count(),7);
+  const heartOffset=await quickHeart.evaluate(async (_,base64)=>{
+   const bytes=Uint8Array.from(atob(base64),char=>char.charCodeAt(0));
+   const image=await createImageBitmap(new Blob([bytes],{type:'image/png'}));
+   const canvas=document.createElement('canvas'),width=canvas.width=image.width,height=canvas.height=image.height;
+   const paint=canvas.getContext('2d');
+   paint.drawImage(image,0,0);
+   const pixels=paint.getImageData(0,0,width,height).data;
+   let left=width,right=-1,top=height,bottom=-1;
+   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const i=(y*width+x)*4,r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+    if(r<90||r-g<40||r-b<35)continue;
+    left=Math.min(left,x);right=Math.max(right,x);
+    top=Math.min(top,y);bottom=Math.max(bottom,y);
+   }
+   return {x:(left+right+1-width)/2,y:(top+bottom+1-height)/2,painted:right>=0};
+  },(await quickHeart.screenshot()).toString('base64'));
+  assert(heartOffset.painted&&Math.abs(heartOffset.x)<=1&&Math.abs(heartOffset.y)<=1,
+   'the painted heart is centered in the quick reaction highlight '+JSON.stringify(heartOffset));
   await quick.getByRole('button',{name:'Thumbs up'}).click();
   await own('👍',true);assert.equal(await region.locator('[data-reaction-summary-count]').textContent(),'3');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-actor-name]').textContent(),'Bob');assert.equal(await region.locator('[data-reaction-actor="bob@fixture"] [data-reaction-emoji]').count(),0,'peer reactions are read-only');assert.equal(state.effects,1);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');
   state.delay=450;

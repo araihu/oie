@@ -256,6 +256,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    button.disabled=!enabled(glyph);
    button.setAttribute('aria-pressed',String(selected(glyph)));
   }
+  window.OieEmojiPicker.alignQuickGlyphs(choices);
   quick.hidden=false;
   quick.showPopover?.();
   positionQuick();
