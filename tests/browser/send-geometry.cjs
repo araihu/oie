@@ -11,7 +11,8 @@ module.exports=async({browser,base,chat,state,emit,until,id})=>{
  try{
   await page.setViewportSize({width:838,height:1108});
   await page.goto(base+'/?chat='+chat+'&lang=pt-BR&theme=dark');
-  const composer=page.locator('#message-composer');
+  const composer=page.getByRole('textbox',{name:'Digite uma mensagem',exact:true});
+  assert.equal(await composer.getAttribute('placeholder'),null);
   await composer.focus();
   const empty=await composer.evaluate(input=>({
    overflowX:getComputedStyle(input).overflowX,
@@ -20,7 +21,7 @@ module.exports=async({browser,base,chat,state,emit,until,id})=>{
    height:input.clientHeight
   }));
   assert.equal(empty.overflowX,'hidden','empty composer has no horizontal scrollbar');
-  assert.equal(empty.scrollWidth,empty.clientWidth,'placeholder does not widen the composer scroll area');
+  assert.equal(empty.scrollWidth,empty.clientWidth,'empty composer has no horizontal overflow');
   await composer.fill(Array(30).fill('Linha de teste').join('\n'));
   const draft=await composer.evaluate(input=>{
    input.scrollTop=input.scrollHeight;
