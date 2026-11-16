@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 if [ "$#" -eq 0 ]; then
-  set -- env GOWORK=off go tool -modfile=tools/vacuum/go.mod vacuum
+  set -- python3 tools/ci/linter.py vacuum
 fi
 python3 tools/generate-reaction-emoji-bases.py --check
 tmp=$(mktemp -d "./.codegen-check.XXXXXX")
