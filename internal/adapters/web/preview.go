@@ -256,6 +256,9 @@ func (v view) accountScreen() string {
 	if v.AccountPage == "remove" && v.ManagedAccount != "" {
 		return "remove"
 	}
+	if v.AccountPage == "contacts" && v.ManagedAccount != "" {
+		return "contacts"
+	}
 	if v.AccountPage == "capabilities" {
 		return "capabilities"
 	}
@@ -304,7 +307,9 @@ func (v view) initialDrawer() string {
 	if v.FormTarget == "join-room" || v.FormTarget == "create-room" {
 		return v.FormTarget
 	}
-	if v.FormTarget == "register" || strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") || strings.HasPrefix(v.FormTarget, "account-avatar-") || strings.HasPrefix(v.FormTarget, "account-label-") {
+	if v.FormTarget == "register" || v.FormTarget == "account-communication" || v.FormTarget == "contact-action" ||
+		strings.HasPrefix(v.FormTarget, "connect-") || strings.HasPrefix(v.FormTarget, "disconnect-") ||
+		strings.HasPrefix(v.FormTarget, "account-avatar-") || strings.HasPrefix(v.FormTarget, "account-label-") {
 		return "accounts"
 	}
 	return ""

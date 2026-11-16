@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
 
 func (s *Server) ListContacts(ctx context.Context, r engineapi.ListContactsRequestObject) (engineapi.ListContactsResponseObject, error) {
 	query := domain.ContactQuery{Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
+	query.IncludePresence = r.Params.IncludePresence != nil && *r.Params.IncludePresence
 	if r.Params.Q != nil {
 		query.Search = *r.Params.Q
 	}
@@ -32,6 +34,10 @@ func (s *Server) ListContacts(ctx context.Context, r engineapi.ListContactsReque
 			id := string(c.ConversationID)
 			item.ConversationId = &id
 		}
+		if c.Presence != nil {
+			observation := presenceObservation(*c.Presence)
+			item.Presence = &observation
+		}
 		out.Items = append(out.Items, item)
 	}
 	for _, source := range page.Sources {
@@ -47,4 +53,23 @@ func (s *Server) ListContacts(ctx context.Context, r engineapi.ListContactsReque
 		out.NextCursor = &cursor
 	}
 	return engineapi.ListContacts200JSONResponse(out), nil
+}
+
+func (s *Server) ListContactRequests(ctx context.Context, r engineapi.ListContactRequestsRequestObject) (engineapi.ListContactRequestsResponseObject, error) {
+	items, err := s.engine.ContactRequests(ctx, domain.ID(r.AccountId))
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.ListContactRequests200JSONResponse{Items: items}, nil
+}
+
+func (s *Server) ChangeProtocolContact(ctx context.Context, r engineapi.ChangeProtocolContactRequestObject) (engineapi.ChangeProtocolContactResponseObject, error) {
+	if r.Body == nil {
+		return nil, application.ErrInvalid
+	}
+	err := s.engine.ChangeContact(ctx, domain.ID(r.AccountId), r.Body.Address, string(r.Body.Action))
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.ChangeProtocolContact204Response{}, nil
 }

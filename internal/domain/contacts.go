@@ -10,8 +10,9 @@ type Contact struct {
 	Groups                             []string
 	Active                             bool
 	UpdatedAt                          time.Time
-	AccountLabel                       string `json:"-"`
-	ConversationID                     ID     `json:"-"`
+	AccountLabel                       string               `json:"-"`
+	ConversationID                     ID                   `json:"-"`
+	Presence                           *PresenceObservation `json:"-"`
 }
 
 type ContactSource struct {
@@ -25,6 +26,7 @@ type ContactQuery struct {
 	AccountIDs                []ID
 	Search, Cursor, ScopeHash string
 	Limit                     int
+	IncludePresence           bool
 }
 
 type ContactPage struct {

@@ -380,7 +380,7 @@ JOIN (
     AND COALESCE(json_extract(c.payload,'$.RemovedFromChats'),0)=0
     AND c.archived=?6
     AND (CAST(?7 AS INTEGER)=0 OR c.favorite=1)
-    AND (CAST(?8 AS INTEGER)=0 OR c.unread_count>0)
+    AND (CAST(?8 AS INTEGER)=0 OR c.unread_count>0 OR json_extract(c.payload,'$.UnreadReminder')=1)
     AND (CAST(?9 AS TEXT)='' OR json_extract(c.payload,'$.Kind')=CAST(?9 AS TEXT))
     AND (CAST(?10 AS TEXT)='' OR instr(lower(c.address || ' ' || json_extract(c.payload,'$.Title') || ' ' || CASE WHEN json_extract(c.payload,'$.Request') IS NULL THEN json_extract(c.payload,'$.LastMessage') ELSE '' END), lower(CAST(?10 AS TEXT)))>0)
     ORDER BY c.activity_sequence DESC LIMIT ?11
@@ -659,8 +659,8 @@ func (q *Queries) UpdateConversation(ctx context.Context, arg UpdateConversation
 
 const updateConversationPreferences = `-- name: UpdateConversationPreferences :execrows
 UPDATE conversations
-SET revision_id=?1,payload=?2,archived=?3,favorite=?4
-WHERE id=?5 AND account_id=?6 AND revision_id=?7
+SET revision_id=?1,payload=?2,archived=?3,favorite=?4,unread_count=?5
+WHERE id=?6 AND account_id=?7 AND revision_id=?8
 `
 
 type UpdateConversationPreferencesParams struct {
@@ -668,6 +668,7 @@ type UpdateConversationPreferencesParams struct {
 	Payload            string
 	Archived           int64
 	Favorite           int64
+	UnreadCount        int64
 	ID                 string
 	AccountID          string
 	ExpectedRevisionID string
@@ -679,6 +680,7 @@ func (q *Queries) UpdateConversationPreferences(ctx context.Context, arg UpdateC
 		arg.Payload,
 		arg.Archived,
 		arg.Favorite,
+		arg.UnreadCount,
 		arg.ID,
 		arg.AccountID,
 		arg.ExpectedRevisionID,

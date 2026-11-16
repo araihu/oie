@@ -60,7 +60,7 @@ func (s *Store) ResolveDirectHistoryCheck(ctx context.Context, id domain.ID, che
 
 func writeConversationDecision(ctx context.Context, q *dbgen.Queries, current, next domain.Conversation, revision domain.ID, at time.Time) error {
 	next.RevisionID = revision
-	count, err := q.UpdateConversationPreferences(ctx, dbgen.UpdateConversationPreferencesParams{ID: string(next.ID), AccountID: string(next.AccountID), ExpectedRevisionID: string(current.RevisionID), RevisionID: string(revision), Payload: jsonText(next), Archived: number(next.Archived), Favorite: number(next.Favorite)})
+	count, err := q.UpdateConversationPreferences(ctx, dbgen.UpdateConversationPreferencesParams{ID: string(next.ID), AccountID: string(next.AccountID), ExpectedRevisionID: string(current.RevisionID), RevisionID: string(revision), Payload: jsonText(next), Archived: number(next.Archived), Favorite: number(next.Favorite), UnreadCount: int64(next.UnreadCount)})
 	if err != nil {
 		return err
 	}

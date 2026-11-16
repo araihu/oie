@@ -54,3 +54,30 @@ migration 11 to 12 after a consistent SQLite backup. Integrity checks passed;
 all previously stored account, conversation, message, revision and operation UUIDs
 were retained, and the previously connected account reconnected. No stored
 credentials were exposed during verification.
+
+## Manage contacts and availability
+
+Open the account profile and choose Contacts. The roster is paginated and loaded
+when the directory opens. A connected account can add an address, remove a
+saved entry, and accept or decline a pending presence request. Removing a saved
+entry preserves the conversation and retained history. Adding an existing entry
+preserves its provider name and groups. Presence comes from the active XMPP
+session and is shown for subscribed contacts when observed.
+
+In the account profile, choose Available, Away or Do not disturb. Saving
+availability applies to that account. Do not disturb suppresses banners and
+sounds leaving incoming messages and unread counts available. The same form
+controls outgoing typing notifications. In direct conversations with a
+compatible XMPP client, typing expires automatically and stays out of retained
+history.
+
+| State | Action | Outcome |
+| --- | --- | --- |
+| Directory open with a connected account | Add a new address | One roster write. Read back the provider roster. Keep the workspace and composer mounted. |
+| Address already in the roster | Add again | Preserve the existing entry, name and groups. |
+| Saved roster entry with history | Remove | Remove the entry from the directory. Retain its conversation and messages. |
+| Current incoming subscription request | Accept or decline | Submit the answer once and clear the pending request. The second attempt gets a conflict. |
+| Disconnected account | Open directory | Show cached entries and a connection prompt. |
+| Availability edited by another client | Save an older revision | Keep the desired value in the form and return the current revision for review. |
+| Compatible direct chat | Type, then pause | Show a transient indicator on the other client and clear it after pause or expiry. |
+| Outgoing typing disabled | Type | Send zero chat-state updates. |

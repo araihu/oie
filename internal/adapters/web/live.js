@@ -1305,6 +1305,13 @@ window.OieRuntime.register('live', life => {
       if (signedOut && (!sending || retryingSend)) return;
       const result = signedOut ? {rejected: true} : await response.json();
       if(life.signal.aborted)return;
+      if (form.dataset.oieAction === 'account-communication') {
+        if (result.ok && result.accountCommunication) {
+          form.elements.expectedRevisionId.value = result.accountCommunication.revisionId || '';
+        }
+        const refresh = form.querySelector('[data-communication-refresh]');
+        if (refresh && result.code === 'revision_conflict') refresh.hidden = false;
+      }
       if (removingConversation && result.rejected) {
         delete form.dataset.removalRetry;
         form.elements.operationKey.value = roomOperationKey();

@@ -60,6 +60,8 @@ func validCSRF(r *http.Request) bool {
 }
 
 type mutationResult struct {
+	Communication *engineapi.AccountCommunicationPreferences `json:"accountCommunication,omitempty"`
+
 	Account            *engineapi.Account        `json:"account,omitempty"`
 	Conversation       *engineapi.Conversation   `json:"conversation,omitempty"`
 	PreferencesPending bool                      `json:"preferencesPending,omitempty"`
@@ -95,7 +97,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 		s.mutationResponse(w, r, 400, mutationResult{Message: text.InvalidForm, Code: "invalid_request", Rejected: true})
 		return
 	}
-	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/remove" || r.URL.Path == "/ui/conversations/remove" || r.URL.Path == "/ui/rooms/join" || r.URL.Path == "/ui/rooms/manage" || r.URL.Path == "/ui/accounts/avatar" || r.URL.Path == "/ui/accounts/label" || r.URL.Path == "/ui/accounts/remove" {
+	if r.URL.Path == "/ui/conversations/preferences" || r.URL.Path == "/ui/rooms/open" || r.URL.Path == "/ui/rooms/remove" || r.URL.Path == "/ui/conversations/remove" || r.URL.Path == "/ui/rooms/join" || r.URL.Path == "/ui/rooms/manage" || r.URL.Path == "/ui/accounts/avatar" || r.URL.Path == "/ui/accounts/label" || r.URL.Path == "/ui/accounts/remove" || r.URL.Path == "/ui/accounts/contacts" || r.URL.Path == "/ui/accounts/communication" {
 		if localized, ok := s.catalogs[r.Form.Get("lang")]; ok {
 			text = localized
 		}
@@ -146,6 +148,10 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request) {
 	result := mutationResult{OK: true, NextKey: newOperationKey()}
 	status := 200
 	switch r.URL.Path {
+	case "/ui/accounts/communication":
+		status, result = s.changeAccountCommunication(ctx, r, text)
+	case "/ui/accounts/contacts":
+		status, result = s.changeContact(ctx, r, text)
 	case "/ui/accounts/remove":
 		status, result = s.removeAccount(ctx, r, text)
 	case "/ui/accounts/label":
@@ -540,8 +546,12 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 	v.ErrorMessage = result.Message
 	v.PreferenceRecovery = r.URL.Path == "/ui/conversations/preferences" && result.PreferencesPending
 	v.FormTarget = r.Form.Get("formTarget")
-	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "lang"} {
+	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "read", "presence", "sendTyping", "contactAction", "lang"} {
 		v.Values[key] = r.Form.Get(key)
+	}
+	if r.URL.Path == "/ui/accounts/communication" && result.Code == "revision_conflict" {
+		delete(v.Values, "presence")
+		delete(v.Values, "sendTyping")
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -559,7 +569,7 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 
 func isMutationPath(path string) bool {
 	switch path {
-	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/conversations/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
+	case "/ui/scheduling/update", "/ui/scheduling/send-now", "/ui/conversations/preferences", "/ui/videos/thumbnail", "/ui/previews/refresh", "/ui/rooms/open", "/ui/rooms/remove", "/ui/conversations/remove", "/ui/rooms/manage", "/ui/rooms/join", "/ui/rooms/leave", "/ui/messages/star", "/ui/messages/forward", "/ui/previews/download", "/ui/accounts/register", "/ui/accounts/communication", "/ui/accounts/contacts", "/ui/accounts/label", "/ui/accounts/avatar", "/ui/accounts/remove", "/ui/accounts/connect", "/ui/accounts/disconnect", "/ui/conversations/open", "/ui/messages/send", "/ui/messages/reconcile", "/ui/messages/cancel":
 		return true
 	}
 	return false

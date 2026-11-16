@@ -12,7 +12,20 @@ The BFF proxies the existing read-state API with browser CSRF protection and eng
 
 Engine API 0.31 also marks the conversation read when the active, focused timeline stays at its latest end for 500 ms. The browser sends the last rendered message and the quoted conversation revision in `If-Match`. In the same transaction that checks both values, the engine records unread messages from the conversation, including earlier pages, and updates the count and unread mention indicator. A stale snapshot returns 412 and the browser refreshes before attempting a new read. Retries of committed requests replay the original result. Clients on earlier engines continue to record individual visible messages.
 
-This implementation records app-owned read evidence. It does not emit XMPP read receipts, synchronize independent engines, implement manual unread reminders or promise persistent offline read commands. Those capabilities retain their separate specification and backlog status.
+## Manual read status
+
+Open the conversation options and choose Mark as read or Mark as unread.
+Mark as read records existing unread incoming messages and clears any manual
+reminder in the same transaction. The command checks the conversation revision,
+retains message and activity order, and replays the original response for a
+matching operation key. A message arriving before the command invalidates the
+reviewed revision. The user can retry after the fresh state loads.
+
+Mark as unread adds a reminder to the inbox and the unread filter. A reminder
+with no unread messages is shown as a dot. The reminder remains until an explicit
+Mark as read. Message read evidence continues to follow visibility. XMPP read
+receipts, persistent offline commands and replication across independent engines
+remain open.
 
 Verification includes concurrent receive/read batches, partial visibility, offscreen messages, focus and visibility guards, modal overlays, lost acknowledgements with stable keys, later arrivals, atomic rollback, account/conversation isolation, restart persistence and preservation of message/outbox state. Browser fixtures use an isolated local API and BFF. They do not connect to the real account or change its unread counters.
 
