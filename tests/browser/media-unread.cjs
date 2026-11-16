@@ -124,6 +124,7 @@ async function test(base) {
       }, first);
       if (width < 500) await page.locator('.oie-chat-pane').getByRole('link', {name: 'Voltar'}).first().click();
       const target = page.locator('#conversation-list a[data-conversation-id="' + chat + '"]');
+      const beforeOpen = state.reads;
       const selectChat = target.click();
       await page.waitForTimeout(150);
       assert.equal(await page.locator('#message-timeline [data-message-id="' + first.id + '"]').count(), 0);
@@ -137,20 +138,36 @@ async function test(base) {
       assert(!new URL(page.url()).searchParams.has('message'));
       assert.equal(await timeline.locator('[data-message-id]').count(), 50);
       const audio = timeline.locator('[data-audio-player]');
-      assert.equal(await audio.getAttribute('src'), null);
-      const previous = state.reads;
-      const play = timeline.locator('[data-audio-play]');
-      const rect = () => page.locator('#message-composer').boundingBox();
-      const before = await rect();
+      const retry = timeline.locator('[data-audio-retry]');
+      assert(await audio.isVisible());
+      assert.equal(await audio.getAttribute('preload'), 'none');
+      assert(await retry.isHidden());
+      assert(await audio.evaluate(player => player.paused && player.readyState === HTMLMediaElement.HAVE_NOTHING));
+      assert.equal(state.reads, beforeOpen, 'opening the conversation does not fetch audio');
+
+      await audio.scrollIntoViewIfNeeded();
+      await audio.focus();
+      await page.evaluate(() => {
+        const selectors = ['.oie-audio-controls', '#message-composer', '#message-timeline'];
+        window.audioFrames = [];
+        const sample = () => {
+          window.audioFrames.push(selectors.map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()));
+          window.audioFrame = requestAnimationFrame(sample);
+        };
+        sample();
+      });
       state.failMedia = true;
-      await play.click();
-      await play.waitFor({state: 'visible'});
-      assert(await play.evaluate(button => document.activeElement === button));
+      await audio.click({position: {x: 24, y: 27}});
+      await retry.waitFor({state: 'visible'});
+      assert(await retry.evaluate(button => document.activeElement === button));
       state.failMedia = false;
-      await play.click();
+      await retry.click();
       await page.waitForFunction(() => document.querySelector('[data-audio-player]')?.currentTime > .1);
-      assert(state.reads > previous);
-      assert.deepEqual(await rect(), before, 'loading and playing do not move the composer');
+      assert(await audio.evaluate(player => document.activeElement === player));
+      assert(state.reads > beforeOpen);
+      const frames = await page.evaluate(() => {cancelAnimationFrame(window.audioFrame); return window.audioFrames;});
+      assert(frames.length > 2, 'sampled painted frames during playback preparation');
+      for (const frame of frames) assert.deepEqual(frame, frames[0], 'loading and playing do not move the controls or composer');
 
       assert.equal(await timeline.locator('.oie-audio-card a[download]').count(), 0);
       const audioRow = timeline.locator('[data-message-id="' + audioMessage.id + '"]');

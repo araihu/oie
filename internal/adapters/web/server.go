@@ -506,7 +506,7 @@ type copy struct {
 	SharedAudio                                                                                                                                                                                              string
 	SharedVideo                                                                                                                                                                                              string
 	DownloadRetentionTitle, DownloadRetentionPeriod, KeepDownloads, DownloadRetentionDays, RemoveDownloads, RemoveDownloadsConfirm, DownloadsRemoved, DownloadRetentionSaved, DownloadRetentionUnavailable   string
-	AudioPlay, AudioUnavailable, FileIntegrityMismatch                                                                                                                                                       string
+	AudioUnavailable, FileIntegrityMismatch                                                                                                                                                                  string
 	SharedDocument                                                                                                                                                                                           string
 	SharedLink                                                                                                                                                                                               string
 	CapabilityPresenceNote                                                                                                                                                                                   string

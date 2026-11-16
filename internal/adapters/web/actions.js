@@ -147,7 +147,7 @@ window.OieRuntime.register('audio', life => {
   const players = new Set();
   function release(player) {
     player.pause();
-    player.removeAttribute('src');
+    if (!player.isConnected) player.removeAttribute('src');
     player.load();
     players.delete(player);
   }
@@ -157,14 +157,22 @@ window.OieRuntime.register('audio', life => {
   });
   function recover(player) {
     if (!player.isConnected || player.hidden) return;
-    const card = player.closest('[data-audio-source]');
-    const play = card.querySelector('[data-audio-play]');
+    const card = player.closest('[data-audio-id]');
+    const retry = card.querySelector('[data-audio-retry]');
+    const restoreFocus = document.activeElement === player || (document.activeElement === document.body && players.has(player));
+    players.delete(player);
     player.hidden = true;
-    release(player);
-    play.hidden = false;
-    if (document.activeElement === player || document.activeElement === document.body) play.focus({preventScroll:true});
+    retry.hidden = false;
+    if (restoreFocus) retry.focus({preventScroll:true});
     window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioError}}));
   }
+
+  life.on(document, 'play', event => {
+    const player = event.target;
+    if (!player.matches?.('[data-audio-player]')) return;
+    for (const previous of players) if (previous !== player) previous.pause();
+    players.add(player);
+  }, true);
 
   life.on(document, 'error', event => {
     if (event.target.matches?.('[data-audio-player]')) recover(event.target);
@@ -194,17 +202,13 @@ window.OieRuntime.register('audio', life => {
   });
 
   life.on(document, 'click', event => {
-    const play = event.target.closest('[data-audio-play]');
-    if (!play) return;
-    const card = play.closest('[data-audio-source]');
-    const player = card.querySelector('[data-audio-player]');
-    if (!card.dataset.audioSource) return;
-    for (const previous of players) previous.pause();
-    players.add(player);
-    player.src = card.dataset.audioSource;
-    play.hidden = true;
+    const retry = event.target.closest('[data-audio-retry]');
+    if (!retry) return;
+    const player = retry.closest('[data-audio-id]').querySelector('[data-audio-player]');
+    retry.hidden = true;
     player.hidden = false;
     player.focus({preventScroll:true});
+    player.load();
     player.play().catch(error => { if (error.name !== 'AbortError') recover(player); });
   });
 });
