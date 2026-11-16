@@ -31,6 +31,7 @@
       emit('open');
     };
     connection.onerror = () => {
+      window.OieHostedSession?.verify();
       connected = false;
       window.OieInbox.invalidate();
       if (connection.readyState === EventSource.CLOSED) stop();

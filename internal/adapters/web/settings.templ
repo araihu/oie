@@ -36,7 +36,7 @@ templ settings(v view) {
 			}
 			@settingsSubpageEntry("about", v.Text.About)
 			if v.HostedSignIn {
-				<form method="post" action="/auth/logout">
+				<form method="post" action="/auth/logout" data-hosted-sign-out>
 					@button.Button(button.WithType("submit"), button.WithAppearance(button.AppearancePlain)) {
 						{ v.Text.SignOutLabel }
 					}

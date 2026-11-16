@@ -32,6 +32,13 @@ that manage the owner and keys run on the host as the Oiê service user.
      --oidc-client-secret-file /run/secrets/oie/client-secret
    ```
 
+If sign-in is required when opening a conversation, a message notification,
+or a workspace search, Oiê opens the requested view after sign-in.
+Clicking a hosted notification opens its link in a browser window. Signing
+out ends the browser session across tabs. If the session expires before a new
+message submission reaches the engine, sign in again to continue from its
+saved draft.
+
 Use a hostname dedicated to Oiê. Browsers share cookies across HTTPS ports
 on the same hostname. If the service user cannot bind port 443 directly, use a
 high port and forward TLS to it, or terminate TLS at a trusted proxy. In proxy mode, replace the certificate and key flags with

@@ -3,13 +3,42 @@ package hostauth
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/adapters/httpapi"
 )
 
-type SignInPage func(http.ResponseWriter, *http.Request, int)
+// Allow a 200-character search whose UTF-8 characters are percent-encoded,
+// while leaving room for the OIDC state in a browser cookie.
+const maxWorkspaceDestinationBytes = 2600
+
+type SignInPage func(http.ResponseWriter, *http.Request, int, string)
+
+func signInPage(w http.ResponseWriter, r *http.Request, page SignInPage, status int, destination string) {
+	page(w, r, status, authURL("/auth/login", destination))
+}
+
+func authURL(path, destination string) string {
+	if destination == "/" {
+		return path
+	}
+	return path + "?" + url.Values{"next": {destination}}.Encode()
+}
+
+func workspaceDestination(raw string) string {
+	if len(raw) > maxWorkspaceDestinationBytes || !utf8.ValidString(raw) || strings.ContainsAny(raw, `\"#`+"\u2028\u2029") || strings.ContainsFunc(raw, unicode.IsControl) {
+		return "/"
+	}
+	u, err := url.ParseRequestURI(raw)
+	if err != nil || u.IsAbs() || u.Host != "" || u.EscapedPath() != u.Path || (u.Path != "/" && u.Path != "/search") {
+		return "/"
+	}
+	return raw
+}
 
 func (a *Auth) API(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,34 +68,41 @@ func BrowserRequest(ctx context.Context) bool {
 }
 
 func (a *Auth) Browser(next http.Handler, page SignInPage) http.Handler {
-	protected := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sessionCookie)
-		if err != nil {
-			a.browserUnauthorized(w, r)
-			return
-		}
-		ok, err := a.store.validCredential(cookie.Value, false)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-			return
-		}
-		if !ok {
-			a.browserUnauthorized(w, r)
-			return
-		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && !a.sameOrigin(r) {
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-		a.serveAuthenticated(w, r, cookie.Value, false, next)
-	})
+	protect := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie(sessionCookie)
+			if err != nil {
+				a.browserUnauthorized(w, r)
+				return
+			}
+			ok, err := a.store.validCredential(cookie.Value, false)
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
+			if !ok {
+				a.browserUnauthorized(w, r)
+				return
+			}
+			if r.Method != http.MethodGet && r.Method != http.MethodHead && !a.sameOrigin(r) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+			a.serveAuthenticated(w, r, cookie.Value, false, next)
+		})
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /auth/sign-in", func(w http.ResponseWriter, r *http.Request) { page(w, r, http.StatusOK) })
+	mux.HandleFunc("GET /auth/sign-in", func(w http.ResponseWriter, r *http.Request) {
+		signInPage(w, r, page, http.StatusOK, workspaceDestination(r.URL.Query().Get("next")))
+	})
+	mux.Handle("GET /auth/session", protect(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
 	mux.HandleFunc("GET /auth/login", func(w http.ResponseWriter, r *http.Request) { a.beginLogin(w, r, page) })
 	mux.HandleFunc("GET /auth/callback", func(w http.ResponseWriter, r *http.Request) { a.finishLogin(w, r, page) })
 	mux.Handle("POST /auth/logout", a.logout())
 	mux.Handle("/auth/", http.NotFoundHandler())
-	mux.Handle("/", protected)
+	mux.Handle("/", protect(next))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), browserRequestKey{}, true)
 		mux.ServeHTTP(w, r.WithContext(ctx))
@@ -91,6 +127,10 @@ func (a *Auth) logout() http.Handler {
 		}
 		setCookie(w, sessionCookie, "", -time.Second)
 		setCookie(w, loginCookie, "", -time.Second)
+		if r.Header.Get("Accept") == "application/json" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		http.Redirect(w, r, "/auth/sign-in", http.StatusSeeOther)
 	})
 }
@@ -100,12 +140,15 @@ func (a *Auth) sameOrigin(r *http.Request) bool {
 }
 
 func (a *Auth) browserUnauthorized(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet && !strings.HasPrefix(r.URL.Path, "/ui/") &&
-		r.Header.Get("HX-Request") == "" && (r.URL.Path == "/" || strings.Contains(r.Header.Get("Accept"), "text/html")) {
-		http.Redirect(w, r, "/auth/sign-in", http.StatusSeeOther)
+	mode := r.Header.Get("Sec-Fetch-Mode")
+	if r.Method == http.MethodGet && (r.URL.Path == "/" || r.URL.Path == "/search") &&
+		r.Header.Get("HX-Request") == "" && (mode == "navigate" ||
+		mode == "" && (r.URL.Path == "/" || strings.Contains(r.Header.Get("Accept"), "text/html"))) {
+		destination := workspaceDestination(r.URL.RequestURI())
+		http.Redirect(w, r, authURL("/auth/sign-in", destination), http.StatusSeeOther)
 		return
 	}
-	w.Header().Set("HX-Redirect", "/auth/sign-in")
+	w.Header().Set("X-Oie-Sign-In-Required", "1")
 	http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 }
 

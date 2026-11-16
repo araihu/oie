@@ -1,6 +1,7 @@
 package hostauth
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -10,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +21,10 @@ import (
 )
 
 const (
-	loginCookie   = "__Host-oie-login"
-	sessionCookie = "__Host-oie-session"
-	loginLifetime = 10 * time.Minute
+	loginCookie         = "__Host-oie-login"
+	sessionCookie       = "__Host-oie-session"
+	loginLifetime       = 10 * time.Minute
+	maxLoginCookieBytes = 3900
 )
 
 type providerClient struct {
@@ -31,6 +34,7 @@ type providerClient struct {
 
 type loginAttempt struct {
 	State, Nonce, PKCE, Generation string
+	Destination                    string
 	ExpiresAt                      time.Time
 }
 
@@ -55,7 +59,8 @@ func (a *Auth) provider(ctx context.Context, issuer string) (*providerClient, er
 	}
 	endpoint := provider.Endpoint()
 	for _, address := range []string{endpoint.AuthURL, endpoint.TokenURL} {
-		if !validOwner(Owner{Issuer: address, Subject: "endpoint"}) {
+		u, err := url.Parse(address)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || strings.Contains(address, "#") {
 			return nil, errors.New("the provider must advertise HTTPS authorization and token endpoints")
 		}
 	}
@@ -81,26 +86,29 @@ func newLoginCipher() (cipher.AEAD, error) {
 
 func (a *Auth) beginLogin(w http.ResponseWriter, r *http.Request, page SignInPage) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
+	destination := workspaceDestination(r.URL.Query().Get("next"))
 	current, err := a.store.read()
 	if err != nil {
-		page(w, r, http.StatusServiceUnavailable)
+		signInPage(w, r, page, http.StatusServiceUnavailable, destination)
 		return
 	}
 	client, err := a.provider(r.Context(), current.Owner.Issuer)
 	if err != nil {
-		page(w, r, http.StatusServiceUnavailable)
+		signInPage(w, r, page, http.StatusServiceUnavailable, destination)
 		return
 	}
 	attempt := loginAttempt{
 		State: newCredential(), Nonce: newCredential(), PKCE: oauth2.GenerateVerifier(),
-		Generation: current.Generation, ExpiresAt: time.Now().Add(loginLifetime),
+		Generation: current.Generation, Destination: destination, ExpiresAt: time.Now().Add(loginLifetime),
 	}
-	plain, err := json.Marshal(attempt)
-	if err != nil {
-		page(w, r, http.StatusServiceUnavailable)
+	var plain bytes.Buffer
+	encoder := json.NewEncoder(&plain)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(attempt); err != nil {
+		signInPage(w, r, page, http.StatusServiceUnavailable, destination)
 		return
 	}
-	cookie := base64.RawURLEncoding.EncodeToString(a.loginCipher.Seal(nil, nil, plain, nil))
+	cookie := base64.RawURLEncoding.EncodeToString(a.loginCipher.Seal(nil, nil, plain.Bytes(), nil))
 	setCookie(w, loginCookie, cookie, loginLifetime)
 	http.Redirect(w, r, client.oauth.AuthCodeURL(attempt.State, oidc.Nonce(attempt.Nonce), oauth2.S256ChallengeOption(attempt.PKCE)), http.StatusSeeOther)
 }
@@ -110,47 +118,53 @@ func (a *Auth) finishLogin(w http.ResponseWriter, r *http.Request, page SignInPa
 	setCookie(w, loginCookie, "", -time.Second)
 	attempt, err := a.loginAttempt(r)
 	if err != nil {
-		page(w, r, http.StatusUnauthorized)
+		signInPage(w, r, page, http.StatusUnauthorized, "/")
+		return
+	}
+	destination := workspaceDestination(attempt.Destination)
+	query := r.URL.Query()
+	if len(query["code"]) != 1 || query.Get("code") == "" || query.Has("error") {
+		signInPage(w, r, page, http.StatusUnauthorized, destination)
 		return
 	}
 	current, err := a.store.read()
 	if err != nil {
-		page(w, r, http.StatusServiceUnavailable)
+		signInPage(w, r, page, http.StatusServiceUnavailable, destination)
 		return
 	}
 	if current.Generation != attempt.Generation {
-		page(w, r, http.StatusUnauthorized)
+		signInPage(w, r, page, http.StatusUnauthorized, destination)
 		return
 	}
 	client, err := a.provider(r.Context(), current.Owner.Issuer)
 	if err != nil {
-		page(w, r, http.StatusServiceUnavailable)
+		signInPage(w, r, page, http.StatusServiceUnavailable, destination)
 		return
 	}
 	ctx := oidc.ClientContext(r.Context(), a.httpClient)
-	token, err := client.oauth.Exchange(ctx, r.URL.Query().Get("code"), oauth2.VerifierOption(attempt.PKCE))
+	token, err := client.oauth.Exchange(ctx, query.Get("code"), oauth2.VerifierOption(attempt.PKCE))
 	if err != nil {
-		page(w, r, http.StatusUnauthorized)
+		signInPage(w, r, page, http.StatusUnauthorized, destination)
 		return
 	}
 	raw, ok := token.Extra("id_token").(string)
 	if !ok {
-		page(w, r, http.StatusUnauthorized)
+		signInPage(w, r, page, http.StatusUnauthorized, destination)
 		return
 	}
 	id, err := client.verifier.Verify(ctx, raw)
 	if err != nil || id.Issuer != current.Owner.Issuer || id.Subject != current.Owner.Subject ||
 		subtle.ConstantTimeCompare([]byte(id.Nonce), []byte(attempt.Nonce)) != 1 || !validAuthorizedParty(id, a.clientID) {
-		page(w, r, http.StatusUnauthorized)
+		signInPage(w, r, page, http.StatusUnauthorized, destination)
 		return
 	}
 	secret, err := a.store.createSession(r.Context(), current.Generation)
 	if err != nil {
-		page(w, r, http.StatusServiceUnavailable)
+		signInPage(w, r, page, http.StatusServiceUnavailable, destination)
 		return
 	}
 	setCookie(w, sessionCookie, secret, sessionLifetime)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, destination, http.StatusSeeOther)
 }
 
 func validAuthorizedParty(id *oidc.IDToken, clientID string) bool {
@@ -168,7 +182,7 @@ func validAuthorizedParty(id *oidc.IDToken, clientID string) bool {
 
 func (a *Auth) loginAttempt(r *http.Request) (loginAttempt, error) {
 	cookie, err := r.Cookie(loginCookie)
-	if err != nil || len(cookie.Value) > 2048 {
+	if err != nil || len(cookie.Value) > maxLoginCookieBytes {
 		return loginAttempt{}, errUnauthorized
 	}
 	data, err := base64.RawURLEncoding.DecodeString(cookie.Value)
@@ -182,7 +196,7 @@ func (a *Auth) loginAttempt(r *http.Request) (loginAttempt, error) {
 	var attempt loginAttempt
 	query := r.URL.Query()
 	if json.Unmarshal(plain, &attempt) != nil || !time.Now().Before(attempt.ExpiresAt) ||
-		len(query["code"]) != 1 || query.Get("code") == "" || len(query["state"]) != 1 ||
+		len(query["state"]) != 1 ||
 		subtle.ConstantTimeCompare([]byte(query.Get("state")), []byte(attempt.State)) != 1 {
 		return loginAttempt{}, errUnauthorized
 	}

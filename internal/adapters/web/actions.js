@@ -45,7 +45,7 @@ window.OieRuntime.register('actions', life => {
     status.textContent = status.dataset.engineConnecting;
     let message = form.dataset.failed;
     try {
-      const response = await fetch(form.action, {
+      const response = await window.OieRuntime.request(form.action, {
         method: 'POST', body, headers: {Accept: 'application/json'},
       });
       if (response.status === 204) {

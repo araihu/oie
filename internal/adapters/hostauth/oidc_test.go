@@ -35,21 +35,33 @@ func TestOIDCOwnerAndSessionRecovery(t *testing.T) {
 	}
 	auth.httpClient = fixture.Client()
 	target := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	handler := auth.Browser(target, func(w http.ResponseWriter, _ *http.Request, status int) { w.WriteHeader(status) })
+	handler := auth.Browser(target, func(w http.ResponseWriter, _ *http.Request, status int, loginURL string) {
+		w.Header().Set("X-Fixture-Login", loginURL)
+		w.WriteHeader(status)
+	})
+	destination := "/search?q=" + url.QueryEscape("a+b "+strings.Repeat("😀", 195)) + "&lang=pt-BR"
+	loginURL := "/auth/login?" + url.Values{"next": {destination}}.Encode()
 
 	for _, attempt := range []string{"wrong-state", "wrong-nonce", "wrong-owner", "wrong-audience", "wrong-key", "expired"} {
 		t.Run(attempt, func(t *testing.T) {
-			w := finishFixtureLogin(t, handler, startFixtureLogin(t, handler, fixture.Client()), attempt)
+			w := finishFixtureLogin(t, handler, startFixtureLogin(t, handler, fixture.Client(), loginURL), attempt)
 			if w.Code != http.StatusUnauthorized || responseCookie(w, sessionCookie) != nil {
 				t.Fatalf("%s issued a session: %d", attempt, w.Code)
+			}
+			want := loginURL
+			if attempt == "wrong-state" {
+				want = "/auth/login"
+			}
+			if got := w.Header().Get("X-Fixture-Login"); got != want {
+				t.Fatalf("retry link %q, want %q", got, want)
 			}
 		})
 	}
 
-	pending := startFixtureLogin(t, handler, fixture.Client())
-	w := finishFixtureLogin(t, handler, startFixtureLogin(t, handler, fixture.Client()), "valid")
+	pending := startFixtureLogin(t, handler, fixture.Client(), loginURL)
+	w := finishFixtureLogin(t, handler, startFixtureLogin(t, handler, fixture.Client(), loginURL), "valid")
 	cookie := responseCookie(w, sessionCookie)
-	if w.Code != http.StatusSeeOther || cookie == nil || !cookie.Secure || !cookie.HttpOnly ||
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != destination || cookie == nil || !cookie.Secure || !cookie.HttpOnly ||
 		cookie.Path != "/" || cookie.Domain != "" || cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("did not issue a protected session: %d %#v", w.Code, cookie)
 	}
@@ -66,6 +78,7 @@ func TestOIDCOwnerAndSessionRecovery(t *testing.T) {
 			t.Fatalf("%s %s returned %d, want %d", method, path, resp.Code, want)
 		}
 	}
+	check("GET", "/auth/session", "", http.StatusNoContent)
 	check("GET", "/ui/events", "", http.StatusNoContent)
 	check("POST", "/ui/messages/send", "https://cross-origin.example", http.StatusForbidden)
 	check("POST", "/ui/messages/send", publicOrigin, http.StatusNoContent)
@@ -90,14 +103,32 @@ func TestOIDCOwnerAndSessionRecovery(t *testing.T) {
 		t.Fatalf("login started before recovery was accepted: %d", w.Code)
 	}
 
-	w = finishFixtureLogin(t, handler, startFixtureLogin(t, handler, fixture.Client()), "replacement")
+	w = finishFixtureLogin(t, handler, startFixtureLogin(t, handler, fixture.Client(), loginURL), "replacement")
 	cookie = responseCookie(w, sessionCookie)
 	if w.Code != http.StatusSeeOther || cookie == nil {
 		t.Fatalf("replacement owner could not sign in: %d", w.Code)
 	}
 	check("GET", "/ui/events", "", http.StatusNoContent)
 	check("POST", "/auth/logout", publicOrigin, http.StatusSeeOther)
+	check("GET", "/auth/session", "", http.StatusUnauthorized)
 	check("GET", "/ui/events", "", http.StatusUnauthorized)
+}
+
+func TestOIDCWorkspaceDestination(t *testing.T) {
+	for _, path := range []string{"/", "/?chat=123&message=456", "/search?q=a%2Bb", "/search?q=https%3A%2F%2Fexample.net"} {
+		if got := workspaceDestination(path); got != path {
+			t.Errorf("workspaceDestination(%q) = %q", path, got)
+		}
+	}
+	for _, path := range []string{
+		"https://other.example/search", "//other.example", "/\\other.example", "/%2Fother.example",
+		"/se%61rch", "/search/../", "/search#fragment", "/ui/events", "/auth/logout",
+		"/?q=\n/me", "/?q=" + strings.Repeat("x", maxWorkspaceDestinationBytes),
+	} {
+		if got := workspaceDestination(path); got != "/" {
+			t.Errorf("workspaceDestination(%q) = %q", path, got)
+		}
+	}
 }
 
 func TestStoreRejectsExpiredKeysAndPersistsOnlyVerifier(t *testing.T) {
@@ -131,10 +162,10 @@ type fixtureLogin struct {
 	state  string
 }
 
-func startFixtureLogin(t *testing.T, browser http.Handler, client *http.Client) fixtureLogin {
+func startFixtureLogin(t *testing.T, browser http.Handler, client *http.Client, loginURL string) fixtureLogin {
 	t.Helper()
 	w := httptest.NewRecorder()
-	browser.ServeHTTP(w, httptest.NewRequest("GET", publicOrigin+"/auth/login", nil))
+	browser.ServeHTTP(w, httptest.NewRequest("GET", publicOrigin+loginURL, nil))
 	next, err := url.Parse(w.Header().Get("Location"))
 	if err != nil || w.Code != http.StatusSeeOther {
 		t.Fatalf("login failed to start: %d %v", w.Code, err)
@@ -201,8 +232,8 @@ func newIssuerFixture(t *testing.T) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		respond(w, map[string]any{
-			"issuer": issuer, "authorization_endpoint": issuer + "/authorize",
-			"token_endpoint": issuer + "/token", "jwks_uri": issuer + "/jwks",
+			"issuer": issuer, "authorization_endpoint": issuer + "/authorize?fixture=login",
+			"token_endpoint": issuer + "/token?fixture=exchange", "jwks_uri": issuer + "/jwks",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})
@@ -214,13 +245,17 @@ func newIssuerFixture(t *testing.T) *httptest.Server {
 	})
 	mux.HandleFunc("GET /authorize", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		if q.Get("fixture") != "login" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		mu.Lock()
 		current = authorization{q.Get("nonce"), q.Get("code_challenge")}
 		mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /token", func(w http.ResponseWriter, r *http.Request) {
-		if id, secret, _ := r.BasicAuth(); id != clientID || secret != clientSecret || r.ParseForm() != nil {
+		if id, secret, _ := r.BasicAuth(); id != clientID || secret != clientSecret || r.URL.Query().Get("fixture") != "exchange" || r.ParseForm() != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

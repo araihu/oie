@@ -58,7 +58,7 @@ export function open() {
     const headers = { 'X-Oie-Diagnostics': '1' };
     if (key) headers['X-Oie-Diagnostics-Key'] = key;
     try {
-      const result = await fetch(path + '?' + search, {
+      const result = await window.OieRuntime.request(path + '?' + search, {
         headers, cache: 'no-store', redirect: 'error', signal: read.signal
       });
       if (read.signal.aborted || !panel.isConnected) return;

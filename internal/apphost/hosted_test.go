@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,7 +97,24 @@ func TestHostedGuardsAllEngineOperations(t *testing.T) {
 	if w := hostedResponse(s, hostedRequest(http.MethodGet, "/", "", nil)); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/auth/sign-in" {
 		t.Fatalf("signed-out page did not redirect: %d %s", w.Code, w.Header().Get("Location"))
 	}
-	r := hostedRequest(http.MethodGet, "/auth/sign-in", "", nil)
+	deepLink := "/?chat=fixture&message=target"
+	r := hostedRequest(http.MethodGet, deepLink, "", nil)
+	r.Header.Set("Sec-Fetch-Mode", "navigate")
+	w := hostedResponse(s, r)
+	signIn, err := url.Parse(w.Header().Get("Location"))
+	if w.Code != http.StatusSeeOther || err != nil || signIn.Path != "/auth/sign-in" || signIn.Query().Get("next") != deepLink {
+		t.Fatalf("signed-out deep link lost its destination: %d %v", w.Code, signIn)
+	}
+	for _, path := range []string{"/auth/session", "/search", "/ui/diagnostics/log"} {
+		r := hostedRequest(http.MethodGet, path, "", nil)
+		r.Header.Set("Sec-Fetch-Mode", "cors")
+		r.Header.Set("Accept", "text/html")
+		w := hostedResponse(s, r)
+		if w.Code != http.StatusUnauthorized || w.Header().Get("X-Oie-Sign-In-Required") != "1" || w.Header().Get("Location") != "" {
+			t.Errorf("%s did not signal session loss: %d", path, w.Code)
+		}
+	}
+	r = hostedRequest(http.MethodGet, "/auth/sign-in", "", nil)
 	r.Header.Set("Accept-Language", "pt-BR")
 	if w := hostedResponse(s, r); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Entrar") {
 		t.Fatalf("public sign-in missing: %d %s", w.Code, w.Body)
@@ -123,7 +141,7 @@ func TestHostedGuardsAllEngineOperations(t *testing.T) {
 		}
 	}
 
-	w := hostedResponse(s, hostedRequest(http.MethodGet, "/api/v1/engine", key, nil))
+	w = hostedResponse(s, hostedRequest(http.MethodGet, "/api/v1/engine", key, nil))
 	var engine struct{ ID, Role string }
 	if err := json.Unmarshal(w.Body.Bytes(), &engine); err != nil || engine.ID == "" || engine.Role != "hosted" ||
 		w.Header().Get("Strict-Transport-Security") == "" {

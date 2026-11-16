@@ -5,7 +5,7 @@ import (
 	"github.com/araihu/goshtoso/components/link"
 )
 
-templ signIn(lang, label, message string) {
+templ signIn(lang, label, message, loginURL string) {
 	<!doctype html>
 	<html lang={ lang }>
 		<head>
@@ -20,7 +20,7 @@ templ signIn(lang, label, message string) {
 				if message != "" {
 					<p role="alert">{ message }</p>
 				}
-				@link.Link("/auth/login", link.WithAppearance(link.AppearanceButton)) {
+				@link.Link(loginURL, link.WithAppearance(link.AppearanceButton)) {
 					{ label }
 				}
 			</main>

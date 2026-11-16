@@ -695,6 +695,11 @@ var previewsScript []byte
 //go:embed runtime.js
 var runtimeScript []byte
 
+//go:embed hosted-session.js
+var hostedSessionScript []byte
+
+var hostedRuntimeScript = append(append([]byte(nil), runtimeScript...), hostedSessionScript...)
+
 //go:embed masonry.js
 var masonryScript []byte
 
@@ -903,6 +908,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/diagnostics.js": {"text/javascript", diagnosticsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
+		if s.hostedSignIn && r.URL.Path == "/ui/runtime.js" {
+			asset.body = hostedRuntimeScript
+		}
 		w.Header().Set("Content-Type", asset.mime)
 		w.Header().Set("ETag", cachehttp.Digest(asset.body))
 		cachehttp.Revalidate.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(asset.body) })).ServeHTTP(w, r)
