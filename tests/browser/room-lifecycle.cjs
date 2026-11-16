@@ -139,8 +139,12 @@ async function until(test, label) {
     await destroy.getByRole('button', {name:'Excluir sala para todos', exact:true}).click();
     await until(async () => (await session(room)).destroyed, 'owner deletion confirmed');
     await until(async () => (await session(bobRoom.id)).destroyed, 'second participant received destruction notice');
-    assert((await chats(alice)).some(c => c.id === room), 'local conversation is retained after server deletion');
-    assert.equal(new URL(page.url()).searchParams.get('chat'), room);
+    await page.waitForURL(url => !url.searchParams.has('chat'), {timeout: 15000});
+    assert((await api('/conversations/' + room)).removedFromChats, 'local conversation is retained and marked as removed');
+    for (const archived of [false, true]) {
+      assert(!(await chats(alice, archived)).some(c => c.id === room), 'confirmed deletion removes the room from the owner’s lists');
+    }
+    assert((await chats(bob)).some(c => c.id === bobRoom.id), 'the other participant keeps their local conversation');
     assert.deepEqual(pageErrors, []);
     console.log('PASS: delayed invalid creation, form correction, local removal, and owner deletion with live XMPP');
   } finally { await browser.close(); }

@@ -299,7 +299,8 @@ saving a creation request. The server's configuration reply confirms creation.
 Removing a room from Chats also removes it from Archived and stops this engine
 from rejoining. It preserves local history and the server room. Joining by
 address adds it back. A joined owner can separately confirm deletion of the room
-on the server using XEP-0045. See [room management](room-management.md).
+on the server using XEP-0045. Server confirmation removes the room from that
+account’s chat lists and retains saved history. See [room management](room-management.md).
 
 **OPEN O03:** room creation defaults, protocol-specific leave/rejoin behavior across independent engines, and the exact representation of participants and memberships.
 

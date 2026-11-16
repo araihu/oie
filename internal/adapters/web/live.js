@@ -1291,7 +1291,7 @@ window.OieRuntime.register('live', life => {
             document.dispatchEvent(new CustomEvent('oie:agenda-refresh',{detail:{form}}));
             return;
           }
-        } else if (form.dataset.oieAction === 'remove-conversation' && result.redirect) {
+        } else if ((form.dataset.oieAction === 'remove-conversation' || roomManagement) && result.redirect) {
           inbox.invalidate();
           if (window.OieNavigation) window.OieNavigation.go(result.redirect);
           else location.replace(result.redirect);

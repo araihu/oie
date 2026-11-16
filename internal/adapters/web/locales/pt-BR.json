@@ -133,7 +133,7 @@
   "RemoveFromChatsUnavailable": "Não foi possível remover a conversa. Tente de novo.",
   "RemoveFromChatsConflict": "A conversa mudou. Atualize a página e tente de novo.",
   "RoomDestroy": "Excluir sala para todos",
-  "RoomDestroyWarning": "Todos serão removidos da sala. Esta ação não pode ser desfeita. O histórico já salvo no Oiê será mantido.",
+  "RoomDestroyWarning": "A sala será excluída para todos e removida da sua lista. Esta ação não pode ser desfeita. O histórico salvo será mantido.",
   "RoomDestroyed": "A sala foi excluída do servidor.",
   "CreateRoom": "Criar sala",
   "PreviewRoom": "Ver prévia",

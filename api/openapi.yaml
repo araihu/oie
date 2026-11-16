@@ -2078,7 +2078,7 @@ paths:
       operationId: manageRoom
       tags: [Conversations]
       summary: Apply a room management action
-      description: Rechecks the active room session, permissions and target before sending. Repeat an uncertain request with the same key to read its outcome without sending it again.
+      description: Rechecks the active room session, permissions and target before sending. Confirmed destruction removes the room from the requesting account’s chat lists and retains stored history. Repeat an uncertain request with the same key to read its outcome without sending it again.
       parameters:
       - name: Idempotency-Key
         in: header

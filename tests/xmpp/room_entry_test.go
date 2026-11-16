@@ -451,6 +451,21 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 			return err == nil && !session.Active && session.LastErrorCode == "room_destroyed"
 		})
 	}
+	stored, err := engine.Conversation(ctx, created.Conversation.ID)
+	if err != nil || !stored.RemovedFromChats {
+		t.Fatalf("confirmed destruction should retain and hide the owner's conversation: %+v %v", stored, err)
+	}
+	for _, archived := range []bool{false, true} {
+		chats, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: alice, Kind: "room", Limit: 10, Archived: archived})
+		if err != nil || slices.ContainsFunc(chats, func(c domain.Conversation) bool { return c.ID == created.Conversation.ID }) {
+			t.Fatalf("destroyed room in owner's list (archived=%v): %+v %v", archived, chats, err)
+		}
+	}
+	participant, err := engine.Conversation(ctx, joinedBob.Conversation.ID)
+	if err != nil || participant.RemovedFromChats {
+		t.Fatalf("destruction notice should preserve the other participant's chat: %+v %v", participant, err)
+	}
+
 	if preview, err = engine.PreviewRoom(ctx, bob, address, false); err != nil || preview.State == "known" {
 		t.Fatalf("server room still answers discovery after confirmed deletion: %+v %v", preview, err)
 	}

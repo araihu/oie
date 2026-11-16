@@ -133,7 +133,7 @@
   "RemoveFromChatsUnavailable": "Couldn’t remove the chat. Try again.",
   "RemoveFromChatsConflict": "The chat has changed. Refresh it and try again.",
   "RoomDestroy": "Delete room for everyone",
-  "RoomDestroyWarning": "Everyone will be removed from this room. This can’t be undone. History already saved in Oiê will stay.",
+  "RoomDestroyWarning": "The room will be deleted for everyone and removed from your chats. This can’t be undone. Saved history will stay.",
   "RoomDestroyed": "The room was deleted from the server.",
   "CreateRoom": "Create room",
   "PreviewRoom": "Preview room",

@@ -28,12 +28,16 @@ func (s *Server) removeConversationFromChats(ctx context.Context, r *http.Reques
 		}
 		return status, result
 	}
+	return http.StatusOK, mutationResult{OK: true, Redirect: conversationListDestination(r)}
+}
+
+func conversationListDestination(r *http.Request) string {
 	back, _ := url.Parse(safeReturn(r.Form.Get("returnTo")))
 	q := back.Query()
 	for _, name := range []string{"chat", "message", "focus", "open", "inviteRoom"} {
 		q.Del(name)
 	}
-	return http.StatusOK, mutationResult{OK: true, Redirect: (&url.URL{Path: "/", RawQuery: q.Encode()}).String()}
+	return (&url.URL{Path: "/", RawQuery: q.Encode()}).String()
 }
 
 func (s *Server) requestConversationRemoval(ctx context.Context, path, id, account, key, revision string) (int, []byte, error) {

@@ -161,7 +161,7 @@ func (s *Server) manageRoom(ctx context.Context, r *http.Request, text copy) (in
 	switch result.JSON200.State {
 	case "confirmed":
 		if action == engineapi.Destroy {
-			return http.StatusOK, mutationResult{OK: true, Message: text.RoomDestroyed, State: "confirmed"}
+			return http.StatusOK, mutationResult{OK: true, Message: text.RoomDestroyed, State: "confirmed", Redirect: conversationListDestination(r)}
 		}
 		return http.StatusOK, mutationResult{OK: true, Message: text.RoomManagementConfirmed, State: "confirmed"}
 	case "submitted":
