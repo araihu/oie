@@ -217,9 +217,14 @@ templ signOutForm(v view) {
 }
 
 templ notificationSettings(v view) {
-	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={v.Text.NotificationDenied} data-unavailable={v.Text.NotificationUnavailable} data-sound-unavailable={v.Text.NotificationSoundUnavailable} data-unsaved={v.Text.NotificationToneUnsaved} data-invalid-tone={v.Text.NotificationToneInvalid} data-large-tone={v.Text.NotificationToneLarge} data-trimmed-tone={v.Text.NotificationToneTrimmed} data-message-title={v.Text.NotificationNewMessage}>
+	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={v.Text.NotificationDenied} data-unavailable={v.Text.NotificationUnavailable} data-sound-unavailable={v.Text.NotificationSoundUnavailable} data-unsaved={v.Text.NotificationToneUnsaved} data-invalid-tone={v.Text.NotificationToneInvalid} data-large-tone={v.Text.NotificationToneLarge} data-trimmed-tone={v.Text.NotificationToneTrimmed} data-message-title={v.Text.NotificationNewMessage} data-background-failed={v.Text.NotificationBackgroundFailed} data-csrf={v.CSRF}>
 		<h2 id="notification-settings-title">@glyph(heroicons.Icon16SolidBell)<span>{v.Text.NotificationSettings}</span></h2>
 		@toggle.Toggle(toggle.Config{ID:"notification-banners",Label:v.Text.NotificationBanners,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-banners":"","aria-describedby":"notification-status"}})
+		if v.BrowserPush {
+			<div data-notification-background-option hidden>
+				@toggle.Toggle(toggle.Config{ID:"notification-background",Label:v.Text.NotificationBackground,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-background":"","aria-describedby":"notification-status"}})
+			</div>
+		}
 		@toggle.Toggle(toggle.Config{ID:"notification-sound",Label:v.Text.NotificationSound,Checked:true,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound":"","aria-describedby":"notification-status"}})
 		<div class="oie-notification-tone">
 			<div class="oie-notification-tone-label">

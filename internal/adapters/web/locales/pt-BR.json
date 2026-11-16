@@ -844,6 +844,8 @@
   "EditRetry": "Tentar esta edição novamente",
   "EditStorageUnavailable": "Não foi possível salvar a edição neste dispositivo.",
   "CapabilitySendCorrectionsNote": "Somente o último texto simples próprio enviado por este motor pode ser editado, em uma sessão atual conhecida. Respostas e menções estruturadas ainda não podem ser editadas. O motor verifica novamente a elegibilidade e a revisão escolhida.",
+  "NotificationBackground": "Notificar com o Oiê fechado",
+  "NotificationBackgroundFailed": "Não foi possível salvar as notificações com o app fechado. Tente novamente.",
   "NotificationSettings": "Notificações",
   "NotificationBanners": "Notificações de mensagens",
   "NotificationDirectSound": "Som em mensagens diretas",

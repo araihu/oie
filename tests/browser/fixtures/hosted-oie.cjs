@@ -81,7 +81,7 @@ async function startIssuer(cert, key, callback) {
   return {url: issuer, stop: () => new Promise(resolve => server.close(resolve))};
 }
 
-async function startHostedOie(binary) {
+async function startHostedOie(binary, startupTimeout) {
   let issuer, server, api, key, certificatePin;
   try {
     server = await startOie(binary, [], '/readyz', async ({listen, dir}) => {
@@ -110,7 +110,7 @@ async function startHostedOie(binary) {
           OIE_OIDC_CLIENT_ID: clientID, OIE_OIDC_CLIENT_SECRET_FILE: credentials,
         },
       };
-    });
+    }, startupTimeout);
     api = await request.newContext({
       baseURL: server.url, ignoreHTTPSErrors: true, extraHTTPHeaders: {Authorization: 'Bearer ' + key},
     });

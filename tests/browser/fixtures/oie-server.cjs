@@ -13,7 +13,7 @@ async function loopbackAddress() {
   return listen;
 }
 
-async function startOie(binary, args, readyPath, configure) {
+async function startOie(binary, args, readyPath, configure, startupTimeout = 15000) {
   const listen = await loopbackAddress();
   const dir = await mkdtemp(path.join(tmpdir(), 'oie-browser-'));
   let options;
@@ -46,7 +46,7 @@ async function startOie(binary, args, readyPath, configure) {
   };
 
   try {
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + startupTimeout;
     while (Date.now() < deadline) {
       if (spawnError) throw spawnError;
       if (child.exitCode !== null || child.signalCode !== null) break;

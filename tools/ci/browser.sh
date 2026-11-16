@@ -92,6 +92,7 @@ integration() {
   run_case media-unread
   run_case read-state
   run_case notifications
+  run_case notification-push
   run_case conversation-navigation
   run_case conversation-preferences
   run_case reply-compose

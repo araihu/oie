@@ -51,11 +51,13 @@ type apiKey struct {
 }
 
 type session struct {
-	Verifier  string    `json:"verifier"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	Push      *PushSubscription `json:"push,omitempty"`
+	Verifier  string            `json:"verifier"`
+	ExpiresAt time.Time         `json:"expiresAt"`
 }
 
 type state struct {
+	PushKeys   *PushKeys `json:"pushKeys,omitempty"`
 	Owner      Owner     `json:"owner"`
 	Generation string    `json:"generation"`
 	Keys       []apiKey  `json:"keys"`
@@ -194,7 +196,7 @@ func (s Store) setOwner(ctx context.Context, owner Owner, firstTimeOnly bool) er
 		if firstTimeOnly && current.Generation != "" {
 			return errAlreadyConfigured
 		}
-		*current = state{Owner: owner, Generation: newCredential()}
+		*current = state{Owner: owner, Generation: newCredential(), PushKeys: current.PushKeys}
 		return nil
 	})
 }

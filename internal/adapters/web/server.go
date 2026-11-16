@@ -17,8 +17,10 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso/expressions"
+	"github.com/araihu/oie/internal/adapters/browserpush"
 	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"github.com/araihu/oie/internal/adapters/diagnostichttp"
+	"github.com/araihu/oie/internal/adapters/hostauth"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web/appicons"
 
@@ -73,6 +75,8 @@ var presentationTimeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
+	pushAuth            *hostauth.Auth
+	pushService         *browserpush.Service
 	createHostedKey     func(*http.Request, string) (string, error)
 	devBuildID          string
 	engineEditors       []engineapi.RequestEditorFn
@@ -173,6 +177,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	BrowserPush          bool
 	HostedSignIn         bool
 	RemoteSignInURL      string
 	AccountAvatarBorders map[string]string
@@ -702,6 +707,7 @@ type copy struct {
 	DiagnosticsSource, DiagnosticsDevice, DiagnosticsServer, DiagnosticsUnlock             string
 	DiagnosticsDebug, DiagnosticsInfo, DiagnosticsWarning, DiagnosticsError                string
 
+	NotificationBackground, NotificationBackgroundFailed                                             string
 	NotificationSettings, NotificationBanners, NotificationSound, NotificationPreview                string
 	NotificationTone, NotificationToneChoose, NotificationToneReset                                  string
 	NotificationToneUnsaved, NotificationToneInvalid, NotificationToneLarge, NotificationToneTrimmed string
@@ -821,6 +827,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/ui/engine-mode" {
 		s.setEngineMode(w, r)
+		return
+	}
+	if r.URL.Path == browserPushPath || r.URL.Path == browserPushForegroundPath {
+		s.notificationPush(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/notification-context" {
@@ -976,6 +986,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if s.createHostedKey != nil && r.URL.Path == "/ui/runtime.js" {
 			asset.body = hostedRuntimeScript
 		}
+		if r.URL.Path == "/ui/notification-worker.js" && s.pushService != nil {
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
 		w.Header().Set("Content-Type", asset.mime)
 		w.Header().Set("ETag", cachehttp.Digest(asset.body))
 		cachehttp.Revalidate.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(asset.body) })).ServeHTTP(w, r)
@@ -1093,6 +1106,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.Text = s.catalogs[v.Locale]
 	v.EngineMode = s.engineMode
 	v.HostedSignIn = s.createHostedKey != nil
+	v.BrowserPush = s.pushService != nil
 	v.Diagnostics = s.diagnostics != nil
 	v.RemoteDiagnostics = v.Diagnostics && s.diagnostics.remote != nil
 	v.configureWorkspace(r)

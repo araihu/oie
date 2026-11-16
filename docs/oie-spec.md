@@ -801,7 +801,7 @@ Show contact presence and manual per-account Available, Away, and Do Not Disturb
 
 ### 10.2 Notification eligibility and coordination
 
-Alpha supports browser notifications while the app is open and permission/platform behavior allows. Web Push and closed-app notification delivery are backlogged.
+Browser notifications work while the app is open and permission and platform behavior allow. Hosted Oiê also offers opt-in Web Push on supported browsers. It sends a generic alert for new incoming messages even when the web app is closed. The current hosted session scopes the subscription and ending that session stops delivery.
 
 Selecting an already delivered persistent browser notification opens the message even after the app window was closed. The destination is scoped to the engine that emitted the notification.
 
@@ -1118,7 +1118,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B12** | Document-body text extraction. |
 | **B13** | Image OCR. |
 | **B14** | Audio transcription. |
-| **B15** | Web Push and notifications while the app is closed. |
+| **B15** | Implemented for the hosted web app on supported browsers. See [Web Push](notifications.md#hosted-web-push). |
 | **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
 | **B18** | Interactive OIDC enrollment and sign-in from desktop clients. The hosted browser uses OIDC and desktop can supply a hosted API key. |
@@ -1196,7 +1196,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
 | Rooms | Discover/join/create/invite and name/topic changes follow support/permissions. Reconnect rejoins active rooms except explicit leave/revoked access. Leaving preserves saved history. |
 | Read and presence | Automatic reads require the active, focused conversation. At the latest end, earlier unread messages clear too. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
-| Notifications | Focused active chat is silent by default. Cooperating same-profile tabs/PWA windows issue at most one banner per message and one sound every two seconds without queueing. Independent devices notify under their own effective policies. Backlogged Web Push is not required. |
+| Notifications | Focused active chat is silent by default. Cooperating same-profile tabs/PWA windows issue at most one banner per message and one sound every two seconds without queueing. Independent devices notify under their own effective policies. Hosted Web Push is opt-in and respects local mute and account Do Not Disturb. |
 | Presentation | Desktop/mobile layouts, send-key preferences, first-unread opening, Jump to latest, and follow-bottom behavior work without losing drafts/scroll on ordinary updates. |
 | PWA storage | Recently viewed history respects the configured device limit; protected cached conversations report insufficient space. Drafts and pending sends are not ordinary eviction candidates. Media-file retention is independent. |
 | i18n and theme | en/pt-BR, device language/override/fallback, complete labels, and system/light/dark work for full pages, fragments, notifications, and offline views without changing another device's locale. |

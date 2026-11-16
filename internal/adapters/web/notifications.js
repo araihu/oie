@@ -9,6 +9,8 @@
   const settings = () => document.querySelector('[data-notification-settings]');
   const desktop = () => window.OieDesktop?.notifications;
   const bannerKey = prefix + 'banners';
+  const pushPath = '/ui/notification-push';
+  const pushStateKey = prefix + 'background';
   const soundKey = prefix + 'sound';
   const roomSoundKey = prefix + 'room-sound';
   const soundScopeKey = scope => prefix + 'sound-' + scope;
@@ -25,6 +27,8 @@
   const tab = Math.random().toString(36).slice(2);
   let context, database, worker, pending = false, notice = '';
   let customSound, toneReady, toneChanges, editingTone = false;
+  let pushStatus, pushManager, pushCheck, pushPending = false;
+  let pushWrites = Promise.resolve();
 
   function read(key) {
     try { return localStorage.getItem(key); } catch { return null; }
@@ -263,7 +267,9 @@
   function notificationWorker() {
     if (!worker) {
       const script = window.OieHostedSession ? '/ui/notification-worker.js?hosted=1' : '/ui/notification-worker.js';
-      worker = navigator.serviceWorker.register(script).then(registration => {
+      const options = settings()?.querySelector('[data-notification-background]')
+        ? {scope: '/'} : undefined;
+      worker = navigator.serviceWorker.register(script, options).then(registration => {
         if (registration.active) return registration;
         const candidate = registration.installing || registration.waiting;
         if (!candidate) throw Error('No notification worker');
@@ -278,6 +284,159 @@
       }).catch(error => { worker = undefined; throw error; });
     }
     return worker;
+  }
+
+  function canPush() {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return Boolean(settings()?.querySelector('[data-notification-background]') && window.isSecureContext &&
+      navigator.serviceWorker && (window.PushManager || window.pushManager) &&
+      (!ios || navigator.standalone || matchMedia('(display-mode: standalone)').matches));
+  }
+
+  function pushEnabled(engine = app()?.dataset.engineId) {
+    return Boolean(uuid(engine) && read(pushStateKey) === engine);
+  }
+
+  async function pushRequest(method, body, suffix = '') {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await window.OieRuntime.request(pushPath + suffix, {
+        method, cache: 'no-store', signal: controller.signal,
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': settings()?.dataset.csrf ?? ''},
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (!response.ok) throw Error('Background notifications unavailable');
+      return response;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function pushLanguage() {
+    return document.documentElement.lang === 'pt-BR' ? 'pt-BR' : 'en';
+  }
+
+  function pushSettings(engine) {
+    const prefix = muteKey(engine, '');
+    const mutedConversations = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      const chat = key?.slice(prefix.length);
+      if (key?.startsWith(prefix) && uuid(chat) && read(key) === '1') mutedConversations.push(chat);
+    }
+    return {
+      engineId: engine, lang: pushLanguage(),
+      mutedConversations, sound: soundEnabled(), directSound: soundScopeEnabled('direct'),
+      roomSound: roomSound(), archivedSound: soundScopeEnabled('archived'),
+    };
+  }
+
+  function savePush(subscription, engine, existing = false) {
+    const {endpoint, keys} = subscription.toJSON();
+    return pushRequest('PUT', {endpoint, keys, existing, ...pushSettings(engine)});
+  }
+
+  function serializePush(action) {
+    const result = pushWrites.then(action);
+    pushWrites = result.catch(() => {});
+    return result;
+  }
+
+  function preparePush(refresh = false) {
+    const engine = app()?.dataset.engineId;
+    if (!canPush() || !uuid(engine) || pushPending) return Promise.resolve();
+    if (pushCheck) return pushCheck;
+    if (!refresh && pushStatus?.engineId === engine) return Promise.resolve();
+    pushCheck = serializePush(async () => {
+      const [response, registration] = await Promise.all([pushRequest('GET'), notificationWorker()]);
+      const status = await response.json();
+      if (status.engineId !== app()?.dataset.engineId) return;
+      pushManager = window.pushManager || registration.pushManager;
+      const subscription = await pushManager.getSubscription();
+      if (status.enabled && (!subscription || window.Notification?.permission !== 'granted' || read(bannerKey) !== '1')) {
+        await pushRequest('DELETE');
+        await subscription?.unsubscribe().catch(() => {});
+        status.enabled = false;
+      }
+      if (status.enabled && status.lang !== pushLanguage()) {
+        await savePush(subscription, status.engineId, true);
+      }
+      write(pushStateKey, status.enabled ? status.engineId : null);
+      pushStatus = status;
+    }).catch(() => {}).finally(() => {
+      pushCheck = undefined;
+      renderSettings();
+    });
+    return pushCheck;
+  }
+
+  async function setPush(desired) {
+    if (pushPending || (pending && desired)) {
+      renderSettings();
+      return;
+    }
+    pushPending = true;
+    notice = '';
+    renderSettings();
+    try {
+      if (desired) {
+        const engine = app()?.dataset.engineId;
+        if (!pushManager || pushStatus?.engineId !== engine) throw Error('Background notifications unavailable');
+        const key = pushStatus.publicKey.replaceAll('-', '+').replaceAll('_', '/');
+        // Call subscribe directly from the toggle gesture on iOS.
+        const subscription = await pushManager.subscribe({
+          userVisibleOnly: true, applicationServerKey: Uint8Array.from(atob(key), value => value.charCodeAt(0)),
+        });
+        const previous = read(bannerKey);
+        if (!write(bannerKey, '1') || !write(pushStateKey, engine)) {
+          await subscription.unsubscribe().catch(() => {});
+          throw Error('Notification storage unavailable');
+        }
+        try {
+          await serializePush(() => savePush(subscription, engine));
+        } catch (error) {
+          write(bannerKey, previous);
+          write(pushStateKey, null);
+          await subscription.unsubscribe().catch(() => {});
+          throw error;
+        }
+      } else {
+        await serializePush(async () => {
+          await pushRequest('DELETE');
+          write(pushStateKey, null);
+          try {
+            const subscription = await pushManager?.getSubscription();
+            await subscription?.unsubscribe();
+          } catch {}
+        });
+      }
+    } catch {
+      notice = window.Notification?.permission === 'denied' ? 'denied' : 'backgroundFailed';
+    } finally {
+      pushPending = false;
+      renderSettings();
+    }
+  }
+
+  async function writeNotificationPreference(key, value) {
+    const previous = read(key);
+    if (!write(key, value)) return false;
+    if (!pushEnabled()) return true;
+    try {
+      await serializePush(async () => {
+        const engine = app()?.dataset.engineId;
+        if (!pushEnabled(engine)) return;
+        const subscription = await pushManager?.getSubscription();
+        if (!subscription) throw Error('Background notifications unavailable');
+        await savePush(subscription, engine, true);
+      });
+      return true;
+    } catch {
+      if (read(key) === value) write(key, previous);
+      return false;
+    }
   }
 
   async function showBanner(engine, message, eligible) {
@@ -332,14 +491,21 @@
     const canNotify = () => app()?.dataset.engineId === engine && !window.OieEvents.replaced &&
       read(muteKey(engine, conversation)) !== '1';
     const canShowBanner = () => canNotify() && wantsBanner() && !viewing(engine, conversation);
-    const canPlaySound = () => canNotify() && (soundScopeEnabled('focused') || !viewing(engine, conversation));
+    const canPlaySound = () => canNotify() && (!pushEnabled(engine) || !document.hidden) &&
+      (soundScopeEnabled('focused') || !viewing(engine, conversation));
 
-    if (canShowBanner()) {
+    const handleBanner = () => {
+      if (!canShowBanner()) return;
       void notificationContext(engine, message).then(async context => {
         if (!context || context.doNotDisturb || !canShowBanner()) return;
         const claimed = await claim(engine, message.id);
         if (claimed && canShowBanner()) return showBanner(engine, message, canShowBanner);
       }).catch(() => {});
+    };
+    if (!pushEnabled(engine)) handleBanner();
+    else if (!document.hidden && canNotify()) {
+      void pushRequest('POST', {engineId: engine, messageId: message.id}, '/foreground')
+        .then(handleBanner).catch(() => {});
     }
     if (canPlaySound()) void playMessageSound(engine, message, canPlaySound);
   }
@@ -403,7 +569,14 @@
     const sound = root.querySelector('[data-notification-sound]');
     const canSound = Boolean(Audio || desktop()?.playSound);
     banners.checked = wantsBanner();
-    banners.disabled = pending || !canBanner();
+    banners.disabled = pending || pushPending || !canBanner();
+    const background = root.querySelector('[data-notification-background]');
+    if (background) {
+      background.closest('[data-notification-background-option]').hidden = !canPush();
+      background.checked = pushEnabled();
+      background.disabled = !canPush() || (!background.checked && pushStatus?.engineId !== app()?.dataset.engineId);
+      background.setAttribute('aria-disabled', String(pending || pushPending || background.disabled));
+    }
     sound.checked = soundEnabled();
     sound.disabled = !canSound;
     for (const scope of root.querySelectorAll('[data-notification-sound-scope]')) {
@@ -436,7 +609,7 @@
     const desired = control.checked;
     if (control.matches('[data-notification-mute]')) {
       const key = muteKey(control.dataset.muteEngine, control.dataset.notificationMute);
-      if (!write(key, desired ? '1' : null)) {
+      if (!await writeNotificationPreference(key, desired ? '1' : null)) {
         window.dispatchEvent(new CustomEvent('notify', {
           detail: {kind: 'toast', tone: 'danger', message: control.dataset.unsaved}
         }));
@@ -445,7 +618,7 @@
       return;
     }
     if (control.matches('[data-notification-sound]')) {
-      notice = write(soundKey, desired ? '1' : '0') ? '' : 'soundUnavailable';
+      notice = await writeNotificationPreference(soundKey, desired ? '1' : '0') ? '' : 'soundUnavailable';
       if (desired) void unlockSound();
       renderSettings();
       return;
@@ -458,22 +631,30 @@
     }
     if (control.matches('[data-notification-room-sound]')) {
       if (!roomSoundValues.includes(control.value)) return;
-      notice = write(roomSoundKey, control.value) ? '' : 'soundUnavailable';
+      notice = await writeNotificationPreference(roomSoundKey, control.value) ? '' : 'soundUnavailable';
       renderSettings();
       return;
     }
     if (control.matches('[data-notification-sound-scope]')) {
-      notice = write(soundScopeKey(control.dataset.notificationSoundScope), desired ? '1' : '0') ? '' : 'soundUnavailable';
+      notice = await writeNotificationPreference(soundScopeKey(control.dataset.notificationSoundScope), desired ? '1' : '0') ? '' : 'soundUnavailable';
       renderSettings();
       return;
     }
-    if (!control.matches('[data-notification-banners]') || pending) return;
+    if (control.matches('[data-notification-background]')) {
+      await setPush(desired);
+      return;
+    }
+    if (!control.matches('[data-notification-banners]') || pending || pushPending) return;
 
     pending = true;
     notice = '';
     renderSettings();
     try {
       if (!desired) {
+        if (pushEnabled()) {
+          await setPush(false);
+          if (pushEnabled()) return;
+        }
         if (!write(bannerKey, null)) notice = 'unavailable';
       } else {
         const granted = desktop()
@@ -529,6 +710,7 @@
   }
 
   function sync() {
+    void preparePush();
     publishFocus();
     renderSettings();
     renderMute();
@@ -572,9 +754,16 @@
   }
   window.addEventListener('oie:desktop-ready', sync);
   window.addEventListener('focus', sync);
+  window.addEventListener('online', () => void preparePush(true));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void preparePush(true);
+  });
   window.addEventListener('blur', () => publishFocus(true));
   window.addEventListener('pagehide', () => publishFocus(true));
-  window.addEventListener('pageshow', sync);
+  window.addEventListener('pageshow', event => {
+    sync();
+    if (event.persisted) void preparePush(true);
+  });
   window.addEventListener('storage', event => {
     if (event.key === null || (event.key !== focusKey && event.key.startsWith(prefix))) {
       renderSettings();

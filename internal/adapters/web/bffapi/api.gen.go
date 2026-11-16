@@ -30,6 +30,45 @@ func (e BrowserEditIntentLang) Valid() bool {
 	}
 }
 
+// Defines values for BrowserPushSubscriptionLang.
+const (
+	BrowserPushSubscriptionLangEn   BrowserPushSubscriptionLang = "en"
+	BrowserPushSubscriptionLangPtBR BrowserPushSubscriptionLang = "pt-BR"
+)
+
+// Valid indicates whether the value is a known member of the BrowserPushSubscriptionLang enum.
+func (e BrowserPushSubscriptionLang) Valid() bool {
+	switch e {
+	case BrowserPushSubscriptionLangEn:
+		return true
+	case BrowserPushSubscriptionLangPtBR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserPushSubscriptionRoomSound.
+const (
+	All       BrowserPushSubscriptionRoomSound = "all"
+	Attention BrowserPushSubscriptionRoomSound = "attention"
+	Off       BrowserPushSubscriptionRoomSound = "off"
+)
+
+// Valid indicates whether the value is a known member of the BrowserPushSubscriptionRoomSound enum.
+func (e BrowserPushSubscriptionRoomSound) Valid() bool {
+	switch e {
+	case All:
+		return true
+	case Attention:
+		return true
+	case Off:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BrowserReactionIntentLang.
 const (
 	BrowserReactionIntentLangEn   BrowserReactionIntentLang = "en"
@@ -577,6 +616,99 @@ type BrowserForward struct {
 	// Example: 019a5df0-0000-7000-8000-000000000001
 	RevisionId externalRef0.ID `json:"revisionId"`
 }
+
+// BrowserPushForeground Claim for foreground notification handling for one message.
+//
+// Example: {"engineId":"019a5df0-0000-7000-8000-000000000001","messageId":"019a5df0-0000-7000-8000-000000000005"}
+type BrowserPushForeground struct {
+	// EngineId Source engine identity.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// MessageId Incoming message already visible to this device.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000005
+	MessageId openapi_types.UUID `json:"messageId"`
+}
+
+// BrowserPushStatus Availability and current subscription for the signed-in device.
+//
+// Example: {"enabled":false,"engineId":"019a5df0-0000-7000-8000-000000000001","publicKey":"BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"}
+type BrowserPushStatus struct {
+	// Enabled Whether the session has a subscription for this engine.
+	//
+	// Example: true
+	Enabled bool `json:"enabled"`
+
+	// EngineId Current engine identity.
+	//
+	// Example: 019a5df0-0000-7000-8000-000000000001
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// Lang Existing subscription language.
+	//
+	// Example: pt-BR
+	Lang *string `json:"lang,omitempty"`
+
+	// PublicKey Base64url-encoded public application server key.
+	//
+	// Example: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU
+	PublicKey string `json:"publicKey"`
+}
+
+// BrowserPushSubscription Browser-supplied destination and delivery settings selected on this device.
+//
+// Example: {"archivedSound":false,"directSound":true,"endpoint":"https://web.push.apple.com/example","engineId":"019a5df0-0000-7000-8000-000000000001","keys":{"auth":"AAAAAAAAAAAAAAAAAAAAAA","p256dh":"BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"},"lang":"pt-BR","mutedConversations":[],"roomSound":"attention","sound":true}
+type BrowserPushSubscription struct {
+	// ArchivedSound Whether archived rooms can play a sound.
+	ArchivedSound bool `json:"archivedSound"`
+
+	// DirectSound Whether direct messages can play a sound.
+	DirectSound bool `json:"directSound"`
+
+	// Endpoint Browser push service endpoint.
+	//
+	// Example: https://web.push.apple.com/example
+	Endpoint string `json:"endpoint"`
+
+	// EngineId Selected engine identity.
+	EngineId openapi_types.UUID `json:"engineId"`
+
+	// Existing Update preferences only while the same endpoint is still subscribed.
+	Existing *bool `json:"existing,omitempty"`
+
+	// Keys Example: {"auth":"AAAAAAAAAAAAAAAAAAAAAA","p256dh":"BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"}
+	Keys struct {
+		// Auth Base64url-encoded subscription authentication secret.
+		//
+		// Example: AAAAAAAAAAAAAAAAAAAAAA
+		Auth string `json:"auth"`
+
+		// P256dh Base64url-encoded browser public key.
+		//
+		// Example: BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU
+		P256dh string `json:"p256dh"`
+	} `json:"keys"`
+
+	// Lang Notification language.
+	Lang BrowserPushSubscriptionLang `json:"lang"`
+
+	// MutedConversations Conversations silenced on this device.
+	MutedConversations []openapi_types.UUID `json:"mutedConversations"`
+
+	// RoomSound Which room messages can play a sound.
+	RoomSound BrowserPushSubscriptionRoomSound `json:"roomSound"`
+
+	// Sound Whether the device allows notification sound.
+	Sound bool `json:"sound"`
+}
+
+// BrowserPushSubscriptionLang Notification language.
+type BrowserPushSubscriptionLang string
+
+// BrowserPushSubscriptionRoomSound Which room messages can play a sound.
+type BrowserPushSubscriptionRoomSound string
 
 // BrowserReactionIntent Complete immutable reaction choice retained for receipt reconciliation.
 //
@@ -1546,6 +1678,12 @@ type SetBrowserMessageReactionsFormdataRequestBody = BrowserReactionIntent
 
 // ReconcileBrowserSubmissionFormdataRequestBody defines body for ReconcileBrowserSubmission for application/x-www-form-urlencoded ContentType.
 type ReconcileBrowserSubmissionFormdataRequestBody = PendingSubmission
+
+// PutBrowserPushJSONRequestBody defines body for PutBrowserPush for application/json ContentType.
+type PutBrowserPushJSONRequestBody = BrowserPushSubscription
+
+// ClaimForegroundNotificationJSONRequestBody defines body for ClaimForegroundNotification for application/json ContentType.
+type ClaimForegroundNotificationJSONRequestBody = BrowserPushForeground
 
 // RequestBrowserRoomArchiveJSONRequestBody defines body for RequestBrowserRoomArchive for application/json ContentType.
 type RequestBrowserRoomArchiveJSONRequestBody = externalRef0.RoomArchiveRequest

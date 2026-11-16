@@ -41,6 +41,53 @@ and no sound is scheduled for the end of the window. Independent browser
 profiles and desktop WebViews maintain their own window. The bundled tone is
 a 300 ms mono PCM WAV clip.
 
+## Hosted Web Push
+
+In **Settings → This device → Notifications**, select **Notify when Oiê is
+closed** and allow notifications. On iPhone and iPad, use Oiê from the Home
+Screen on iOS or iPadOS 16.4 or later. The setting is available in hosted
+mode on HTTPS and requires a browser that supports Web Push. Leave the hosted
+engine running and the XMPP account connected.
+
+The alert says only that a new message arrived. Selecting it opens the
+message, with a sign-in step if necessary. The same device's conversation
+mutes and the account's Do Not Disturb setting apply. The browser or OS
+handles background sound, using the Oiê sound preferences to decide whether
+to request sound. Your custom Oiê tone plays while the app is visible.
+
+Turn off **Notify when Oiê is closed** to keep notifications only while
+using Oiê. Disabling message banners also removes the background
+subscription. Signing out or letting the session expire ends delivery.
+Enable the option again after signing back in.
+
+### Deployment and verification
+
+The engine stores the VAPID keys and browser subscriptions in its existing
+private `host-auth/state.json`. Keep that directory on the hosted data
+volume. Oiê generates the keys when a supported device first opens the
+subscription settings. The engine needs outbound HTTPS to the browser push
+services. Supported endpoints are Apple's `*.push.apple.com`, Google FCM,
+Mozilla Push and Windows Push Notification Services. Delivery uses encrypted
+RFC 8291 payloads with a five-minute lifetime and same-origin message URLs.
+The service worker handles conventional browser push, and WebKit can use
+the declarative notification when the worker is unavailable.
+
+The engine watches new committed incoming messages. It allows a short
+window for a visible page to claim notification handling before sending.
+That page uses the existing banner and sound rules, including suppressing
+alerts for the focused conversation. The engine checks current mute,
+conversation, read and account state for Web Push. Only the path that
+claims an alert can display it.
+
+Run `node tests/browser/notification-push.cjs` after `make build` to check
+hosted enrollment, authorization, notification handling after all Oiê
+pages close, link routing and unsubscribe. The browser fixture supplies a
+subscription and injects a push event. The Go tests exercise encrypted
+requests and delivery eligibility. To check Apple's delivery separately,
+install the hosted preview on an iPhone, activate the setting, close Oiê
+and send a message from another XMPP account. Tap the notification and check
+that it opens the exact message.
+
 ## Platform delivery and checks
 
 - Browsers prefer persistent banners through the notification service worker
@@ -65,13 +112,8 @@ a 300 ms mono PCM WAV clip.
   PWA uses the same page and notification worker as a browser tab. On Linux,
   Chromium 151 installed Oiê through its UI and opened the exact message in the
   standalone window for a D-Bus notification click, both with the window open
-  and after closing it. Permissions, delivery, navigation, and coordination
-  with a tab still need coverage on Android and iOS. On iOS and iPadOS, test
-  on an HTTPS site added to the Home Screen with authorization initiated inside
-  the installed app. Do not assume a backgrounded mobile page keeps receiving
-  the live stream. Web Push remains the delivery path for a suspended or
-  closed page. Its system notification sound will need a separate design
-  decision, since the browser Notifications API cannot select Oiê's WAV.
+  and after closing it. The hosted Web Push option above allows delivery even
+  when the installed app is suspended or closed.
 
 ### Testing on another device
 
@@ -89,6 +131,5 @@ Return to **Conversation 0**, send a different label, and leave its banner in
 the notification center. Hide the desktop window or close the PWA window,
 then click the existing banner and verify that it opens the second message.
 
-Account Do Not Disturb and shared conversation mutes await the corresponding
-account and sync features. Web Push and alerts while Oiê is fully closed are
-backlogged.
+Conversation mutes remain device-specific. The account's Do Not Disturb
+setting applies across devices connected to the same engine.
