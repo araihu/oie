@@ -166,11 +166,11 @@ func (s *Service) Run(ctx context.Context, source eventSource, snapshot applicat
 		}
 		for _, event := range events {
 			cursor = event.Sequence
-			if !isLiveMessage(event) || time.Since(event.Message.ReceivedAt) > freshEventWindow {
+			if !isLiveMessage(event) || time.Since(event.OccurredAt) > freshEventWindow {
 				continue
 			}
 			select {
-			case jobs <- delivery{event.Message.ID, time.Now()}:
+			case jobs <- delivery{event.Message.ID, event.OccurredAt, time.Now()}:
 			default:
 				// Prefer current notifications to processing an unbounded backlog.
 			}
@@ -202,12 +202,12 @@ func isLiveMessage(event application.Event) bool {
 }
 
 type delivery struct {
-	messageID domain.ID
-	seenAt    time.Time
+	messageID              domain.ID
+	receivedAt, observedAt time.Time
 }
 
 func (s *Service) deliver(ctx context.Context, source eventSource, engineID string, job delivery) {
-	if remaining := time.Until(job.seenAt.Add(foregroundGrace)); remaining > 0 && !wait(ctx, remaining) {
+	if remaining := time.Until(job.observedAt.Add(foregroundGrace)); remaining > 0 && !wait(ctx, remaining) {
 		return
 	}
 	keys, recipients, err := s.auth.PushRecipients(engineID)
@@ -230,7 +230,7 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 			continue
 		}
 		message, err := source.Message(ctx, job.messageID)
-		if err != nil || message.IsWithdrawn() || time.Since(message.ReceivedAt) > freshEventWindow {
+		if err != nil || message.IsWithdrawn() || time.Since(job.receivedAt) > freshEventWindow {
 			return
 		}
 		conversation, err := source.Conversation(ctx, message.ConversationID)
@@ -252,13 +252,13 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 				target.ConversationID == message.ConversationID && target.IsOwn
 		}
 		recipient, err := s.auth.CurrentPushRecipient(engineID, candidate.SessionID)
-		if err != nil || recipient == nil || recipient.StartedAt.After(message.ReceivedAt) ||
+		if err != nil || recipient == nil || recipient.StartedAt.After(job.receivedAt) ||
 			slices.Contains(recipient.MutedConversations, string(conversation.ID)) {
 			continue
 		}
 		silent := !soundsFor(recipient.PushSubscription, conversation, message.MentionsYou || replyToYou)
 		data, err := payload(s.sender.origin, engineID, message, *recipient, silent)
-		if err != nil || time.Since(message.ReceivedAt) > freshEventWindow {
+		if err != nil || time.Since(job.receivedAt) > freshEventWindow {
 			continue
 		}
 		expired, err := s.sender.send(ctx, keys, *recipient, data, message.ID)

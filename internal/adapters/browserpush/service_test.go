@@ -16,8 +16,10 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/hostauth"
+	"github.com/araihu/oie/internal/adapters/sqlite"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/google/uuid"
 )
 
 const engineID = "019a5df0-0000-7000-8000-000000000001"
@@ -88,7 +90,6 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 		ID:             "019a5df0-0000-7000-8000-000000000002",
 		AccountID:      "019a5df0-0000-7000-8000-000000000003",
 		ConversationID: "019a5df0-0000-7000-8000-000000000004",
-		ReceivedAt:     time.Now().Add(-2 * time.Second),
 		OriginalText:   "private text", Sender: domain.Sender{DisplayName: "private sender"}, SendState: "received",
 	}
 	var calls []string
@@ -146,7 +147,8 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 		!service.ClaimForeground("focused", engineID, string(message.ID), "suppress") {
 		t.Fatal("foreground delivery unable to claim an unsent message")
 	}
-	job := delivery{message.ID, time.Now().Add(-2 * time.Second)}
+	received := time.Now().Add(-2 * time.Second)
+	job := delivery{message.ID, received, received}
 	service.deliver(t.Context(), &source, engineID, job)
 	if strings.Join(calls, ",") != "/ready,/gone" || strings.Join(registered.expired, ",") != "gone" {
 		t.Fatalf("delivery attempts %v, expired endpoints %v", calls, registered.expired)
@@ -162,8 +164,9 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 	source.read, source.message.Retraction = false, &domain.MessageRetraction{}
 	service.deliver(t.Context(), &source, engineID, job)
 	source.message.Retraction = nil
-	source.message.ReceivedAt = time.Now().Add(-time.Minute)
-	service.deliver(t.Context(), &source, engineID, job)
+	stale := job
+	stale.receivedAt = time.Now().Add(-time.Minute)
+	service.deliver(t.Context(), &source, engineID, stale)
 	if len(calls) != 2 {
 		t.Fatalf("sent an alert for a DND account, read message or retracted/stale message: %v", calls)
 	}
@@ -281,5 +284,91 @@ func TestAbandonedDisplayLeaseAllowsWebPush(t *testing.T) {
 	}
 	if ok, _ := service.claim(key, remoteClaimed); !ok {
 		t.Fatal("a failed display prevented remote delivery")
+	}
+}
+
+type testProtocols struct{ application.Protocols }
+
+func (testProtocols) NormalizeAddress(_, address string) (string, error) { return address, nil }
+
+func TestLiveReceiveUsesDurableReceiptTimeForPush(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	id := func() (domain.ID, error) {
+		value, err := uuid.NewV7()
+		return domain.ID(value.String()), err
+	}
+	store, err := sqlite.Open(ctx, t.TempDir(), domain.ID(engineID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	engine, err := application.New(store, "hosted", id, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.SetProtocols(testProtocols{})
+	key, err := id()
+	if err != nil {
+		t.Fatal(err)
+	}
+	account, err := engine.Register(ctx, key, application.RegisterInput{
+		Protocol: "xmpp", Address: "alice@example.test", Label: "Alice",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := engine.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := &testRegistry{keys: testKey(t), recipients: []hostauth.PushRecipient{{
+		SessionID: "browser", PushSubscription: hostauth.PushSubscription{
+			Endpoint: "https://web.push.apple.com/live", Auth: base64.RawURLEncoding.EncodeToString(make([]byte, 16)),
+			PublicKey: testKey(t).Public, EngineID: engineID, Language: "en", StartedAt: time.Now().Add(-time.Second),
+		},
+	}}}
+	sent := make(chan string, 1)
+	service := &Service{auth: registry, claims: make(map[deliveryKey]deliveryClaim), sender: sender{
+		origin: "https://oie.example",
+		client: transportFunc(func(request *http.Request) (*http.Response, error) {
+			sent <- request.URL.Path
+			return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody}, nil
+		}),
+	}}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.Run(ctx, engine, snapshot)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	// A live stanza can carry an older provider timestamp. The receipt time
+	// must survive SQLite serialization without changing the message timeline.
+	providerTime := time.Now().UTC().Add(-time.Hour)
+	if err := engine.Receive(ctx, application.Incoming{
+		AccountID: account.Account.ID, Address: "bob@example.test", ProviderID: "live-push",
+		OriginalText: "a live message", CreatedAt: providerTime,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case path := <-sent:
+		if path != "/live" {
+			t.Fatalf("unexpected push destination %q", path)
+		}
+	case <-ctx.Done():
+		t.Fatal("persisted live message did not reach the push transport")
+	}
+	events, err := engine.Events(ctx, snapshot.Sequence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := slices.IndexFunc(events, isLiveMessage)
+	if index < 0 || !events[index].Message.CreatedAt.Equal(providerTime) {
+		t.Fatal("receiving the push changed the message's original timestamp")
 	}
 }
