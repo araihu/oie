@@ -224,9 +224,10 @@ sudo install -m 0644 oie.repo /etc/yum.repos.d/araihu-oie.repo
 sudo dnf install oie
 ```
 
-Check the key fingerprint at DNF's import prompt against
-`CA0A 410F B344 E22A B7FB 8011 21CB CCC4 11B0 03A9`. To update, quit Oiê
-and run `sudo dnf upgrade --refresh oie`.
+DNF can show the primary key fingerprint `CA0A 410F B344 E22A B7FB 8011 21CB CCC4 11B0 03A9`
+or the signing subkey fingerprint `6F0E BFC3 6E8C 5123 0700 447A 8BA9 F980 6488 4A57`.
+Check the fingerprint before accepting the key. To update, quit Oiê and run
+`sudo dnf upgrade --refresh oie`.
 
 ### Install with pacman on Arch Linux
 
