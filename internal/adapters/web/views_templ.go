@@ -2715,7 +2715,7 @@ func chatHeader(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			sections := []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, OnClick: "$dispatch('oie:conversation-drawer-open','details')"}}}, v.conversationPreferenceSection(), {Items: []dropdown.Item{{ID: "chat-search-messages", Label: v.Text.SearchMessages, Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), OnClick: "$dispatch('oie:conversation-search-open')"}}}}
+			sections := []dropdown.Section{{Items: []dropdown.Item{{Label: v.Text.Details, Icon: glyph(heroicons.Icon16SolidInformationCircle), OnClick: "$dispatch('oie:conversation-drawer-open','details')"}}}, v.conversationPreferenceSection(), {Items: []dropdown.Item{{ID: "chat-search-messages", Label: v.Text.SearchMessages, Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), OnClick: "$dispatch('oie:conversation-search-open')"}}}}
 			if v.conversationSchedulesAvailable() {
 				sections[0].Items = append(sections[0].Items, dropdown.Item{Label: v.Text.Scheduled, Icon: glyph(heroicons.Icon16SolidClock), OnClick: "$dispatch('oie:conversation-drawer-open','conversation-schedules')"})
 			}
