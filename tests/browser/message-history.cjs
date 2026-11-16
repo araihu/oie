@@ -4,7 +4,8 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const engine=id(1),account=id(2),direct=id(3),room=id(4),revision=id(5),streams=new Set();
- const state={generation:0,transport:0,fail:false,foreign:false,delay:0,writes:[],historyReads:[],otherReads:[]};
+ const state={generation:0,transport:0,fail:false,foreign:false,delay:0,retracted:false,writes:[],historyReads:[],otherReads:[]};
+ const retraction={at:'2026-11-09T15:00:00Z',originalAvailable:true};
  const owner={id:account,revisionId:revision,protocol:'xmpp',label:'Fixture account',address:'alice@fixture',createdAt:'2026-11-09T12:00:00Z'};
  const chats=[{id:direct,kind:'direct',address:'bob@fixture',title:'Bob'},{id:room,kind:'room',address:'room@fixture',title:'Saved room'}].map(c=>({...c,revisionId:revision,accountId:account,lastMessage:'Retained text',updatedAt:'2026-11-09T12:19:00Z',unreadCount:0,archived:false,favorite:false}));
  const baseNumber=c=>c.id===room?200:100,targetID=c=>id(baseNumber(c)+18),revisionID=(c,n)=>id((c.id===room?4000:3000)+n);
@@ -14,7 +15,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const sourceText=(c,n)=>n===0?'Original **literal** <script>alert(1)</script>\nCafé 🧑🏽‍💻':n===25?'Current **saved** message\nSecond line':n===26?'Alternative authored later than the selected current head':n===27?'Newest verified correction':n===28?'Newest verified correction after live refresh':n===22||n===23?'Repeated authored text':'Observed content version '+n;
  const messages=c=>Array.from({length:20},(_,n)=>{
   const messageId=id(baseNumber(c)+n),queued=messageId===queuedRoomMessage;
-  return {id:messageId,revisionId:n===18?revisionID(c,currentNumber()+state.transport*10000):n===17?revisionID(c,currentNumber()+100):revision,accountId:account,conversationId:c.id,sender:queued?{id:account,displayName:'Alice'}:{id:id(8),displayName:'Bob'},originalText:n===18?sourceText(c,currentNumber()):n===17?'Other logical source version '+currentNumber():'Retained message '+n,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:queued,historical:true,sendState:queued?'queued':'received',edited:n===18||n===17,editedAt:n===18||n===17?new Date(Date.UTC(2026,10,9,13,currentNumber())).toISOString():undefined};
+  const withdrawn=state.retracted&&c.id===direct&&n===18;
+  return {id:messageId,revisionId:n===18?revisionID(c,currentNumber()+state.transport*10000):n===17?revisionID(c,currentNumber()+100):revision,accountId:account,conversationId:c.id,sender:queued?{id:account,displayName:'Alice'}:{id:id(8),displayName:'Bob'},originalText:withdrawn?'':n===18?sourceText(c,currentNumber()):n===17?'Other logical source version '+currentNumber():'Retained message '+n,retraction:withdrawn?retraction:undefined,createdAt:new Date(Date.UTC(2026,10,9,12,n)).toISOString(),isOwn:queued,historical:true,sendState:queued?'queued':'received',edited:n===18||n===17,editedAt:n===18||n===17?new Date(Date.UTC(2026,10,9,13,currentNumber())).toISOString():undefined};
  });
  const versions=(c,canonical=targetID(c))=>Array.from({length:27+state.generation},(_,n)=>({revisionId:revisionID(c,n+(canonical===targetID(c)?0:100)),sourceMessageId:n===0?canonical:id((c.id===room?6000:5000)+n+(canonical===targetID(c)?0:100)),createdAt:new Date(Date.UTC(2026,10,9,13,n)).toISOString(),originalText:canonical===targetID(c)?sourceText(c,n):'Other logical source version '+n,sender:{id:id(8),displayName:'Bob'},isCurrent:n===currentNumber(),isOriginal:n===0,parentRevisionIds:n===0?[]:[revisionID(c,(n===26?24:n-1)+(canonical===targetID(c)?0:100))]})).reverse();
  const api=http.createServer((req,res)=>{
@@ -22,13 +24,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(req.method!=='GET'){state.writes.push({method:req.method,path:u.pathname});return send(405,{status:405,code:'invalid_request'})}
   const history=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)\/edit-history$/);
   if(history){
-   state.historyReads.push({message:history[1],cursor:u.searchParams.get('cursor')||''});
+   const includeRetracted=u.searchParams.get('includeRetracted')==='true';
+   state.historyReads.push({message:history[1],cursor:u.searchParams.get('cursor')||'',includeRetracted});
    const canonical=history[1]===id(900)?targetID(chats[0]):history[1],c=chats.find(chat=>targetID(chat)===canonical||id(baseNumber(chat)+17)===canonical);
    if(!c)return send(404,{status:404,code:'not_found'});
+   const withdrawn=state.retracted&&canonical===targetID(chats[0]);
+   if(withdrawn&&!includeRetracted)return send(404,{status:404,code:'not_found'});
    if(state.fail)return send(503,{status:503,code:'unavailable'});
    const snapshot=(state.generation>1?'e':state.generation?'c':canonical!==targetID(c)?'d':c.id===room?'b':'a').repeat(64),limit=Number(u.searchParams.get('limit')||20),cursor=u.searchParams.get('cursor')||'';
    let start=0;if(cursor){const match=cursor.match(/^history:([a-f0-9-]+):(\d+):([a-f0-9]+)$/);if(!match||match[1]!==c.id)return send(400,{status:400,code:'invalid_request'});if(match[3]!==snapshot)return send(409,{status:409,code:'history_changed'});start=Number(match[2]);}
-   const all=versions(c,canonical),items=all.slice(start,start+limit),body={requestedMessageId:history[1],messageId:canonical,accountId:state.foreign?id(999):account,conversationId:c.id,currentRevisionId:revisionID(c,currentNumber()+(canonical===targetID(c)?0:100)),snapshot,items,nextCursor:start+limit<all.length?'history:'+c.id+':'+(start+limit)+':'+snapshot:undefined};
+   const all=versions(c,canonical),items=all.slice(start,start+limit),body={requestedMessageId:history[1],messageId:canonical,accountId:state.foreign?id(999):account,conversationId:c.id,currentRevisionId:revisionID(c,currentNumber()+(canonical===targetID(c)?0:100)),snapshot,retraction:withdrawn?retraction:undefined,items,nextCursor:start+limit<all.length?'history:'+c.id+':'+(start+limit)+':'+snapshot:undefined};
    const delay=state.delay;return delay?setTimeout(()=>send(200,body),delay):send(200,body);
   }
   state.otherReads.push(u.pathname);
@@ -97,6 +102,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.transport=1;await refreshTimeline();assert.equal(await rows().count(),20);
   state.generation=2;state.transport=0;await refreshTimeline();await slot.locator('[data-history-restart]').waitFor({state:'visible'});assert.equal(await rows().count(),0);await slot.locator('[data-history-restart]').click();await until(async()=>await rows().count()===20,'restart after content refresh');await refreshTimeline();assert.equal(await rows().count(),20);await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   findings.push('A transport-only row revision keeps the observed page, while a retained-source refresh clears it and offers a fresh scoped read');
+  await edited.click();await until(async()=>await rows().count()===20,'history before withdrawal');
+  const readsBeforeRetraction=state.historyReads.length;
+  state.retracted=true;
+  await page.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:refresh-request')));
+  const reveal=target.getByRole('link',{name:'Reveal original',exact:true});
+  await reveal.waitFor({state:'visible'});await drawer.waitFor({state:'hidden'});await settleDrawers();
+  assert.equal(await rows().count(),0);assert.equal(state.historyReads.length,readsBeforeRetraction);
+  await until(()=>reveal.evaluate(el=>el===document.activeElement),'withdrawal focuses explicit reveal');
+  await page.keyboard.press('Enter');await slot.locator('[data-history-retraction]').waitFor({state:'visible'});
+  assert(state.historyReads.at(-1).includeRetracted);assert(await rows().first().isVisible());
+  await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
+  state.retracted=false;await page.goto(route(chats[0]));await edited.waitFor({state:'visible'});
+  findings.push('Live withdrawal closes ordinary edit history and focuses explicit Reveal original without reading withdrawn content automatically');
   state.fail=true;await edited.click();await drawer.waitFor({state:'visible'});await settleDrawers();await slot.locator('[data-history-retry]').waitFor({state:'visible'});assert.equal(await rows().count(),0);state.fail=false;await slot.locator('[data-history-retry]').click();await until(async()=>await rows().count()===20,'retry saved history');await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   state.foreign=true;await edited.click();await slot.locator('[data-history-retry]').waitFor({state:'visible'});assert.equal(await rows().count(),0);state.foreign=false;await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});await settleDrawers();
   findings.push('Transient failures have scoped read-only retry, and a foreign account response never exposes versions');

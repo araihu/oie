@@ -287,6 +287,16 @@ window.OieRuntime.register('conversation-search',life=>{
   abort();reset();
   if(state().q)timer=life.timeout(()=>request('',0,false),100);
  });
+ life.on(window.OieEvents?.target,'message.updated',event=>{
+  if(!valid()||!opened||!state().q)return;
+  let message;try{message=JSON.parse(event.detail.data).message}catch{return;}
+  if(message?.accountId!==account||message.conversationId!==conversation||!(message.retraction||message.moderation))return;
+  if(!busy&&!archivePending&&!hits.some(hit=>hit.id===message.id&&!hit.retracted))return;
+  abort();reset();
+  archivePending=window.OieRoomArchive?.search()===true;
+  timer=life.timeout(()=>request('',0,false),100);
+  if(archivePending)archiveTimer=life.timeout(()=>searchArchive('',false),350);
+ });
  life.on(document,'oie:conversation-search-open',open);
  life.on(document,'click',event=>{const link=event.target.closest?.('[data-open-conversation-search]');if(link&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&(!link.dataset.searchConversation||link.dataset.searchConversation===conversation)){event.preventDefault();event.stopImmediatePropagation();window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'details'}}));open()}},true);
  life.on(form,'submit',event=>{event.preventDefault();changed(0)});

@@ -6,6 +6,23 @@ const moreSelector='a[data-message-search-next]';
 const searchKeys=['searchMode','searchQuery','searchAccount','searchType','searchConversation','searchCursor','searchEngine','includeEditHistory','includeRetracted'];
 const chatSearchKeys=['chatSearch','chatQuery','chatIncludeHistory','chatIncludeRetracted','chatSearchRevision'];
 
+function withdrawnMessage(event){
+ try{
+  const {message}=JSON.parse(event.detail.data);
+  if(typeof message?.id==='string'&&(message.retraction||message.moderation))return message;
+ }catch{}
+ return null;
+}
+function removeSearchHits(results,input,ids,includingRetracted=false){
+ let removed=false;
+ for(const row of results.querySelectorAll('[data-search-message]')){
+  if(!ids.has(row.dataset.searchMessage)||includingRetracted&&row.dataset.searchHitRetracted==='true')continue;
+  if(row.contains(document.activeElement))input.focus({preventScroll:true});
+  row.remove();removed=true;
+ }
+ return removed;
+}
+
 function searchResponseMatches(response,state,cursor){
  const data=response?.dataset;
  return data&&data.searchEngine===state.engineId&&data.searchQuery===state.q&&data.searchAccount===state.accounts.join(',')&&data.searchConversation===state.conversationId&&data.searchHistory===state.includeEditHistory&&data.searchRetracted===state.includeRetracted&&data.searchType===state.searchType&&data.searchCursor===cursor;
@@ -130,16 +147,21 @@ window.OieRuntime.register('message-search',life=>{
  life.on(document,'htmx:error',event=>{const ctx=event.detail.ctx;if(ctx?.target===buffer&&ctx.searchEpoch===epoch&&valid()&&opened){busy=false;active=null;loading.hidden=true;results.removeAttribute('aria-busy');status(root.dataset.searchFailed);}});
  life.on(document,'oie:history-pruned',event=>{
   if(!opened||!valid()||!value().q||conversation.value&&conversation.value!==event.detail.conversationId)return;
-  const ids=new Set(event.detail.messageIds);
-  for(const row of results.querySelectorAll('[data-search-message]')){
-   if(!ids.has(row.dataset.searchMessage))continue;
-   if(row.contains(document.activeElement))query.focus({preventScroll:true});
-   row.remove();
-  }
+  removeSearchHits(results,query,new Set(event.detail.messageIds));
+  invalidateResults();
+ });
+ function invalidateResults(){
   abort();
   if(pagination.contains(document.activeElement))query.focus({preventScroll:true});
   pagination.replaceChildren();next='';
   timer=life.timeout(()=>request(),100);
+ }
+ life.on(window.OieEvents?.target,'message.updated',event=>{
+  const message=withdrawnMessage(event),state=value();
+  if(!message||!opened||!valid()||!state.q||
+     state.conversationId&&state.conversationId!==message.conversationId||
+     state.accounts.length&&!state.accounts.includes(message.accountId))return;
+  if(removeSearchHits(results,query,new Set([message.id]),state.includeRetracted==='true')||busy)invalidateResults();
  });
  life.on(query,'compositionstart',()=>abort());life.on(query,'input',event=>{if(!event.isComposing)changed(300)});life.on(query,'compositionend',()=>changed(300));
  for(const node of [form,filterForm])life.on(node,'submit',event=>{event.preventDefault();changed()});life.on(historyField,'change',()=>changed());life.on(retractedField,'change',()=>changed());
@@ -334,6 +356,15 @@ window.OieRuntime.register('quick-message-search',life=>{
   event.preventDefault();event.stopPropagation();modal('close');
  },true);
  life.on(window,'popstate',()=>{if(dialog.open)modal('close');});
+ life.on(window.OieEvents?.target,'message.updated',event=>{
+  const message=withdrawnMessage(event);
+  if(!message||!dialog.open||!input.value.trim())return;
+  if(!removeSearchHits(results,input,new Set([message.id]))&&!active)return;
+  abort();lastCursor='';
+  if(pager.contains(document.activeElement))input.focus({preventScroll:true});
+  pager.replaceChildren();
+  timer=life.timeout(request,100);
+ });
  life.on(form,'submit',event=>{event.preventDefault();clearTimeout(timer);request();});
  life.on(input,'compositionstart',abort);
  life.on(input,'input',event=>{if(!event.isComposing)changed();});

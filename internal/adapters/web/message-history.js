@@ -18,12 +18,13 @@
   if(wanted&&['engineId','accountId','conversationId','messageId','includeRetracted'].some(key=>q.get(key)!==wanted.url.searchParams.get(key)))return null;
   return url;
  }
- function sourceVersion(id){const row=id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"][data-message-source]`);return row?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||row.querySelector('[data-message-history-retracted]')?.dataset.messageHistoryRetracted||'']):null;}
+ const sourceRow=id=>id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`);
+ function sourceVersion(id){const row=sourceRow(id);return row?.hasAttribute('data-message-source')?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||row.querySelector('[data-message-history-retracted]')?.dataset.messageHistoryRetracted||'']):null;}
  function cancel(){generation++;request?.abort();request=null;loading.hidden=true;root.removeAttribute('aria-busy');}
  function currentOpener(){
   if(opener?.isConnected)return opener;
   const id=canonical||scope?.url.searchParams.get('messageId');if(!uuid(id))return null;
-  const row=document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`);if(!row)return null;
+  const row=sourceRow(id);if(!row)return null;
   const trigger=row.querySelector('[data-message-menu-trigger]');
   return openerKind==='menu'?trigger:row.querySelector('[data-open-message-history]')||trigger;
  }
@@ -69,9 +70,15 @@
  // Content changes invalidate the snapshot. Transport-state revisions alone
  // leave the retained history, focused controls and page position untouched.
  life.on(document,'oie:shared-refresh',()=>{
-  if(!active||observed===null||!scope)return;
-  const current=sourceVersion(canonical||scope.url.searchParams.get('messageId'));
-  if(current!==null&&current!==observed){const focus=results.contains(document.activeElement);cancel();fail(true,focus);}
+  if(!active||!scope)return;
+  const id=canonical||scope.url.searchParams.get('messageId'),row=sourceRow(id);
+  if(scope.url.searchParams.get('includeRetracted')!=='true'&&row?.querySelector('[data-message-retracted],[data-message-moderated]')){
+   opener=row.querySelector('[data-message-history-retracted]')||row;
+   window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'message-history'}}));
+   return;
+  }
+  const current=sourceVersion(id);
+  if(observed!==null&&current!==null&&current!==observed){const focus=results.contains(document.activeElement);cancel();fail(true,focus);}
  });
  life.on(document,'click',event=>{
   const action=event.target.closest('[data-open-message-history],[id^="history-message-"]');
