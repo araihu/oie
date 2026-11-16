@@ -170,7 +170,43 @@ function thumbnail(color,width=8,height=8){
   findings.push('A failed original download reports a localized error and supports a safe retry');
   state.room=true;await page.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await verifyOwn();assert(await page.locator('#message-composer').isDisabled());
   findings.push('Canonical isOwn=true messages align right with primary color in both direct and read-only room views');
-  await page.setViewportSize({width:390,height:844});await page.goto(`${base}/?account=${account}&chat=${chat}&lang=pt-BR&theme=dark`);await scope(page,previews[1]).locator('[data-preview-expand]').first().click();await page.locator('#oie-image-viewer').waitFor({state:'visible'});await page.waitForTimeout(100);
+  const sentPreview=previews.find(p=>p.messageId===messages[23].id);
+  finish(sentPreview);
+  const mobilePreviews=[previews[1],sentPreview];
+  const mobileFrames=mobilePreviews.map(p=>scope(page,p).locator('.oie-image-frame'));
+  const mobileFrameSizes=()=>Promise.all(mobileFrames.map(frame=>frame.evaluate(el=>{
+   const image=el.querySelector('img').getBoundingClientRect();
+   const previews=el.closest('.oie-message-previews').getBoundingClientRect();
+   return {offset:image.right-previews.right,width:image.width,height:image.height};
+  })));
+  let releaseThumbnails;
+  const thumbnailGate=new Promise(resolve=>{releaseThumbnails=resolve});
+  const thumbnailRoute=async route=>{await thumbnailGate;await route.continue()};
+  const thumbnailURL='**/ui/media/'+thumbHash;
+  await page.route(thumbnailURL,thumbnailRoute);
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(`${base}/?account=${account}&chat=${chat}&lang=pt-BR&theme=dark`,{waitUntil:'domcontentloaded'});
+  let beforeThumbnails;
+  try{
+   for(const [index,preview] of mobilePreviews.entries()){
+    const row=page.locator(`[data-message-id="${preview.messageId}"] .oie-bubble`);
+    assert.equal(await row.getAttribute('data-mine'),String(index===1));
+   }
+   for(const frame of mobileFrames){
+    const image=frame.locator('img');
+    await image.waitFor({state:'visible'});
+    assert.equal(await image.evaluate(el=>el.naturalWidth),0,'thumbnail response is still delayed');
+   }
+   beforeThumbnails=await mobileFrameSizes();
+   for(const {offset,width,height} of beforeThumbnails){
+    assert(offset<=1&&width>0&&height>0,'image stays within the mobile bubble while loading');
+   }
+  }finally{releaseThumbnails()}
+  for(const frame of mobileFrames)await until(()=>frame.locator('img').evaluate(img=>img.naturalWidth===256),'mobile thumbnail loaded');
+  assert.deepEqual(await mobileFrameSizes(),beforeThumbnails,'decoded images keep the reserved frame geometry');
+  await page.unroute(thumbnailURL,thumbnailRoute);
+  findings.push('Received and sent image previews fit the mobile bubble before and after thumbnail decode');
+  await scope(page,previews[1]).locator('[data-preview-expand]').first().click();await page.locator('#oie-image-viewer').waitFor({state:'visible'});await page.waitForTimeout(100);
   assert.equal(await page.locator('#oie-image-viewerTitle').textContent(),'Imagem');assert.equal(await page.locator('.oie-viewer-toolbar [data-viewer-info]').count(),1);assert.equal((await page.locator('[data-viewer-info]').textContent()).trim(),'');await page.locator('[data-viewer-info]').click();await page.locator('#oie-image-info').waitFor({state:'visible'});assert.equal(await page.locator('[data-image-source]').getAttribute('href'),previews[1].url);await page.locator('#oie-image-info').waitFor({state:'visible'});await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const accessibility=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(accessibility.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,'message-previews-mobile.png')});await page.screenshot({path:path.join(artifacts,'image-info-mobile.png')});await page.keyboard.press('Escape');await page.locator('#oie-image-info').waitFor({state:'hidden'});await page.keyboard.press('Escape');await page.setViewportSize({width:1440,height:1000});await scope(page,previews[0]).scrollIntoViewIfNeeded();await page.waitForTimeout(100);await page.screenshot({path:path.join(artifacts,'message-previews-desktop.png')});await messageRow(18).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(artifacts,'image-message-desktop.png')});await fs.writeFile(path.join(artifacts,'message-previews-report.json'),JSON.stringify({findings,automaticDownloads,downloads:state.downloads,originalReads:state.originalReads,externalBrowserRequests:external,pageErrors:errors},null,2));console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
