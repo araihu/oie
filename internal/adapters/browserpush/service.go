@@ -15,6 +15,7 @@ import (
 
 const foregroundGrace = 1500 * time.Millisecond
 const foregroundLease = 2 * time.Second
+const displayLease = 2500 * time.Millisecond
 const freshEventWindow = 30 * time.Second
 
 type deliveryKey struct {
@@ -25,7 +26,9 @@ type claimState uint8
 
 const (
 	foregroundPending claimState = iota
+	foregroundDisplaying
 	foregroundHandled
+	foregroundSuppress
 	legacyForeground
 	remoteClaimed
 )
@@ -55,13 +58,21 @@ func New(auth *hostauth.Auth, origin string) *Service {
 
 // ClaimForeground reserves a short window for the browser to finish handling
 // a message. An abandoned reservation leaves the message eligible for push.
-func (s *Service) ClaimForeground(session, engine, message string, complete *bool) bool {
-	state := foregroundPending
-	if complete == nil {
-		// Pre-reservation browser tabs handle the alert after a single POST.
-		state = legacyForeground
-	} else if *complete {
+func (s *Service) ClaimForeground(session, engine, message, phase string) bool {
+	var state claimState
+	switch phase {
+	case "reserve":
+		state = foregroundPending
+	case "display":
+		state = foregroundDisplaying
+	case "shown":
 		state = foregroundHandled
+	case "suppress":
+		state = foregroundSuppress
+	case "":
+		state = legacyForeground
+	default:
+		return false
 	}
 	ok, _ := s.claim(deliveryKey{session, engine, message}, state)
 	return ok
@@ -80,25 +91,26 @@ func (s *Service) claim(key deliveryKey, state claimState) (bool, time.Time) {
 		s.nextPrune = now.Add(freshEventWindow)
 	}
 	if previous, ok := s.claims[key]; ok && now.Before(previous.expires) {
+		pending := previous.state == foregroundPending || previous.state == foregroundDisplaying
+		active := pending && now.Before(previous.reservedUntil)
 		switch {
-		case previous.state == foregroundPending && now.Before(previous.reservedUntil):
-			if state == remoteClaimed {
+		case state == remoteClaimed && pending:
+			if active {
 				return false, previous.reservedUntil
 			}
-			if state == foregroundHandled {
-				previous.state = state
-				s.claims[key] = previous
-			}
-			return state == foregroundHandled, time.Time{}
-		case previous.state == foregroundPending && state == remoteClaimed:
-			previous.state = state
-			s.claims[key] = previous
-			return true, time.Time{}
+			previous.state = remoteClaimed
+		case state == foregroundDisplaying && active && previous.state == foregroundPending:
+			previous.state, previous.reservedUntil = foregroundDisplaying, now.Add(displayLease)
+		case state == foregroundHandled && active && previous.state == foregroundDisplaying,
+			state == foregroundSuppress && active && previous.state == foregroundPending:
+			previous.state = foregroundHandled
 		default:
-			return previous.state == foregroundHandled && state == foregroundHandled, time.Time{}
+			return false, time.Time{}
 		}
+		s.claims[key] = previous
+		return true, time.Time{}
 	}
-	if state == foregroundHandled {
+	if state != foregroundPending && state != legacyForeground && state != remoteClaimed {
 		return false, time.Time{}
 	}
 	if len(s.claims) >= 4096 {
@@ -206,8 +218,11 @@ func (s *Service) deliver(ctx context.Context, source eventSource, engineID stri
 		}
 		key := deliveryKey{candidate.SessionID, engineID, string(job.messageID)}
 		ok, pendingUntil := s.claim(key, remoteClaimed)
-		if !pendingUntil.IsZero() && wait(ctx, time.Until(pendingUntil)) {
-			ok, _ = s.claim(key, remoteClaimed)
+		for !pendingUntil.IsZero() {
+			if !wait(ctx, time.Until(pendingUntil)) {
+				return
+			}
+			ok, pendingUntil = s.claim(key, remoteClaimed)
 		}
 		if !ok {
 			continue

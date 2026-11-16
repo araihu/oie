@@ -142,8 +142,8 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 			return &http.Response{StatusCode: status, Body: http.NoBody}, nil
 		}),
 	}}
-	if !service.ClaimForeground("focused", engineID, string(message.ID), new(false)) ||
-		!service.ClaimForeground("focused", engineID, string(message.ID), new(true)) {
+	if !service.ClaimForeground("focused", engineID, string(message.ID), "reserve") ||
+		!service.ClaimForeground("focused", engineID, string(message.ID), "suppress") {
 		t.Fatal("foreground delivery unable to claim an unsent message")
 	}
 	job := delivery{message.ID, time.Now().Add(-2 * time.Second)}
@@ -151,7 +151,7 @@ func TestDeliverySkipsIneligibleDevicesAndRemovesExpiredEndpoint(t *testing.T) {
 	if strings.Join(calls, ",") != "/ready,/gone" || strings.Join(registered.expired, ",") != "gone" {
 		t.Fatalf("delivery attempts %v, expired endpoints %v", calls, registered.expired)
 	}
-	if service.ClaimForeground("ready", engineID, string(message.ID), new(false)) {
+	if service.ClaimForeground("ready", engineID, string(message.ID), "reserve") {
 		t.Fatal("foreground delivery would duplicate an issued Web Push")
 	}
 	service.claims = make(map[deliveryKey]deliveryClaim)
@@ -240,10 +240,10 @@ func TestPushEndpointAndEncryptionKeyValidation(t *testing.T) {
 func TestAbandonedForegroundReservationAllowsWebPush(t *testing.T) {
 	service := &Service{claims: make(map[deliveryKey]deliveryClaim)}
 	key := deliveryKey{"session", engineID, "message"}
-	if !service.ClaimForeground(key.session, key.engine, key.message, new(false)) {
+	if !service.ClaimForeground(key.session, key.engine, key.message, "reserve") {
 		t.Fatal("unable to reserve foreground delivery")
 	}
-	if service.ClaimForeground(key.session, key.engine, key.message, new(false)) {
+	if service.ClaimForeground(key.session, key.engine, key.message, "reserve") {
 		t.Fatal("a second window joined the first window's reservation")
 	}
 	if ok, until := service.claim(key, remoteClaimed); ok || until.IsZero() {
@@ -252,10 +252,34 @@ func TestAbandonedForegroundReservationAllowsWebPush(t *testing.T) {
 	service.claims[key] = deliveryClaim{
 		expires: time.Now().Add(time.Minute), reservedUntil: time.Now().Add(-time.Millisecond), state: foregroundPending,
 	}
-	if service.ClaimForeground(key.session, key.engine, key.message, new(true)) {
+	if service.ClaimForeground(key.session, key.engine, key.message, "shown") {
 		t.Fatal("foreground completed an expired reservation")
 	}
 	if ok, _ := service.claim(key, remoteClaimed); !ok {
 		t.Fatal("abandoned foreground reservation suppressed remote delivery")
+	}
+}
+
+func TestAbandonedDisplayLeaseAllowsWebPush(t *testing.T) {
+	service := &Service{claims: make(map[deliveryKey]deliveryClaim)}
+	key := deliveryKey{"session", engineID, "message"}
+	if !service.ClaimForeground(key.session, key.engine, key.message, "reserve") ||
+		!service.ClaimForeground(key.session, key.engine, key.message, "display") {
+		t.Fatal("unable to grant foreground display")
+	}
+	if service.ClaimForeground(key.session, key.engine, key.message, "display") {
+		t.Fatal("a second notification worker acquired the same display")
+	}
+	if ok, until := service.claim(key, remoteClaimed); ok || until.IsZero() {
+		t.Fatal("remote path skipped the display lease")
+	}
+	claim := service.claims[key]
+	claim.reservedUntil = time.Now().Add(-time.Millisecond)
+	service.claims[key] = claim
+	if service.ClaimForeground(key.session, key.engine, key.message, "shown") {
+		t.Fatal("an expired display lease was recorded as shown")
+	}
+	if ok, _ := service.claim(key, remoteClaimed); !ok {
+		t.Fatal("a failed display prevented remote delivery")
 	}
 }

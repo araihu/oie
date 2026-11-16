@@ -16,17 +16,25 @@ self.addEventListener('message', event => {
     try {
       const client = await self.clients.get(event.source.id);
       if (client?.visibilityState !== 'visible') return;
-      const response = await fetch('/ui/notification-push/foreground', {
+      const started = performance.now();
+      const request = phase => fetch('/ui/notification-push/foreground', {
         method: 'POST', cache: 'no-store', keepalive: true,
         headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
-        body: JSON.stringify({engineId: engine, messageId: message, complete: true}),
+        body: JSON.stringify({engineId: engine, accountId: account, conversationId: conversation, messageId: message, phase}),
       });
-      if (!response.ok) return;
+      const grant = await request('display');
+      if (!grant.ok || performance.now() - started >= 2000) return;
       await self.registration.showNotification(title, {
         body, lang, tag: engine + ':' + message, silent: true,
         data: {engine, account, conversation, message},
       });
-      shown = true;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const recorded = await request('shown').catch(() => null);
+        if (recorded && recorded.status < 500) {
+          shown = recorded.ok;
+          break;
+        }
+      }
     } catch {} finally {
       port.postMessage(shown);
       port.close();

@@ -310,7 +310,7 @@
       if (expected) headers['If-Match'] = '"' + expected + '"';
       const response = await window.OieRuntime.request(pushPath + suffix, {
         method, cache: 'no-store', signal: controller.signal,
-        keepalive: body?.complete === true,
+        keepalive: body?.phase === 'suppress',
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -458,10 +458,17 @@
         });
       } else {
         await serializePush(async () => {
-          if (clearBanner && !write(bannerKey, null)) throw Error('Notification storage unavailable');
+          if (clearBanner && !pushEnabled() && !pushPaused()) {
+            const status = await readPushStatus().catch(() => pushStatus);
+            if (status?.enabled === false) {
+              if (!write(bannerKey, null)) throw Error('Notification storage unavailable');
+              return;
+            }
+          }
           const subscription = await boundedPush(pushManager?.getSubscription()).catch(() => null);
           await pushRequest('DELETE');
           write(pushStateKey, null);
+          if (clearBanner && !write(bannerKey, null)) throw Error('Notification storage unavailable');
           await unsubscribePush(subscription);
         });
       }
@@ -597,11 +604,13 @@
       }
       void notificationContext(engine, message).then(async context => {
         if (!context || context.doNotDisturb || !visible()) return;
-        const request = {engineId: engine, messageId: message.id, complete: false};
+        const request = {
+          engineId: engine, messageId: message.id, accountId: message.accountId, conversationId: message.conversationId,
+        };
         const started = performance.now();
         const reserved = () => visible() && performance.now() - started < 1750;
         try {
-          await pushRequest('POST', request, '/foreground');
+          await pushRequest('POST', {...request, phase: 'reserve'}, '/foreground');
         } catch (error) {
           if (error.status === 404 && visible()) {
             handleBanner();
@@ -611,7 +620,7 @@
         }
         if (!reserved()) return;
         if (viewing(engine, conversation)) {
-          await pushRequest('POST', {...request, complete: true}, '/foreground');
+          await pushRequest('POST', {...request, phase: 'suppress'}, '/foreground');
         } else {
           if (!await claim(engine, message.id) || !await showHostedForeground(engine, message, () => reserved() && canShowBanner())) return;
         }

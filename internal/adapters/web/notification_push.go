@@ -46,7 +46,30 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		recipient, err := s.pushAuth.CurrentPushRecipient(request.EngineId.String(), session)
+		engine, message := request.EngineId.String(), request.MessageId.String()
+		phase := ""
+		if request.Phase != nil {
+			if !request.Phase.Valid() {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			phase = string(*request.Phase)
+		}
+		checkEligibility := phase == "display" || phase == "suppress"
+		var conversation string
+		if checkEligibility {
+			if request.AccountId == nil || request.ConversationId == nil ||
+				!validOperationKey(request.AccountId.String()) || !validOperationKey(request.ConversationId.String()) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			conversation = request.ConversationId.String()
+			if !s.foregroundNotificationAllowed(r, request.AccountId.String(), conversation) {
+				w.WriteHeader(http.StatusConflict)
+				return
+			}
+		}
+		recipient, err := s.pushAuth.CurrentPushRecipient(engine, session)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -55,7 +78,8 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		if !s.pushService.ClaimForeground(session, request.EngineId.String(), request.MessageId.String(), request.Complete) {
+		if checkEligibility && slices.Contains(recipient.MutedConversations, conversation) ||
+			!s.pushService.ClaimForeground(session, engine, message, phase) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
@@ -145,6 +169,17 @@ func (s *Server) notificationPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) foregroundNotificationAllowed(r *http.Request, account, conversation string) bool {
+	ctx := r.Context()
+	result, err := s.client.GetConversationWithResponse(ctx, conversation)
+	if err != nil || result.JSON200 == nil || result.JSON200.AccountId != account ||
+		(result.JSON200.RemovedFromChats != nil && *result.JSON200.RemovedFromChats) {
+		return false
+	}
+	prefs, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, account)
+	return err == nil && prefs.JSON200 != nil && prefs.JSON200.Presence != "dnd"
 }
 
 func readPushJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

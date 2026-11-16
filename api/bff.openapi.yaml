@@ -1421,7 +1421,9 @@ components:
       properties:
         engineId: {type: string, format: uuid, description: Source engine identity., example: 019a5df0-0000-7000-8000-000000000001}
         messageId: {type: string, format: uuid, description: Incoming message already visible to this device., example: 019a5df0-0000-7000-8000-000000000005}
-        complete: {type: boolean, description: The browser handled the message during its reservation., example: false}
+        phase: {type: string, enum: [reserve, display, shown, suppress], description: Current step in foreground handling., example: reserve}
+        accountId: {type: string, format: uuid, description: Account owning the source conversation.}
+        conversationId: {type: string, format: uuid, description: Conversation containing the message.}
     NotificationContext:
       description: Current conversation and reply ownership used to decide whether an incoming message can play a sound.
       type: object

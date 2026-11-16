@@ -30,6 +30,30 @@ func (e BrowserEditIntentLang) Valid() bool {
 	}
 }
 
+// Defines values for BrowserPushForegroundPhase.
+const (
+	Display  BrowserPushForegroundPhase = "display"
+	Reserve  BrowserPushForegroundPhase = "reserve"
+	Shown    BrowserPushForegroundPhase = "shown"
+	Suppress BrowserPushForegroundPhase = "suppress"
+)
+
+// Valid indicates whether the value is a known member of the BrowserPushForegroundPhase enum.
+func (e BrowserPushForegroundPhase) Valid() bool {
+	switch e {
+	case Display:
+		return true
+	case Reserve:
+		return true
+	case Shown:
+		return true
+	case Suppress:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BrowserPushSubscriptionLang.
 const (
 	BrowserPushSubscriptionLangEn   BrowserPushSubscriptionLang = "en"
@@ -621,10 +645,11 @@ type BrowserForward struct {
 //
 // Example: {"engineId":"019a5df0-0000-7000-8000-000000000001","messageId":"019a5df0-0000-7000-8000-000000000005"}
 type BrowserPushForeground struct {
-	// Complete The browser handled the message during its reservation.
-	//
-	// Example: false
-	Complete *bool `json:"complete,omitempty"`
+	// AccountId Account owning the source conversation.
+	AccountId *openapi_types.UUID `json:"accountId,omitempty"`
+
+	// ConversationId Conversation containing the message.
+	ConversationId *openapi_types.UUID `json:"conversationId,omitempty"`
 
 	// EngineId Source engine identity.
 	//
@@ -635,7 +660,17 @@ type BrowserPushForeground struct {
 	//
 	// Example: 019a5df0-0000-7000-8000-000000000005
 	MessageId openapi_types.UUID `json:"messageId"`
+
+	// Phase Current step in foreground handling.
+	//
+	// Example: reserve
+	Phase *BrowserPushForegroundPhase `json:"phase,omitempty"`
 }
+
+// BrowserPushForegroundPhase Current step in foreground handling.
+//
+// Example: reserve
+type BrowserPushForegroundPhase string
 
 // BrowserPushStatus Availability and current subscription for the signed-in device.
 //

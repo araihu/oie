@@ -161,15 +161,28 @@ async function check() {
       path: path.join(__dirname, 'artifacts', 'notification-push-settings-pt.png'),
     });
 
+    const accountResponse = await hosted.api.post('/api/v1/accounts', {
+      headers: {'Idempotency-Key': fixedID(30)},
+      data: {label: 'Fixture', protocol: 'xmpp', address: 'fixture@example.test'},
+    });
+    assert.equal(accountResponse.status(), 201);
+    const account = await accountResponse.json();
+    const conversationResponse = await hosted.api.post('/api/v1/conversations', {
+      headers: {'Idempotency-Key': fixedID(31)},
+      data: {accountId: account.id, address: 'peer@example.test'},
+    });
+    assert.equal(conversationResponse.status(), 201);
+    const conversation = await conversationResponse.json();
+
     const [worker] = context.serviceWorkers().filter(worker => worker.url().includes('notification-worker'));
     assert(worker);
     await worker.evaluate(() => {
       self.foregroundDisplays = 0;
       self.registration.showNotification = async () => { self.foregroundDisplays++; };
     });
-    const reserve = messageId => page.request.post(hosted.url + pushPath + '/foreground', {
+    const foreground = (messageId, phase = 'reserve') => page.request.post(hosted.url + pushPath + '/foreground', {
       headers: {Origin: hosted.url, 'X-CSRF-Token': csrf},
-      data: {engineId: enabled.engineId, messageId, complete: false},
+      data: {engineId: enabled.engineId, messageId, phase, accountId: account.id, conversationId: conversation.id},
     });
     const completeInWorker = message => page.evaluate(async payload => {
       const registration = await navigator.serviceWorker.getRegistration('/');
@@ -184,15 +197,33 @@ async function check() {
         channel.port1.close();
       }
     }, {
-      type: 'oie:foreground-notification', engine: enabled.engineId, account: fixedID(2),
-      conversation: fixedID(3), message, title: 'Oiê', body: 'Mensagem nova', lang: 'pt-BR', csrf,
+      type: 'oie:foreground-notification', engine: enabled.engineId, account: account.id,
+      conversation: conversation.id, message, title: 'Oiê', body: 'Mensagem nova', lang: 'pt-BR', csrf,
     });
     const localMessage = fixedID(10);
-    assert.equal((await reserve(localMessage)).status(), 204);
-    assert.equal((await reserve(localMessage)).status(), 409);
+    assert.equal((await foreground(localMessage)).status(), 204);
+    assert.equal((await foreground(localMessage)).status(), 409);
     assert.equal(await completeInWorker(localMessage), true);
+    assert.equal(await completeInWorker(localMessage), false);
     assert.equal(await completeInWorker(fixedID(11)), false);
     assert.equal(await worker.evaluate(() => self.foregroundDisplays), 1);
+
+    const failedMessage = fixedID(12);
+    await worker.evaluate(() => {
+      self.registration.showNotification = async () => { throw Error('Platform refused to show the alert'); };
+    });
+    assert.equal((await foreground(failedMessage)).status(), 204);
+    assert.equal(await completeInWorker(failedMessage), false);
+
+    const dndMessage = fixedID(13);
+    assert.equal((await foreground(dndMessage)).status(), 204);
+    const dnd = await hosted.api.put('/api/v1/accounts/' + account.id + '/communication-preferences', {
+      data: {revisionId: null, presence: 'dnd'},
+    });
+    assert.equal(dnd.status(), 200);
+    assert.equal(await completeInWorker(dndMessage), false);
+    assert.equal((await foreground(dndMessage, 'shown')).status(), 409);
+
     await page.close();
     assert.equal(context.pages().length, 0);
     const destination = hosted.url + '/?' + new URLSearchParams({
@@ -237,9 +268,18 @@ async function check() {
     await reopened.getByRole('tab', {name: 'Este dispositivo', exact: true}).click();
     const reopenedToggle = reopened.locator('[data-notification-background]');
     assert(await reopenedToggle.isChecked());
+    const banners = reopened.locator('[data-notification-banners]');
+    const failDisable = route => route.request().method() === 'DELETE'
+      ? route.fulfill({status: 503}) : route.continue();
+    await reopened.route('**' + pushPath, failDisable);
+    await banners.press('Space');
+    await reopened.getByText('Não foi possível salvar as notificações com o app fechado. Tente novamente.', {exact: true}).waitFor();
+    assert(await banners.isChecked());
+    assert.equal((await getStatus()).enabled, true);
+    await reopened.unroute('**' + pushPath, failDisable);
     const off = reopened.waitForResponse(response => response.url().endsWith(pushPath) && response.request().method() === 'DELETE');
     await reopened.evaluate(() => localStorage.removeItem('oie.notifications.background'));
-    await reopened.locator('[data-notification-banners]').press('Space');
+    await banners.press('Space');
     assert.equal((await off).status(), 204);
     assert.equal((await getStatus()).enabled, false);
     await reopened.waitForFunction(() => !document.querySelector('[data-notification-banners]').checked);
@@ -256,6 +296,12 @@ async function check() {
     assert.equal((await getStatus()).enabled, false);
     assert.equal(await reopenedToggle.isChecked(), false);
     assert(await reopenedToggle.evaluate(control => control === document.activeElement));
+    await reopened.unroute('**' + pushPath, failSave);
+    await reopened.route('**' + pushPath, failDisable);
+    await banners.press('Space');
+    await reopened.waitForFunction(() => document.querySelector('[data-notification-banners]').checked);
+    await banners.press('Space');
+    await reopened.waitForFunction(() => !document.querySelector('[data-notification-banners]').checked);
     console.log('PASS: hosted opt-in, stable settings geometry, subscription renewal, cross-tab writes, closed-page notification and click, unsubscribe and CSRF');
   } finally {
     await browser?.close();
