@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-	"github.com/araihu/oie/internal/domain"
 )
 
 const videoSampleLimit = 5 << 20
@@ -159,7 +158,7 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filename := "video"
-	if domain.PlayableAudioType(mediaType) != "" {
+	if audioMediaType(mediaType) != "" {
 		filename = "audio"
 	}
 	switch mediaType {
@@ -210,7 +209,7 @@ func sharedMediaMaximum(kind string) int64 {
 	if videoMediaType(kind) {
 		return 2 << 30
 	}
-	if domain.PlayableAudioType(kind) != "" {
+	if audioMediaType(kind) != "" {
 		return 100 << 20
 	}
 	switch kind {

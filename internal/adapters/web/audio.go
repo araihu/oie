@@ -11,6 +11,23 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
+// Match the audio types allowed in same-origin browser responses.
+func audioMediaType(mediaType string) string {
+	switch mediaType {
+	case "audio/mpeg", "audio/ogg", "audio/mp4", "audio/wav", "audio/flac", "audio/aac", "audio/webm":
+		return mediaType
+	case "audio/x-wav", "audio/wave", "audio/vnd.wave":
+		return "audio/wav"
+	case "audio/x-m4a":
+		return "audio/mp4"
+	case "audio/x-flac":
+		return "audio/flac"
+	case "audio/opus":
+		return "audio/ogg"
+	}
+	return ""
+}
+
 func audioURL(address string) bool {
 	u, err := url.Parse(address)
 	if err != nil {

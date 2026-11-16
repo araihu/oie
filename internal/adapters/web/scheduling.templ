@@ -14,7 +14,6 @@ import (
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/oie/internal/adapters/web/appicons"
-	"github.com/araihu/oie/internal/domain"
 )
 
 templ scheduledWorkspace(v view) {
@@ -365,7 +364,7 @@ templ outgoingAttachments(v view,m engineapi.Message) {
 	if m.Attachments != nil && len(*m.Attachments)>0 {
 		<div class="oie-message-attachments" data-message-attachments>
 			for _, a := range *m.Attachments {
-				if domain.PlayableAudioType(a.MediaType) != "" {
+				if audioMediaType(a.MediaType) != "" {
 					@audioPlayer(v,a.FileName,v.stagedAttachmentHref(m.ConversationId,a.Id,false),v.stagedAttachmentHref(m.ConversationId,a.Id,true))
 				} else {
 				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {

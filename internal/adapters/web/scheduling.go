@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-	"github.com/araihu/oie/internal/domain"
 )
 
 //go:embed scheduling.js
@@ -252,12 +251,12 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 	prefix, _ := body.Peek(512)
 	contentType := http.DetectContentType(prefix)
 	if !q.Has("download") && !rasterAttachment(contentType) {
-		if audio := domain.PlayableAudioType(response.Header.Get("X-Oie-Attachment-Type")); audio != "" {
+		if audio := audioMediaType(response.Header.Get("X-Oie-Attachment-Type")); audio != "" {
 			contentType = audio
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 		}
 	}
-	if q.Has("download") || !rasterAttachment(contentType) && domain.PlayableAudioType(contentType) == "" {
+	if q.Has("download") || !rasterAttachment(contentType) && audioMediaType(contentType) == "" {
 		contentType = "application/octet-stream"
 		disposition := response.Header.Get("Content-Disposition")
 		kind, params, err := mime.ParseMediaType(disposition)
