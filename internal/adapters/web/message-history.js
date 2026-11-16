@@ -8,24 +8,25 @@
  'use strict';
  const root=document.getElementById('message-history-content');if(!root)return;
  const results=root.querySelector('[data-history-results]'),loading=root.querySelector('[data-history-loading]'),error=root.querySelector('[data-history-error]'),retry=root.querySelector('[data-history-retry]'),restart=root.querySelector('[data-history-restart]');
- let generation=0,request=null,scope=null,snapshot='',currentRevision='',canonical='',pages=[],position=-1,lastRequest=null,active=false,opener=null,openerKind='edited',observed=null;
+ let generation=0,request=null,scope=null,snapshot='',currentRevision='',canonical='',pages=[],position=-1,lastRequest=null,active=false,opener=null,openerKind='edited',observed=null,revealOnRefresh='';
  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
  const digest=value=>typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);
  function scopedURL(value,wanted=null){
   let url;try{url=new URL(value,location.origin)}catch{return null}
   const q=url.searchParams;if(url.origin!==location.origin||url.pathname!=='/ui/message-history'||!['engineId','accountId','conversationId','messageId'].every(key=>uuid(q.get(key)))||(q.get('cursor')||'').length>2048)return null;
   if(q.get('engineId')!==document.body.dataset.engineId||q.get('accountId')!==document.body.dataset.accountId||q.get('conversationId')!==document.body.dataset.conversationId)return null;
-  if(wanted&&['engineId','accountId','conversationId','messageId'].some(key=>q.get(key)!==wanted.url.searchParams.get(key)))return null;
+  if(wanted&&['engineId','accountId','conversationId','messageId','includeRetracted'].some(key=>q.get(key)!==wanted.url.searchParams.get(key)))return null;
   return url;
  }
- function sourceVersion(id){const row=id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"][data-message-source]`);return row?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||'']):null;}
+ const sourceRow=id=>id&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`);
+ function sourceVersion(id){const row=sourceRow(id);return row?.hasAttribute('data-message-source')?JSON.stringify([row.dataset.messageSource,row.querySelector('[data-message-edited]')?.dataset.editedAt||row.querySelector('[data-message-history-retracted]')?.dataset.messageHistoryRetracted||'']):null;}
  function cancel(){generation++;request?.abort();request=null;loading.hidden=true;root.removeAttribute('aria-busy');}
  function currentOpener(){
   if(opener?.isConnected)return opener;
   const id=canonical||scope?.url.searchParams.get('messageId');if(!uuid(id))return null;
-  const row=document.querySelector(`#message-timeline [data-message-id="${CSS.escape(id)}"]`);if(!row)return null;
+  const row=sourceRow(id);if(!row)return null;
   const trigger=row.querySelector('[data-message-menu-trigger]');
-  return openerKind==='menu'?trigger:row.querySelector('[data-open-message-history][data-message-edited]')||trigger;
+  return openerKind==='menu'?trigger:row.querySelector('[data-open-message-history]')||trigger;
  }
  function close(restore=true){
   const wasActive=active;active=false;cancel();results.replaceChildren();
@@ -35,9 +36,25 @@
  life.on(window,'drawer:close',event=>{if(event.detail?.id==='message-history')close()});
  life.on(window,'drawer:close-request',event=>{if(event.detail?.id==='message-history'&&!event.defaultPrevented)close()});
 
+ function dismissWithdrawn(id,row=sourceRow(id)){
+  const reveal=row?.querySelector('[data-message-history-retracted]');
+  opener=reveal||row;
+  openerKind='edited';
+  revealOnRefresh=reveal?'':id;
+  window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'message-history'}}));
+ }
+ life.on(window.OieEvents?.target,'message.updated',event=>{
+  if(!active||!scope||!scopedURL(scope.url))return;
+  const params=scope.url.searchParams;
+  if(params.get('includeRetracted')==='true')return;
+  let message;try{message=JSON.parse(event.detail.data).message}catch{return;}
+  if(message?.id===(canonical||params.get('messageId'))&&message.accountId===params.get('accountId')&&
+     message.conversationId===params.get('conversationId')&&(message.retraction||message.moderation))dismissWithdrawn(message.id);
+ });
+
  function matches(page,url,wanted){
   const d=page?.dataset,q=url.searchParams;
-  if(!d||d.historyEngine!==q.get('engineId')||d.historyAccount!==q.get('accountId')||d.historyConversation!==q.get('conversationId')||d.historyRequested!==q.get('messageId')||d.historyCursor!==(q.get('cursor')||'')||!uuid(d.historyMessage)||!uuid(d.historyCurrentRevision)||!digest(d.historySnapshot))return false;
+  if(!d||d.historyEngine!==q.get('engineId')||d.historyAccount!==q.get('accountId')||d.historyConversation!==q.get('conversationId')||d.historyRequested!==q.get('messageId')||d.historyCursor!==(q.get('cursor')||'')||(d.historyRetracted==='true')!==(q.get('includeRetracted')==='true')||!uuid(d.historyMessage)||!uuid(d.historyCurrentRevision)||!digest(d.historySnapshot))return false;
   if(wanted!==scope||snapshot&&(d.historySnapshot!==snapshot||d.historyCurrentRevision!==currentRevision||d.historyMessage!==canonical))return false;
   const rows=[...page.querySelectorAll('[data-history-revision]')];if(rows.length>20||new Set(rows.map(row=>row.dataset.historyRevision)).size!==rows.length)return false;
   return rows.every(row=>uuid(row.dataset.historyRevision)&&uuid(row.dataset.historySource)&&['true','false'].includes(row.dataset.historyIsCurrent)&&['true','false'].includes(row.dataset.historyIsOriginal)&&(row.dataset.historyIsCurrent==='true')===(row.dataset.historyRevision===d.historyCurrentRevision));
@@ -68,16 +85,31 @@
  }
  // Content changes invalidate the snapshot. Transport-state revisions alone
  // leave the retained history, focused controls and page position untouched.
- life.on(document,'oie:shared-refresh',()=>{
-  if(!active||observed===null||!scope)return;
-  const current=sourceVersion(canonical||scope.url.searchParams.get('messageId'));
-  if(current!==null&&current!==observed){const focus=results.contains(document.activeElement);cancel();fail(true,focus);}
- });
+ function refreshSource(){
+  if(revealOnRefresh){
+   const row=sourceRow(revealOnRefresh);
+   if(row?.querySelector('[data-message-retracted],[data-message-moderated]')){
+    revealOnRefresh='';
+    const focus=document.activeElement;
+    if(!active&&(focus===document.body||row.contains(focus)||root.contains(focus)))row.querySelector('[data-message-history-retracted]')?.focus({preventScroll:true});
+   }
+  }
+  if(!active||!scope)return;
+  const id=canonical||scope.url.searchParams.get('messageId'),row=sourceRow(id);
+  if(scope.url.searchParams.get('includeRetracted')!=='true'&&row?.querySelector('[data-message-retracted],[data-message-moderated]')){
+   dismissWithdrawn(id,row);
+   return;
+  }
+  const current=sourceVersion(id);
+  if(observed!==null&&current!==null&&current!==observed){const focus=results.contains(document.activeElement);cancel();fail(true,focus);}
+ }
+ life.on(document,'oie:shared-refresh',refreshSource);
+ life.on(document,'oie:timeline-content',refreshSource);
  life.on(document,'click',event=>{
   const action=event.target.closest('[data-open-message-history],[id^="history-message-"]');
   if(action&&!event.defaultPrevented&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
    const url=scopedURL(action.href);if(!url)return;
-   event.preventDefault();event.stopPropagation();close(false);active=true;scope={url};snapshot='';currentRevision='';canonical='';pages=[];position=-1;observed=sourceVersion(url.searchParams.get('messageId'));
+   event.preventDefault();event.stopPropagation();close(false);active=true;scope={url};snapshot='';currentRevision='';canonical='';pages=[];position=-1;revealOnRefresh='';observed=sourceVersion(url.searchParams.get('messageId'));
    const menuID=action.id?.startsWith('history-message-')?action.id.slice(16):'';openerKind=menuID?'menu':'edited';opener=menuID?document.getElementById('message-menu-'+menuID)?.querySelector('button')||action:action;opener?.focus({preventScroll:true});
    window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'message-history'}}));load(url,[url.href],0);return;
   }

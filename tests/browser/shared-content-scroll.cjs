@@ -10,6 +10,12 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const newest=make(400);newest.message.createdAt='2026-12-01T12:00:00Z';
  const cursor=item=>'after-'+item.id,first=cursor(items[49]),second=cursor(items[99]);
  const state={mode:'normal',head:false,older:false,removed:new Set(),seq:0,reads:[],pending:[],aborted:[],hold:false,writes:0,videoReads:0};
+ const withdrawn=new Set(),retraction={at:'2026-12-01T12:00:00Z',originalAvailable:true};
+ const withdraw=item=>{
+  withdrawn.add(item.message.id);state.seq++;
+  const data=JSON.stringify({message:{...item.message,originalText:'',retraction}});
+  for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: message.updated\ndata: ${data}\n\n`);
+ };
  const accounts=[{id:account,label:'Personal',address:'alice@fixture'},{id:other,label:'Work',address:'work@fixture'}].map(a=>({...a,revisionId:revision,protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}));
  const conversation={id:chat,revisionId:revision,accountId:account,address:'family@fixture',title:'Family',kind:'direct',lastMessage:'Media',updatedAt:'2026-11-30T12:00:00Z',unreadCount:0,archived:false,favorite:false};
  const emit=()=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: account.history_changed\ndata: {}\n\n`)};
@@ -29,6 +35,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname==='/api/v1/shared-content'){
    const query=Object.fromEntries(u.searchParams),kind=u.searchParams.get('type'),ids=u.searchParams.getAll('messageId'),limit=Number(u.searchParams.get('limit')),requested=u.searchParams.get('cursor')||'';state.reads.push(query);
    let selected=kind==='links'?links:kind==='documents'?[]:u.searchParams.get('q')==='fresh'?fresh:[...(state.head?[newest]:[]),...items,...(state.older?older:[])].filter(item=>!state.removed.has(item.id));
+   if(u.searchParams.get('includeRetracted')==='true')selected=selected.map(item=>withdrawn.has(item.message.id)?{...item,message:{...item.message,originalText:'',retraction}}:item);
+   else selected=selected.filter(item=>!withdrawn.has(item.message.id));
    if(kind==='video')selected=selected.filter(item=>item.kind==='video');if(ids.length){assert.equal(u.searchParams.get('conversationId'),chat);assert(ids.length<=100);selected=selected.filter(item=>ids.includes(item.message.id))}
    const anchor=requested?selected.findIndex(item=>cursor(item)===requested):-1,start=requested?anchor+1:0;let page=selected.slice(start,start+limit),next=selected.length>start+page.length?cursor(page.at(-1)):undefined;
    const respond=()=>{
@@ -115,6 +123,31 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.locator('[data-info-back]').click();await page.locator('[data-info-entry=media]').click();region=regions(page,true);await until(async()=>await region.results.locator('[data-shared-item]').count()>=50,'drawer reopened');await context.close();
   state.hold=true;state.pending=[];state.aborted=[];({page,context}=await create(chatURL));await openConversationDetails(page);await page.locator('[data-info-entry=media]').click();region=regions(page,true);await until(async()=>await region.results.locator('[data-shared-item]').count()===50,'held drawer scope ready');await bottom(region);await until(()=>state.pending.length===1,'held drawer request');await page.locator('[data-shared-tab=links]').click();await until(async()=>await region.results.getAttribute('data-content-type')==='links','drawer tab changes scope');await until(()=>state.aborted.length===1,'drawer tab aborts old page');release();await page.waitForTimeout(150);assert.equal(await region.results.locator('[data-shared-item]').count(),3);await consistent(region);await context.close();
   state.hold=true;state.pending=[];state.aborted=[];({page,context}=await create(chatURL));await openConversationDetails(page);await page.locator('[data-info-entry=media]').click();region=regions(page,true);await until(async()=>await region.results.locator('[data-shared-item]').count()===50,'held drawer scope ready');await bottom(region);await until(()=>state.pending.length===1,'held drawer close request');await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await until(()=>state.aborted.length===1,'drawer close aborts page');release();await page.waitForTimeout(150);assert.equal(await region.results.locator('[data-shared-item]').count(),50);await context.close();findings.push('Scoped drawer appends cursors once and aborts reads on tab change and close without late media mixing');
+  state.head=false;state.older=false;state.removed.clear();
+  ({page,context}=await create(media));region=regions(page);
+  await region.results.locator('[data-shared-item]').first().waitFor();
+  await bottom(region);
+  const firstWithdrawn=items[75],cachedWithdrawn=items[76];
+  const card=(region,item)=>region.results.locator(`[data-shared-item="${item.id}"]`);
+  await card(region,firstWithdrawn).waitFor();
+  await region.scroll.evaluate(node=>node.scrollTop=0);
+  const optInURL=media+'&contentIncludeRetracted=true&contentCursor='+encodeURIComponent(first);
+  const optIn=await create(optInURL),included=regions(optIn.page);
+  await card(included,firstWithdrawn).waitFor();
+  await Promise.all([page,optIn.page].map(view=>view.waitForFunction(()=>window.OieEvents?.connected)));
+  withdraw(firstWithdrawn);
+  await card(region,firstWithdrawn).waitFor({state:'detached',timeout:3000});
+  await card(included,firstWithdrawn).getByText('Message retracted',{exact:true}).waitFor({state:'visible'});
+  await page.locator('[data-shared-tab=links]').click();
+  await until(async()=>await region.results.getAttribute('data-content-type')==='links','default page moved to dormant cache');
+  withdraw(cachedWithdrawn);
+  await card(included,cachedWithdrawn).getByText('Message retracted',{exact:true}).waitFor({state:'visible'});
+  await page.goBack();
+  await card(region,items[77]).waitFor();
+  assert.equal(await card(region,firstWithdrawn).count(),0);
+  assert.equal(await card(region,cachedWithdrawn).count(),0);
+  await context.close();await optIn.context.close();
+  findings.push('Withdrawal evicts mounted older cards and default-scope Back cache while explicit opt-in still includes retracted cards');
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'shared-content-scroll-report.json'),JSON.stringify({findings,pageErrors:errors,unexpectedMutations:state.writes},null,2));console.log('PASS: scoped catalog infinite scroll, retries/cursor guards, native video continuity, SSE/head-tail/history and route/drawer cancellation');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Scroll failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,lists:[...document.querySelectorAll('#shared-content-results,#info-shared-results')].map(root=>({id:root.id,count:root.querySelectorAll('[data-shared-item]').length,version:root.dataset.version})),pages:[...document.querySelectorAll('[data-shared-page]')].map(page=>({...page.dataset,status:page.querySelector('[data-shared-page-status]')?.textContent})),focus:document.activeElement?.outerHTML.slice(0,300)})).catch(()=>({unavailable:true}))),JSON.stringify({mode:state.mode,reads:state.reads.slice(-15),pending:state.pending.map(value=>value.query),aborted:state.aborted.map(value=>value.query)}));throw error}finally{release();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

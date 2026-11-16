@@ -1270,6 +1270,9 @@ type GetBrowserMessageEditHistoryParams struct {
 	// MessageId Requested retained source, allowing engine-validated canonical aliases.
 	MessageId openapi_types.UUID `form:"messageId" json:"messageId"`
 
+	// IncludeRetracted Explicitly reveal retained revisions and show the retraction in the history.
+	IncludeRetracted *bool `form:"includeRetracted,omitempty" json:"includeRetracted,omitempty"`
+
 	// Cursor Engine-issued older-page cursor for the exact history snapshot.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -1314,6 +1317,9 @@ type SearchBrowserMessagesParams struct {
 
 	// ConversationId Optional conversation scope, validated within account when both are supplied.
 	ConversationId *openapi_types.UUID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
+
+	// IncludeRetracted Include retained content from retracted messages.
+	IncludeRetracted *bool `form:"includeRetracted,omitempty" json:"includeRetracted,omitempty"`
 
 	// IncludeEditHistory Include retained earlier content versions, explicitly labelled as prior versions.
 	IncludeEditHistory *bool `form:"includeEditHistory,omitempty" json:"includeEditHistory,omitempty"`

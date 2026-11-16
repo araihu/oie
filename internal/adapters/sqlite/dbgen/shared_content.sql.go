@@ -15,6 +15,10 @@ SELECT COUNT(*) FROM (
  JOIN shared_content sc ON sc.id=o.reference_id
  JOIN shared_catalog_sources s ON s.message_id=sc.message_id
  WHERE o.scope=?1 AND o.tab=?2 AND s.parser_version>=?3
+ AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT sc.message_id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=sc.message_id)
+))
  LIMIT ?4
 )
 `
@@ -40,10 +44,10 @@ func (q *Queries) CountCatalogPage(ctx context.Context, arg CountCatalogPagePara
 
 const countSharedContentFirstPage = `-- name: CountSharedContentFirstPage :one
 WITH scoped_references AS (
-    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content WHERE CAST(?8 AS TEXT)='[]'
+    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content WHERE CAST(?9 AS TEXT)='[]'
     UNION ALL
     SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content
-    WHERE message_id IN (SELECT value FROM json_each(CAST(?8 AS TEXT)))
+    WHERE message_id IN (SELECT value FROM json_each(CAST(?9 AS TEXT)))
 )
 SELECT COUNT(*) FROM (
     SELECT 1
@@ -56,31 +60,35 @@ SELECT COUNT(*) FROM (
     AND json_extract(c.payload,'$.Request') IS NULL
     AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
     AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND NOT EXISTS (
+AND (CAST(?4 AS INTEGER)=1 OR NOT EXISTS (
  SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
  ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
  WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
-)
-    AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
-    AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
-     OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
-     OR (CAST(?5 AS TEXT)='audio' AND sc.kind='audio')
-     OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
-     OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-    AND (CAST(?6 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?6 AS TEXT))=1)
-    LIMIT ?7
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
+AND (CAST(?5 AS TEXT)='' OR m.conversation_id=CAST(?5 AS TEXT))
+    AND ((CAST(?6 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+     OR (CAST(?6 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+     OR (CAST(?6 AS TEXT)='audio' AND sc.kind='audio')
+     OR (CAST(?6 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+     OR (CAST(?6 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+    AND (CAST(?7 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?7 AS TEXT))=1)
+    LIMIT ?8
 )
 `
 
 type CountSharedContentFirstPageParams struct {
-	ParserVersion  int64
-	AccountID      string
-	AccountIds     string
-	ConversationID string
-	ContentType    string
-	Search         string
-	PageLimit      int64
-	MessageIds     string
+	ParserVersion    int64
+	AccountID        string
+	AccountIds       string
+	IncludeRetracted int64
+	ConversationID   string
+	ContentType      string
+	Search           string
+	PageLimit        int64
+	MessageIds       string
 }
 
 // Match ListSharedContent's scope, categories and search. Any matching rows
@@ -90,6 +98,7 @@ func (q *Queries) CountSharedContentFirstPage(ctx context.Context, arg CountShar
 		arg.ParserVersion,
 		arg.AccountID,
 		arg.AccountIds,
+		arg.IncludeRetracted,
 		arg.ConversationID,
 		arg.ContentType,
 		arg.Search,
@@ -182,7 +191,11 @@ WITH page AS (
  AND position_ms<=CAST(?3 AS INTEGER)
  AND (position_ms,reference_id)<(CAST(?3 AS INTEGER),CAST(?4 AS TEXT))
  AND EXISTS (SELECT 1 FROM shared_content sc JOIN shared_catalog_sources s ON s.message_id=sc.message_id
-             WHERE sc.id=o.reference_id AND s.parser_version>=?5)
+             WHERE sc.id=o.reference_id AND s.parser_version>=?5
+             AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT sc.message_id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=sc.message_id)
+)))
  ORDER BY position_ms DESC,reference_id DESC LIMIT ?6
 )
 SELECT sc.id,sc.revision_id,
@@ -265,10 +278,10 @@ func (q *Queries) ListCatalogPage(ctx context.Context, arg ListCatalogPageParams
 
 const listSharedContent = `-- name: ListSharedContent :many
 WITH scoped_references AS (
-    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content WHERE CAST(?10 AS TEXT)='[]'
+    SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content WHERE CAST(?11 AS TEXT)='[]'
     UNION ALL
     SELECT id, revision_id, message_id, url, kind, file_name FROM shared_content
-    WHERE message_id IN (SELECT value FROM json_each(CAST(?10 AS TEXT)))
+    WHERE message_id IN (SELECT value FROM json_each(CAST(?11 AS TEXT)))
 )
 SELECT sc.id, sc.revision_id,
 CAST(CASE WHEN json_extract(p.payload,'$.Kind')='image' THEN 'image' ELSE sc.kind END AS TEXT) AS kind,
@@ -288,33 +301,37 @@ AND (CAST(?3 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(
 AND json_extract(c.payload,'$.Request') IS NULL
 AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases AS alias WHERE alias.alias_id=m.id)
 AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages hidden WHERE hidden.message_id=m.id)
-AND NOT EXISTS (
+AND (CAST(?4 AS INTEGER)=1 OR NOT EXISTS (
  SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
  ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
  WHERE ref.message_id=m.id OR ref.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
-)
-AND (CAST(?4 AS TEXT)='' OR m.conversation_id=CAST(?4 AS TEXT))
-AND ((CAST(?5 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
- OR (CAST(?5 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?5 AS TEXT)='audio' AND sc.kind='audio')
- OR (CAST(?5 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
- OR (CAST(?5 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
-AND (CAST(?6 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?7 AS INTEGER),CAST(?6 AS TEXT)))
-AND (CAST(?8 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?8 AS TEXT))=1)
-ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?9
+) AND (NOT EXISTS(SELECT 1 FROM message_retractions) OR NOT EXISTS (
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=m.id)
+)))
+AND (CAST(?5 AS TEXT)='' OR m.conversation_id=CAST(?5 AS TEXT))
+AND ((CAST(?6 AS TEXT)='media' AND (sc.kind IN ('image','video','audio') OR json_extract(p.payload,'$.Kind')='image'))
+ OR (CAST(?6 AS TEXT)='video' AND sc.kind='video' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?6 AS TEXT)='audio' AND sc.kind='audio')
+ OR (CAST(?6 AS TEXT)='links' AND sc.kind='link' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image')
+ OR (CAST(?6 AS TEXT)='documents' AND sc.kind='document' AND coalesce(json_extract(p.payload,'$.Kind'),'')<>'image'))
+AND (CAST(?7 AS TEXT)='' OR (COALESCE(m.timeline_at_ms,m.created_at_ms),sc.id)<(CAST(?8 AS INTEGER),CAST(?7 AS TEXT)))
+AND (CAST(?9 AS TEXT)='' OR oie_search_match(sc.url||' '||sc.file_name||' '||s.caption||' '||coalesce(json_extract(m.payload,'$.Sender.DisplayName'),'')||' '||coalesce(json_extract(c.payload,'$.Title'),'')||' '||a.label||' '||coalesce(json_extract(p.payload,'$.Title'),'')||' '||coalesce(json_extract(p.payload,'$.Description'),''),CAST(?9 AS TEXT))=1)
+ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,sc.id DESC LIMIT ?10
 `
 
 type ListSharedContentParams struct {
-	ParserVersion  int64
-	AccountID      string
-	AccountIds     string
-	ConversationID string
-	ContentType    string
-	CursorID       string
-	CursorMs       int64
-	Search         string
-	PageLimit      int64
-	MessageIds     string
+	ParserVersion    int64
+	AccountID        string
+	AccountIds       string
+	IncludeRetracted int64
+	ConversationID   string
+	ContentType      string
+	CursorID         string
+	CursorMs         int64
+	Search           string
+	PageLimit        int64
+	MessageIds       string
 }
 
 type ListSharedContentRow struct {
@@ -336,6 +353,7 @@ func (q *Queries) ListSharedContent(ctx context.Context, arg ListSharedContentPa
 		arg.ParserVersion,
 		arg.AccountID,
 		arg.AccountIds,
+		arg.IncludeRetracted,
 		arg.ConversationID,
 		arg.ContentType,
 		arg.CursorID,
@@ -390,6 +408,55 @@ type MarkSharedContentIndexedParams struct {
 func (q *Queries) MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error {
 	_, err := q.db.ExecContext(ctx, markSharedContentIndexed, arg.MessageID, arg.ParserVersion, arg.Caption)
 	return err
+}
+
+const moderatedSharedContentCandidates = `-- name: ModeratedSharedContentCandidates :many
+SELECT DISTINCT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM shared_catalog_moderated_sources x JOIN messages m ON m.id=x.message_id
+JOIN conversations c ON c.id=m.conversation_id LEFT JOIN shared_content_state s ON s.message_id=m.id
+WHERE COALESCE(s.parser_version,-1)<?1
+AND json_extract(c.payload,'$.Request') IS NULL
+AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.id)
+ORDER BY m.id LIMIT ?2
+`
+
+type ModeratedSharedContentCandidatesParams struct {
+	ParserVersion int64
+	BatchLimit    int64
+}
+
+func (q *Queries) ModeratedSharedContentCandidates(ctx context.Context, arg ModeratedSharedContentCandidatesParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, moderatedSharedContentCandidates, arg.ParserVersion, arg.BatchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.RevisionID,
+			&i.AccountID,
+			&i.ConversationID,
+			&i.ProviderID,
+			&i.IsOwn,
+			&i.State,
+			&i.Payload,
+			&i.CreatedAtMs,
+			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const putSharedContent = `-- name: PutSharedContent :exec

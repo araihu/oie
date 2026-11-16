@@ -48,6 +48,9 @@ templ forwardForm(v view, source messageView, rooms []forwardRoom) {
 								<span class="oie-forward-room-text">
 									<strong id={ labelID }>{ room.Title }</strong>
 									<span id={ infoID } class="oie-forward-room-info">
+										if room.Kind == "direct" && room.Address != room.Title {
+											<span class="oie-forward-address" dir="auto">{ room.Address }</span>
+										}
 										if room.Topic != "" {
 											<span class="oie-forward-topic" title={ room.Topic }>{ room.Topic }</span>
 										}

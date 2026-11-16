@@ -32,7 +32,7 @@ type searchReference struct {
 
 func searchResultText(hit engineapi.MessageSearchHit) (excerpt, sharedURL string, preview *engineapi.MessageSearchPreview) {
 	preview = hit.Preview
-	if hit.Historical || hit.MatchKind != "metadata" {
+	if hit.Historical || hit.Message.Retraction != nil || hit.Message.Moderation != nil || hit.MatchKind != "metadata" {
 		return hit.Excerpt, "", preview
 	}
 	body := strings.TrimSpace(messageView{Message: hit.Message}.displayBody())
@@ -92,7 +92,7 @@ type messageSearchView struct {
 	Category                                                                     string
 	Query, AccountID, ConversationID, Cursor, RequestedEngine, ConversationTitle string
 	AccountIDs                                                                   []string
-	IncludeHistory                                                               bool
+	IncludeHistory, IncludeRetracted                                             bool
 	Limit                                                                        int
 	State                                                                        string
 	Status                                                                       int
@@ -158,6 +158,11 @@ func (v *view) configureMessageSearch(r *http.Request) {
 			s.State = "invalid"
 			s.Status = 400
 		}
+	}
+	retracted := q.Get("includeRetracted")
+	s.IncludeRetracted = retracted == "true"
+	if retracted != "" && retracted != "true" && retracted != "false" {
+		s.State, s.Status = "invalid", 400
 	}
 	history := q.Get("includeEditHistory")
 	s.IncludeHistory = history == "true"
@@ -234,7 +239,7 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 		}
 		return
 	}
-	params := engineapi.SearchMessagesParams{Q: state.Query, IncludeEditHistory: &state.IncludeHistory, Limit: &state.Limit}
+	params := engineapi.SearchMessagesParams{Q: state.Query, IncludeEditHistory: &state.IncludeHistory, IncludeRetracted: &state.IncludeRetracted, Limit: &state.Limit}
 	if state.AccountID != "" {
 		params.AccountId = &state.AccountID
 	}
@@ -297,7 +302,7 @@ func validMessageSearchPage(page engineapi.MessageSearchPage, request messageSea
 	if page.AccountIds != nil {
 		accountIDs = *page.AccountIds
 	}
-	if page.Query != request.Query || value(page.AccountId) != request.AccountID || !slices.Equal(accountIDs, request.AccountIDs) || value(page.ConversationId) != request.ConversationID || page.IncludeEditHistory != request.IncludeHistory || len(page.Items) > request.Limit {
+	if page.Query != request.Query || value(page.AccountId) != request.AccountID || !slices.Equal(accountIDs, request.AccountIDs) || value(page.ConversationId) != request.ConversationID || page.IncludeEditHistory != request.IncludeHistory || (page.IncludeRetracted != nil && *page.IncludeRetracted) != request.IncludeRetracted || len(page.Items) > request.Limit {
 		return false
 	}
 	if page.NextCursor != nil && (*page.NextCursor == "" || *page.NextCursor == request.Cursor || len(*page.NextCursor) > 2048) {
@@ -315,7 +320,7 @@ func validMessageSearchPage(page engineapi.MessageSearchPage, request messageSea
 		if !request.includesAccount(m.AccountId) || request.ConversationID != "" && m.ConversationId != request.ConversationID {
 			return false
 		}
-		if hit.MatchKind != "text" && hit.MatchKind != "metadata" || hit.Historical && !request.IncludeHistory {
+		if hit.MatchKind != "text" && hit.MatchKind != "metadata" || hit.Historical && !request.IncludeHistory || (hit.Message.Retraction != nil || hit.Message.Moderation != nil) && !request.IncludeRetracted {
 			return false
 		}
 		key := m.Id + ":" + hit.MatchedRevisionId
@@ -408,6 +413,9 @@ func (v view) messageSearchNativeHref(cursor string) string {
 	}
 	if v.MessageSearch.ConversationID != "" {
 		q.Set("conversationId", v.MessageSearch.ConversationID)
+	}
+	if v.MessageSearch.IncludeRetracted {
+		q.Set("includeRetracted", "true")
 	}
 	if v.MessageSearch.IncludeHistory {
 		q.Set("includeEditHistory", "true")

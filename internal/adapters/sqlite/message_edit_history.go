@@ -14,20 +14,20 @@ import (
 
 // ReadMessageEditHistory reads the immutable first content of physical source
 // messages. Ordinary send-state revisions never become visible content history.
-func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID) (domain.MessageEditHistoryPage, error) {
+func (s *Store) ReadMessageEditHistory(ctx context.Context, requested domain.ID, includeRetracted bool) (domain.MessageEditHistoryPage, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return domain.MessageEditHistoryPage{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	page, err := readMessageEditHistory(ctx, q, requested)
+	page, err := readMessageEditHistory(ctx, q, requested, includeRetracted)
 	if err != nil {
 		return page, err
 	}
 	return page, tx.Commit()
 }
 
-func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested domain.ID) (domain.MessageEditHistoryPage, error) {
+func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested domain.ID, includeRetracted bool) (domain.MessageEditHistoryPage, error) {
 	page := domain.MessageEditHistoryPage{RequestedMessageID: requested, Items: []domain.MessageEditHistoryItem{}}
 	requestedRow, err := q.GetMessage(ctx, string(requested))
 	if err != nil {
@@ -44,11 +44,17 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 	if row.AccountID != requestedRow.AccountID || row.ConversationID != requestedRow.ConversationID {
 		return page, application.ErrNotFound
 	}
-	if _, err := q.GetRoomMessageModeration(ctx, string(canonical)); err == nil {
-		return page, application.ErrNotFound
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	message, err := decodeMessage(row)
+	if err != nil {
 		return page, err
 	}
+	if err := hydrateMessageWithdrawal(ctx, q, &message); err != nil {
+		return page, err
+	}
+	if message.IsWithdrawn() && !includeRetracted {
+		return page, application.ErrNotFound
+	}
+	page.Retraction = message.Retraction
 	page.MessageID = canonical
 	page.AccountID = domain.ID(row.AccountID)
 	page.ConversationID = domain.ID(row.ConversationID)
@@ -85,6 +91,12 @@ func readMessageEditHistory(ctx context.Context, q *dbgen.Queries, requested dom
 			text = content.Reply.BodyText
 		}
 		item := domain.MessageEditHistoryItem{RevisionID: domain.ID(source.RevisionID), SourceMessageID: domain.ID(source.SourceID), CreatedAt: at.UTC(), OriginalText: text, Sender: content.Sender, ParentRevisionIDs: []domain.ID{}}
+		if page.Retraction != nil {
+			item.Attachments = content.Attachments
+			if len(item.Attachments) == 0 {
+				item.AttachmentLinks = application.MessageSharedReferences(domain.Message{FileReferences: content.FileReferences, AudioURLs: content.AudioURLs})
+			}
+		}
 		nodes[item.SourceMessageID] = &historyNode{item: item, source: content}
 	}
 	original := nodes[canonical]

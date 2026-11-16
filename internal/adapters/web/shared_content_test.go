@@ -6,10 +6,35 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+func TestSharedContentDoesNotOfferForwardingForWithdrawnMessages(t *testing.T) {
+	for _, fixture := range []struct {
+		name        string
+		message     engineapi.Message
+		wantForward bool
+	}{
+		{name: "retained", wantForward: true},
+		{name: "retracted", message: engineapi.Message{Retraction: &engineapi.MessageRetraction{}}},
+		{name: "moderated", message: engineapi.Message{Moderation: &engineapi.MessageModeration{}}},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			fixture.message.Id = testMessage
+			item := engineapi.SharedContentItem{Id: testRevision, Kind: "link", Url: "https://example.test", Message: fixture.message}
+			hasForward := false
+			for _, item := range sharedActions(view{}, item)[0].Items {
+				hasForward = hasForward || strings.HasPrefix(item.ID, "forward-message-")
+			}
+			if hasForward != fixture.wantForward {
+				t.Fatalf("forward action available: %t, want %t", hasForward, fixture.wantForward)
+			}
+		})
+	}
+}
 
 func TestSharedContentReadsRemainScopedAndPreviewBound(t *testing.T) {
 	for _, variant := range []string{"valid", "foreign account", "foreign conversation", "foreign preview", "wrong category", "unsafe link"} {

@@ -36,4 +36,5 @@ type SharedContentQuery struct {
 	Limit                     int
 	IncludeFirstPageCounts    bool
 	IncludeMessageStars       bool
+	IncludeRetracted          bool
 }

@@ -123,6 +123,7 @@ type Engine struct {
 	eventWake         chan struct{}
 
 	accountConnectionMu sync.Mutex
+	messageRetractionMu sync.Mutex
 }
 
 func New(repo Repository, role string, ids NewID, now func() time.Time) (*Engine, error) {

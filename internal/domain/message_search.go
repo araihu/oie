@@ -7,6 +7,7 @@ type MessageSearchQuery struct {
 	AccountID, ConversationID ID
 	AccountIDs                []ID
 	IncludeEditHistory        bool
+	IncludeRetracted          bool
 	Limit                     int
 }
 
@@ -30,6 +31,7 @@ type MessageSearchPage struct {
 	AccountID, ConversationID ID
 	AccountIDs                []ID
 	IncludeEditHistory        bool
+	IncludeRetracted          bool
 	Items                     []MessageSearchHit
 	NextCursor                string
 	MetadataIndexing          SharedContentIndex

@@ -4,6 +4,7 @@ import (
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 func (v view) imagePreviews(id string) []engineapi.MessagePreview {
@@ -33,9 +34,17 @@ func messageActions(v view, id string) []dropdown.Section {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "react-message-" + id, Icon: glyph(heroicons.Icon16SolidFaceSmile), Label: v.Text.ReactMessage, OnClick: "void 0", Disabled: !v.reactionAllowed(id), Tooltip: v.Text.ReactionUnavailable}}})
 	}
 	if v.editableMessage(id) {
-		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "edit-message-" + id, Icon: glyph(heroicons.Icon16SolidPencilSquare), Label: v.Text.EditMessage, Href: v.editTargetHref(id)}}})
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{
+			ID:    "edit-message-" + id,
+			Icon:  appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsPencil16SolidPencil, Decorative: true, RootClass: "oie-icon"}),
+			Label: v.Text.EditMessage,
+			Href:  v.editTargetHref(id),
+		}}})
 	}
 	for _, message := range v.Messages {
+		if message.Id == id && !v.Preview && message.CanRetract != nil && *message.CanRetract {
+			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "retract-message-" + id, Icon: glyph(heroicons.Icon16SolidTrash), Label: v.Text.RetractMessage, OnClick: "void 0"}}})
+		}
 		if message.Id == id && v.Selected != nil && v.Selected.Kind == "room" && !v.Preview &&
 			!message.IsOwn && message.Moderation == nil && v.roomState() == "joined" &&
 			v.ConversationInfo != nil && v.ConversationInfo.CanModerateMessages != nil && *v.ConversationInfo.CanModerateMessages {
@@ -48,7 +57,7 @@ func messageActions(v view, id string) []dropdown.Section {
 	}
 	for _, message := range v.Messages {
 		if message.Id == id && messageEdited(message) {
-			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "history-message-" + id, Icon: glyph(heroicons.Icon16SolidClock), Label: v.Text.ViewEditHistory, Href: v.editHistoryHref(message)}}})
+			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "history-message-" + id, Icon: historyIcon(), Label: v.Text.ViewEditHistory, Href: v.editHistoryHref(message)}}})
 			break
 		}
 	}

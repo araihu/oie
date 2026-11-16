@@ -14,6 +14,7 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 	if r.Params.ConversationId != nil {
 		q.ConversationID = domain.ID(*r.Params.ConversationId)
 	}
+	q.IncludeRetracted = r.Params.IncludeRetracted != nil && *r.Params.IncludeRetracted
 	if r.Params.IncludeEditHistory != nil {
 		q.IncludeEditHistory = *r.Params.IncludeEditHistory
 	}
@@ -27,7 +28,7 @@ func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesR
 	if err != nil {
 		return nil, err
 	}
-	out := engineapi.MessageSearchPage{Query: page.Query, IncludeEditHistory: page.IncludeEditHistory, Items: []engineapi.MessageSearchHit{}, MetadataIndexing: engineapi.SharedContentIndexing{State: engineapi.SharedContentIndexingState(page.MetadataIndexing.State), IndexedMessages: page.MetadataIndexing.IndexedMessages, TotalMessages: page.MetadataIndexing.TotalMessages}}
+	out := engineapi.MessageSearchPage{Query: page.Query, IncludeEditHistory: page.IncludeEditHistory, IncludeRetracted: &page.IncludeRetracted, Items: []engineapi.MessageSearchHit{}, MetadataIndexing: engineapi.SharedContentIndexing{State: engineapi.SharedContentIndexingState(page.MetadataIndexing.State), IndexedMessages: page.MetadataIndexing.IndexedMessages, TotalMessages: page.MetadataIndexing.TotalMessages}}
 	if page.AccountID != "" {
 		id := string(page.AccountID)
 		out.AccountId = &id

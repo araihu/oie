@@ -97,8 +97,9 @@ func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery
 		Query                     string
 		AccountID, ConversationID domain.ID
 		History                   bool
+		Retracted                 bool        `json:",omitempty"`
 		AccountIDs                []domain.ID `json:",omitempty"`
-	}{snapshot.ID, q.Search, q.AccountID, q.ConversationID, q.IncludeEditHistory, q.AccountIDs})
+	}{snapshot.ID, q.Search, q.AccountID, q.ConversationID, q.IncludeEditHistory, q.IncludeRetracted, q.AccountIDs})
 	if _, err = ParseMessageSearchCursor(q.Cursor, q.ScopeHash); err != nil {
 		return empty, err
 	}

@@ -371,6 +371,11 @@
   padding: .375rem;
 }
 
+#composer-split-menu [role="menuitem"]:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
 #send-message-form:not([data-editing-schedule]) :is([data-schedule-save-label], #composer-schedule-reschedule),
 #send-message-form[data-editing-schedule] :is([data-schedule-send-icon], #composer-schedule-new) {
   display: none;

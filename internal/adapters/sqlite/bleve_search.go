@@ -34,7 +34,7 @@ func (i *messageIndex) selectRows(ctx context.Context, _ *sql.Tx, q *dbgen.Queri
 		CursorID:   p.CursorID, CursorMs: p.CursorMs, CursorCurrent: p.CursorCurrent,
 		CursorRevisionAt: p.CursorRevisionAt, CursorRevisionID: p.CursorRevisionID, PageLimit: p.PageLimit,
 		ParserVersion: p.ParserVersion, AccountID: p.AccountID, AccountIds: p.AccountIds,
-		ConversationID: p.ConversationID, IncludeHistory: p.IncludeHistory, Search: p.Search,
+		ConversationID: p.ConversationID, IncludeHistory: p.IncludeHistory, IncludeRetracted: p.IncludeRetracted, Search: p.Search,
 	})
 	if err != nil {
 		if ctx.Err() != nil {
@@ -108,7 +108,7 @@ func searchChronological(ctx context.Context, q *dbgen.Queries, p dbgen.SearchMe
 		p.CursorID, p.CursorMs = "~", math.MaxInt64
 	}
 	params := dbgen.SearchMessagesChronologicalParams{
-		Search: p.Search, ParserVersion: p.ParserVersion, AccountID: p.AccountID, AccountIds: p.AccountIds,
+		Search: p.Search, IncludeRetracted: p.IncludeRetracted, ParserVersion: p.ParserVersion, AccountID: p.AccountID, AccountIds: p.AccountIds,
 		ConversationID: p.ConversationID, CursorMs: &p.CursorMs, CursorID: p.CursorID, CursorCurrent: p.CursorCurrent,
 		CursorRevisionAt: p.CursorRevisionAt, CursorRevisionID: p.CursorRevisionID, PageLimit: p.PageLimit,
 	}

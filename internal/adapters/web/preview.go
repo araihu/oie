@@ -51,6 +51,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 		v.InfoType = "media"
 	}
 	v.InfoCursor = q.Get("infoCursor")
+	v.InfoIncludeRetracted = q.Get("infoIncludeRetracted") == "true"
 	v.InfoQuery = q.Get("infoQuery")
 	if len([]rune(v.InfoQuery)) > 200 {
 		v.InfoQuery = string([]rune(v.InfoQuery)[:200])
@@ -75,6 +76,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 	slices.Sort(v.ScheduleConversations)
 	v.ScheduleConversations = slices.Compact(v.ScheduleConversations)
 	v.SharedCursor = q.Get("contentCursor")
+	v.SharedIncludeRetracted = q.Get("contentIncludeRetracted") == "true"
 	v.SharedConversation = q.Get("contentConversation")
 	v.Query = q.Get("q")
 	if query := []rune(v.Query); len(query) > 200 {
@@ -105,6 +107,9 @@ func (v view) href(pairs ...string) string {
 			q.Set("message", v.FocusMessage)
 		}
 	}
+	if v.InfoIncludeRetracted && v.InfoView == "shared" {
+		q.Set("infoIncludeRetracted", "true")
+	}
 	if v.InfoView != "" {
 		q.Set("infoView", v.InfoView)
 		q.Set("infoType", v.InfoType)
@@ -116,6 +121,9 @@ func (v view) href(pairs ...string) string {
 		q.Set("infoQuery", v.InfoQuery)
 	}
 	if v.Section == "media" {
+		if v.SharedIncludeRetracted {
+			q.Set("contentIncludeRetracted", "true")
+		}
 		q.Set("contentType", v.SharedType)
 		if v.SharedCursor != "" {
 			q.Set("contentCursor", v.SharedCursor)
@@ -148,6 +156,9 @@ func (v view) href(pairs ...string) string {
 			q.Set("searchType", v.MessageSearch.Category)
 		}
 		q.Set("searchEngine", v.EngineID)
+		if v.MessageSearch.IncludeRetracted {
+			q.Set("includeRetracted", "true")
+		}
 		if v.MessageSearch.IncludeHistory {
 			q.Set("includeEditHistory", "true")
 		}
@@ -155,6 +166,9 @@ func (v view) href(pairs ...string) string {
 	if v.ConversationSearchOpen {
 		q.Set("chatSearch", "1")
 		q.Set("chatQuery", v.ConversationSearchQuery)
+		if v.ConversationSearchRetracted {
+			q.Set("chatIncludeRetracted", "true")
+		}
 		if v.ConversationSearchHistory {
 			q.Set("chatIncludeHistory", "true")
 			if v.FocusMessage != "" && v.ConversationSearchRevision != "" {
@@ -164,13 +178,14 @@ func (v view) href(pairs ...string) string {
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled" || pairs[i+1] == "favorites") {
-			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "chatSearch", "chatQuery", "chatIncludeHistory", "chatSearchRevision"} {
+			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "includeRetracted", "chatSearch", "chatQuery", "chatIncludeHistory", "chatIncludeRetracted", "chatSearchRevision"} {
 				q.Del(key)
 			}
 		}
 		if pairs[i] == "section" && pairs[i+1] != "media" {
 			q.Del("contentType")
 			q.Del("contentCursor")
+			q.Del("contentIncludeRetracted")
 			q.Del("contentConversation")
 		}
 		if pairs[i] == "section" && pairs[i+1] != "scheduled" {
@@ -186,6 +201,7 @@ func (v view) href(pairs ...string) string {
 		if pairs[i] == "account" {
 			if pairs[i+1] != v.AccountFilter || sharedAccounts != nil {
 				q.Del("contentCursor")
+				q.Del("contentIncludeRetracted")
 			}
 			sharedAccounts = nil
 		}
@@ -193,6 +209,7 @@ func (v view) href(pairs ...string) string {
 			q.Del("chatSearch")
 			q.Del("chatQuery")
 			q.Del("chatIncludeHistory")
+			q.Del("chatIncludeRetracted")
 			q.Del("chatSearchRevision")
 			for _, key := range []string{"infoView", "infoType", "infoCursor", "infoQuery", "infoFocus"} {
 				q.Del(key)

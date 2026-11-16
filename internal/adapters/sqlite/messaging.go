@@ -296,6 +296,30 @@ func checkPendingReplyTarget(ctx context.Context, q *dbgen.Queries, m *domain.Me
 	return nil
 }
 
+func readMessageReceipt(ctx context.Context, q *dbgen.Queries, payload string) (domain.Message, error) {
+	var message domain.Message
+	if payload == "null" {
+		return message, application.ErrNotFound
+	}
+	if err := json.Unmarshal([]byte(payload), &message); err != nil {
+		return message, err
+	}
+	if err := maskWithdrawnProjection(ctx, q, &message); err != nil {
+		return message, err
+	}
+	if err := hydrateReply(ctx, q, &message); err != nil {
+		return message, err
+	}
+	return message, nil
+}
+
+func pendingMessageConflict(ctx context.Context, q *dbgen.Queries, message domain.Message) error {
+	if err := maskWithdrawnProjection(ctx, q, &message); err != nil {
+		return err
+	}
+	return application.StateConflict{Current: message}
+}
+
 func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutation) (application.MessageResult, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -307,22 +331,18 @@ func (s *Store) AcceptMessage(ctx context.Context, in application.MessageMutatio
 		return application.MessageResult{}, err
 	}
 	if receipt != nil {
-		if receipt.Result == "null" {
-			return application.MessageResult{}, application.ErrNotFound
+		message, err := readMessageReceipt(ctx, q, receipt.Result)
+		if err != nil {
+			return application.MessageResult{}, err
 		}
-		var m domain.Message
-		err = json.Unmarshal([]byte(receipt.Result), &m)
-		if err == nil {
-			err = hydrateReply(ctx, q, &m)
-		}
-		return application.MessageResult{Message: m, Replayed: true}, err
+		return application.MessageResult{Message: message, Replayed: true}, nil
 	}
 	if source := in.ForwardSource; source != nil {
 		m, err := visibleMessageProjection(ctx, q, source.MessageID)
 		if err != nil {
 			return application.MessageResult{}, err
 		}
-		if m.ID != source.MessageID || m.RevisionID != source.RevisionID || m.SendState == "cancelled" {
+		if m.ID != source.MessageID || m.RevisionID != source.RevisionID || m.SendState == "cancelled" || m.IsWithdrawn() {
 			return application.MessageResult{}, application.StateConflict{Current: m}
 		}
 	}
@@ -675,15 +695,11 @@ func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation
 		return application.MessageResult{}, err
 	}
 	if receipt != nil {
-		if receipt.Result == "null" {
-			return application.MessageResult{}, application.ErrNotFound
+		message, err := readMessageReceipt(ctx, q, receipt.Result)
+		if err != nil {
+			return application.MessageResult{}, err
 		}
-		var m domain.Message
-		err = json.Unmarshal([]byte(receipt.Result), &m)
-		if err == nil {
-			err = hydrateReply(ctx, q, &m)
-		}
-		return application.MessageResult{Message: m, Replayed: true}, err
+		return application.MessageResult{Message: message, Replayed: true}, nil
 	}
 	row, err := q.GetMessage(ctx, string(in.MessageID))
 	if err != nil {
@@ -694,14 +710,14 @@ func (s *Store) CancelMessage(ctx context.Context, in application.CancelMutation
 		return application.MessageResult{}, err
 	}
 	if !m.IsOwn || m.SendState != "queued" || m.RevisionID != in.ExpectedRevisionID {
-		return application.MessageResult{}, application.StateConflict{Current: m}
+		return application.MessageResult{}, pendingMessageConflict(ctx, q, m)
 	}
 	outbox, err := q.GetOutbox(ctx, string(m.ID))
 	if err != nil {
 		return application.MessageResult{}, err
 	}
 	if outbox.AttemptCount != 0 {
-		return application.MessageResult{}, application.StateConflict{Current: m}
+		return application.MessageResult{}, pendingMessageConflict(ctx, q, m)
 	}
 	m, err = updateMessage(ctx, q, m, "cancelled", in.RevisionID, in.Operation.CreatedAt, in.Operation.CreatedAt, false)
 	if err != nil {

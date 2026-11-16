@@ -23,8 +23,8 @@ func (e *Engine) AcceptedSendMessage(ctx context.Context, operationID domain.ID)
 	return repo.AcceptedSendMessage(ctx, operationID)
 }
 
-// VerifyExpiredSend checks only a durable receipt. A missing or mismatched
-// operation never queues a new message.
+// VerifyExpiredSend checks an exact durable acceptance for an expired or
+// currently withdrawn message. It never queues a message.
 func (e *Engine) VerifyExpiredSend(ctx context.Context, key, conversation domain.ID, in domain.OutgoingComposition, at *time.Time, review ReplyReview) error {
 	if !validID(key) || !validID(conversation) {
 		return ErrInvalid

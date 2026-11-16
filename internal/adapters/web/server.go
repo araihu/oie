@@ -204,6 +204,7 @@ type view struct {
 	RoomArchive                                          *engineapi.RoomArchive
 	ConversationSearchOpen                               bool
 	ConversationSearchQuery                              string
+	ConversationSearchRetracted                          bool
 	ConversationSearchHistory                            bool
 	ConversationSearchRevision                           string
 	MessageSearch                                        messageSearchView
@@ -218,6 +219,7 @@ type view struct {
 	InfoParticipants                                     *engineapi.RoomParticipants
 	InfoShared                                           *engineapi.SharedContentPage
 	InfoStars                                            *engineapi.StarredMessagePage
+	SharedIncludeRetracted, InfoIncludeRetracted         bool
 	InfoInvalid, SharedInDetails                         bool
 	SharedType, SharedCursor, SharedConversation         string
 	SharedAccountIDs                                     []string
@@ -397,6 +399,7 @@ type copy struct {
 	RoomAffiliationMember                                                                                                                                                                                    string
 	RoomAffiliationOutcast                                                                                                                                                                                   string
 	RoomAffiliationNone                                                                                                                                                                                      string
+	RetractMessage, MessageRetracted, RevealOriginal, RetractionConfirm, RetractionPending, RetractionFailed, RetractionUnconfirmed, RetractionRequested, IncludeRetracted                                   string
 	RoomModerateMessage                                                                                                                                                                                      string
 	RoomMessageModerated                                                                                                                                                                                     string
 	RoomUserAddress                                                                                                                                                                                          string
@@ -658,7 +661,7 @@ type copy struct {
 	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
-	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
+	Preview, PreviewNote, Message, Send                                                                                                                                  string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string
@@ -931,16 +934,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body []byte
 	}{
 		"/ui/draft-link-preview.js": {"text/javascript", draftLinkPreviewScript}, "/ui/draft-link-preview.css": {"text/css", draftLinkPreviewStylesheet},
-		"/ui/forwarding.js":        {"text/javascript", forwardingScript},
-		"/ui/scheduling.js":        {"text/javascript", schedulingScript},
-		"/ui/scheduling.css":       {"text/css", schedulingStylesheet},
-		"/ui/sidebar.js":           {"text/javascript", sidebarScript},
-		"/ui/masonry.js":           {"text/javascript", masonryScript},
-		"/ui/presentation-time.js": {"text/javascript", presentationTimeScript},
-		"/ui/reset-data.js":        {"text/javascript", resetDataScript},
-		"/ui/event-stream.js":      {"text/javascript", eventStreamScript},
-		"/ui/inbox-cache.js":       {"text/javascript", inboxCacheScript},
-		"/ui/mentions.js":          {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
+		"/ui/message-retractions.js": {"text/javascript", messageRetractionsScript},
+		"/ui/forwarding.js":          {"text/javascript", forwardingScript},
+		"/ui/scheduling.js":          {"text/javascript", schedulingScript},
+		"/ui/scheduling.css":         {"text/css", schedulingStylesheet},
+		"/ui/sidebar.js":             {"text/javascript", sidebarScript},
+		"/ui/masonry.js":             {"text/javascript", masonryScript},
+		"/ui/presentation-time.js":   {"text/javascript", presentationTimeScript},
+		"/ui/reset-data.js":          {"text/javascript", resetDataScript},
+		"/ui/event-stream.js":        {"text/javascript", eventStreamScript},
+		"/ui/inbox-cache.js":         {"text/javascript", inboxCacheScript},
+		"/ui/mentions.js":            {"text/javascript", mentionsScript}, "/ui/mentions.css": {"text/css", mentionsStylesheet},
 
 		"/ui/notifications.js":       {"text/javascript", notificationScript},
 		"/ui/notification-worker.js": {"text/javascript", notificationWorkerScript},
@@ -1092,6 +1096,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages" && v.MessageSearch.Query != ""
 	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
 	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
+	v.ConversationSearchRetracted = r.URL.Query().Get("chatIncludeRetracted") == "true"
 	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"
 	if id := r.URL.Query().Get("chatSearchRevision"); v.ConversationSearchOpen && v.ConversationSearchHistory && validOperationKey(id) {
 		v.ConversationSearchRevision = id
@@ -1469,7 +1474,7 @@ func (v view) timelineVersion() string {
 		out.WriteString(m.Id + ":" + m.RevisionId + ":" + string(m.SendState) + ";")
 		media, _ := json.Marshal([]any{v.messageVideos(m.Id), v.MessageAudio[m.Id]})
 		_, _ = fmt.Fprintf(&out, "media:%x;", sha256.Sum256(media))
-		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, m.MentionsYou, m.Moderation, v.Reactions[m.Id]})
+		reply, _ := json.Marshal([]any{m.Reply, m.Edited, m.EditedAt, m.MentionsYou, m.Moderation, m.Retraction, m.CanRetract, v.Reactions[m.Id]})
 		_, _ = fmt.Fprintf(&out, "%x;", sha256.Sum256(reply))
 	}
 	return out.String()

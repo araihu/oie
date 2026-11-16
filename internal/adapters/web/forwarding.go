@@ -57,7 +57,7 @@ func (s *Server) prepareForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := source.JSON200
-	if m.Id != sourceID || !validOperationKey(m.RevisionId) || m.SendState == "cancelled" {
+	if m.Id != sourceID || !validOperationKey(m.RevisionId) || m.SendState == "cancelled" || m.Retraction != nil || m.Moderation != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -146,6 +146,9 @@ func (s *Server) loadForwardTopics(ctx context.Context, rooms []forwardRoom) {
 				if ctx.Err() != nil {
 					return
 				}
+				if room.Kind != "room" {
+					continue
+				}
 				if details := s.conversationDetails(ctx, room.Conversation); details != nil {
 					room.Topic = strings.TrimSpace(previewValue(details.Topic))
 				}
@@ -156,11 +159,11 @@ func (s *Server) loadForwardTopics(ctx context.Context, rooms []forwardRoom) {
 }
 
 func (s *Server) forwardRooms(ctx context.Context) ([]forwardRoom, bool) {
-	limit, kind := 100, engineapi.ListConversationsParamsKindRoom
+	limit := 100
 	var rooms []forwardRoom
 	seen := make(map[string]bool)
 	for _, archived := range []bool{false, true} {
-		params := &engineapi.ListConversationsParams{Limit: &limit, Kind: &kind, Archived: &archived}
+		params := &engineapi.ListConversationsParams{Limit: &limit, Archived: &archived}
 		cursors := make(map[string]bool)
 		for {
 			response, err := s.client.ListConversationsWithResponse(ctx, params)
@@ -168,7 +171,7 @@ func (s *Server) forwardRooms(ctx context.Context) ([]forwardRoom, bool) {
 				return nil, false
 			}
 			for _, room := range response.JSON200.Items {
-				if room.Kind == "room" && room.Request == nil && validOperationKey(room.Id) && !seen[room.Id] {
+				if (room.Kind == "room" || room.Kind == "direct") && room.Request == nil && (room.RemovedFromChats == nil || !*room.RemovedFromChats) && validOperationKey(room.Id) && !seen[room.Id] {
 					if room.Title == "" {
 						room.Title = room.Address
 					}
@@ -218,7 +221,7 @@ func (s *Server) submitForward(ctx context.Context, r *http.Request, text copy) 
 		var problem engineapi.Problem
 		if json.Unmarshal(result.Body, &problem) == nil {
 			if current := problem.CurrentMessage; problem.Code == "state_conflict" && current != nil && validOperationKey(current.Id) &&
-				validOperationKey(current.RevisionId) && (current.Id != source || current.RevisionId != revision || current.SendState == "cancelled") {
+				validOperationKey(current.RevisionId) && (current.Id != source || current.RevisionId != revision || current.SendState == "cancelled" || current.Retraction != nil || current.Moderation != nil) {
 				return result.StatusCode(), mutationResult{Message: text.ForwardChanged, Rejected: true, Code: "source_changed"}
 			}
 			if problem.CurrentRoomSession != nil && !problem.CurrentRoomSession.Active {

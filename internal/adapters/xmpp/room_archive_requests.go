@@ -114,7 +114,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 				continue
 			}
 		}
-		if !seen[message.ID] {
+		if !message.IsWithdrawn() && !seen[message.ID] {
 			seen[message.ID] = true
 			result.Items = append(result.Items, message)
 		}

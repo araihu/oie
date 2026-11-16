@@ -32,6 +32,7 @@ func (s *Server) ListSharedContent(ctx context.Context, r engineapi.ListSharedCo
 		q.Limit = *r.Params.Limit
 	}
 	q.IncludeFirstPageCounts = r.Params.IncludeFirstPageCounts != nil && *r.Params.IncludeFirstPageCounts
+	q.IncludeRetracted = r.Params.IncludeRetracted != nil && *r.Params.IncludeRetracted
 	q.IncludeMessageStars = r.Params.IncludeMessageStars != nil && *r.Params.IncludeMessageStars
 	page, err := s.engine.SharedContent(ctx, q)
 	if err != nil {

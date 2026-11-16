@@ -69,6 +69,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   const previewMessage={...layoutMessages[0],id:id(6062),revisionId:id(6162),originalText:'Conheça as plataformas disponíveis '+otherURL+'\n'+matchURL};
   corpus.push(previewMessage);
   const all = [...corpus,...fillers];
+  let withdrawnId='';
+  const projection=m=>m.id===withdrawnId?{...m,originalText:'',retraction:{at:'2026-11-10T12:00:00Z',originalAvailable:true}}:m;
   const chronological = c => all.filter(m => m.conversationId===c.id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const fold = value => value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
   const api = http.createServer(async (req,res) => {
@@ -128,14 +130,15 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       state.searchReads.push({...Object.fromEntries(u.searchParams),accountIds});
       if (state.mode==='unavailable') return send(503,{code:'unavailable'});
       const q=u.searchParams.get('q')?.trim(), selectedAccount=u.searchParams.get('accountId')||'', conversation=u.searchParams.get('conversationId')||'', history=u.searchParams.get('includeEditHistory')==='true';
-      const matchesScope=m=>(!selectedAccount||m.accountId===selectedAccount)&&(!accountIds.length||accountIds.includes(m.accountId))&&(!conversation||m.conversationId===conversation);
-      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,accountIds,conversation,history]);
+      const includeRetracted=u.searchParams.get('includeRetracted')==='true';
+      const matchesScope=m=>(!selectedAccount||m.accountId===selectedAccount)&&(!accountIds.length||accountIds.includes(m.accountId))&&(!conversation||m.conversationId===conversation)&&(includeRetracted||m.id!==withdrawnId);
+      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,accountIds,conversation,history,includeRetracted]);
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
       let hits=corpus.filter(matchesScope).flatMap(m=>{
         const c=[...chats,archiveRoom].find(c=>c.id===m.conversationId),a=accounts.find(a=>a.id===m.accountId);
         const senderAddress=m.isOwn?a.address:c.kind==='direct'?c.address:undefined;
-        const base={message:m,accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
+        const base={message:projection(m),accountLabel:a.label,conversationTitle:c.title,conversationAddress:c.address,senderAddress,matchedAt:m.createdAt,matchKind:'text',...(m===corpus[54]?{senderAvatarHash:senderHash}:{})};
         if(m===layoutMessages[0])base.preview={kind:'link',imageHash:conversationHash,faviconHash:senderHash};
         if(m===layoutMessages[1])base.preview={kind:'link'};
         const rows=(fold(m.originalText).includes(fold(q))||m===markdownHit&&q==='viedo')?[{...base,matchedRevisionId:m===corpus[1]?id(9001):m.revisionId,historical:false,excerpt:m.originalText}]:[];
@@ -145,7 +148,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       }).sort((a,b)=>new Date(b.message.createdAt).getTime()-new Date(a.message.createdAt).getTime()||b.message.id.localeCompare(a.message.id)||Number(a.historical)-Number(b.historical)||b.matchedAt.localeCompare(a.matchedAt));
       const limit=conversation===chat.id?Math.min(q==='Pineapple prior'?1:7,Number(u.searchParams.get('limit')||50)):Number(u.searchParams.get('limit')||50),items=hits.slice(offset,offset+limit);
       const indexedMessages=corpus.filter(matchesScope).length,totalMessages=all.filter(matchesScope).length;
-      return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(accountIds.length?{accountIds}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:totalMessages===indexedMessages?'complete':'pending',indexedMessages,totalMessages}});
+      return send(200,{query:q,...(selectedAccount?{accountId:selectedAccount}:{}),...(accountIds.length?{accountIds}:{}),...(conversation?{conversationId:conversation}:{}),includeEditHistory:history,includeRetracted,items,nextCursor:offset+limit<hits.length?Buffer.from(JSON.stringify({scope:fingerprint,offset:offset+limit})).toString('base64url'):undefined,metadataIndexing:{state:totalMessages===indexedMessages?'complete':'pending',indexedMessages,totalMessages}});
     }
     if(u.pathname.endsWith('/contacts')){
       state.contactReads.push(Object.fromEntries(u.searchParams));
@@ -169,18 +172,18 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
         const cursor=u.searchParams.get('cursor'),index=cursor?messages.findIndex(m=>m.id===cursor):messages.length,direction=u.searchParams.get('direction')||'older';
         if(index<0)return send(404,{code:'not_found'});
         const start=direction==='newer'?index+1:Math.max(0,index-limit),end=direction==='newer'?Math.min(messages.length,start+limit):index,items=messages.slice(start,end).reverse();
-        return send(200,{items,nextCursor:direction==='newer'?(end<messages.length?items[0]?.id:undefined):(start>0?items.at(-1)?.id:undefined)});
+        return send(200,{items:items.map(projection),nextCursor:direction==='newer'?(end<messages.length?items[0]?.id:undefined):(start>0?items.at(-1)?.id:undefined)});
       }
       const context=/^\/api\/v1\/conversations\/[^/]+\/messages\/([^/]+)\/context$/.exec(u.pathname);
       if(context&&u.pathname.startsWith(prefix+'/')) {
         state.contexts.push({conversation:c.id,message:context[1],limit});
         const index=messages.findIndex(m=>m.id===context[1]);if(index<0)return send(404,{code:'not_found'});
         const start=Math.max(0,index-Math.floor(limit/2)),end=Math.min(messages.length,start+limit);
-        return send(200,{targetId:messages[index].id,items:messages.slice(start,end).reverse(),hasOlder:start>0,hasNewer:end<messages.length});
+        return send(200,{targetId:messages[index].id,items:messages.slice(start,end).reverse().map(projection),hasOlder:start>0,hasNewer:end<messages.length});
       }
       if(u.pathname===prefix+'/details') return send(200,{conversationId:c.id,accountId:c.accountId,kind:'direct',address:c.address,state:'known',checkedAt:chat.updatedAt,accountConnection:{accountId:c.accountId,state:'connected',updatedAt:chat.updatedAt},participants:{scope:'peer',state:'unknown',items:[]},features:[]});
     }
-    if(u.pathname.startsWith('/api/v1/messages/')){const m=all.find(m=>m.id===u.pathname.split('/').at(-1));return m?send(200,m):send(404,{code:'not_found'})}
+    if(u.pathname.startsWith('/api/v1/messages/')){const m=all.find(m=>m.id===u.pathname.split('/').at(-1));return m?send(200,projection(m)):send(404,{code:'not_found'})}
     if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
     send(404,{code:'not_found'});
   });
@@ -995,6 +998,35 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await historyPage.context().close();
     findings.push('Room search returns local hits before an outstanding server request and merges matching sources without moving the timeline or composer');
     findings.push('Room archive switch preserves focus and geometry, saves the selected mode and restores it on refusal. Its help opens independently');
+    const withdrawalPage=await fresh(),withdrawn=corpus[0],searchTerm=withdrawn.originalText;
+    await withdrawalPage.goto(initial());
+    await withdrawalPage.waitForFunction(()=>window.OieEvents?.connected);
+    await query(withdrawalPage).fill(searchTerm);
+    const globalHit=hits(withdrawalPage).filter({hasText:searchTerm});
+    await globalHit.waitFor();await settled(withdrawalPage,searchTerm);
+    await withdrawalPage.evaluate(()=>document.dispatchEvent(new CustomEvent('oie:conversation-search-open')));
+    const local=withdrawalPage.locator('[data-conversation-search]');
+    await local.getByRole('checkbox',{name:'Include edit history',exact:true}).check();
+    await local.locator('#conversation-search-query').fill('Pineapple prior');
+    const excerpt=local.locator('[data-conversation-search-excerpt]');
+    await excerpt.getByText('Pineapple prior version 2',{exact:false}).waitFor();
+    await withdrawalPage.keyboard.press('Control+k');
+    const quick=withdrawalPage.locator('#oie-quick-search');
+    await quick.locator('#oie-quick-search-query').fill(searchTerm);
+    const quickHit=quick.locator('[data-search-message="'+withdrawn.id+'"]');
+    await quickHit.waitFor();
+    withdrawnId=withdrawn.id;
+    for(const stream of streams)stream.write('id: '+state.engine+':1\nevent: message.updated\ndata: '+JSON.stringify({message:projection(withdrawn)})+'\n\n');
+    await quickHit.waitFor({state:'detached'});
+    await globalHit.waitFor({state:'detached'});
+    await excerpt.waitFor({state:'hidden'});
+    await until(async()=>await local.getAttribute('data-search-loaded')==='0','conversation search removes withdrawn historical matches');
+    await withdrawalPage.keyboard.press('Escape');
+    await form(withdrawalPage).getByRole('checkbox',{name:'Include retracted',exact:true}).check();
+    await globalHit.waitFor();
+    assert.equal(await globalHit.getAttribute('data-search-hit-retracted'),'true');
+    await withdrawalPage.context().close();withdrawnId='';
+    findings.push('A withdrawal evicts open quick and global hits plus a visible historical conversation excerpt until explicitly included');
     state.engine=id(99);await query(page).fill('switch');await until(async()=>await page.locator('#message-search-feedback').textContent().then(text=>text.includes('engine')||text.includes('Engine')),'engine change is visible');assert.equal(await hits(page).count(),0);assert.equal(await query(page).inputValue(),'switch','engine rejection preserves the latest typed search');assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'switch');const readsBeforeRebind=state.searchReads.length;await page.locator('button[data-message-search-restart]:visible').click();await page.waitForURL(url=>url.pathname==='/search');await until(async()=>await form(page).locator('[name=engineId]').inputValue()===id(99),'explicit restart binds the replacement engine');assert.equal(await query(page).inputValue(),'switch');assert(state.searchReads.length>readsBeforeRebind,'only explicit recovery queries the replacement engine');state.engine=id(1);
     findings.push('Engine replacement clears old results and requires explicit restart before rebinding');
 

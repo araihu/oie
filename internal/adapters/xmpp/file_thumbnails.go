@@ -116,9 +116,6 @@ func decodeFileReferences(meta fileSharingMetadata) []domain.SharedReference {
 	var refs []domain.SharedReference
 	for _, file := range meta.Files {
 		mediaType, _, _ := mime.ParseMediaType(file.File.MediaType)
-		if domain.PlayableAudioType(mediaType) != "" {
-			continue
-		}
 		name := path.Base(strings.ReplaceAll(file.File.Name, "\\", "/"))
 		var kind string
 		switch mediaType {
@@ -135,6 +132,10 @@ func decodeFileReferences(meta fileSharingMetadata) []domain.SharedReference {
 			kind = "document"
 			if path.Ext(name) == "" {
 				name += ".txt"
+			}
+		default:
+			if domain.PlayableAudioType(mediaType) != "" {
+				kind = "audio"
 			}
 		}
 		for _, source := range file.Sources.URLs {
