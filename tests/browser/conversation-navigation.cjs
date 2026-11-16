@@ -185,9 +185,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   },{times:1});
   const beforeFailure=await page.evaluate(()=>{window.failedOpenPane=document.getElementById('conversation-pane');return location.href});
   await page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]').click();
+  const preferenceFeedback=page.locator('.oie-conversation-preference-feedback');
   try{
    await skeleton().waitFor({state:'visible'});
    assert(await page.locator('#message-timeline').evaluate(node=>node.inert));
+   assert(await preferenceFeedback.evaluate(node=>node.inert));
    assert(await skeleton().locator('.oie-chat-skeleton-header').isHidden());
    assert(await skeleton().locator('.oie-chat-skeleton-composer').isHidden());
    assert(await page.locator('#chat-header').isVisible());
@@ -196,6 +198,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
   await skeleton().waitFor({state:'hidden'});
   assert(await page.evaluate(()=>window.failedOpenPane===document.getElementById('conversation-pane')&&window.savedList===document.getElementById('conversation-list')&&!document.getElementById('message-timeline').inert));
+  assert.equal(await preferenceFeedback.evaluate(node=>node.inert),false);
   assert.equal(page.url(),beforeFailure);
   const savedChatScroll=await page.locator('#message-timeline').evaluate(node=>{
    node.scrollTop=Math.floor((node.scrollHeight-node.clientHeight)/2);
