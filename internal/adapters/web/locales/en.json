@@ -52,7 +52,7 @@
   "AttachFile": "File",
   "AttachmentPreparing": "Preparing attachments…",
   "RecordAudio": "Record audio",
-  "AudioPreparing": "Waiting for microphone…",
+  "AudioPreparing": "Starting microphone…",
   "AudioRecording": "Recording audio…",
   "AudioRecordingFailed": "Could not record audio. Check microphone access.",
   "AudioRecordingFile": "Audio recording",

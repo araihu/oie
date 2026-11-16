@@ -41,7 +41,7 @@ window.OieRuntime.register('message-audio', life => {
 
   function update(player) {
     const {card, media, button, wave, shape} = player;
-    const playing = !media.paused && !media.ended;
+    const playing = player.playRequested || (!media.paused && !media.ended);
     button.setAttribute('aria-label', (playing ? card.dataset.audioPauseLabel : card.dataset.audioPlayLabel) + ' · ' + card.closest('[data-audio-id]').dataset.audioFilename);
     button.querySelector('[data-record-play-icon]').hidden = playing;
     button.querySelector('[data-record-pause-icon]').hidden = !playing;
@@ -67,6 +67,7 @@ window.OieRuntime.register('message-audio', life => {
     players.delete(player.card);
     if (active === player) active = null;
     const {card, media, button, shape} = player;
+    player.playRequested = false;
     player.controller.abort();
     player.wave?.destroy();
     const focused = card.isConnected && (document.activeElement === media || document.activeElement === shape);
@@ -134,6 +135,8 @@ window.OieRuntime.register('message-audio', life => {
   }
 
   async function play(player) {
+    player.playRequested = true;
+    update(player);
     if (player.recovering) return;
     const {card, media, source} = player;
     if (!media.hasAttribute('src')) media.src = source;
@@ -143,7 +146,12 @@ window.OieRuntime.register('message-audio', life => {
     try {
       await media.play();
     } catch (error) {
-      if (active !== player || media.src !== attemptedSource || error.name === 'NotAllowedError' || error.name === 'AbortError') return;
+      if (active !== player || media.src !== attemptedSource || error.name === 'AbortError') return;
+      if (error.name === 'NotAllowedError') {
+        player.playRequested = false;
+        update(player);
+        return;
+      }
       void playbackError(player);
     } finally {
       if (current(player) && active === player && media.src === attemptedSource && !player.recovering) status(card);
@@ -154,6 +162,7 @@ window.OieRuntime.register('message-audio', life => {
     if (!current(player) || player.recovering) return;
     const {media, source} = player;
     if (media.src === source) {
+      const position = media.currentTime;
       // A provider or WebView can reject the native range probe while the
       // bounded waveform request succeeds. Reuse those bytes for playback.
       player.recovering = true;
@@ -161,8 +170,11 @@ window.OieRuntime.register('message-audio', life => {
       if (!current(player)) return;
       player.recovering = false;
       if (player.url) {
+        media.preload = 'metadata';
         media.src = player.url;
-        if (active === player) void play(player);
+        // A seek before metadata sets the new resource's playback start position.
+        if (position > 0) media.currentTime = position;
+        if (active === player && player.playRequested) void play(player);
         return;
       }
     }
@@ -219,6 +231,8 @@ window.OieRuntime.register('message-audio', life => {
       shape.setAttribute('role', 'slider');
       shape.setAttribute('aria-label', card.dataset.audioPositionLabel);
       shape.setAttribute('aria-valuemin', '0');
+      // Draw the current position even if playback paused while decoding.
+      media.dispatchEvent(new Event('timeupdate'));
     } catch {
       player.wave?.destroy();
       player.wave = null;
@@ -269,9 +283,11 @@ window.OieRuntime.register('message-audio', life => {
     const previous = active;
     active = player;
     if (!previous || previous === player) return;
+    previous.playRequested = false;
     previous.media.pause();
     status(previous.card);
     if (!visible.has(previous.card)) release(previous);
+    else update(previous);
   }
 
   life.on(app, 'click', event => {
@@ -281,8 +297,11 @@ window.OieRuntime.register('message-audio', life => {
     waiting.delete(card);
     const player = loadPlayer(card);
     if (!player) return;
-    if (active === player && !player.media.paused) {
+    if (active === player && (player.playRequested || !player.media.paused)) {
+      player.playRequested = false;
       player.media.pause();
+      status(card);
+      update(player);
       return;
     }
     selectPlayer(player);
@@ -306,7 +325,12 @@ window.OieRuntime.register('message-audio', life => {
       if (event.type === 'play' && event.target.matches?.('[data-audio-player]') && !event.target.paused) {
         selectPlayer(player);
       }
-      if (event.target === player?.media) update(player);
+      if (event.target !== player?.media) return;
+      if (event.type === 'play' && !player.media.paused) player.playRequested = true;
+      if (event.type === 'ended' || (event.type === 'pause' && player.media.paused && !player.media.error)) {
+        player.playRequested = false;
+      }
+      update(player);
     }, true);
   }
   life.on(app, 'error', event => {

@@ -382,7 +382,8 @@ window.OieRuntime.register('scheduling', life => {
     const player = playerDialog.querySelector('video');
     const playbackError = playerDialog.querySelector('[data-draft-video-error]');
     const maxFileSize = 20 * 1024 * 1024;
-    const failedRecordingKey = 'failed-recordings:' + data.engineId + ':' + data.conversationId;
+    const submittedRecordingKey = 'submitted-recording:' + data.engineId + ':' + data.conversationId;
+    const runtimeMemory = window.OieRuntime.memory;
     let currentVideo, playerURL, playback, previewing;
     const selectionOrder = new Map();
     let sequence = 0;
@@ -475,15 +476,19 @@ window.OieRuntime.register('scheduling', life => {
       syncAttachmentControls();
     }
 
+    function canAddAttachments() {
+      return available() && !locked && !recording && !nativeSelection && !recordingDraft()?.finishUpload;
+    }
+
     function syncAttachmentControls() {
-      const disabled = !available() || locked || !!recording || !!nativeSelection || !!recordingDraft()?.finishUpload ||
-        (!!window.OieDesktop?.attachFiles && pending.size > 0);
+      const disabled = !canAddAttachments() || (!!window.OieDesktop?.attachFiles && pending.size > 0);
       for (const action of attachmentActions) action.disabled = disabled;
       menuTrigger.disabled = disabled && scheduleAction.disabled;
       for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked || !!nativeSelection;
       for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
       recordRemove.disabled = locked || !!nativeSelection;
-      recordRetry.disabled = locked || (!!recordingDraft()?.failed && !available());
+      const voice = recordingDraft();
+      recordRetry.disabled = locked || (!!voice?.failed && (!available() || !!voice.request));
       queueMicrotask(syncRecordButton);
     }
 
@@ -663,14 +668,11 @@ window.OieRuntime.register('scheduling', life => {
         recordWave.setAttribute('aria-label', recordWave.dataset.positionLabel);
         recordWave.setAttribute('aria-valuemin', '0');
         recordWave.setAttribute('aria-valuemax', duration);
+        recordMedia.dispatchEvent(new Event('timeupdate'));
       } catch {
         if (audioPreview !== preview) return;
         preview.wave?.destroy();
         preview.wave = null;
-        if (!recordMedia.hasAttribute('src')) {
-          failAudioPreview(preview);
-          return;
-        }
         preview.waveUnavailable = true;
         if (!recordMedia.paused) showNativeAudioPreview();
       } finally {
@@ -682,6 +684,7 @@ window.OieRuntime.register('scheduling', life => {
     async function recoverAudioPreview(preview) {
       if (audioPreview !== preview || preview.failed || preview.recovering) return;
       if (recordMedia.src === preview.source) {
+        const position = recordMedia.currentTime;
         // Some WebViews fail the initial media range probe, while the full staged GET succeeds.
         preview.recovering = true;
         await preview.buffered.catch(() => {});
@@ -689,7 +692,8 @@ window.OieRuntime.register('scheduling', life => {
         preview.recovering = false;
         if (preview.url) {
           recordMedia.src = preview.url;
-          if (!editingSent) playAudioPreview(preview);
+          if (position > 0) recordMedia.currentTime = position;
+          if (preview.playRequested && !editingSent) playAudioPreview(preview);
           return;
         }
       }
@@ -697,18 +701,26 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     function playAudioPreview(preview) {
+      preview.playRequested = true;
+      updateAudioPlayer();
+      if (preview.recovering) return;
       if (!recordMedia.hasAttribute('src')) recordMedia.src = preview.source;
       if (preview.waveUnavailable) showNativeAudioPreview();
       const source = recordMedia.src;
       void recordMedia.play().catch(error => {
-        if (audioPreview === preview && recordMedia.src === source &&
-            error.name !== 'AbortError' && error.name !== 'NotAllowedError') void recoverAudioPreview(preview);
+        if (audioPreview !== preview || recordMedia.src !== source || error.name === 'AbortError') return;
+        if (error.name === 'NotAllowedError') {
+          preview.playRequested = false;
+          updateAudioPlayer();
+          return;
+        }
+        void recoverAudioPreview(preview);
       });
     }
 
     function updateAudioPlayer() {
       if (!audioPreview) return;
-      const playing = !recordMedia.paused;
+      const playing = audioPreview.playRequested || (!recordMedia.paused && !recordMedia.ended);
       recordPlay.setAttribute('aria-label', playing ? recordPanel.dataset.pauseLabel : recordPanel.dataset.playLabel);
       recordPlay.querySelector('[data-record-play-icon]').hidden = playing;
       recordPlay.querySelector('[data-record-pause-icon]').hidden = !playing;
@@ -724,6 +736,7 @@ window.OieRuntime.register('scheduling', life => {
       const file = recordingDraft();
       recordPanel.hidden = editingSent || (!file && !recording);
       if (editingSent) {
+        if (audioPreview) audioPreview.playRequested = false;
         recordMedia.pause();
         return;
       }
@@ -855,7 +868,10 @@ window.OieRuntime.register('scheduling', life => {
         const options = {signal: take.controller.signal};
         track.addEventListener('mute', renderAudio, options);
         track.addEventListener('unmute', microphoneReady, options);
-        track.addEventListener('ended', failRecording, options);
+        track.addEventListener('ended', () => {
+          // Stop can precede the recorder's final data and stop events.
+          if (!take.keep) failRecording();
+        }, options);
         microphoneReady();
       } catch {
         failRecording();
@@ -905,9 +921,11 @@ window.OieRuntime.register('scheduling', life => {
     });
     life.on(recordPlay, 'click', () => {
       const preview = audioPreview;
-      if (!preview || preview.failed || preview.recovering) return;
-      if (!recordMedia.paused) {
+      if (!preview || preview.failed) return;
+      if (preview.playRequested || !recordMedia.paused) {
+        preview.playRequested = false;
         recordMedia.pause();
+        updateAudioPlayer();
         return;
       }
       playAudioPreview(preview);
@@ -927,7 +945,12 @@ window.OieRuntime.register('scheduling', life => {
     });
     for (const event of ['timeupdate', 'durationchange', 'loadedmetadata', 'play', 'pause', 'ended']) {
       life.on(recordPanel, event, event => {
-        if (event.target === recordMedia) updateAudioPlayer();
+        if (event.target !== recordMedia || !audioPreview) return;
+        if (event.type === 'play' && !recordMedia.paused) audioPreview.playRequested = true;
+        if (event.type === 'ended' || (event.type === 'pause' && recordMedia.paused && !recordMedia.error)) {
+          audioPreview.playRequested = false;
+        }
+        updateAudioPlayer();
       }, true);
     }
     life.on(recordPanel, 'error', event => {
@@ -949,6 +972,10 @@ window.OieRuntime.register('scheduling', life => {
     function syncPending() {
       composer.toggleAttribute('data-attachments-pending', pending.size > 0 || !!nativeSelection);
       composer.toggleAttribute('data-recording-upload', !!uploadingRecording());
+      const queued = !!recordingDraft()?.finishUpload;
+      composer.toggleAttribute('data-waiting-recording-upload', queued);
+      if (queued) primary.setAttribute('aria-busy', 'true');
+      else primary.removeAttribute('aria-busy');
       composer.dispatchEvent(new Event('oie:attachment-staging'));
       syncVideos();
       renderFiles();
@@ -957,25 +984,36 @@ window.OieRuntime.register('scheduling', life => {
     function uploadingRecording() {
       if (!available() || locked || nativeSelection || pending.size !== 1 || files.length) return;
       const [file] = pending.values();
-      if (file.recordedAudio && !file.failed) return file;
+      const submitted = runtimeMemory.get(submittedRecordingKey);
+      if (file.recordedAudio && !file.failed && (!submitted || submitted === file)) return file;
     }
 
     life.on(composer, 'oie:wait-for-recording-upload', ({detail}) => {
       const file = uploadingRecording();
       if (!file || file.finishUpload) return;
+      runtimeMemory.set(submittedRecordingKey, file);
       const confirmLeave = event => {
         if (window.OieHostedSession?.leaving) return;
         event.preventDefault();
         event.returnValue = '';
       };
+      const cancelOnReset = () => forget(file);
       window.addEventListener('beforeunload', confirmLeave);
+      window.addEventListener('oie:device-reset', cancelOnReset);
       detail.ready = new Promise(resolve => {
         file.finishUpload = metadata => {
           window.removeEventListener('beforeunload', confirmLeave);
+          window.removeEventListener('oie:device-reset', cancelOnReset);
           resolve(metadata);
         };
       });
-      syncAttachmentControls();
+      detail.abandon = () => {
+        if (life.signal.aborted) return false;
+        settleRecordingUpload(file);
+        syncPending();
+        return true;
+      };
+      syncPending();
     });
 
     function draftVideoType(file) {
@@ -1087,17 +1125,24 @@ window.OieRuntime.register('scheduling', life => {
     life.on(player, 'error', () => { if (currentVideo) playbackError.hidden = false; });
     life.on(window, 'pagehide', () => closeVideo(false));
 
-    function forget(file) {
-      file.request?.abort();
-      file.finishUpload?.();
+    function settleRecordingUpload(file, metadata) {
+      const finish = file.finishUpload;
       delete file.finishUpload;
+      finish?.(metadata);
+    }
+
+    function forget(file) {
+      file.discarded = true;
+      if (runtimeMemory.get(submittedRecordingKey) === file) runtimeMemory.delete(submittedRecordingKey);
+      file.request?.abort();
+      settleRecordingUpload(file);
       if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
       pending.delete(file.id);
     }
 
     function stageNext() {
       if (uploading || locked || !available() || life.signal.aborted) return;
-      const file = [...pending.values()].find(file => !file.failed);
+      const file = [...pending.values()].find(file => !file.failed && !file.request);
       if (file) void stage(file);
     }
 
@@ -1126,13 +1171,15 @@ window.OieRuntime.register('scheduling', life => {
         if (metadata?.id !== file.id || metadata.size !== file.file.size ||
           metadata.fileName !== file.fileName ||
           typeof metadata.mediaType !== 'string' || !/^[a-f0-9]{64}$/.test(metadata.sha256)) throw Error('staging');
-        if (pending.get(file.id) !== file || (life.signal.aborted && !file.finishUpload)) return;
+        if (file.discarded || pending.get(file.id) !== file || (life.signal.aborted && !file.finishUpload)) return;
         if (controller.signal.aborted || (!life.signal.aborted && !available())) throw Error('staging unavailable');
         if (file.recordedAudio) metadata.recordedAudio = true;
         pending.delete(file.id);
         if (!life.signal.aborted) {
           const order = item => selectionOrder.get(item.id) || 0;
-          const detail = {files: [...files, metadata].sort((a,b) => order(a) - order(b))};
+          const detail = {
+            files: [...files, metadata].sort((a,b) => order(a) - order(b)), queuedRecording: !!file.finishUpload,
+          };
           composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
           if (!detail.applied) {
             pending.set(file.id, file);
@@ -1142,21 +1189,18 @@ window.OieRuntime.register('scheduling', life => {
         staged = metadata;
         if (file.thumbnail) URL.revokeObjectURL(file.thumbnail);
       } catch {
-        if (pending.get(file.id) !== file) return;
+        if (file.discarded || pending.get(file.id) !== file) return;
         file.failed = true;
-        if (life.signal.aborted && file.finishUpload) {
-          retainFailedRecording(file);
-        } else {
-          status.textContent = labels.failed;
-        }
+        if (!life.signal.aborted) status.textContent = labels.failed;
         if (file.recordedAudio) errorToast(labels.failed);
       } finally {
         clearTimeout(timeout);
         delete file.request;
-        file.finishUpload?.(staged);
-        delete file.finishUpload;
+        const submitted = runtimeMemory.get(submittedRecordingKey) === file;
+        if (submitted && staged) runtimeMemory.delete(submittedRecordingKey);
+        settleRecordingUpload(file, staged);
         if (!life.signal.aborted) syncPending();
-        else if (file.failed) document.dispatchEvent(new Event('oie:failed-recording-upload'));
+        else if (submitted) document.dispatchEvent(new CustomEvent('oie:recording-upload-settled', {detail: {key: submittedRecordingKey, file}}));
         uploading = false;
         stageNext();
       }
@@ -1164,7 +1208,7 @@ window.OieRuntime.register('scheduling', life => {
 
     function addFiles(picked, recordedAudio = false) {
       if (!picked.length || !chat.getClientRects().length) return;
-      if (!available() || locked || recording || nativeSelection || recordingDraft()?.finishUpload || document.querySelector('dialog[open]')) {
+      if (!canAddAttachments() || document.querySelector('dialog[open]')) {
         errorToast(labels.unavailable);
         return;
       }
@@ -1202,33 +1246,35 @@ window.OieRuntime.register('scheduling', life => {
       }
       stageNext();
     });
-    function retainFailedRecording(file) {
-      const {id, fileName, file: blob} = file;
-      const memory = window.OieRuntime.memory;
-      const failed = memory.get(failedRecordingKey) || [];
-      failed.push({id, fileName, file: blob, recordedAudio: true, failed: true, recovered: true});
-      memory.set(failedRecordingKey, failed);
-    }
-
-    function restoreFailedRecording() {
+    function restoreSubmittedRecording() {
       if (pending.size || files.length || locked || editingSent || recording || input.value.trim() ||
           composer.hasAttribute('data-editing-schedule')) return;
-      const memory = window.OieRuntime.memory;
-      const failed = memory.get(failedRecordingKey);
-      if (!failed?.length) return;
-      const file = failed.shift();
-      if (!failed.length) memory.delete(failedRecordingKey);
+      const file = runtimeMemory.get(submittedRecordingKey);
+      if (!file) return;
       pending.set(file.id, file);
       syncPending();
     }
-    life.on(document, 'oie:failed-recording-upload', restoreFailedRecording);
-    restoreFailedRecording();
+    life.on(document, 'oie:recording-upload-settled', ({detail: {key, file}}) => {
+      if (key !== submittedRecordingKey) return;
+      if (pending.get(file.id) !== file) {
+        restoreSubmittedRecording();
+        return;
+      }
+      if (runtimeMemory.get(key) !== file) pending.delete(file.id);
+      syncPending();
+    });
+    restoreSubmittedRecording();
 
     function discardPending(keepQueued = false) {
       nativeSelection = null;
       for (const file of pending.values()) {
-        if (keepQueued && file.finishUpload) continue;
-        if (keepQueued && file.recovered) retainFailedRecording(file);
+        if (keepQueued && runtimeMemory.get(submittedRecordingKey) === file) {
+          if (!file.finishUpload && file.request) {
+            file.failed = true;
+            file.request.abort();
+          }
+          continue;
+        }
         forget(file);
       }
     }
@@ -1275,7 +1321,7 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     life.on(composer, 'oie:compose-add', event => {
-      if (!['image', 'file'].includes(event.detail) || !available() || locked || recording || nativeSelection) return;
+      if (!['image', 'file'].includes(event.detail) || !canAddAttachments()) return;
       const choose = window.OieDesktop?.attachFiles;
       const imagesOnly = event.detail === 'image';
       if (choose) {
@@ -1300,12 +1346,14 @@ window.OieRuntime.register('scheduling', life => {
       if (!fileDrag(event)) return;
       event.preventDefault();
       dragDepth++;
-      chat.toggleAttribute('data-file-drag', available() && !locked && !recording && !nativeSelection);
+      chat.toggleAttribute('data-file-drag', canAddAttachments());
     });
     life.on(chat, 'dragover', event => {
       if (!fileDrag(event)) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = available() && !locked && !recording && !nativeSelection ? 'copy' : 'none';
+      const allowed = canAddAttachments();
+      chat.toggleAttribute('data-file-drag', allowed);
+      event.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
     });
     life.on(chat, 'dragleave', event => {
       if (!fileDrag(event)) return;

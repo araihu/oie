@@ -5,6 +5,7 @@ const {spawn} = require('node:child_process');
 const {once} = require('node:events');
 const fs = require('node:fs/promises');
 const http = require('node:http');
+const os = require('node:os');
 const path = require('node:path');
 const {chromium, webkit} = require('playwright');
 
@@ -40,14 +41,14 @@ const ownText = {
   createdAt:'2026-11-08T12:00:03Z',
 };
 
-function audioFixture(seconds = 2) {
+function audioFixture(seconds = 2, amplitude = 1500) {
   const samples = 8000 * seconds;
   const pcm = Buffer.alloc(44 + samples * 2);
   pcm.write('RIFF',0); pcm.writeUInt32LE(pcm.length - 8,4); pcm.write('WAVEfmt ',8);
   pcm.writeUInt32LE(16,16); pcm.writeUInt16LE(1,20); pcm.writeUInt16LE(1,22);
   pcm.writeUInt32LE(8000,24); pcm.writeUInt32LE(16000,28); pcm.writeUInt16LE(2,32);
   pcm.writeUInt16LE(16,34); pcm.write('data',36); pcm.writeUInt32LE(samples * 2,40);
-  for(let i=0;i<Math.min(samples,16000);i++) pcm.writeInt16LE(Math.round(1500 * Math.sin(i * Math.PI * .11)),44+i*2);
+  for(let i=0;i<Math.min(samples,16000);i++) pcm.writeInt16LE(Math.round(amplitude * Math.sin(i * Math.PI * .11)),44+i*2);
   return pcm;
 }
 const features = ['schedules', 'file_upload', 'room_messaging', 'send_corrections'].map(id => ({
@@ -82,11 +83,11 @@ async function installMicrophoneTone(page) {
   await page.waitForFunction(() => !!window.microphoneTone);
 }
 
-async function verifyAudioCapture(page, locale, useTone) {
+async function verifyAudioCapture(page, locale, useTone, endOnStop = false) {
   const copy = locale === 'pt-BR' ? {
-    record:'Gravar áudio', waiting:'Aguardando microfone…', stop:'Parar gravação', recording:'Gravando áudio…', cancel:'Cancelar',
+    record:'Gravar áudio', waiting:'Abrindo microfone…', stop:'Parar gravação', recording:'Gravando áudio…', cancel:'Cancelar',
   } : {
-    record:'Record audio', waiting:'Waiting for microphone…', stop:'Stop recording', recording:'Recording audio…', cancel:'Cancel',
+    record:'Record audio', waiting:'Starting microphone…', stop:'Stop recording', recording:'Recording audio…', cancel:'Cancel',
   };
   const record = page.getByRole('button', {name:copy.record,exact:true});
   const stop = page.getByRole('button', {name:copy.stop,exact:true});
@@ -96,10 +97,10 @@ async function verifyAudioCapture(page, locale, useTone) {
   const composer = page.locator('#message-composer');
   const geometry = await composer.boundingBox();
   if (useTone) await installMicrophoneTone(page);
-  await page.evaluate(() => {
+  await page.evaluate(endOnStop => {
     const getUserMedia = navigator.mediaDevices.getUserMedia;
     const Recorder = MediaRecorder;
-    let releaseStart;
+    let releaseStart, microphoneTrack;
     const started = new Promise(resolve => { releaseStart = resolve; });
     window.startAudioTestRecorder = releaseStart;
     window.audioTestRecorderCalls = 0;
@@ -114,11 +115,18 @@ async function verifyAudioCapture(page, locale, useTone) {
         window.audioTestRecorderCalls++;
         return super.start(...args);
       }
+      stop() {
+        super.stop();
+        if (!endOnStop) return;
+        // Simulate the device ending the track before the recorder dispatches its final data.
+        microphoneTrack.stop();
+        microphoneTrack.dispatchEvent(new Event('ended'));
+      }
     };
     navigator.mediaDevices.getUserMedia = async options => {
       const microphone = window.microphoneTone;
       const stream = microphone?.stream ?? await getUserMedia.call(navigator.mediaDevices, options);
-      const track = stream.getAudioTracks()[0];
+      const track = microphoneTrack = stream.getAudioTracks()[0];
       let muted = true;
       Object.defineProperty(track,'muted',{get:() => muted});
       window.unmuteAudioTestTrack = () => {
@@ -143,7 +151,7 @@ async function verifyAudioCapture(page, locale, useTone) {
       window.audioTestFrame = requestAnimationFrame(sample);
     }
     window.audioTestFrame = requestAnimationFrame(sample);
-  });
+  },endOnStop);
   await record.click();
   const waiting = audio.getByText(copy.waiting, {exact:true});
   await waiting.waitFor();
@@ -170,6 +178,13 @@ async function verifyAudioCapture(page, locale, useTone) {
     const pixels = canvas.getContext('2d').getImageData(0,Math.floor(canvas.height / 3),canvas.width,1).data;
     return pixels.some((value,index) => index % 4 === 3 && value > 0);
   });
+  if (endOnStop) {
+    await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+    const staged = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
+    await stop.click();
+    assert((await staged).ok(),'stopping keeps the recording when the device ends the track');
+    await audio.locator('[data-record-audio-play]').waitFor();
+  }
   await audio.getByRole('button',{name:copy.cancel,exact:true}).click();
   await audio.waitFor({state:'hidden'});
   assert(await composer.evaluate(node => node === document.activeElement));
@@ -182,11 +197,41 @@ async function verifyAudioCapture(page, locale, useTone) {
     JSON.stringify({locale,expected:frames[0],frame}));
 }
 
+async function pauseAfterPlaybackBegins(audio, container, control) {
+  await audio.evaluate((node, {container, control}) => {
+    // Pause from the page so a slow runner can't miss the short clip's play button state.
+    node.playbackRate = 0.5;
+    node.addEventListener('timeupdate', function pauseOnce() {
+      if (node.currentTime <= 0.15 || node.paused) return;
+      node.removeEventListener('timeupdate', pauseOnce);
+      const button = node.closest(container).querySelector(control);
+      button.focus({preventScroll:true});
+      button.click();
+    });
+  },{container,control});
+}
+
+async function verifyPausedMediaRecovery(page, audio) {
+  const before = await audio.evaluate(node => {
+    const snapshot = {source:node.currentSrc,position:node.currentTime,paused:node.paused};
+    node.dispatchEvent(new Event('error'));
+    return snapshot;
+  });
+  assert(before.paused && before.position > 0 && !before.source.startsWith('blob:'));
+  await page.waitForFunction(node => node.currentSrc.startsWith('blob:') &&
+    node.readyState >= HTMLMediaElement.HAVE_METADATA && !node.seeking, await audio.elementHandle());
+  const after = await audio.evaluate(node => ({position:node.currentTime,paused:node.paused}));
+  assert(after.paused);
+  assert(Math.abs(after.position - before.position) < .04,
+    JSON.stringify({before,after}));
+}
+
 async function verifyDraftPlayback(page, href, locale, queuedSend) {
   const portuguese = locale === 'pt-BR';
   const audio = page.locator('[data-record-audio]');
   const record = page.getByRole('button', {name:portuguese ? 'Gravar áudio' : 'Record audio',exact:true});
   const play = audio.getByRole('button', {name:portuguese ? 'Reproduzir gravação' : 'Play recording',exact:true});
+  const pause = audio.getByRole('button', {name:portuguese ? 'Pausar reprodução' : 'Pause playback',exact:true});
   const stop = page.getByRole('button', {name:portuguese ? 'Parar gravação' : 'Stop recording',exact:true});
   const position = audio.getByRole('slider', {name:portuguese ? 'Posição da gravação' : 'Recording position',exact:true});
   const media = '[data-record-audio-media]';
@@ -208,6 +253,7 @@ async function verifyDraftPlayback(page, href, locale, queuedSend) {
   await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:02');
   const stage = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
   await stop.click();
+  await page.locator(media).evaluate(node => { node.playbackRate = 0.5; });
   await play.focus();
   await play.press('Enter');
   await page.waitForFunction(selector => document.querySelector(selector).currentTime > .05,media);
@@ -237,20 +283,29 @@ async function verifyDraftPlayback(page, href, locale, queuedSend) {
   const restoredWave = new Promise(resolve => { releaseRestoredWave = resolve; });
   const nativeFailure = queuedSend ? page.waitForResponse(response => response.status() === 416 &&
     new URL(response.url()).searchParams.get('attachmentId') === restoredID) : null;
-  await page.route(url => url.pathname === '/ui/scheduling/file' && url.searchParams.get('attachmentId') === restoredID,
-    async route => {
-      if (route.request().resourceType() === 'fetch') await restoredWave;
-      else if (queuedSend) return route.fulfill({status:416,headers:{'Content-Range':'bytes */0'}});
-      await route.continue();
-    });
+  const restoredFile = url => url.pathname === '/ui/scheduling/file' && url.searchParams.get('attachmentId') === restoredID;
+  await page.route(restoredFile, async route => {
+    if (route.request().resourceType() === 'fetch') await restoredWave;
+    else if (queuedSend) return route.fulfill({status:416,headers:{'Content-Range':'bytes */0'}});
+    await route.continue();
+  });
   await page.reload();
   try {
+    if (!nativeFailure) await pauseAfterPlaybackBegins(page.locator(media),'[data-record-audio]','[data-record-audio-play]');
     await play.click();
     if (nativeFailure) {
       await nativeFailure;
+      await page.waitForFunction(selector => !!document.querySelector(selector).error,media);
+      await pause.click();
       releaseRestoredWave();
+      await page.waitForFunction(selector => document.querySelector(selector).src.startsWith('blob:'),media);
+      assert(await page.locator(media).evaluate(audio => audio.paused));
+      await play.click();
     }
-    await page.waitForFunction(selector => document.querySelector(selector).currentTime > .05,media);
+    await page.waitForFunction(({selector, recovered}) => {
+      const node = document.querySelector(selector);
+      return recovered ? node.currentTime > .05 : node.paused && node.currentTime > .15;
+    },{selector:media,recovered:!!nativeFailure});
     assert(await position.isHidden());
     const source = new URL(await page.locator(media).evaluate(audio => audio.currentSrc));
     if (nativeFailure) assert.equal(source.protocol,'blob:');
@@ -260,6 +315,30 @@ async function verifyDraftPlayback(page, href, locale, queuedSend) {
     await page.evaluate(() => window.releaseAudioWaveform());
   }
   await position.waitFor();
+  if (!nativeFailure) await verifyPausedMediaRecovery(page, page.locator(media));
+  await page.unroute(restoredFile);
+  if (!portuguese) {
+    await page.addInitScript(attachmentID => {
+      const originalFetch = window.fetch;
+      window.fetch = async (...args) => {
+        const response = await originalFetch(...args);
+        if (response.status === 503 && new URL(response.url).searchParams.get('attachmentId') === attachmentID) {
+          // Let the app consume the failed response before clicking Play.
+          setTimeout(() => { window.draftWaveformFetchFailed = true; }, 0);
+        }
+        return response;
+      };
+    },restoredID);
+    await page.route(restoredFile, route => route.request().resourceType() === 'fetch'
+      ? route.fulfill({status:503}) : route.continue());
+    await page.reload();
+    await page.waitForFunction(() => window.draftWaveformFetchFailed);
+    await play.click();
+    await page.waitForFunction(selector => document.querySelector(selector).currentTime > .05,media);
+    assert(await page.locator(media).evaluate(audio => audio.controls));
+    assert(await position.isHidden());
+    await page.unroute(restoredFile);
+  }
   await audio.locator('[data-record-audio-remove]').click();
   await audio.waitFor({state:'hidden'});
 
@@ -457,12 +536,17 @@ async function launch() {
   server.stderr.on('data', data => { log += data; });
   const base = 'http://127.0.0.1:' + port;
   const useWebKit = process.argv.includes('--webkit');
-  const browser = useWebKit ? await webkit.launch() : await chromium.launch({
-    args:['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
-    // Chromium uses the process locale when converting the suggested filename.
-    env: process.platform === 'linux' ? {...process.env, LC_ALL:'C.UTF-8'} : process.env,
-  });
+  const microphoneDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'oie-fixture-microphone-'));
+  const microphoneFile = path.join(microphoneDirectory, 'tone.wav');
+  let browser;
   try {
+    await fs.writeFile(microphoneFile, audioFixture(2, 14000));
+    browser = useWebKit ? await webkit.launch() : await chromium.launch({
+      args:['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
+        '--use-file-for-fake-audio-capture=' + microphoneFile],
+      // Chromium uses the process locale when converting the suggested filename.
+      env: process.platform === 'linux' ? {...process.env, LC_ALL:'C.UTF-8'} : process.env,
+    });
     for (let attempt = 0; attempt < 100; attempt++) {
       if (await fetch(base).then(response => response.ok, () => false)) break;
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -482,7 +566,16 @@ async function launch() {
         await draftPage.close();
       }
     }
-    for (const rejectNativeRange of [false, true]) {
+    {
+      const page = await browser.newPage({locale:'pt-BR',viewport:{width:320,height:720}});
+      try {
+        await page.goto(base + '/?chat=' + direct + '&lang=pt-BR');
+        await verifyAudioCapture(page, 'pt-BR', useWebKit, true);
+      } finally {
+        await page.close();
+      }
+    }
+    for (const [rejectNativeRange, pauseRecovery] of [[false,false], [true,false], [true,true]]) {
       const page = await browser.newPage({locale:'pt-BR',viewport:{width:390,height:844}});
       let releaseWave;
       const waveGate = new Promise(resolve => { releaseWave = resolve; });
@@ -501,28 +594,36 @@ async function launch() {
         const pause = player.getByRole('button',{name:/^Pausar áudio/});
         const slider = player.getByRole('slider',{name:'Posição do áudio',exact:true});
         await player.scrollIntoViewIfNeeded();
+        if (!rejectNativeRange) await pauseAfterPlaybackBegins(audio,'[data-message-audio]','[data-message-audio-play]');
         await play.click();
         await nativeRequest;
         if (rejectNativeRange) {
           await page.waitForFunction(node => !!node.error, await audio.elementHandle());
           assert.equal(await player.getAttribute('aria-busy'),'true');
+          if (pauseRecovery) await pause.click();
           releaseWave();
+          if (pauseRecovery) {
+            await page.waitForFunction(node => node.src.startsWith('blob:'), await audio.elementHandle());
+            assert(await audio.evaluate(node => node.paused));
+            await play.click();
+          }
           await page.waitForFunction(node => node.currentSrc.startsWith('blob:') && node.currentTime > 0, await audio.elementHandle());
           await slider.waitFor();
           continue;
         }
-        await page.waitForFunction(node => !node.paused && node.currentTime > 0, await audio.elementHandle());
+        await page.waitForFunction(node => node.paused && node.currentTime > .15, await audio.elementHandle());
         assert.equal(await player.getAttribute('aria-busy'),'true');
         assert.equal(await slider.count(),0);
-        await pause.focus();
-        await pause.press('Enter');
         const before = await audio.evaluate(node => [node.currentSrc, node.currentTime]);
+        assert(before[1] > 0);
         releaseWave();
         await slider.waitFor();
         await player.locator('canvas').first().waitFor();
+        assert(await slider.locator('[part="progress"]').evaluate(node => Number.parseFloat(node.style.width) > 0));
         assert.deepEqual(await audio.evaluate(node => [node.currentSrc, node.currentTime]),before);
         assert(await audio.evaluate(node => node.paused));
         assert(await play.evaluate(node => node === document.activeElement));
+        await verifyPausedMediaRecovery(page, audio);
       } finally {
         releaseWave();
         await page.close();
@@ -848,7 +949,7 @@ async function launch() {
           };
         });
         await record.click();
-        await audio.getByText('Waiting for microphone…',{exact:true}).waitFor();
+        await audio.getByText('Starting microphone…',{exact:true}).waitFor();
         await page.evaluate(() => window.dispatchEvent(new Event('oie:desktop-hide')));
         await audio.waitFor({state:'hidden'});
         await page.evaluate(() => window.grantMicrophone());
@@ -895,6 +996,11 @@ async function launch() {
         await position.waitFor();
         await retry.waitFor();
         await page.locator('#toast-container').getByText('Could not attach this file.',{exact:true}).waitFor();
+        assert(await send.isDisabled());
+        await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
+        await page.waitForFunction(id => document.body.dataset.conversationId === id, room);
+        await page.locator('#conversation-list a[href*="chat=' + direct + '"]').first().click();
+        await retry.waitFor();
         assert(await send.isDisabled());
         state.stageStatus = 201;
         let releaseRetryUpload;
@@ -1000,7 +1106,15 @@ async function launch() {
         const uploadRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
         await stop.click();
         const attachmentID = new URL((await uploadRequest).url()).searchParams.get('attachmentId');
+        let releaseQueuedSend;
+        const queuedSendGate = new Promise(resolve => { releaseQueuedSend = resolve; });
+        await page.route('**/ui/messages/send', async route => {
+          await queuedSendGate;
+          await route.continue();
+        }, {times:1});
+        const queuedSend = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/messages/send');
         const queued = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
+        const otherDraft = 'Typed in another tab while the recording uploads';
         try {
           await audio.evaluate(panel => {
             const nodes = [panel, panel.closest('form'), document.getElementById('message-timeline')];
@@ -1017,6 +1131,16 @@ async function launch() {
           await send.click();
           assert.equal(await send.getAttribute('aria-disabled'),'true');
           assert(await send.evaluate(node => node === document.activeElement));
+          assert.equal(await page.locator('.oie-chat-pane').evaluate(chat => {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(new File(['draft'], 'draft.txt'));
+            const event = name => new DragEvent(name, {dataTransfer, bubbles:true, cancelable:true});
+            chat.dispatchEvent(event('dragenter'));
+            chat.dispatchEvent(event('dragover'));
+            const ready = chat.hasAttribute('data-file-drag');
+            chat.dispatchEvent(event('dragleave'));
+            return ready;
+          }),false,'dragging must not offer a drop target while the recording is being sent');
           await page.locator('#send-message-form').evaluate(form => form.requestSubmit());
           assert.equal(sends,2,'no message request before the attachment is staged');
           const frames = await page.evaluate(() => {
@@ -1025,10 +1149,32 @@ async function launch() {
           });
           assert(frames.length > 1);
           for (const frame of frames) assert(frame.every((value,index) => Math.abs(value-frames[0][index]) <= 1));
+          const other = await page.context().newPage();
+          try {
+            await other.addInitScript(() => Object.defineProperty(navigator, 'onLine', {get:() => false}));
+            await other.goto(base + '/?lang=en&chat=' + direct);
+            await other.locator('#message-composer').fill(otherDraft);
+            await other.getByRole('button',{name:'Send message',exact:true}).click();
+            await other.getByText('Couldn’t save the message for sending. Your draft is still open.',{exact:true}).waitFor();
+            assert.equal(await other.locator('#message-composer').inputValue(),otherDraft);
+          } finally {
+            await other.close();
+          }
         } finally {
           releaseUpload();
         }
+        try {
+          await queuedSend;
+          await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
+          await page.waitForFunction(id => document.body.dataset.conversationId === id, room);
+        } finally {
+          releaseQueuedSend();
+        }
         assert.equal((await (await queued).json()).accepted,true);
+        await page.locator('#conversation-list a[href*="chat=' + direct + '"]').first().click();
+        await page.waitForFunction(draft => document.querySelector('#message-composer')?.value === draft, otherDraft);
+        await composer.fill('');
+        await record.waitFor();
         await audio.waitFor({state:'hidden'});
         assert.equal(sends,3,'upload completion dispatches the queued click once');
         assert.equal(sendRequests.length,3);
@@ -1049,6 +1195,12 @@ async function launch() {
         await cancelPageUpload;
         try {
           await send.click();
+          await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
+          await page.waitForFunction(id => document.body.dataset.conversationId === id, room);
+          await page.locator('#conversation-list a[href*="chat=' + direct + '"]').first().click();
+          await cancel.waitFor();
+          assert(await record.isHidden(),'the returned conversation still owns the queued recording');
+          assert.equal(await send.getAttribute('aria-busy'),'true');
           await cancel.click();
           await record.waitFor();
           assert(await composer.evaluate(node => node === document.activeElement));
@@ -1068,7 +1220,14 @@ async function launch() {
         const background = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
         await stop.click();
         const backgroundID = new URL((await background).url()).searchParams.get('attachmentId');
+        let finishBackgroundSend;
+        const sendGate = new Promise(resolve => { finishBackgroundSend = resolve; });
+        await page.route('**/ui/messages/send', async route => {
+          await sendGate;
+          await route.continue();
+        }, {times:1});
         const backgroundSend = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/messages/send');
+        const backgroundReceipt = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
         try {
           await send.click();
           await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
@@ -1077,10 +1236,75 @@ async function launch() {
         } finally {
           finishBackgroundUpload();
         }
-        const originalScope = new URLSearchParams((await backgroundSend).postData());
-        assert.equal(originalScope.get('conversationId'),direct);
-        assert.deepEqual(JSON.parse(originalScope.get('attachmentIds')),[backgroundID]);
+        try {
+          const originalScope = new URLSearchParams((await backgroundSend).postData());
+          assert.equal(originalScope.get('conversationId'),direct);
+          assert.deepEqual(JSON.parse(originalScope.get('attachmentIds')),[backgroundID]);
+          await page.locator('#conversation-list a[href*="chat=' + direct + '"]').first().click();
+          await page.waitForFunction(id => document.body.dataset.conversationId === id, direct);
+          assert.equal(sendRequests.length,3,'the background request has not reached the engine');
+        } finally {
+          finishBackgroundSend();
+        }
+        assert.equal((await (await backgroundReceipt).json()).accepted,true);
+        await record.waitFor();
+        assert.equal(sendRequests.length,4);
+        assert.deepEqual(sendRequests[3].attachmentIds,[backgroundID]);
         assert.equal(sends,4,'switching conversations preserves the explicitly requested send');
+
+        await record.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+        let finishRemountedUpload;
+        const remountedUpload = new Promise(resolve => { finishRemountedUpload = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          await remountedUpload;
+          await route.continue();
+        }, {times:1});
+        await page.route('**/ui/messages/reconcile', route => route.fulfill({status:503,
+          json:{ok:false,code:'engine_unavailable'}}));
+        await stop.click();
+        try {
+          await send.click();
+          await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
+          await page.waitForFunction(id => document.body.dataset.conversationId === id, room);
+          await page.locator('#conversation-list a[href*="chat=' + direct + '"]').first().click();
+          await cancel.waitFor();
+        } finally {
+          finishRemountedUpload();
+        }
+        const cancelWaiting = page.locator('[data-cancel-offline-send]:visible');
+        await cancelWaiting.click();
+        await cancel.waitFor();
+        assert.equal(sends,4,'an offline recording restored in the source conversation can be cancelled');
+
+        await cancel.click();
+        await record.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+        let releaseResetUpload;
+        const resetUpload = new Promise(resolve => { releaseResetUpload = resolve; });
+        await page.route('**/ui/scheduling/stage?*', async route => {
+          await resetUpload;
+          await route.continue().catch(() => {});
+        }, {times:1});
+        await stop.click();
+        try {
+          await send.click();
+          let unloadPrompts = 0;
+          page.on('dialog', dialog => { unloadPrompts++; void dialog.dismiss(); });
+          await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
+          await page.waitForFunction(id => document.body.dataset.conversationId === id, room);
+          const reset = page.waitForURL(url => url.pathname === '/' && !url.searchParams.has('chat'));
+          await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', {
+            key:'oie.reset.notice', newValue:document.body.dataset.engineId, storageArea:localStorage,
+          }))).catch(error => {
+            if (!String(error).includes('Execution context was destroyed')) throw error;
+          });
+          await reset;
+          assert.equal(unloadPrompts,0,'reset discards the upload without blocking navigation');
+          assert.equal(sends,4);
+        } finally {
+          releaseResetUpload();
+        }
       }
       assert.deepEqual(errors,[]);
       await page.close();
@@ -1091,11 +1315,12 @@ async function launch() {
     console.error(log);
     throw error;
   } finally {
-    await browser.close();
+    await browser?.close();
     server.kill('SIGTERM');
     for (const stream of streams) stream.end();
     api.closeAllConnections();
     await new Promise(resolve => api.close(resolve));
+    await fs.rm(microphoneDirectory, {recursive:true,force:true});
   }
 }
 

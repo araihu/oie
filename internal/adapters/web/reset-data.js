@@ -11,6 +11,8 @@
   const submitButton = node => node.querySelector('button[type="submit"]');
 
   function returnToEmptyApp(confirmed = false) {
+    window.OieRuntime?.memory.set('device-reset', true);
+    window.dispatchEvent(new Event('oie:device-reset'));
     window.OieRuntime?.stop();
     window.OieEvents?.suspend();
     window.OieInbox?.clear();
