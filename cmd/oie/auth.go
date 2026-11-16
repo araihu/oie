@@ -41,7 +41,7 @@ func runAuth(ctx context.Context, args []string, out io.Writer) error {
 		}
 	case "key-create":
 		name := flags.String("name", "", "label for this full-access key")
-		lifetime := flags.Duration("ttl", 90*24*time.Hour, "key lifetime (for example, 720h for 30 days)")
+		lifetime := flags.Duration("ttl", hostauth.DefaultKeyLifetime, "key lifetime (for example, 720h for 30 days)")
 		action = func(store hostauth.Store) error {
 			_, secret, err := store.CreateKey(ctx, *name, *lifetime)
 			if err != nil {

@@ -24,11 +24,11 @@ func TestDesktopEngineSelection(t *testing.T) {
 	var saved atomic.Value
 	saved.Store("")
 	var saveFailure atomic.Bool
-	desktop, err := StartDesktop(t.Context(), dir, "", "", "", nil, func(address string) error {
+	desktop, err := StartDesktop(t.Context(), dir, "", DesktopEngine{}, "", nil, func(selection DesktopEngine) error {
 		if saveFailure.Load() {
 			return errors.New("test save failure")
 		}
-		saved.Store(address)
+		saved.Store(selection.URL)
 		return nil
 	})
 	if err != nil {
@@ -133,7 +133,7 @@ func TestDesktopEngineSelection(t *testing.T) {
 func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 	dir := t.TempDir()
 	remote := testServer(t, Config{Role: "local", DataOnly: true, DataDir: t.TempDir(), Listen: "127.0.0.1:0"})
-	desktop, err := StartDesktop(t.Context(), dir, "", remote.URL(), "", nil, func(string) error { return nil })
+	desktop, err := StartDesktop(t.Context(), dir, "", DesktopEngine{URL: remote.URL()}, "", nil, func(DesktopEngine) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,5 +144,32 @@ func TestDesktopRemoteStartupDoesNotOpenLocalData(t *testing.T) {
 	}()
 	if _, err := os.Stat(filepath.Join(dir, "oie.sqlite")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("remote startup opened local data: %v", err)
+	}
+}
+
+func TestDesktopKeyStaysAtSelectedOrigin(t *testing.T) {
+	const token = "example-desktop-key"
+	selected := DesktopEngine{URL: "https://oie.example.test", APIKey: token}
+	edit, err := desktopKeyEditor(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ url, authorization string }{
+		{"https://oie.example.test/api/v1/engine", "Bearer " + token},
+		{"https://oie.example.test:8443/api/v1/engine", ""},
+		{"http://oie.example.test/api/v1/engine", ""},
+		{"https://remote.example.test/api/v1/engine", ""},
+	} {
+		r := httptest.NewRequest(http.MethodGet, tc.url, nil)
+		if err := edit(t.Context(), r); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.Header.Get("Authorization"); got != tc.authorization {
+			t.Fatalf("unexpected authorization at %s", r.URL.Host)
+		}
+	}
+	selected.URL = "http://oie.example.test"
+	if _, err := desktopKeyEditor(selected); err == nil {
+		t.Fatal("accepted an access key over HTTP")
 	}
 }

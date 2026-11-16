@@ -2,8 +2,9 @@
 
 Hosted mode gives one configured OIDC identity full access to one Oiê engine.
 API keys have the same engine permissions, including reading history, sending
-messages, changing protocol accounts, and resetting engine data. The commands
-that manage the owner and keys run on the host as the Oiê service user.
+messages, changing protocol accounts, and resetting engine data. The owner
+can create keys from Settings in the hosted workspace. Host commands run
+as the Oiê service user.
 
 ## Register the owner and start the engine
 
@@ -112,6 +113,20 @@ The probe listener takes no credentials. Keep it off public ingress and
 restrict access to infrastructure that needs it. Kubernetes can reach the
 pod's probe port directly. The hosted engine API, including `/api/v1/health`,
 still requires a bearer key. See the [internal OpenAPI contract](../api/probe.openapi.yaml).
+
+## Connect the desktop app
+
+1. Open the hosted site and sign in with OIDC.
+2. In **Settings → General → Access keys**, enter a name such as
+   “Laptop” and choose **Create access key**, then **Copy key**. The key
+   grants full access and expires after 90 days.
+3. In the desktop app, open **Settings → General → Engine → Remote**.
+   Enter the hosted HTTPS address, paste the key, and select **Save**.
+
+The desktop saves the connection in a private file in its profile after
+verifying access to the server. The key is only sent to the selected HTTPS
+origin. To replace it, enter a new key for the same address. Use the host's
+`key-list` and `key-revoke` commands to identify and revoke an old key.
 
 ## Create and revoke API keys
 

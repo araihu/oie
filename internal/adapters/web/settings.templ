@@ -47,6 +47,9 @@ templ settings(v view) {
 	if v.EngineMode != nil {
 		@engineModeSettings(v)
 	}
+	if v.HostedSignIn {
+		@accessKeysSettings(v)
+	}
 	if v.Diagnostics {
 		@diagnosticsSettings(v)
 	}
@@ -97,6 +100,9 @@ templ generalSettings(v view) {
 		@timeZoneSettings(v)
 		if v.EngineMode != nil {
 			@settingsSubpageEntry("engine-settings", v.Text.EngineMode)
+		}
+		if v.HostedSignIn {
+			@settingsSubpageEntry("access-keys", v.Text.AccessKeys)
 		}
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>

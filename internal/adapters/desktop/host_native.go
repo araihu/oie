@@ -43,47 +43,16 @@ type runtimeService struct {
 	diagnostics *diagnostics.Logger
 }
 
-// An explicit launch argument overrides the saved desktop preference.
-func desktopEngineURL(config Config) (string, error) {
-	if config.EngineURL != "" {
-		return config.EngineURL, nil
-	}
-	path := engineModePath(config.DataDir)
-	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return "", fmt.Errorf("desktop engine preference must be a private regular file: %s", path)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	var address string
-	if err := json.Unmarshal(data, &address); err != nil {
-		return "", fmt.Errorf("read desktop engine preference: %w", err)
-	}
-	return address, nil
-}
-
-func engineModePath(dataDir string) string {
-	return filepath.Join(dataDir, "webview", "engine.json")
-}
-
 func (s *runtimeService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	if err := s.outer.Err(); err != nil {
 		return err
 	}
-	engineURL, err := desktopEngineURL(s.config)
+	selection, err := desktopEngineSelection(s.config)
 	if err != nil {
 		return err
 	}
-	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, engineURL, s.config.EngineTokenFile, s.diagnostics, func(url string) error {
-		return writePrivateJSON(engineModePath(s.config.DataDir), url)
+	server, err := apphost.StartDesktop(ctx, s.config.DataDir, s.config.XMPPCAFile, selection, s.config.EngineTokenFile, s.diagnostics, func(selected apphost.DesktopEngine) error {
+		return writePrivateJSON(engineModePath(s.config.DataDir), selected)
 	})
 	if err != nil {
 		return err

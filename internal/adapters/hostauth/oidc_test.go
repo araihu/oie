@@ -84,9 +84,19 @@ func TestOIDCOwnerAndSessionRecovery(t *testing.T) {
 	check("POST", "/ui/messages/send", publicOrigin, http.StatusNoContent)
 	check("POST", "/auth/logout", "https://cross-origin.example", http.StatusForbidden)
 
-	_, key, err := store.CreateKey(t.Context(), "fixture", time.Hour)
+	createKey := httptest.NewRequest(http.MethodPost, publicOrigin+"/ui/access-keys", nil)
+	createKey.AddCookie(cookie)
+	createKey.Header.Set("Origin", "https://cross-origin.example")
+	if _, err := auth.CreateBrowserKey(createKey, "fixture"); err == nil {
+		t.Fatal("created a browser key from another origin")
+	}
+	createKey.Header.Set("Origin", publicOrigin)
+	key, err := auth.CreateBrowserKey(createKey, "fixture")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if valid, err := store.validCredential(key, true); err != nil || !valid {
+		t.Fatalf("browser key did not authenticate: %v %v", valid, err)
 	}
 	if err := store.Recover(t.Context(), Owner{Issuer: owner.Issuer, Subject: "replacement-owner"}); err != nil {
 		t.Fatal(err)
@@ -96,6 +106,9 @@ func TestOIDCOwnerAndSessionRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("GET", "/ui/events", "", http.StatusUnauthorized)
+	if _, err := auth.CreateBrowserKey(createKey, "stale-fixture"); err == nil {
+		t.Fatal("a recovered session created another key")
+	}
 	if valid, err := store.validCredential(key, true); err != nil || valid {
 		t.Fatalf("recovered instance accepted the old key: %v %v", valid, err)
 	}

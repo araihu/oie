@@ -175,3 +175,13 @@ func (a *Auth) serveAuthenticated(w http.ResponseWriter, r *http.Request, secret
 	}()
 	next.ServeHTTP(w, r.WithContext(ctx))
 }
+
+// CreateBrowserKey creates a key while the owner's browser session is valid.
+func (a *Auth) CreateBrowserKey(r *http.Request, name string) (string, error) {
+	cookie, err := r.Cookie(sessionCookie)
+	if err != nil || cookie.Value == "" || !a.sameOrigin(r) {
+		return "", errUnauthorized
+	}
+	_, secret, err := a.store.createKey(r.Context(), name, DefaultKeyLifetime, cookie.Value)
+	return secret, err
+}

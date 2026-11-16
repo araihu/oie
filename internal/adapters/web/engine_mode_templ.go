@@ -126,13 +126,22 @@ func engineModeSettings(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><div data-engine-address>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><div class=\"grid gap-3\" data-engine-address>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = textinput.TextInput(textinput.Config{
 				ID: "engine-mode-url", Name: "url", Label: v.Text.EngineModeAddress,
 				Type: textinput.TypeURL, Value: v.EngineMode.url, MaxLength: 2048, Autocomplete: "off",
+			}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = textinput.TextInput(textinput.Config{
+				ID: "engine-mode-key", Name: "apiKey", Label: v.Text.EngineModeKey,
+				Type: textinput.TypePassword, MaxLength: 512, Autocomplete: "off",
+				Placeholder: engineKeyPlaceholder(v),
+				InputAttrs:  templ.Attributes{"data-saved-placeholder": engineKeyPlaceholder(v)},
 			}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -160,7 +169,7 @@ func engineModeSettings(v view) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.EngineModeSave)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/engine_mode.templ`, Line: 29, Col: 58}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/engine_mode.templ`, Line: 35, Col: 58}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -173,7 +182,7 @@ func engineModeSettings(v view) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.EngineModeConnecting)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/engine_mode.templ`, Line: 30, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/engine_mode.templ`, Line: 36, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -196,7 +205,7 @@ func engineModeSettings(v view) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.EngineModeConnecting).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/engine_mode.templ`, Line: 32, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/engine_mode.templ`, Line: 38, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -214,6 +223,13 @@ func engineModeSettings(v view) templ.Component {
 		}
 		return nil
 	})
+}
+
+func engineKeyPlaceholder(v view) string {
+	if v.EngineMode.hasKey {
+		return v.Text.EngineModeKeySaved
+	}
+	return ""
 }
 
 var _ = templruntime.GeneratedTemplate

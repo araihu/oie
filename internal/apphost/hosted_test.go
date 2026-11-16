@@ -88,7 +88,7 @@ func TestHostedGuardsAllEngineOperations(t *testing.T) {
 	}
 	for _, path := range []string{
 		"/ui/events", "/ui/api/v1/previews/fixture", "/ui/scheduling/file", "/ui/notification-worker.js",
-		"/ui/engine/reset", "/ui/refresh", "/ui/media/fixture", "/ui/avatars/fixture",
+		"/ui/access-keys", "/ui/engine/reset", "/ui/refresh", "/ui/media/fixture", "/ui/avatars/fixture",
 	} {
 		if w := hostedResponse(s, hostedRequest(http.MethodGet, path, "", nil)); w.Code != http.StatusUnauthorized {
 			t.Errorf("%s returned %d", path, w.Code)

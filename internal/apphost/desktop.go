@@ -16,42 +16,50 @@ import (
 	"github.com/araihu/oie/internal/diagnostics"
 )
 
+// DesktopEngine is the selection saved privately for one desktop profile.
+type DesktopEngine struct {
+	URL    string `json:"url"`
+	APIKey string `json:"apiKey,omitempty"`
+}
+
 type desktopTarget struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	ui     http.Handler
-	engine *Server
+	selection DesktopEngine
+	ctx       context.Context
+	cancel    context.CancelFunc
+	ui        http.Handler
+	engine    *Server
 }
 
 // Desktop keeps the native presentation origin stable while changing engines.
 // Its engine listener exists only while the local engine is running.
 type Desktop struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	dataDir      string
-	xmppCAFile   string
-	keyEditor    engineapi.RequestEditorFn
-	keyEngineURL string
-	save         func(string) error
-	mu           sync.Mutex
-	active       atomic.Pointer[desktopTarget]
-	lastLocal    *Server
-	diagnostics  *diagnostics.Logger
+	ctx         context.Context
+	cancel      context.CancelFunc
+	dataDir     string
+	xmppCAFile  string
+	save        func(DesktopEngine) error
+	mu          sync.Mutex
+	active      atomic.Pointer[desktopTarget]
+	lastLocal   *Server
+	diagnostics *diagnostics.Logger
 }
 
 // StartDesktop uses an empty engine URL for local mode. The caller owns the
 // per-profile preference and supplies the persistence function.
-func StartDesktop(ctx context.Context, dataDir, xmppCAFile, engineURL, engineKeyFile string, logger *diagnostics.Logger, save func(string) error) (*Desktop, error) {
-	editor, err := desktopKeyEditor(engineURL, engineKeyFile)
-	if err != nil {
-		return nil, err
+func StartDesktop(ctx context.Context, dataDir, xmppCAFile string, selection DesktopEngine, engineKeyFile string, logger *diagnostics.Logger, save func(DesktopEngine) error) (*Desktop, error) {
+	if engineKeyFile != "" {
+		key, err := desktopKeyFromFile(engineKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		selection.APIKey = key
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, keyEditor: editor, keyEngineURL: strings.TrimSuffix(engineURL, "/"), diagnostics: logger}
-	target, err := d.prepare(ctx, engineURL, false)
-	if err != nil && ctx.Err() == nil && logger != nil {
+	d := &Desktop{ctx: ctx, cancel: cancel, dataDir: dataDir, xmppCAFile: xmppCAFile, save: save, diagnostics: logger}
+	target, err := d.prepare(ctx, selection, false)
+	if err != nil && !errors.Is(err, web.ErrEngineModeKeyHTTPS) && ctx.Err() == nil && logger != nil {
 		logger.Record(diagnostics.DesktopFailed, 0, 0)
-		target, err = d.recovery(engineURL)
+		target, err = d.recovery(selection)
 	}
 	if err != nil {
 		cancel()
@@ -61,50 +69,65 @@ func StartDesktop(ctx context.Context, dataDir, xmppCAFile, engineURL, engineKey
 	return d, nil
 }
 
-func desktopKeyEditor(address, filename string) (engineapi.RequestEditorFn, error) {
-	if filename == "" {
-		return nil, nil
-	}
-	origin, err := url.Parse(address)
-	if err != nil || origin.Scheme != "https" || origin.Hostname() == "" || origin.User != nil ||
-		(origin.Path != "" && origin.Path != "/") || origin.RawPath != "" || origin.ForceQuery ||
-		origin.RawQuery != "" || strings.Contains(address, "#") {
-		return nil, errors.New("the remote engine token file requires a hosted HTTPS origin")
-	}
+func desktopKeyFromFile(filename string) (string, error) {
 	info, err := os.Stat(filename)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > 4096 {
-		return nil, errors.New("engine token file must be a private regular file (0600)")
+		return "", errors.New("engine token file must be a private regular file (0600)")
 	}
 	body, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	token := strings.TrimSpace(string(body))
-	if token == "" || strings.ContainsAny(token, " \t\r\n\x00") {
-		return nil, errors.New("engine token file must contain one API key")
+	if token == "" || !validDesktopKey(token) {
+		return "", errors.New("engine token file must contain one API key")
+	}
+	return token, nil
+}
+
+func validDesktopKey(token string) bool {
+	return len(token) <= 4096 && !strings.ContainsFunc(token, func(r rune) bool { return r < 0x21 || r > 0x7e })
+}
+
+func desktopKeyEditor(selection DesktopEngine) (engineapi.RequestEditorFn, error) {
+	if selection.APIKey == "" {
+		return nil, nil
+	}
+	origin, err := url.Parse(selection.URL)
+	if err != nil || origin.Scheme != "https" || origin.Hostname() == "" || origin.User != nil ||
+		(origin.Path != "" && origin.Path != "/") || origin.RawPath != "" || origin.ForceQuery ||
+		origin.RawQuery != "" || strings.Contains(selection.URL, "#") {
+		return nil, web.ErrEngineModeKeyHTTPS
+	}
+	if !validDesktopKey(selection.APIKey) {
+		return nil, web.ErrEngineModeAuthentication
 	}
 	return func(_ context.Context, request *http.Request) error {
 		if request.URL.Scheme == "https" && strings.EqualFold(request.URL.Host, origin.Host) {
-			request.Header.Set("Authorization", "Bearer "+token)
+			request.Header.Set("Authorization", "Bearer "+selection.APIKey)
 		}
 		return nil
 	}, nil
 }
 
-func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool) (_ *desktopTarget, err error) {
+func (d *Desktop) prepare(ctx context.Context, selection DesktopEngine, probe bool) (_ *desktopTarget, err error) {
+	editor, err := desktopKeyEditor(selection)
+	if err != nil {
+		return nil, err
+	}
 	targetCtx, cancel := context.WithCancel(d.ctx)
-	target := &desktopTarget{ctx: targetCtx, cancel: cancel}
+	target := &desktopTarget{ctx: targetCtx, cancel: cancel, selection: selection}
 	defer func() {
 		if err != nil {
 			target.stop()
 		}
 	}()
 	var options []web.Option
-	baseURL := engineURL
-	if engineURL == "" {
+	baseURL := selection.URL
+	if selection.URL == "" {
 		if d.lastLocal != nil {
 			select {
 			case <-d.lastLocal.stopped:
@@ -124,12 +147,13 @@ func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool) (_ 
 		options = append(options, web.WithEngineRequestEditor(target.engine.editEngineRequest))
 
 	}
-	options = append(options, d.options(target, engineURL)...)
+	options = append(options, web.WithEngineRequestEditor(editor))
+	options = append(options, d.options(target)...)
 	ui, err := web.New(baseURL, options...)
 	if err != nil {
 		return nil, err
 	}
-	if probe && engineURL != "" {
+	if probe && selection.URL != "" {
 		if err = ui.CheckEngine(ctx); err != nil {
 			return nil, err
 		}
@@ -138,24 +162,21 @@ func (d *Desktop) prepare(ctx context.Context, engineURL string, probe bool) (_ 
 	return target, nil
 }
 
-func (d *Desktop) options(target *desktopTarget, engineURL string) []web.Option {
-	var options []web.Option
-	if d.keyEditor != nil && strings.EqualFold(strings.TrimSuffix(engineURL, "/"), d.keyEngineURL) {
-		options = append(options, web.WithEngineRequestEditor(d.keyEditor))
-	}
-	return append(options,
+func (d *Desktop) options(target *desktopTarget) []web.Option {
+	selection := target.selection
+	return []web.Option{
 		web.WithDiagnostics(d.diagnostics, "", web.DiagnosticsNative),
-		web.WithRemoteDiagnostics(engineURL),
-		web.WithEngineMode(rand.Text(), engineURL, func(ctx context.Context, url string) error {
-			return d.selectEngine(ctx, target, url)
+		web.WithRemoteDiagnostics(selection.URL),
+		web.WithEngineMode(rand.Text(), selection.URL, selection.APIKey != "", func(ctx context.Context, address, key string) error {
+			return d.selectEngine(ctx, target, DesktopEngine{URL: address, APIKey: key})
 		}),
-	)
+	}
 }
 
-func (d *Desktop) recovery(engineURL string) (*desktopTarget, error) {
+func (d *Desktop) recovery(selection DesktopEngine) (*desktopTarget, error) {
 	ctx, cancel := context.WithCancel(d.ctx)
-	target := &desktopTarget{ctx: ctx, cancel: cancel}
-	options := append(d.options(target, engineURL), web.WithUnavailableEngine())
+	target := &desktopTarget{ctx: ctx, cancel: cancel, selection: selection}
+	options := append(d.options(target), web.WithUnavailableEngine())
 	ui, err := web.New("http://127.0.0.1", options...)
 	if err != nil {
 		cancel()
@@ -165,7 +186,7 @@ func (d *Desktop) recovery(engineURL string) (*desktopTarget, error) {
 	return target, nil
 }
 
-func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, engineURL string) error {
+func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, selection DesktopEngine) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.active.Load() != previous {
@@ -174,13 +195,16 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, eng
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if engineURL == "" && previous.engine != nil && previous.engine.ctx.Err() == nil {
-		if err := d.save(""); err != nil {
+	if selection.URL == "" && previous.engine != nil && previous.engine.ctx.Err() == nil {
+		if err := d.save(selection); err != nil {
 			return errors.Join(web.ErrEngineModeSave, err)
 		}
 		return nil
 	}
-	next, err := d.prepare(ctx, engineURL, true)
+	if selection.APIKey == "" && strings.EqualFold(strings.TrimSuffix(selection.URL, "/"), strings.TrimSuffix(previous.selection.URL, "/")) {
+		selection.APIKey = previous.selection.APIKey
+	}
+	next, err := d.prepare(ctx, selection, true)
 	if err != nil {
 		d.diagnostics.Record(diagnostics.EngineSwitchError, 0, 0)
 		return err
@@ -189,7 +213,7 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, eng
 		next.stop()
 		return err
 	}
-	if err = d.save(engineURL); err != nil {
+	if err = d.save(selection); err != nil {
 		next.stop()
 		d.diagnostics.Record(diagnostics.PreferencesFailed, 0, 0)
 		return errors.Join(web.ErrEngineModeSave, err)
@@ -197,7 +221,7 @@ func (d *Desktop) selectEngine(ctx context.Context, previous *desktopTarget, eng
 	d.active.Store(next)
 	previous.stop()
 	event := diagnostics.EngineRemote
-	if engineURL == "" {
+	if selection.URL == "" {
 		event = diagnostics.EngineLocal
 	}
 	d.diagnostics.Record(event, 0, 0)

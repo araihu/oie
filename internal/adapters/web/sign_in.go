@@ -6,8 +6,8 @@ import (
 	"github.com/araihu/oie/internal/adapters/hostauth"
 )
 
-func WithHostedSignIn() Option {
-	return func(s *Server) { s.hostedSignIn = true }
+func WithHostedSignIn(auth *hostauth.Auth) Option {
+	return func(s *Server) { s.createHostedKey = auth.CreateBrowserKey }
 }
 
 // SignIn renders the public hosted sign-in page without accessing the engine.

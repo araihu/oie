@@ -67,7 +67,7 @@ var presentationTimeScript []byte
 var localeFiles embed.FS
 
 type Server struct {
-	hostedSignIn      bool
+	createHostedKey   func(*http.Request, string) (string, error)
 	devBuildID        string
 	engineEditors     []engineapi.RequestEditorFn
 	client            *engineapi.ClientWithResponses
@@ -250,9 +250,11 @@ type view struct {
 }
 
 type copy struct {
-	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                           string
-	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting string
-	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                      string
+	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                                                   string
+	AccessKeys, AccessKeyName, AccessKeyCreate, AccessKeySecret, AccessKeyCopy, AccessKeyCopied, AccessKeyFailed, AccessKeyInvalid string
+	EngineModeKey, EngineModeKeySaved, EngineModeAuthentication, EngineModeKeyHTTPS                                                string
+	EngineMode, EngineModeLocal, EngineModeRemote, EngineModeAddress, EngineModeSave, EngineModeConnecting                         string
+	EngineModeInvalid, EngineModeUnavailable, EngineModeSaveFailed, EngineModeChanged                                              string
 
 	Forward, ForwardTitle, ForwardChooseRooms, ForwardSearchRooms, ForwardNoRooms, ForwardNoRoomsFound, ForwardLoading, ForwardSending string
 	ForwardAccepted, ForwardComplete, ForwardFailed, ForwardUnconfirmed, ForwardChanged                                                string
@@ -771,6 +773,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.diagnostics.ServeHTTP(w, r)
 		return
 	}
+	if r.URL.Path == "/ui/access-keys" {
+		s.hostedAccessKey(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/engine-mode" {
 		s.setEngineMode(w, r)
 		return
@@ -908,7 +914,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/reactions.js": {"text/javascript", reactionsScript}, "/ui/reactions.css": {"text/css", reactionsStylesheet}, "/ui/message-correction.css": {"text/css", messageCorrectionStylesheet}, "/ui/message-star.css": {"text/css", messageStarStylesheet}, "/ui/shared-actions.js": {"text/javascript", sharedActionsScript}, "/ui/shared-actions.css": {"text/css", sharedActionsStylesheet}, "/ui/read-state.js": {"text/javascript", readStateScript}, "/ui/runtime.js": {"text/javascript", runtimeScript}, "/ui/navigation.js": {"text/javascript", navigationScript}, "/ui/shared-content.js": {"text/javascript", sharedScript}, "/ui/actions.js": {"text/javascript", actionsScript}, "/ui/diagnostics.js": {"text/javascript", diagnosticsScript}, "/ui/stars.js": {"text/javascript", starsScript}, "/ui/message-history.js": {"text/javascript", messageHistoryScript}, "/ui/message-history.css": {"text/css", messageHistoryStylesheet}, "/ui/sender.js": {"text/javascript", senderScript}, "/ui/message-search.js": {"text/javascript", messageSearchScript}, "/ui/message-search.css": {"text/css", messageSearchStylesheet}, "/ui/conversation-search.js": {"text/javascript", conversationSearchScript}, "/ui/conversation-search.css": {"text/css", conversationSearchStylesheet}, "/ui/conversation-preferences.js": {"text/javascript", conversationPreferencesScript}, "/ui/formatting.js": {"text/javascript", formattingScript}, "/ui/previews.js": {"text/javascript", previewsScript}, "/ui/app.css": {"text/css", stylesheet}, "/ui/chat-pattern.svg": {"image/svg+xml", chatPattern}, "/ui/preview-landscape.svg": {"image/svg+xml", previewLandscape}, "/ui/theme.js": {"text/javascript", themeScript}, "/ui/live.js": {"text/javascript", liveScript},
 	}
 	if asset, ok := assets[r.URL.Path]; ok {
-		if s.hostedSignIn && r.URL.Path == "/ui/runtime.js" {
+		if s.createHostedKey != nil && r.URL.Path == "/ui/runtime.js" {
 			asset.body = hostedRuntimeScript
 		}
 		w.Header().Set("Content-Type", asset.mime)
@@ -1020,7 +1026,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: preference(r, "theme", []string{"system", "light", "dark"}, "system"), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
 	v.EngineMode = s.engineMode
-	v.HostedSignIn = s.hostedSignIn
+	v.HostedSignIn = s.createHostedKey != nil
 	v.Diagnostics = s.diagnostics != nil
 	v.RemoteDiagnostics = v.Diagnostics && s.diagnostics.remote != nil
 	v.configureWorkspace(r)

@@ -184,7 +184,7 @@ func Start(parent context.Context, cfg Config) (_ *Server, err error) {
 	var browser http.Handler
 	if !cfg.DataOnly && !cfg.engineOnly {
 		if hosted != nil {
-			options = append(options, web.WithHostedSignIn())
+			options = append(options, web.WithHostedSignIn(hosted.auth))
 		}
 		ui, err := web.New(engineURL, options...)
 		if err != nil {

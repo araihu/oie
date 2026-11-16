@@ -50,6 +50,25 @@ async function create(api, endpoint, sequence, data) {
     const page = await context.newPage();
     await server.signIn(page, search);
 
+    await page.goto(url + '/?open=settings&lang=en');
+    const access = page.getByRole('button', {name: 'Access keys', exact: true});
+    await access.click();
+    const keyDrawer = page.getByRole('dialog', {name: 'Access keys', exact: true});
+    const keyName = keyDrawer.getByRole('textbox', {name: 'Key name'});
+    await keyName.fill('Laptop fixture');
+    await keyDrawer.getByRole('button', {name: 'Create access key'}).click();
+    const generatedKey = keyDrawer.getByRole('textbox', {name: 'New access key'});
+    await generatedKey.waitFor();
+    const desktopKey = await generatedKey.inputValue();
+    assert(desktopKey.length > 32, 'the owner can create a key without using the host');
+    const keyCheck = await context.request.get(url + '/api/v1/engine', {
+      headers: {Authorization: 'Bearer ' + desktopKey},
+    });
+    assert.equal(keyCheck.status(), 200);
+    assert.equal((await keyCheck.json()).id, engine.id);
+    await keyDrawer.getByRole('button', {name: 'Back to settings', exact: true}).click();
+    assert.equal(await generatedKey.inputValue(), '');
+
     const staleCheck = Promise.withResolvers();
     const releaseCheck = Promise.withResolvers();
     await page.route('**/auth/session', async route => {
@@ -181,7 +200,7 @@ async function create(api, endpoint, sequence, data) {
     await loginLink(notificationPage).click();
     await notificationPage.waitForURL(url + notification);
     await notificationPage.locator('[data-message-id="' + message.id + '"]').waitFor();
-    console.log('PASS: hosted OIDC, long deep links, concurrent session checks, saved drafts, and notification reauthentication');
+    console.log('PASS: hosted OIDC, long deep links, concurrent session checks, saved drafts, desktop key creation, and notification reauthentication');
   } finally {
     await browser?.close();
     await server.stop();

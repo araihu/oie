@@ -992,6 +992,15 @@ type RenderWorkspaceParamsHXRequest string
 // RenderWorkspaceParamsXOieFragment defines parameters for RenderWorkspace.
 type RenderWorkspaceParamsXOieFragment string
 
+// CreateHostedAccessKeyFormdataBody defines parameters for CreateHostedAccessKey.
+type CreateHostedAccessKeyFormdataBody struct {
+	// Csrf Example: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI
+	Csrf string `form:"csrf" json:"csrf"`
+
+	// Name Example: Laptop
+	Name string `form:"name" json:"name"`
+}
+
 // UpdateBrowserAccountAvatarMultipartBody defines parameters for UpdateBrowserAccountAvatar.
 type UpdateBrowserAccountAvatarMultipartBody struct {
 	// AccountId Canonical lowercase UUIDv7; IDs do not establish causal order.
@@ -1136,6 +1145,11 @@ type ReadDiagnosticsLogParamsXOieDiagnostics string
 
 // SetDesktopEngineModeFormdataBody defines parameters for SetDesktopEngineMode.
 type SetDesktopEngineModeFormdataBody struct {
+	// ApiKey Optional hosted engine key. Only accepted for an HTTPS origin. Omit to keep the key already saved for this address.
+	//
+	// Example: oie_example_access_key
+	ApiKey *string `form:"apiKey,omitempty" json:"apiKey,omitempty"`
+
 	// Csrf CSRF token from the settings form.
 	//
 	// Example: ohR8kA1WBvkfL2EluINHTC0hKgDTM2zwJQwbjUEzrvI
@@ -1414,6 +1428,9 @@ type GetBrowserSharedMediaParamsDownload string
 
 // GetBrowserSharedMediaParamsPreview defines parameters for GetBrowserSharedMedia.
 type GetBrowserSharedMediaParamsPreview string
+
+// CreateHostedAccessKeyFormdataRequestBody defines body for CreateHostedAccessKey for application/x-www-form-urlencoded ContentType.
+type CreateHostedAccessKeyFormdataRequestBody CreateHostedAccessKeyFormdataBody
 
 // UpdateBrowserAccountAvatarMultipartRequestBody defines body for UpdateBrowserAccountAvatar for multipart/form-data ContentType.
 type UpdateBrowserAccountAvatarMultipartRequestBody UpdateBrowserAccountAvatarMultipartBody

@@ -26,7 +26,9 @@ The broader alpha target includes local standalone operation, hosted-engine oper
 Alpha is single-user. One owner can connect multiple protocol accounts and
 access the same hosted engine from multiple devices. Hosted access uses one
 configured OIDC issuer and subject, with full-access API keys for API clients.
-The operator registers and recovers the owner and manages keys on the host.
+The operator registers and recovers the owner on the host. The signed-in
+owner can create an access key in Settings for a desktop connection. Host
+commands also create, list, and revoke keys.
 Protocol account credentials are still needed for existing XMPP accounts.
 
 No specific XMPP client, SQLite driver, browser database, UUID library, Go toolchain version, or final library dependency set is selected by this draft.
@@ -50,8 +52,8 @@ default or **Remote** with an HTTP(S) base address. Save the selection per
 desktop profile. Check the remote engine before changing the active selection.
 Local mode runs the embedded engine and resumes its SQLite/media profile.
 Remote mode runs the desktop client against the configured engine, with the
-embedded engine stopped. Hosted engines accept API keys from the desktop client through its
-launch options. See [hosted access](hosted-auth.md).
+embedded engine stopped. For authenticated hosted engines, enter an API key
+alongside the HTTPS address in desktop settings. See [hosted access](hosted-auth.md).
 
 Use an embedded engine initially, with no separate daemon required. In a future native window host, closing the window keeps the engine running; explicit quit stops it. In the browser-first alpha, closing a tab does not stop the serving Go process. Closing a hosted UI does not terminate its shared remote engine. Wails is now selected for the first standalone desktop alpha, as described below; this supersedes the earlier browser-only release boundary.
 

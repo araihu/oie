@@ -168,7 +168,7 @@ func TestDesktopDiagnosticsSurvivesEmbeddedStartupFailure(t *testing.T) {
 	dir := t.TempDir()
 	testServer(t, Config{Role: "local", Listen: "127.0.0.1:0", DataDir: dir})
 	logger := diagnostics.New(filepath.Join(t.TempDir(), "diagnostics"), nil, diagnostics.Desktop, false)
-	desktop, err := StartDesktop(t.Context(), dir, "", "", "", logger, func(string) error { return nil })
+	desktop, err := StartDesktop(t.Context(), dir, "", DesktopEngine{}, "", logger, func(DesktopEngine) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestDesktopCanReadLegacyDataOnlyDiagnostics(t *testing.T) {
 		Role: "local", DataOnly: true, Listen: "127.0.0.1:0", DataDir: dir, Diagnostics: logger, DiagnosticsKey: key,
 	})
 	local := diagnostics.New(filepath.Join(t.TempDir(), "diagnostics"), nil, diagnostics.Desktop, false)
-	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", engine.URL(), "", local, func(string) error { return nil })
+	desktop, err := StartDesktop(t.Context(), t.TempDir(), "", DesktopEngine{URL: engine.URL()}, "", local, func(DesktopEngine) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}

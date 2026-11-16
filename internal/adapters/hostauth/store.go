@@ -199,15 +199,26 @@ func (s Store) setOwner(ctx context.Context, owner Owner, firstTimeOnly bool) er
 	})
 }
 
+const DefaultKeyLifetime = 90 * 24 * time.Hour
+
+var ErrInvalidKey = errors.New("provide a key name of up to 100 bytes and a lifetime of at least one second")
+
 func (s Store) CreateKey(ctx context.Context, name string, lifetime time.Duration) (KeyInfo, string, error) {
+	return s.createKey(ctx, name, lifetime, "")
+}
+
+func (s Store) createKey(ctx context.Context, name string, lifetime time.Duration, ownerSession string) (KeyInfo, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 100 || strings.ContainsFunc(name, unicode.IsControl) || lifetime < time.Second {
-		return KeyInfo{}, "", errors.New("provide a key name of up to 100 bytes and a lifetime of at least one second")
+		return KeyInfo{}, "", ErrInvalidKey
 	}
 	secret := keyPrefix + newCredential()
 	now := time.Now().UTC()
 	info := KeyInfo{ID: uuid.NewString(), Name: name, CreatedAt: now, ExpiresAt: now.Add(lifetime)}
 	if err := s.update(ctx, false, func(current *state) error {
+		if ownerSession != "" && !current.validSession(verifier(ownerSession), time.Now()) {
+			return errUnauthorized
+		}
 		current.Keys = append(current.Keys, apiKey{KeyInfo: info, Verifier: verifier(secret)})
 		return nil
 	}); err != nil {
@@ -293,9 +304,13 @@ func (s Store) validCredential(secret string, key bool) (bool, error) {
 			return subtle.ConstantTimeCompare([]byte(item.Verifier), []byte(digest)) == 1 && now.Before(item.ExpiresAt)
 		}), nil
 	}
-	return slices.ContainsFunc(current.Sessions, func(item session) bool {
+	return current.validSession(digest, now), nil
+}
+
+func (s state) validSession(digest string, now time.Time) bool {
+	return slices.ContainsFunc(s.Sessions, func(item session) bool {
 		return subtle.ConstantTimeCompare([]byte(item.Verifier), []byte(digest)) == 1 && now.Before(item.ExpiresAt)
-	}), nil
+	})
 }
 
 func newCredential() string {
