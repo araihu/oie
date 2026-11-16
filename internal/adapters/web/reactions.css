@@ -28,7 +28,11 @@
 .oie-reaction-shortcut:hover{color:var(--oie-text);background:var(--oie-raised)}
 .oie-message:focus-within .oie-reaction-shortcut-slot{opacity:1;pointer-events:auto}
 @media(hover:hover) and (pointer:fine){.oie-message:hover .oie-reaction-shortcut-slot{opacity:1;pointer-events:auto}}
-@media(pointer:coarse){[data-message-bubble]{touch-action:manipulation;-webkit-touch-callout:none}}
+@media(pointer:coarse){
+ [data-message-bubble]{touch-action:manipulation;-webkit-touch-callout:none}
+ /* WebKit handles text selection separately from the touch callout. */
+ [data-message-bubble]:has(>[data-message-menu-slot]){-webkit-user-select:none;user-select:none}
+}
 .oie-reaction-details-panel{width:min(320px,calc(100vw - 24px));padding:0}
 .oie-reaction-details{padding:12px;color:var(--oie-text);background:var(--oie-panel);border-radius:inherit}
 .oie-reaction-details>header{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
