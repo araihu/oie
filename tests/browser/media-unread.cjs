@@ -132,6 +132,7 @@ async function test(base) {
       if (width < 500) await page.locator('.oie-chat-pane').getByRole('link', {name: 'Voltar'}).first().click();
       const target = page.locator('#conversation-list a[data-conversation-id="' + chat + '"]');
       const beforeOpen = state.reads;
+      state.failMedia = true;
       const selectChat = target.click();
       await page.waitForTimeout(150);
       assert.equal(await page.locator('#message-timeline [data-message-id="' + first.id + '"]').count(), 0);
@@ -145,16 +146,13 @@ async function test(base) {
       assert(!new URL(page.url()).searchParams.has('message'));
       assert.equal(await timeline.locator('[data-message-id]').count(), 50);
       const audio = timeline.locator('[data-audio-player]');
-      const retry = timeline.locator('[data-audio-retry]');
-      assert(await audio.isVisible());
-      assert.equal(await audio.getAttribute('preload'), 'none');
+      const player = timeline.locator('[data-message-audio]');
+      const play = player.getByRole('button', {name: lang === 'en' ? /^Play audio/ : /^Reproduzir áudio/});
+      await play.waitFor();
       assert.equal(await audio.getAttribute('controlslist'), 'nodownload');
-      assert(await retry.isHidden());
-      assert(await audio.evaluate(player => player.paused && player.readyState === HTMLMediaElement.HAVE_NOTHING));
-      assert.equal(state.reads, beforeOpen, 'opening the conversation does not fetch audio');
-
-      await audio.scrollIntoViewIfNeeded();
-      await audio.focus();
+      assert(await audio.evaluate(player => player.paused));
+      await play.scrollIntoViewIfNeeded();
+      await play.focus();
       await page.evaluate(() => {
         const selectors = ['.oie-audio-controls', '#message-composer', '#message-timeline'];
         window.audioFrames = [];
@@ -164,14 +162,15 @@ async function test(base) {
         };
         sample();
       });
-      state.failMedia = true;
-      await audio.click({position: {x: 24, y: 27}});
-      await retry.waitFor({state: 'visible'});
-      assert(await retry.evaluate(button => document.activeElement === button));
+      const failedRead = page.waitForResponse(response => response.url().includes('/' + media + '/content') && response.status() === 502);
+      await play.press('Enter');
+      await failedRead;
+      await page.waitForFunction(node => !node.hasAttribute('aria-busy'), await player.elementHandle());
+      assert(await play.evaluate(button => button === document.activeElement));
       state.failMedia = false;
-      await retry.click();
+      await play.press('Enter');
       await page.waitForFunction(() => document.querySelector('[data-audio-player]')?.currentTime > .1);
-      assert(await audio.evaluate(player => document.activeElement === player));
+      assert(await play.evaluate(button => document.activeElement === button));
       assert(state.reads > beforeOpen);
       const frames = await page.evaluate(() => {cancelAnimationFrame(window.audioFrame); return window.audioFrames;});
       assert(frames.length > 2, 'sampled painted frames during playback preparation');
@@ -182,7 +181,7 @@ async function test(base) {
       const messageMenu = audioRow.locator('[data-message-menu-trigger]');
       await messageMenu.click();
       const downloadEvent = page.waitForEvent('download');
-      await page.getByRole('menuitem', {name: lang === 'en' ? 'Download' : 'Baixar', exact: true}).click();
+      await page.getByRole('menuitem', {name: lang === 'en' ? 'Download audio' : 'Baixar áudio', exact: true}).click();
       const download = await downloadEvent;
       assert.equal(download.suggestedFilename(), 'roteiro.wav');
       assert.equal(await download.failure(), null);
@@ -302,7 +301,7 @@ async function test(base) {
       await new Promise(resolve => {process.once('SIGTERM', resolve); process.once('SIGINT', resolve);});
     } else {
       await test(app.url);
-      console.log('Unread positioning, explicit navigation, native audio and device download settings passed');
+      console.log('Unread positioning, explicit navigation, audio playback and device download settings passed');
     }
   } finally {
     await app.stop();

@@ -23,6 +23,12 @@ var schedulingScript []byte
 //go:embed scheduling.css
 var schedulingStylesheet []byte
 
+//go:embed wavesurfer/player.mjs
+var waveSurferPlayer []byte
+
+//go:embed wavesurfer/record.mjs
+var waveSurferRecorder []byte
+
 func (s *Server) conversationSchedules(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {

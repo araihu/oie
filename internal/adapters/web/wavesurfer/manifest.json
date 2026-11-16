@@ -1,0 +1,21 @@
+{
+  "package": "wavesurfer.js",
+  "version": "8.1.0",
+  "license": "BSD-3-Clause",
+  "archive": "https://registry.npmjs.org/wavesurfer.js/-/wavesurfer.js-8.1.0.tgz",
+  "archiveSHA256": "515cb3a7f4b8dff3b4ad28188172b45ffca1aec12fb56efcc59aa324614bb3bd",
+  "files": {
+    "player.mjs": {
+      "path": "package/dist/wavesurfer.esm.js",
+      "sha256": "ff2222536e300c20c2d09bfb5f025b3c019406c7858bc32549e91a6c1294a62c"
+    },
+    "record.mjs": {
+      "path": "package/dist/plugins/record.esm.js",
+      "sha256": "b1e7a0a78e88c339b39184e5c3816d4863dedab350b425ad64a4d343441a76e2"
+    },
+    "LICENSE": {
+      "path": "package/LICENSE",
+      "sha256": "0fc992dc27cc34dde78bfeb024b4cadff6320f0dcbee2f1228efaeb533ca1364"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-// Isolated engine fixture for local staging and received DM/room video cards.
+// Isolated engine fixture for attachment staging and conversation media.
 const assert = require('node:assert/strict');
 const {createHash} = require('node:crypto');
 const {spawn} = require('node:child_process');
@@ -25,16 +25,45 @@ const clips = conversations.map((conversation, index) => {
   return {id:id(20 + index), revisionId:revision, kind:'video', url, fileName:'Clip.webm', message,
     accountLabel:'Fixture', conversationTitle:conversation.title};
 });
-const features = ['schedules', 'file_upload', 'room_messaging'].map(id => ({
+const audioURL = 'https://files.example.test/mensagem.wav';
+const receivedAudio = {
+  ...clips[0].message,id:id(30),originalText:audioURL,createdAt:'2026-11-08T12:00:01Z',
+};
+const audioItem = {...clips[0],id:id(31),kind:'audio',url:audioURL,fileName:'mensagem.wav',message:receivedAudio};
+const audioAttachment = {id:id(32),fileName:'Gravação.wav',mediaType:'audio/wav',size:32044,sha256:'a'.repeat(64)};
+const sentAudio = {
+  ...receivedAudio,id:id(33),isOwn:true,sendState:'submitted',originalText:'',attachments:[audioAttachment],
+  createdAt:'2026-11-08T12:00:02Z',
+};
+const ownText = {
+  ...receivedAudio,id:id(34),isOwn:true,sendState:'submitted',originalText:'My earlier message',
+  createdAt:'2026-11-08T12:00:03Z',
+};
+
+function audioFixture(seconds = 2) {
+  const samples = 8000 * seconds;
+  const pcm = Buffer.alloc(44 + samples * 2);
+  pcm.write('RIFF',0); pcm.writeUInt32LE(pcm.length - 8,4); pcm.write('WAVEfmt ',8);
+  pcm.writeUInt32LE(16,16); pcm.writeUInt16LE(1,20); pcm.writeUInt16LE(1,22);
+  pcm.writeUInt32LE(8000,24); pcm.writeUInt32LE(16000,28); pcm.writeUInt16LE(2,32);
+  pcm.writeUInt16LE(16,34); pcm.write('data',36); pcm.writeUInt32LE(samples * 2,40);
+  for(let i=0;i<Math.min(samples,16000);i++) pcm.writeInt16LE(Math.round(1500 * Math.sin(i * Math.PI * .11)),44+i*2);
+  return pcm;
+}
+const features = ['schedules', 'file_upload', 'room_messaging', 'send_corrections'].map(id => ({
   id, appSupport:'supported', protocolSupport:'supported', serverSupport:'supported', scope:'service',
 }));
 
 async function launch() {
   const bytes = await fs.readFile(path.join(__dirname, 'fixtures/tiny-video.webm'));
+  const audioBytes = audioFixture();
   const files = new Map();
+  const staged = new Map();
+  files.set(direct + '/' + audioAttachment.id, audioBytes);
   const streams = new Set();
-  const reads = [], posts = [];
-  const state = {stageStatus:201, oversize:false, stagedReads:0};
+  const reads = [], posts = [], audioReads = [], sendRequests = [];
+  let acceptedAudio;
+  const state = {stageStatus:201, oversize:false, stagedReads:0, rejectSend:false};
   const api = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://fixture');
     const send = (status, value) => response.writeHead(status, {'Content-Type':'application/json'}).end(JSON.stringify(value));
@@ -49,14 +78,47 @@ async function launch() {
     if (url.pathname === '/api/v1/conversations') return send(200,{items:conversations});
     if (chat && name === chat.id) return send(200,chat);
     if (chat && name === 'room-session') return send(200,{accountId:account,conversationId:room,active:true,state:'joined',nickname:'Alice',updatedAt:now});
-    if (chat && name === 'messages') return send(200,{items:clips.filter(clip => clip.message.conversationId === chat.id).map(clip => clip.message)});
+    if (chat && name === 'messages') {
+      if (request.method === 'POST') {
+        const chunks = [];
+        request.on('data', chunk => chunks.push(chunk));
+        request.on('end', () => {
+          const payload = JSON.parse(Buffer.concat(chunks));
+          sendRequests.push(payload);
+          if (!Array.isArray(payload.attachmentIds)) return send(422,{code:'invalid_request',status:422});
+          if (state.rejectSend) return send(422,{code:'invalid_request',status:422});
+          const attachments = payload.attachmentIds.map(id => staged.get(chat.id + '/' + id));
+          if (attachments.some(file => !file)) return send(422,{code:'invalid_request',status:422});
+          acceptedAudio = {...sentAudio,id:id(35),originalText:payload.originalText,attachments,
+            composition:{attachmentIds:payload.attachmentIds},createdAt:'2026-11-08T12:00:04Z'};
+          send(202,acceptedAudio);
+        });
+        return;
+      }
+      const items = clips.filter(clip => clip.message.conversationId === chat.id).map(clip => clip.message);
+      if (chat.id === direct) items.unshift(ownText, sentAudio, receivedAudio);
+      if (chat.id === direct && acceptedAudio) items.unshift(acceptedAudio);
+      return send(200,{items});
+    }
+    if (name === 'edit-target') return send(200,{messageId:ownText.id,accountId:account,conversationId:direct,
+      currentRevisionId:ownText.revisionId,originalText:ownText.originalText,eligible:true});
     if (name === 'shared-content') {
       const chatID = url.searchParams.get('conversationId');
-      return send(200,{items:clips.filter(clip => !chatID || clip.message.conversationId === chatID),indexing:{state:'complete',indexedMessages:2,totalMessages:2}});
+      const selected = [...clips, audioItem].filter(item => (!chatID || item.message.conversationId === chatID) &&
+        (!['video','audio'].includes(url.searchParams.get('type')) || url.searchParams.get('type') === item.kind));
+      return send(200,{items:selected,indexing:{state:'complete',indexedMessages:4,totalMessages:4}});
     }
     if (name === 'thumbnail') return send(503,{status:503});
     if (name === 'content') {
       const item = url.pathname.split('/').at(-2);
+      if (item === audioItem.id) {
+        const range = request.headers.range;
+        audioReads.push({item, range, download:url.searchParams.has('download')});
+        const headers = {'Content-Type':'audio/wav','Content-Length':audioBytes.length,
+          'Content-Disposition':'inline; filename=mensagem.wav'};
+        if (range === 'bytes=0-20971519') headers['Content-Range'] = 'bytes 0-' + (audioBytes.length - 1) + '/' + audioBytes.length;
+        return response.writeHead(headers['Content-Range'] ? 206 : 200,headers).end(audioBytes);
+      }
       const range = request.headers.range;
       reads.push({item,range});
       if (state.oversize && range === 'bytes=0-5242879') {
@@ -81,10 +143,17 @@ async function launch() {
     if (chat && url.pathname.includes('/staged-attachments/')) {
       const key = chat.id + '/' + name;
       if (request.method === 'GET') {
-        state.stagedReads++;
+        if (name === audioAttachment.id) audioReads.push({item:name, range:request.headers.range, download:false});
+        else state.stagedReads++;
         const file = files.get(key);
         if (!file) return send(404,{status:404});
-        return response.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':file.length}).end(file);
+        const headers = {'Content-Type':'application/octet-stream','Content-Length':file.length};
+        const metadata = name === audioAttachment.id ? audioAttachment : staged.get(key);
+        if (metadata) {
+          headers['X-Oie-Attachment-Type'] = metadata.mediaType;
+          headers['Content-Disposition'] = "attachment; filename*=UTF-8''" + encodeURIComponent(metadata.fileName);
+        }
+        return response.writeHead(200,headers).end(file);
       }
       posts.push(key);
       const chunks = [];
@@ -93,11 +162,15 @@ async function launch() {
         if (state.stageStatus !== 201) return send(state.stageStatus,{status:state.stageStatus});
         const multipart = Buffer.concat(chunks);
         const endOfHeaders = multipart.indexOf('\r\n\r\n');
-        const fileName = /filename="([^"]+)"/.exec(multipart.subarray(0,endOfHeaders).toString())[1];
+        const headers = multipart.subarray(0,endOfHeaders).toString();
+        const fileName = /filename="([^"]+)"/.exec(headers)[1];
+        const mediaType = /Content-Type: ([^\r\n]+)/i.exec(headers)[1];
         const limit = multipart.lastIndexOf('\r\n--');
         const file = multipart.subarray(endOfHeaders + 4,limit);
         files.set(key,file);
-        send(201,{id:name,fileName,mediaType:'video/webm',size:file.length,sha256:createHash('sha256').update(file).digest('hex')});
+        const metadata = {id:name,fileName,mediaType,size:file.length,sha256:createHash('sha256').update(file).digest('hex')};
+        staged.set(key,metadata);
+        send(201,metadata);
       });
       return;
     }
@@ -120,11 +193,157 @@ async function launch() {
   let log = '';
   server.stderr.on('data', data => { log += data; });
   const base = 'http://127.0.0.1:' + port;
-  const browser = await (process.argv.includes('--webkit') ? webkit : chromium).launch();
+  const useWebKit = process.argv.includes('--webkit');
+  const browser = useWebKit ? await webkit.launch() : await chromium.launch({
+    args:['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    // Chromium uses the process locale when converting the suggested filename.
+    env: process.platform === 'linux' ? {...process.env, LC_ALL:'C.UTF-8'} : process.env,
+  });
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
       if (await fetch(base).then(response => response.ok, () => false)) break;
       await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    if (!useWebKit) {
+      for (const [locale, width, playLabel, pauseLabel, positionLabel, downloadLabel, theme] of [
+        ['en', 1440, 'Play audio', 'Pause audio', 'Audio position', 'Download audio', 'light'],
+        ['pt-BR', 390, 'Reproduzir áudio', 'Pausar áudio', 'Posição do áudio', 'Baixar áudio', 'dark'],
+        ['pt-BR', 838, 'Reproduzir áudio', 'Pausar áudio', 'Posição do áudio', 'Baixar áudio', 'dark'],
+      ]) {
+        const page = await browser.newPage({locale,viewport:{width,height:844}});
+        const startReads = audioReads.length;
+        let releaseWaves;
+        const waveGate = new Promise(resolve => { releaseWaves = resolve; });
+        await page.route(url => url.pathname.endsWith('/' + audioItem.id + '/content') ||
+          url.searchParams.get('attachmentId') === audioAttachment.id, async route => {
+          await waveGate;
+          await route.continue();
+        });
+        await page.goto(base + '/?chat=' + direct + '&lang=' + locale + '&theme=' + theme);
+        const players = page.locator('[data-message-audio]:visible');
+        await players.last().waitFor();
+        assert.equal(await players.count(),2);
+        try {
+          await page.locator('[data-message-audio][aria-busy="true"]').waitFor();
+          assert.equal(audioReads.length,startReads);
+          await page.evaluate(() => {
+            const nodes = [...document.querySelectorAll('[data-message-audio],#message-timeline,#send-message-form')];
+            const measure = () => nodes.flatMap(node => {
+              const {x,y,width,height} = node.getBoundingClientRect();
+              return [x,y,width,height,node.scrollTop];
+            });
+            window.audioRects = [];
+            function sample() {
+              window.audioRects.push(measure());
+              window.audioRAF = requestAnimationFrame(sample);
+            }
+            sample();
+          });
+        } finally {
+          releaseWaves();
+        }
+        for (const player of await players.all()) {
+          await player.getByRole('slider',{name:positionLabel,exact:true}).waitFor();
+          await player.locator('canvas').first().waitFor();
+          await player.locator('[data-message-audio-time]').filter({hasText:/^0:02$/}).waitFor();
+          assert(await player.locator('audio').evaluate(audio => audio.paused));
+          assert(await player.evaluate(node => {
+            const card = node.getBoundingClientRect();
+            const bubble = node.closest('.oie-message-body-content').getBoundingClientRect();
+            return card.left >= bubble.left - 1 && card.right <= bubble.right + 1;
+          }), 'the player fits inside the message bubble');
+        }
+        const frames = await page.evaluate(() => {
+          cancelAnimationFrame(window.audioRAF);
+          return window.audioRects;
+        });
+        for (const sample of frames) assert(sample.every((value,index)=>Math.abs(value-frames[0][index])<=1),
+          JSON.stringify({width,expected:frames[0],sample}));
+        const expectedReads = [{item:audioItem.id,range:'bytes=0-20971519',download:false},
+          {item:audioAttachment.id,range:undefined,download:false}];
+        const preparedReads = () => audioReads.slice(startReads).sort((a,b) => a.item.localeCompare(b.item));
+        assert.deepEqual(preparedReads(),expectedReads);
+        for (const player of await players.all()) {
+          await player.getByRole('button',{name:new RegExp('^' + playLabel)}).click();
+          await player.getByRole('button',{name:new RegExp('^' + pauseLabel)}).click();
+          const seek = player.getByRole('slider',{name:positionLabel,exact:true});
+          await seek.press('End');
+          await page.waitForFunction(slider => Number(slider.getAttribute('aria-valuenow')) >= 1.9,await seek.elementHandle());
+          assert.equal(await seek.getAttribute('aria-valuetext'),'0:02 / 0:02');
+          assert.equal(await player.locator('[data-message-audio-time]').textContent(),'0:02');
+        }
+        assert.equal(await players.getByRole('slider').count(),2);
+        assert.deepEqual(preparedReads(),expectedReads,'playback reuses the prepared audio');
+        for (const [message, filename] of [[receivedAudio,'mensagem.wav'], [sentAudio,'Gravação.wav']]) {
+          const row = page.locator('[data-message-id="' + message.id + '"]');
+          const menuTrigger = row.locator('[data-message-menu-trigger]');
+          await menuTrigger.focus();
+          await menuTrigger.press('Enter');
+          const action = row.getByRole('menuitem',{name:downloadLabel,exact:true});
+          await action.focus();
+          const downloading = page.waitForEvent('download');
+          await action.press('Enter');
+          const file = await downloading;
+          assert.equal(file.suggestedFilename(),filename);
+          assert.deepEqual(await fs.readFile(await file.path()),audioBytes);
+          await page.waitForFunction(node => node === document.activeElement,await menuTrigger.elementHandle());
+        }
+        await page.close();
+        reads.length = 0;
+      }
+    }
+    if (!useWebKit) {
+      const page = await browser.newPage({viewport:{width:838,height:844}});
+      let rejectedRange = 0;
+      await page.route(url => url.pathname.endsWith('/' + audioItem.id + '/content'), route => {
+        if (route.request().headers().range !== 'bytes=0-20971519') return route.continue();
+        rejectedRange++;
+        return route.fulfill({status:416});
+      });
+      await page.goto(base + '/?chat=' + direct + '&lang=en');
+      const player = message => page.locator('[data-message-id="' + message.id + '"] [data-message-audio]');
+      await player(sentAudio).getByRole('slider',{name:'Audio position'}).waitFor({timeout:5000});
+      assert.equal(await player(sentAudio).locator('[data-message-audio-time]').textContent(),'0:02');
+      assert.equal(await player(receivedAudio).getAttribute('aria-busy'),null);
+      assert.equal(rejectedRange,1);
+      await player(receivedAudio).getByRole('button',{name:/^Play audio/}).click();
+      const streaming = player(receivedAudio).locator('audio[controls]');
+      await streaming.waitFor();
+      await page.waitForFunction(audio => !audio.paused && audio.currentTime > 0, await streaming.elementHandle());
+      await page.close();
+      reads.length = 0;
+    }
+    if (!useWebKit) {
+      const page = await browser.newPage({viewport:{width:838,height:844}});
+      await page.route(url => url.pathname.endsWith('/' + audioItem.id + '/content'), route =>
+        route.fulfill({contentType:'audio/wav',body:audioFixture(301)}), {times:1});
+      await page.goto(base + '/?chat=' + direct + '&lang=en');
+      const player = page.locator('[data-message-id="' + receivedAudio.id + '"] [data-message-audio]');
+      await player.locator('[data-message-audio-time]').filter({hasText:/^5:01$/}).waitFor();
+      assert.equal(await player.getByRole('slider').count(),0,'long clips play without full waveform decoding');
+      await player.getByRole('button',{name:/^Play audio/}).click();
+      await player.locator('audio[controls]').waitFor();
+      await page.close();
+      reads.length = 0;
+    }
+    if (!useWebKit) {
+      const page = await browser.newPage({viewport:{width:838,height:844}});
+      await page.addInitScript(() => {
+        AudioContext.prototype.decodeAudioData = () => Promise.reject(new Error('Waveform decoder unavailable'));
+      });
+      await page.goto(base + '/?chat=' + direct + '&lang=en');
+      const player = page.locator('[data-message-id="' + sentAudio.id + '"] [data-message-audio]');
+      await player.locator('[data-message-audio-time]').filter({hasText:/^0:02$/}).waitFor();
+      await page.waitForFunction(node => !node.hasAttribute('aria-busy'), await player.elementHandle());
+      assert.equal(await player.getByRole('slider').count(),0);
+      const before = await player.boundingBox();
+      await player.getByRole('button',{name:/^Play audio/}).click();
+      await player.locator('audio[controls]').waitFor();
+      await page.waitForFunction(node => !node.paused,await player.locator('audio').elementHandle());
+      assert.equal((await player.boundingBox()).height,before.height);
+      assert.equal(await player.locator('[data-message-audio-time]').textContent(),'0:02');
+      await page.close();
+      reads.length = 0;
     }
     for (const [index, locale, width] of [[0,'en',1280], [1,'pt-BR',390]]) {
       const page = await browser.newPage({locale, viewport:{width,height:844}});
@@ -278,11 +497,153 @@ async function launch() {
       }
       await videoCard.locator('[data-video-play]').click();
       await waitPlayback('[data-video-item="' + clips[index].id + '"] video');
+      if (!useWebKit && index === 0) {
+        await composer.fill('');
+        const record = page.getByRole('button', {name:'Record audio',exact:true});
+        const send = page.getByRole('button', {name:'Send message',exact:true});
+        const audio = page.locator('[data-record-audio]');
+        const stop = page.getByRole('button', {name:'Stop recording',exact:true});
+        const play = page.getByRole('button', {name:'Play recording',exact:true});
+        const position = audio.getByRole('slider', {name:'Recording position',exact:true});
+        const cancel = audio.getByRole('button',{name:'Cancel',exact:true});
+        const retry = audio.getByRole('button',{name:'Try again',exact:true});
+        const geometry = await composer.boundingBox();
+        const before = posts.length;
+        let sends = 0;
+        page.on('request', request => {
+          if (new URL(request.url()).pathname === '/ui/messages/send') sends++;
+        });
+        await page.evaluate(() => {
+          const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+          navigator.mediaDevices.getUserMedia = async options => {
+            navigator.mediaDevices.getUserMedia = getUserMedia;
+            await new Promise(resolve => { window.grantMicrophone = resolve; });
+            const stream = await getUserMedia(options);
+            window.lateMicrophone = stream;
+            return stream;
+          };
+        });
+        await record.click();
+        await audio.getByText('Waiting for microphone access…',{exact:true}).waitFor();
+        await page.evaluate(() => window.dispatchEvent(new Event('oie:desktop-hide')));
+        await audio.waitFor({state:'hidden'});
+        await page.evaluate(() => window.grantMicrophone());
+        await page.waitForFunction(() => window.lateMicrophone?.getTracks().every(track => track.readyState === 'ended'));
+        assert.equal(posts.length,before);
+        await page.evaluate(() => {
+          const getUserMedia = navigator.mediaDevices.getUserMedia;
+          navigator.mediaDevices.getUserMedia = async () => {
+            navigator.mediaDevices.getUserMedia = getUserMedia;
+            throw new DOMException('Microphone denied','NotAllowedError');
+          };
+        });
+        await record.click();
+        await page.getByText('Could not record audio. Check microphone access.',{exact:true}).waitFor();
+        assert(await composer.evaluate(node => node === document.activeElement));
+        await record.click();
+        await audio.getByText('Recording audio…',{exact:true}).waitFor();
+        assert(await composer.isHidden());
+        assert(await audio.locator('.oie-audio-recording-dot .animate-ping').isVisible());
+        assert.deepEqual(await audio.boundingBox(),geometry);
+        await audio.locator('[data-record-audio-wave] canvas').first().waitFor();
+        await cancel.click();
+        await audio.waitFor({state:'hidden'});
+        assert(await composer.isVisible());
+        assert.equal(posts.length,before);
+        await record.click();
+        await audio.locator('[data-record-audio-wave] canvas').first().waitFor();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:02');
+        state.stageStatus = 503;
+        await stop.click();
+        await position.waitFor();
+        await retry.waitFor();
+        await page.locator('#toast-container').getByText('Could not attach this file.',{exact:true}).waitFor();
+        assert(await send.isDisabled());
+        state.stageStatus = 201;
+        await retry.click();
+        assert(Number(await position.getAttribute('aria-valuemax')) >= 1);
+        await page.waitForFunction(() => !document.querySelector('#composer-send').disabled);
+        assert(await cancel.evaluate(node => node === document.activeElement));
+        assert.deepEqual(await audio.boundingBox(),geometry);
+        assert(await send.isVisible());
+        assert(await composer.isHidden());
+        assert.equal(posts.length,before + 2);
+        assert.equal(posts.at(-1),posts.at(-2),'retry stages the same recording');
+        assert(files.get(posts.at(-1)).length > 0);
+        assert.equal(sends,0);
+        await play.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-media]').currentTime > 0);
+        const firstRecording = posts.at(-1);
+        const earlier = page.locator('[data-message-id="' + ownText.id + '"]');
+        await earlier.locator('[data-message-menu-trigger]').click();
+        const editTarget = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/message-edit-target');
+        await earlier.locator('#edit-message-' + ownText.id).click();
+        assert((await editTarget).ok());
+        await composer.waitFor();
+        assert.equal(await composer.inputValue(),ownText.originalText);
+        assert(await composer.evaluate(node => node === document.activeElement));
+        assert(await audio.isHidden());
+        await page.reload();
+        await page.locator('[data-edit-cancel]').waitFor();
+        assert.equal(await composer.inputValue(),ownText.originalText);
+        assert(await composer.isVisible());
+        assert(await audio.isHidden());
+        await page.locator('[data-edit-cancel]').click();
+        await position.waitFor();
+        assert(await cancel.evaluate(node => node === document.activeElement));
+        assert(await composer.isHidden());
+        await cancel.click();
+        await composer.waitFor();
+
+        await record.click();
+        await audio.locator('[data-record-audio-wave] canvas').first().waitFor();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-time]').textContent === '0:01');
+        await stop.click();
+        await position.waitFor();
+        await page.waitForFunction(() => !document.querySelector('#composer-send').disabled);
+        assert.equal(posts.length,before + 3);
+        assert.notEqual(posts.at(-1),firstRecording);
+        assert.equal(sends,0);
+        await play.click();
+        await page.waitForFunction(() => document.querySelector('[data-record-audio-media]').currentTime > 0);
+        const newRecordingID = posts.at(-1).split('/').at(-1);
+        await page.route(url => url.pathname === '/ui/scheduling/file' && url.searchParams.get('attachmentId') === newRecordingID,
+          route => route.fulfill({contentType:'audio/webm',body:'Corrupt recording'}), {times:1});
+        await page.reload();
+        await retry.waitFor();
+        await page.locator('#toast-container').getByText('Could not play this audio.',{exact:true}).waitFor();
+        assert(await play.isDisabled());
+        await retry.click();
+        await position.waitFor();
+        assert(await play.isEnabled());
+        assert(await composer.isHidden());
+        state.rejectSend = true;
+        const rejected = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
+        await send.click();
+        assert.equal((await rejected).status(),422);
+        await page.waitForFunction(() => document.activeElement?.id === 'composer-send' && !document.activeElement.disabled);
+        assert(await audio.isVisible());
+        assert(await play.isEnabled());
+        state.rejectSend = false;
+        const accepted = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/messages/send');
+        await send.click();
+        assert.equal((await (await accepted).json()).accepted,true);
+        await audio.waitFor({state:'hidden'});
+        await composer.waitFor();
+        assert.equal(await composer.inputValue(),'');
+        await page.reload();
+        await page.locator('[data-message-id="' + id(35) + '"]').waitFor();
+        assert(await audio.isHidden());
+        assert.equal(sends,2);
+        assert.equal(sendRequests.length,2);
+        assert.deepEqual(sendRequests[1].attachmentIds,[newRecordingID]);
+        assert.equal(sendRequests[1].originalText,'');
+      }
       assert.deepEqual(errors,[]);
       await page.close();
       reads.length = 0;
     }
-    console.log('PASS: draft thumbnail, staging failure/retry, playback and reload, bounded received DM and room previews');
+    console.log('PASS: draft thumbnail, staging failure/retry, playback and reload, bounded received DM and room previews, and chat waveforms before playback');
   } catch (error) {
     console.error(log);
     throw error;

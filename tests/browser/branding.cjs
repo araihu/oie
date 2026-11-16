@@ -12,6 +12,7 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
  const address='http://127.0.0.1:'+port,binary=process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie');
  const child=spawn(binary,['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});let log='';child.stderr.on('data',data=>log+=data);
  const licenseText=await fs.readFile(path.resolve(__dirname,'../../LICENSE'),'utf8');
+ const waveSurferLicense=await fs.readFile(path.resolve(__dirname,'../../internal/adapters/web/wavesurfer/LICENSE'),'utf8');
  const browser=await chromium.launch({headless:true}),findings=[];
  try{
   for(let i=0;i<100;i++){try{if((await fetch(address)).ok)break}catch{}if(i===99)throw Error('BFF not ready '+log);await new Promise(r=>setTimeout(r,100))}
@@ -44,9 +45,13 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
    assert.equal(licenseResponse.status(),200);
    assert.equal(await licenseResponse.text(),licenseText);
    const credits=about.getByRole('region',{name:lang==='en'?'Attributions':'Créditos'});
-   assert.equal(await credits.getByRole('link').count(),6);
+   assert.equal(await credits.getByRole('link').count(),7);
+   const waveSurferURL=await credits.getByRole('link',{name:'WaveSurfer.js',exact:true}).getAttribute('href');
+   assert.equal(waveSurferURL,'/ui/wavesurfer/LICENSE');
    for(const href of await credits.getByRole('link').evaluateAll(links=>links.map(link=>link.getAttribute('href')).filter(href=>href.startsWith('/')))){
-    assert.equal((await page.request.get(new URL(href,address).href)).status(),200,href);
+    const creditResponse=await page.request.get(new URL(href,address).href);
+    assert.equal(creditResponse.status(),200,href);
+    if(href===waveSurferURL)assert.equal(await creditResponse.text(),waveSurferLicense);
    }
    const manifestURL=await page.locator('link[rel=manifest]').getAttribute('href'),response=await page.request.get(new URL(manifestURL,address).href),manifest=await response.json();
    assert.equal(response.status(),200);assert.equal(manifest.name,'Oiê');assert.equal(manifest.short_name,'Oiê');assert.equal(manifest.lang,lang);assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/');assert.equal(manifest.scope,'/');assert.equal(manifest.icons.length,4);

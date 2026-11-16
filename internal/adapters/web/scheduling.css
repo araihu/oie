@@ -377,8 +377,129 @@
 }
 
 #send-message-form:not([data-editing-schedule]) :is([data-schedule-save-label], #composer-schedule-reschedule),
-#send-message-form[data-editing-schedule] :is([data-schedule-send-icon], #composer-schedule-new) {
+#send-message-form[data-editing-schedule] :is([data-schedule-send-icon], #composer-schedule-new),
+#composer-send:is([data-record-mode], [data-stop-recording]) [data-schedule-send-icon] {
   display: none;
+}
+
+[data-stop-audio-icon]:not([hidden]) {
+  display: block;
+  inline-size: .75rem;
+  block-size: .75rem;
+  border-radius: .125rem;
+  background: currentColor;
+}
+
+.oie-composer-field:has([data-record-audio]:not([hidden])) :is(.oie-composer-input, .oie-composer-emoji) {
+  display: none;
+}
+
+.oie-composer-audio:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  min-block-size: var(--oie-composer-control-size);
+  padding-inline: .25rem .625rem;
+  border: 1px solid var(--oie-border);
+  border-radius: 1.5rem;
+  background: var(--oie-raised);
+}
+
+.oie-composer-audio button:not([hidden]) {
+  flex: none;
+  min-inline-size: 2rem;
+  min-block-size: 2rem;
+  padding: .25rem;
+}
+
+.oie-composer-audio time { font-variant-numeric: tabular-nums; }
+[data-record-audio-wave] {
+  flex: 1;
+  min-inline-size: 0;
+  block-size: 1.25rem;
+  color: var(--oie-muted);
+}
+[data-record-audio-wave][role="slider"] { cursor: pointer; }
+
+.oie-audio-recording-dot {
+  display: none;
+  flex: none;
+}
+
+.oie-composer-audio[data-capturing] .oie-audio-recording-dot { display: block; }
+[data-record-audio-media]:not([controls]) { display: none; }
+[data-record-audio-media][controls] { min-inline-size: 0; flex: 1; block-size: 2.5rem; }
+
+.oie-message-audio:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-block-size: 3rem;
+  padding: .25rem .625rem .25rem .375rem;
+  border: 1px solid var(--oie-border);
+  border-radius: .75rem;
+  background: var(--oie-panel);
+  color: var(--oie-text);
+}
+
+[data-message-presentation] ~ .oie-audio-card,
+[data-message-presentation] ~ .oie-message-attachments:has(.oie-audio-card) {
+  margin-block-start: .375rem;
+}
+
+.oie-message-audio .oie-message-audio-play:not([hidden]) {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.125rem;
+  block-size: 2.125rem;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--oie-accent-text);
+  color: var(--oie-panel);
+}
+.oie-message-audio .oie-message-audio-play:hover { background: var(--oie-text); }
+.oie-message-audio :is(button, [role="slider"]):focus-visible {
+  outline: 2px solid var(--oie-accent-text);
+  outline-offset: 2px;
+}
+.oie-message-audio button[aria-disabled="true"] { cursor: progress; }
+.oie-message-audio-time {
+  flex: none;
+  inline-size: 5.5ch;
+  font-size: .8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+.oie-message-audio-wave {
+  flex: 1;
+  min-inline-size: 0;
+  block-size: 1.5rem;
+  color: var(--oie-muted);
+}
+.oie-message-audio-wave:not([role="slider"]) {
+  background: linear-gradient(var(--oie-muted), var(--oie-muted)) center / 100% 1px no-repeat;
+}
+.oie-message-audio-wave[role="slider"] { cursor: pointer; }
+.oie-message-audio audio:not([controls]) { display: none; }
+.oie-message-audio audio[controls] { flex: 1; min-inline-size: 0; block-size: 2.375rem; }
+
+@container (max-width: 330px) {
+  .oie-message-audio[data-waveform-player]:not(:has(audio[controls])) {
+    display: grid;
+    grid-template-columns: 2.125rem minmax(0, 1fr);
+    grid-template-rows: 1.5rem 1rem;
+    row-gap: 0;
+    min-block-size: 3.125rem;
+  }
+  .oie-message-audio-play { grid-area: 1 / 1 / 3 / 2; }
+  .oie-message-audio-wave { grid-area: 1 / 2; }
+  .oie-message-audio-time { grid-area: 2 / 2; justify-self: end; line-height: 1; }
+  .oie-message-audio:has(audio[controls]) { min-block-size: 3.125rem; }
 }
 
 .oie-chat-pane[data-file-drag]::after {

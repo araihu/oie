@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	_ "embed"
 	"net/url"
 	"path"
 	"slices"
@@ -10,6 +11,15 @@ import (
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
+
+//go:embed message-audio.js
+var messageAudioScript []byte
+
+//go:embed audio-duration.js
+var audioDurationScript []byte
+
+//go:embed wavesurfer/LICENSE
+var waveSurferLicense []byte
 
 // Match the audio types allowed in same-origin browser responses.
 func audioMediaType(mediaType string) string {
@@ -28,16 +38,28 @@ func audioMediaType(mediaType string) string {
 	return ""
 }
 
-func audioURL(address string) bool {
+func audioURLMediaType(address string) string {
 	u, err := url.Parse(address)
 	if err != nil {
-		return false
+		return ""
 	}
 	switch strings.ToLower(path.Ext(u.Path)) {
-	case ".mp3", ".ogg", ".opus", ".m4a", ".wav", ".flac", ".aac":
-		return true
+	case ".mp3":
+		return "audio/mpeg"
+	case ".ogg", ".opus", ".oga":
+		return "audio/ogg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".wav":
+		return "audio/wav"
+	case ".flac":
+		return "audio/flac"
+	case ".aac":
+		return "audio/aac"
+	case ".weba":
+		return "audio/webm"
 	}
-	return false
+	return ""
 }
 
 func (s *Server) loadMessageAudio(ctx context.Context, v *view) {
@@ -53,7 +75,7 @@ func (s *Server) loadMessageAudio(ctx context.Context, v *view) {
 			continue
 		}
 		for _, match := range messageBodyURLs.FindAllString(message.displayBody(), 128) {
-			if audioURL(strings.TrimRight(match, ".,;!)]}")) {
+			if audioURLMediaType(strings.TrimRight(match, ".,;!)]}")) != "" {
 				visible[message.Id] = message
 				ids = append(ids, message.Id)
 				break

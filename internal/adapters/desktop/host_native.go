@@ -197,6 +197,7 @@ func Run(ctx context.Context, c Config) (err error) {
 	}
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		if app.Context().Err() == nil {
+			window.ExecJS("window.dispatchEvent(new Event('oie:desktop-hide'))")
 			window.Hide()
 			e.Cancel()
 		}

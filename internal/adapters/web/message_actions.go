@@ -101,9 +101,9 @@ func audioDownloadActions(v view, messageID string) []dropdown.Item {
 	}
 	for i := range items {
 		if len(items) == 1 {
-			items[i].Label = v.Text.SharedDownload
+			items[i].Label = v.Text.AudioDownload
 		} else {
-			items[i].Label = v.Text.SharedDownload + " · " + items[i].Label
+			items[i].Label = v.Text.AudioDownload + " · " + items[i].Label
 		}
 	}
 	return items
