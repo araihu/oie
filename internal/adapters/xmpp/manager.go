@@ -806,8 +806,6 @@ func definitivelyUnsent(managed bool, err error) bool {
 		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
-var errStanzaTooLarge = errors.New("XMPP stanza exceeds size limit")
-
 type boundedTokens struct {
 	reader    xml.TokenReader
 	remaining int
@@ -832,7 +830,7 @@ func (b *boundedTokens) Token() (xml.Token, error) {
 		}
 	}
 	if b.remaining < 0 {
-		return nil, errStanzaTooLarge
+		return nil, errors.New("XMPP stanza exceeds size limit")
 	}
 	return token, nil
 }
@@ -844,11 +842,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		switch {
 		case err == nil:
 			return true, nil
-		case errors.Is(err, errStanzaTooLarge):
-			return false, stream.PolicyViolation
 		default:
-			// The session drains a malformed payload. Transport errors and
-			// application errors still reach Serve and can trigger resumption.
+			// Serve drains and acknowledges malformed or oversized stanzas.
+			// Transport and application failures can still trigger resumption.
 			return false, limited.readError
 		}
 	}

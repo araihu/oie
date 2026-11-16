@@ -11,7 +11,6 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
-	"mellium.im/xmpp/stream"
 )
 
 type failingReceiveHost struct {
@@ -48,7 +47,7 @@ func TestInboundStanzaFailureAndResumption(t *testing.T) {
 		wire string
 		want error
 	}{
-		{"oversized stanza invalidates the stream", message + "<body>" + strings.Repeat("a", 1<<20) + "</body></message>", stream.PolicyViolation},
+		{"oversized stanza is discarded", message + "<body>" + strings.Repeat("a", 1<<20) + "</body></message>", nil},
 		{"invalid JID is discarded", `<message xmlns="jabber:client" from="alice@bad domain"><body>Hello</body></message>`, nil},
 		{"storage failure leaves the stanza unhandled", message + "<body>Hello</body></message>", transient},
 	} {
