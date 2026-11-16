@@ -27,7 +27,14 @@ type RoomPreviewProvider interface {
 	PreviewRoom(context.Context, domain.Account, string, bool) (domain.RoomPreview, []byte, error)
 }
 
+var (
+	ErrInvalidRoomService      = errors.New("address domain is not an XMPP room service")
+	ErrRoomCreationUnavailable = errors.New("could not verify the XMPP room address")
+	ErrRoomAlreadyExists       = errors.New("room already exists")
+)
+
 type RoomCreator interface {
+	CheckRoomCreation(context.Context, domain.Account, string) error
 	CreateRoom(context.Context, domain.Account, domain.Conversation, string, string, domain.ID) (domain.RoomSession, error)
 }
 
@@ -95,17 +102,21 @@ func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address
 	if _, ok := e.protocols.(RoomProtocol); !ok {
 		return ConversationResult{}, ErrProtocolUnavailable
 	}
-	if create {
-		if _, ok := e.protocols.(RoomCreator); !ok {
-			return ConversationResult{}, ErrProtocolUnavailable
-		}
-	}
 	if err := e.checkRoomNickname(account, nickname); err != nil {
 		return ConversationResult{}, err
 	}
 	repo, err := e.messaging()
 	if err != nil {
 		return ConversationResult{}, err
+	}
+	if create {
+		creator, ok := e.protocols.(RoomCreator)
+		if !ok {
+			return ConversationResult{}, ErrProtocolUnavailable
+		}
+		if err := e.checkRoomCreation(ctx, creator, key, account, canonical); err != nil {
+			return ConversationResult{}, err
+		}
 	}
 	id, err := e.newID()
 	if err != nil {
@@ -152,4 +163,19 @@ func (e *Engine) OpenRoom(ctx context.Context, key, accountID domain.ID, address
 		e.outgoingWorkCommitted()
 	}
 	return result, err
+}
+
+// Already accepted requests replay through OpenConversation even if the service
+// is now unreachable or the first attempt has already created the room.
+func (e *Engine) checkRoomCreation(ctx context.Context, creator RoomCreator, key domain.ID, account domain.Account, address string) error {
+	if _, err := e.Operation(ctx, key); !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	err := creator.CheckRoomCreation(ctx, account, address)
+	if err != nil {
+		if _, replayErr := e.Operation(ctx, key); replayErr == nil {
+			return nil
+		}
+	}
+	return err
 }

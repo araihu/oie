@@ -73,7 +73,9 @@
     // Keep the real header and composer in place. The skeleton must be
     // outside the inert content so its status stays available.
     timeline.append(overlay);
-    pending.covered=[...chat.children].flatMap(node=>node===timeline?[timeline.firstElementChild]:[node]);
+    pending.covered=[...chat.children].flatMap(node=>node===timeline
+     ? [...timeline.children].filter(child=>child!==overlay)
+     : [node]);
     for(const node of pending.covered)node.inert=true;
    }else if(covered){covered.inert=true;pending.covered=[covered];}
    const params=new URL(ctx.request.action,location.href).searchParams;

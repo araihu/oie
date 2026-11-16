@@ -1,5 +1,5 @@
 .oie-message-stamp{display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-top:3px;font-size:10px;line-height:1.4;color:var(--oie-muted);white-space:nowrap}
-.oie-message-body-compact>.oie-message-stamp{margin-inline-end:-22px}
+.oie-message-body-compact>.oie-message-stamp{margin-inline-end:calc(-1 * var(--oie-message-menu-clearance))}
 .oie-message-stamp time{font-variant-numeric:tabular-nums}
 .oie-message-stamp :is(.oie-message-edit-symbol,.oie-message-edited,.oie-send-state-slot,.oie-send-state-slot>span,.oie-send-retry,.oie-message-star-indicator){
  display:inline-flex;align-items:center;justify-content:center;flex:none;

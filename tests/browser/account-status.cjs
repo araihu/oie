@@ -4,6 +4,7 @@ const http=require('node:http'),path=require('node:path'),fs=require('node:fs/pr
 const {createHash}=require('node:crypto'),{deflateSync}=require('node:zlib');
 const {spawn}=require('node:child_process'),{once}=require('node:events');
 const {chromium}=require('playwright');
+const {resizeVisibleViewport}=require('./fixtures/viewport.cjs');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 function image(){
  const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let i=0;i<8;i++)n=(n>>>1)^((n&1)?0xedb88320:0)}return(n^0xffffffff)>>>0};
@@ -14,7 +15,10 @@ function image(){
 (async()=>{
  const engine=id(1),alice=id(2),bob=id(3),revision=id(4),stamp='2026-11-08T12:00:00Z';
  const png=image(),hash=createHash('sha256').update(png).digest('hex'),missing='f'.repeat(64);
- const accounts=[{id:alice,label:'Alice initials',address:'alice@fixture'},{id:bob,label:'Bob photo',address:'bob@fixture'}].map(a=>({...a,revisionId:revision,protocol:'xmpp',createdAt:stamp,connectionState:'connected'}));
+ const accounts=[{id:alice,label:'Alice initials',address:'alice@fixture'},{id:bob,label:'Bob photo',address:'bob4@fixture'}].map(a=>({...a,revisionId:revision,protocol:'xmpp',createdAt:stamp,connectionState:'connected'}));
+ // These account addresses hash to the same starting color.
+ const conversations=accounts.map((a,i)=>({id:id(50+i),revisionId:revision,accountId:a.id,kind:'room',
+  address:'reading@rooms.fixture',title:'Reading group',lastMessage:'Hello',updatedAt:stamp,unreadCount:0,archived:false,favorite:false,roomStatus:'joined'}));
  const state={seq:0,connection:'connected',avatars:new Map([[bob,hash]])},streams=new Set(),errors=[],findings=[];
  const emit=type=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: {}\n\n`)};
  const api=http.createServer((req,res)=>{
@@ -22,7 +26,7 @@ function image(){
   assert.equal(req.method,'GET','status fixture must not mutate any account');
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.12.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:accounts});
-  if(u.pathname==='/api/v1/conversations')return send(200,{items:[]});
+  if(u.pathname==='/api/v1/conversations')return send(200,{items:u.searchParams.get('archived')==='true'?[]:conversations});
   for(const account of accounts){
    if(u.pathname===`/api/v1/accounts/${account.id}/connection`)return send(200,{accountId:account.id,state:state.connection,lastErrorCode:state.connection==='error'?'authentication_failed':undefined,updatedAt:stamp});
    if(u.pathname===`/api/v1/accounts/${account.id}/history`)return send(200,{accountId:account.id,state:'complete',retainedMessages:0,conversations:0,updatedAt:stamp});
@@ -38,11 +42,11 @@ function image(){
  let log='';child.stderr.on('data',chunk=>log+=chunk);const browser=await chromium.launch({headless:true}),base='http://127.0.0.1:'+port;
  const until=async(fn,label)=>{for(let n=0;n<160;n++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50))}throw Error('Timed out: '+label+'\n'+log)};
  try{
-  await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  await until(async()=>{try{return(await fetch(base+"/?inbox=1")).ok}catch{return false}},'BFF startup');
   for(const config of [{width:1440,locale:'en',mode:'dark'},{width:390,locale:'pt-BR',mode:'light'}])for(const theme of ['goshtoso','minimal']){
    state.connection='connected';state.avatars=new Map([[bob,hash]]);
    const page=await browser.newPage({viewport:{width:config.width,height:900},locale:config.locale,reducedMotion:'reduce'});page.on('pageerror',error=>errors.push(error.message));
-   await page.goto(`${base}/?lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
+   await page.goto(`${base}/?inbox=1&lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
    await until(()=>streams.size>0,'live event stream');await page.locator('[data-account-switcher]:visible').click();
    const menu=page.getByRole('dialog',{name:config.locale==='en'?'Switch account':'Trocar de conta',exact:true});await menu.waitFor({state:'visible'});
    const choice=account=>menu.locator(`[data-switch-account="${account}"]`),status=account=>choice(account).locator(`[data-account-status="${account}"]`);
@@ -63,13 +67,28 @@ function image(){
    };
    await until(async()=>await choice(bob).locator('img').evaluate(img=>img.complete&&img.naturalWidth===1),'profile image ready');
    assert.equal(await choice(alice).locator('img').count(),0);await placement(alice);await placement(bob);
+   const border=async(root,layer='initials')=>root.locator(`.oie-avatar-${layer} [class*="oie-avatar-user-"]`).evaluate(node=>{
+    const style=getComputedStyle(node);
+    if(style.borderTopWidth!=='2px') throw Error('The avatar color must appear on a rendered border');
+    return style.borderTopColor;
+   });
+   const accountBorders=await Promise.all(accounts.map(a=>border(choice(a.id))));
+   assert.notEqual(accountBorders[0],accountBorders[1],'a hash collision must still produce distinct account borders');
+   assert.equal(await border(choice(bob),'photo'),accountBorders[1]);
+   for(const [i,room] of conversations.entries()){
+    const row=page.locator(`[data-conversation-row="${room.id}"]`);
+    assert.equal(await border(row),accountBorders[i]);
+    assert.equal(await row.locator('.oie-row-account').textContent(),accounts[i].label+' · '+accounts[i].address);
+    assert.equal(await row.locator('.oie-avatar-initials .bg-success').count(),1);
+   }
+
    const labels=config.locale==='en'?{connected:'Connected',connecting:'Connecting…',error:'Connection error',not_connected:'Not connected'}:{connected:'Conectado',connecting:'Conectando…',error:'Erro de conexão',not_connected:'Não conectado'};
    await choice(bob).focus();const colors=new Set();
    for(const value of ['connecting','error','not_connected','connected']){
     state.connection=value;emit('account.connection_changed');
     await until(async()=>await status(bob).getAttribute('data-connection-state')===value&&await status(alice).getAttribute('data-connection-state')===value,'live avatar status '+value);
     for(const account of [alice,bob]){assert.equal(await status(account).getAttribute('title'),labels[value]);assert.equal(await status(account).getAttribute('aria-label'),labels[value]);assert.equal(await status(account).getAttribute('role'),'img');await placement(account)}
-    colors.add(await placement(bob));assert(await menu.isVisible());assert(await choice(bob).evaluate(node=>document.activeElement===node));assert.equal(await choice(bob).locator('.oie-profile-identity small').count(),1);
+    colors.add(await placement(bob));assert.equal(await border(choice(bob)),accountBorders[1]);assert(await menu.isVisible());assert(await choice(bob).evaluate(node=>document.activeElement===node));assert.equal(await choice(bob).locator('.oie-profile-identity small').count(),1);
    }
    assert.equal(colors.size,4,'connection states retain distinct semantic colors');
    state.avatars.set(bob,missing);emit('profile.avatar_changed');
@@ -77,11 +96,11 @@ function image(){
    assert(await choice(bob).evaluate(node=>document.activeElement===node));
    state.avatars.set(bob,'');emit('profile.avatar_changed');await until(async()=>await choice(bob).locator('img').count()===0,'explicit avatar removal');await placement(bob);
    await page.keyboard.press('Escape');await menu.waitFor({state:'hidden'});assert(await page.locator('[data-account-switcher]:visible').evaluate(node=>document.activeElement===node));
-   await page.goto(`${base}/?open=accounts&managedAccount=${bob}&lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
+   await page.goto(`${base}/?inbox=1&open=accounts&managedAccount=${bob}&lang=${config.locale}&theme=${config.mode}`);await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
    const detail=page.locator('.oie-account-detail'),detailStatus=detail.locator(`[data-account-status="${bob}"]`),connect=detail.locator('[data-connect-account]');await detail.waitFor({state:'visible'});
    assert.equal(await connect.count(),0);assert.equal(await detail.locator('input[name=password],input[name=endpoint]').count(),0);assert.equal(await detail.locator('[id^=connection-status-]').count(),0);assert(await detail.locator('[data-disconnect-account]').isVisible());await placement(bob,detailStatus);
    const footer=detail.locator('footer'),disconnect=footer.locator('[data-disconnect-account] button[type=submit]');
-   await page.setViewportSize({width:config.width,height:245});
+   await resizeVisibleViewport(page,{width:config.width,height:245});
    const layout=await footer.evaluate(node=>{
     const body=node.closest('#accounts-body'),content=body.querySelector('#account-detail-scroll');
     const bottom=node.getBoundingClientRect().bottom;
@@ -89,7 +108,7 @@ function image(){
     return {scrolled:content.scrollTop>0,shift:Math.abs(node.getBoundingClientRect().bottom-bottom),gap:Math.abs(bottom-body.getBoundingClientRect().bottom)};
    });
    assert(layout.scrolled&&layout.shift<=1&&layout.gap<=1,JSON.stringify(layout));
-   await page.setViewportSize({width:config.width,height:900});
+   await resizeVisibleViewport(page,{width:config.width,height:900});
    let release;
    const pending=new Promise(resolve=>{release=resolve});
    await page.route('**/ui/accounts/disconnect',async route=>{

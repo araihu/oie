@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/disco"
+	discoinfo "mellium.im/xmpp/disco/info"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
@@ -24,11 +26,55 @@ func isTextRoom(info disco.Info) bool {
 	return false
 }
 
+func supportsRoomCreation(info disco.Info) bool {
+	return isTextRoom(info) && slices.ContainsFunc(info.Features, func(feature discoinfo.Feature) bool {
+		return feature.Var == "http://jabber.org/protocol/muc"
+	})
+}
+
 func sameRoomEntry(slot *roomSlot, name *string, revision domain.ID) bool {
 	if slot.creationName == nil && name == nil {
 		return true
 	}
 	return slot.creationName != nil && name != nil && slot.snapshot.IntentRevisionID == revision
+}
+
+func (m *Manager) CheckRoomCreation(ctx context.Context, a domain.Account, address string) error {
+	e, room, err := m.roomEntry(a, domain.Conversation{AccountID: a.ID, Address: address, Kind: "room"})
+	if err != nil {
+		return err
+	}
+	if e == nil {
+		return application.ErrRoomCreationUnavailable
+	}
+	e.mu.RLock()
+	session, connected := e.session, e.state.State == "connected"
+	e.mu.RUnlock()
+	if session == nil || !connected {
+		return application.ErrRoomCreationUnavailable
+	}
+
+	lookup, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	info, err := m.queryInfo(lookup, e, session, room.Domain().String())
+	if err != nil {
+		if errors.Is(err, errArchiveCursor) {
+			return application.ErrInvalidRoomService
+		}
+		return application.ErrRoomCreationUnavailable
+	}
+	if !supportsRoomCreation(info) {
+		return application.ErrInvalidRoomService
+	}
+	_, err = m.readHistoryIQ(lookup, e, session, room.String(), stanza.GetIQ, discoInfoQuery)
+	switch {
+	case err == nil:
+		return application.ErrRoomAlreadyExists
+	case errors.Is(err, errArchiveCursor):
+		return nil
+	default:
+		return application.ErrRoomCreationUnavailable
+	}
 }
 
 func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *mx.Session, room jid.JID, create bool) string {
@@ -48,7 +94,7 @@ func (m *Manager) roomEntryAvailability(ctx context.Context, e *entry, session *
 		return "room_exists"
 	case errors.Is(err, errArchiveCursor) && create:
 		info, err := m.queryInfo(ctx, e, session, room.Domain().String())
-		if err == nil && isTextRoom(info) {
+		if err == nil && supportsRoomCreation(info) {
 			return ""
 		}
 		return "creation_failed"

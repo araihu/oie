@@ -166,10 +166,11 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
-	HostedSignIn   bool
-	EngineMode     *engineMode
-	StarredContent starredContent
-	PreviewScope   string
+	HostedSignIn         bool
+	AccountAvatarBorders map[string]string
+	EngineMode           *engineMode
+	StarredContent       starredContent
+	PreviewScope         string
 
 	FavoritesPage                   *engineapi.StarredMessagePage
 	FavoritesCursor, FavoritesQuery string
@@ -250,6 +251,8 @@ type view struct {
 }
 
 type copy struct {
+	ConversationRemoved string
+
 	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel                                                                   string
 	AccessKeys, AccessKeyName, AccessKeyCreate, AccessKeySecret, AccessKeyCopy, AccessKeyCopied, AccessKeyFailed, AccessKeyInvalid string
 	EngineModeKey, EngineModeKeySaved, EngineModeAuthentication, EngineModeKeyHTTPS                                                string
@@ -625,6 +628,9 @@ type copy struct {
 	Settings, You, All, Unread, Groups                                                                                                                                   string
 	RoomInvitation, ViewRoom, RoomAddressConflict, ConversationChanged                                                                                                   string
 	CreateRoom, PreviewRoom, RoomAddress, RoomAddressPlaceholder, RoomOccupants, RoomName                                                                                string
+	RoomInvalidService, RoomCreationUnavailable, RemoveFromChats, RoomRemoveWarning, DirectRemoveWarning, RemoveFromChatsUnavailable, RemoveFromChatsConflict            string
+	RoomStatusJoining, RoomStatusDisconnected, RoomStatusDestroyed, RoomStatusAccessDenied, RoomStatusUnavailable                                                        string
+	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
 	Preview, PreviewNote, Message, Send, Attach                                                                                                                          string
@@ -1098,7 +1104,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		v.Unavailable = true
 		return
 	}
-	v.Accounts = accounts.JSON200.Items
+	v.setAccounts(accounts.JSON200.Items)
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
 		return
@@ -1230,7 +1236,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	c := conversation.JSON200
-	if fromCache && ((c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
+	if fromCache && (removedConversation(c) || (c == nil && (conversation.StatusCode() == 400 || conversation.StatusCode() == 404)) ||
 		(c != nil && (c.Archived || v.AccountFilter != "" && c.AccountId != v.AccountFilter ||
 			v.Filter == "unread" && c.UnreadCount == 0 || v.Filter == "favorites" && !c.Favorite ||
 			v.Filter == "groups" && c.Kind != "room"))) {
@@ -1417,7 +1423,8 @@ func (v view) headerVersion() string {
 	if v.Selected == nil {
 		return ""
 	}
-	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
+	status, _ := v.roomStatusPresentation(v.selectedRoomStatus())
+	return v.Selected.Id + v.Selected.RevisionId + strconv.FormatBool(v.conversationRemoved()) + status + strconv.FormatBool(v.Selected.Archived) + strconv.FormatBool(v.Selected.Favorite) + v.Selected.Title + v.AccountAvatarBorders[v.Selected.AccountId] + v.accountLabel(v.Selected.AccountId) + v.connectionLabel(v.Selected.AccountId) + strconv.FormatBool(v.canJoinRoom()) + strconv.FormatBool(v.canLeaveRoom()) + strconv.FormatBool(v.canInviteToRoom())
 }
 func (v view) accountVersion() string {
 	var out strings.Builder

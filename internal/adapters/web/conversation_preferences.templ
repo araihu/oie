@@ -20,8 +20,15 @@ for _,field:=range []string{"archived","favorite"} {
 </form>
 }
 </div>
-@conversationPreferenceFeedback(v)
 }
+}
+
+templ conversationPreferenceOverlay(v view){
+<div class="oie-conversation-preference-feedback">
+<div class="oie-conversation-preference-feedback-content">
+@conversationPreferenceFeedback(v)
+</div>
+</div>
 }
 
 templ conversationPreferenceFeedback(v view){

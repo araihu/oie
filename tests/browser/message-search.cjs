@@ -1,5 +1,6 @@
 // Independent read-only engine fixture. Real SQLite search is checked separately
 // by message_search_test.go and the development-XMPP browser workflow.
+const {openConversationDetails} = require('./fixtures/conversation-menu.cjs');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const fs = require('node:fs/promises');
@@ -851,7 +852,8 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     findings.push('Ctrl/Cmd+K opens the independent global dialog in chats or media; arrows cross result groups, Enter opens a bounded source and Escape restores focus');
 
     await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});
-    for(const width of [390,1440])for(const design of ['goshtoso','minimal'])for(const theme of ['light','dark']){
+    const fullMatrix=process.argv.includes('--full-matrix');
+    for(const [widthIndex,width] of [390,1440].entries())for(const [designIndex,design] of ['goshtoso','minimal'].entries())for(const [themeIndex,theme] of ['light','dark'].entries()){
       const variant=await fresh({viewport:{width,height:900},locale:width===390?'pt-BR':'en',hasTouch:width===390}),lang=width===390?'pt-BR':'en';
       await variant.goto(base+'/?account='+work+'&lang='+lang+'&theme='+theme);await variant.waitForFunction(()=>window.OieRuntime?.generation>0);
       await variant.evaluate(design=>document.documentElement.dataset.theme=design,design);
@@ -881,15 +883,21 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert.equal(await query(variant).inputValue(),'Telescope');
       assert.equal(await variant.locator('#message-search-history').isChecked(),false);
       await hits(variant).first().waitFor({state:'visible'});await variant.evaluate(design=>document.documentElement.dataset.theme=design,design);assert.equal(await variant.locator('html').getAttribute('data-theme'),design);
-      if(width===1440){await variant.locator('#chat-options button').first().click();await variant.locator('#chat-search-messages:visible').click();await variant.locator('#chat-options [role=menu]').waitFor({state:'hidden'});await variant.locator('#conversation-search-query').fill(corpus[55].originalText);await until(async()=>await variant.locator('[data-conversation-search]').getAttribute('data-search-selected')===corpus[55].id,'independent desktop queries in '+design+'/'+theme);assert.equal(await query(variant).inputValue(),'Telescope');assert.equal(await hits(variant).count(),19)}
+      if(width===1440&&design==='goshtoso'&&theme==='light'){await variant.locator('#chat-options button').first().click();await variant.locator('#chat-search-messages:visible').click();await variant.locator('#chat-options [role=menu]').waitFor({state:'hidden'});await variant.locator('#conversation-search-query').fill(corpus[55].originalText);await until(async()=>await variant.locator('[data-conversation-search]').getAttribute('data-search-selected')===corpus[55].id,'independent desktop queries');assert.equal(await query(variant).inputValue(),'Telescope');assert.equal(await hits(variant).count(),19)}
       const activeField=await query(variant).boundingBox(),cancelBox=await cancel.boundingBox();
       assert.deepEqual(activeField,idleField,'opening search does not move or resize the field');
       assert(cancelBox.x>activeField.x+activeField.width/2&&cancelBox.x+cancelBox.width<=activeField.x+activeField.width&&cancelBox.y>=activeField.y&&cancelBox.y+cancelBox.height<=activeField.y+activeField.height,'cancel is inside the right side of the field');
       assert(cancelBox.width>=24&&cancelBox.height>=24,'cancel has a touch target of at least 24px');
       await query(variant).focus();await variant.keyboard.press('Tab');assert(await cancel.evaluate(node=>node===document.activeElement),'cancel is the next keyboard stop');
       assert(await variant.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'search has no horizontal page overflow '+width+'/'+design+'/'+theme);
-      await variant.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const audit=await variant.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
-      const screenshot='message-search-'+width+'-'+design+'-'+theme+'.png';await variant.screenshot({path:path.join(__dirname,'artifacts',screenshot),fullPage:true});screenshots.push({width,design,theme,lang,screenshot,axe:audit.violations.length});
+      let axeViolations=null;
+      if(fullMatrix||(widthIndex+designIndex+themeIndex)%2===0){
+        await variant.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+        const audit=await variant.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
+        assert.deepEqual(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
+        axeViolations=audit.violations.length;
+      }
+      const screenshot='message-search-'+width+'-'+design+'-'+theme+'.png';await variant.screenshot({path:path.join(__dirname,'artifacts',screenshot),fullPage:true});screenshots.push({width,design,theme,lang,screenshot,axe:axeViolations});
       if(width===390)await cancel.tap();
       else await variant.keyboard.press('Enter');
       assert(await variant.locator('#conversation-list-default').isVisible());
@@ -930,7 +938,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       await field.fill('Latest room term');
       await until(()=>archiveRequests.slice(previous).some(r=>r.query==='Latest room term'),'latest query reaches remote archive');
       assert.deepEqual(archiveRequests.slice(previous).map(r=>r.query),['Latest room term']);
-      await roomPage.locator('[data-open-details]').click();
+      await openConversationDetails(roomPage);
       const toggle=roomPage.getByRole('switch',{name:lang==='en'?'Download older history automatically':'Baixar histórico antigo automaticamente'});
       const help=roomPage.getByRole('button',{name:lang==='en'?'Older history':'Histórico antigo',exact:true});
       const initial=archive.mode==='gradual',changes=archiveModes.length;

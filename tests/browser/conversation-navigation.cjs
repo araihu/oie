@@ -1,4 +1,5 @@
 // Isolated HTTP engines only; no retained user accounts or protocol traffic.
+const {openConversationDetails} = require('./fixtures/conversation-menu.cjs');
 const assert=require('node:assert/strict'),http=require('node:http'),path=require('node:path'),fs=require('node:fs/promises');
 const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
@@ -121,11 +122,12 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const nextRow=page.locator('#conversation-list a[aria-current=false]').first();
   const rowStyle=row=>row.evaluate(link=>{
    const style=getComputedStyle(link),marker=getComputedStyle(link,'::before');
-   return {background:style.backgroundColor,marker:marker.content,markerWidth:marker.borderInlineStartWidth,outline:style.outlineStyle,outlineWidth:style.outlineWidth};
+   return {background:style.backgroundColor,marker:marker.content,outline:style.outlineStyle,outlineWidth:style.outlineWidth};
   });
   const currentStyle=await rowStyle(currentRow),nextStyle=await rowStyle(nextRow);
   const currentBounds=await currentRow.boundingBox(),nextBounds=await nextRow.boundingBox();
-  assert.equal(currentStyle.markerWidth,'3px');
+  assert.notEqual(currentStyle.background,nextStyle.background);
+  assert.equal(currentStyle.marker,'none');
   assert.equal(nextStyle.marker,'none');
   await nextRow.hover();
   await until(async()=>(await rowStyle(nextRow)).background!==nextStyle.background,'conversation hover surface');
@@ -148,7 +150,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(async()=>await page.locator('[data-message-search-root]').getAttribute('data-search-query')==='unfinished filter'&&await page.locator('[data-message-search-root]').getAttribute('data-search-state')==='ready','unified global query settled');
   assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'unfinished filter');assert.equal(new URL(page.url()).searchParams.get('q'),originalTitleParameter);assert.equal(await page.locator('#conversation-search').inputValue(),'unfinished filter');assert(await page.locator('#conversation-search').evaluate(node=>document.activeElement===node));assert(await page.locator('#conversation-list-default').isHidden());assert(await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').isHidden());assert.equal(await page.locator('[data-message-search-conversation]').count(),0);assert.equal(await page.locator('[data-message-search-hit]').count(),0);assert.equal(await page.locator('#message-composer').inputValue(),'Draft A');assert.equal(await page.evaluate(()=>window.OieRuntime.generation),searchGeneration);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')&&window.savedGlobalInput===document.getElementById('conversation-search')&&window.savedNavigationRows.every((node,index)=>node.isConnected&&node===document.querySelectorAll('#conversation-list a[data-conversation-id]')[index])));
   await page.locator('[data-message-search-close]').click();await page.locator('#conversation-list-default').waitFor({state:'visible'});assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),searchTop);assert(await page.locator('#conversation-search').evaluate(node=>document.activeElement===node));assert.equal(new URL(page.url()).searchParams.get('searchMode'),null);
-  await click(b);assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#message-composer').inputValue(),'');await page.locator('#message-composer').fill('Draft B');await page.locator('[data-open-details]').click();await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'visible'});assert((await page.locator('.oie-details-identity').textContent()).includes(b.title));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await click(a);await until(async()=>await page.locator('#message-composer').inputValue()==='Draft A','A draft');
+  await click(b);assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#message-composer').inputValue(),'');await page.locator('#message-composer').fill('Draft B');await openConversationDetails(page);await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'visible'});assert((await page.locator('.oie-details-identity').textContent()).includes(b.title));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await click(a);await until(async()=>await page.locator('#message-composer').inputValue()==='Draft A','A draft');
   const top=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);let generation=await page.evaluate(()=>window.OieRuntime.generation);await page.goBack();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'Back settled');await ready(b);assert.equal(await page.locator('#message-composer').inputValue(),'Draft B');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),top);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));
   generation=await page.evaluate(()=>window.OieRuntime.generation);await page.goForward();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'Forward settled');await ready(a);assert.equal(await page.locator('#message-composer').inputValue(),'Draft A');
   await click(b);await page.locator('[data-sidebar-toggle]').click();await page.locator('.oie-list-account').waitFor();
@@ -184,9 +186,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   },{times:1});
   const beforeFailure=await page.evaluate(()=>{window.failedOpenPane=document.getElementById('conversation-pane');return location.href});
   await page.locator('#conversation-list a[data-conversation-id="'+a.id+'"]').click();
+  const preferenceFeedback=page.locator('.oie-conversation-preference-feedback');
   try{
    await skeleton().waitFor({state:'visible'});
    assert(await page.locator('#message-timeline').evaluate(node=>node.inert));
+   assert(await preferenceFeedback.evaluate(node=>node.inert));
    assert(await skeleton().locator('.oie-chat-skeleton-header').isHidden());
    assert(await skeleton().locator('.oie-chat-skeleton-composer').isHidden());
    assert(await page.locator('#chat-header').isVisible());
@@ -195,6 +199,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.locator('[data-toast-container]').getByText('Could not open this view. Try again.',{exact:true}).waitFor();
   await skeleton().waitFor({state:'hidden'});
   assert(await page.evaluate(()=>window.failedOpenPane===document.getElementById('conversation-pane')&&window.savedList===document.getElementById('conversation-list')&&!document.getElementById('message-timeline').inert));
+  assert.equal(await preferenceFeedback.evaluate(node=>node.inert),false);
   assert.equal(page.url(),beforeFailure);
   const savedChatScroll=await page.locator('#message-timeline').evaluate(node=>{
    node.scrollTop=Math.floor((node.scrollHeight-node.clientHeight)/2);

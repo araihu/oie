@@ -21,7 +21,7 @@ templ composerReplyBody(){<strong data-composer-reply-sender></strong><p data-co
 // Room controls stay mounted for live state and pending-operation recovery.
 // Explicit entry and uncertain commands open the dialog.
 templ roomSessionDialog(v view){
-if v.Selected!=nil&&v.Selected.Kind=="room" {
+if v.Selected!=nil&&v.Selected.Kind=="room"&&!v.conversationRemoved() {
 @modal.Dialog(modal.DialogConfig{ID:"room-session-dialog",Title:v.Text.RoomSessionTitle,Content:roomSessionStatus(v),FullscreenMobile:true})
 }
 }

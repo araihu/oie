@@ -5,48 +5,48 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      full_browser_matrix:
+        description: Run every browser presentation variant
+        type: boolean
+        default: false
+concurrency:
+  group: engine-checks-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 jobs:
   dagger:
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    # Match the Hostinger admission policy and keep other events on GitHub runners.
-    runs-on: >-
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.draft == false &&
-        github.event.pull_request.user.login == github.actor &&
-        github.event.pull_request.base.repo.full_name == github.repository &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.pull_request.head.repo.fork == false &&
-        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
-        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
-        'ubuntu-latest'
-      }}
+    name: Dagger (${{ matrix.mode }})
+    if: github.event_name != 'push' || vars.OIE_REQUIRED_PR_CI != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [build, race, desktop, browser-consumer, browser-integration]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: ${{ runner.environment == 'github-hosted' }}
           cache-dependency-path: tools/ci/go.sum
-      - run: make ci
+      - run: sh tools/ci/run.sh "$MODE"
         env:
-          OIE_CI_TIMEOUT: 45m
-      - if: always()
+          MODE: ${{ matrix.mode }}
+          OIE_CI_TIMEOUT: 35m
+          OIE_CI_ARTIFACTS: ${{ runner.temp }}/oie-ci
+          OIE_CI_BROWSER_FULL_MATRIX: ${{ inputs.full_browser_matrix && '1' || '0' }}
+      - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: dagger-ci-evidence
-          path: tests/browser/artifacts/ci
+          name: dagger-ci-evidence-${{ matrix.mode }}
+          path: ${{ runner.temp }}/oie-ci
 
   image-smoke:
     name: Container smoke test (${{ matrix.platform }})
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -71,11 +71,26 @@ jobs:
       - name: Verify the web interface, engine and persistent volume
         run: sh scripts/smoke-image.sh oie:check
 
+  required:
+    name: Required CI
+    if: ${{ !cancelled() && (github.event_name != 'push' || vars.OIE_REQUIRED_PR_CI != 'true') }}
+    needs: [dagger, image-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all CI jobs to pass
+        env:
+          DAGGER_RESULT: ${{ needs.dagger.result }}
+          SMOKE_RESULT: ${{ needs.image-smoke.result }}
+        run: |
+          test "$DAGGER_RESULT" = success
+          test "$SMOKE_RESULT" = success
+
   image-publish:
     name: Publish to GHCR
     if: >-
       github.repository == 'araihu/oie' && github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.full_browser_matrix))
     needs: image-smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 20

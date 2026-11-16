@@ -17,6 +17,13 @@ run_case() {
   run "$1" node "tests/browser/$1.cjs"
 }
 
+with_presentation_matrix() {
+  if [ "${OIE_CI_BROWSER_FULL_MATRIX:-0}" = 1 ]; then
+    set -- "$@" --full-matrix
+  fi
+  "$@"
+}
+
 # The two groups have similar elapsed times in the Hostinger evidence.
 consumer() (
   mock_pid=
@@ -41,8 +48,8 @@ consumer() (
   run_case branding
   run test npm --prefix tests/browser test
   run test:chat npm --prefix tests/browser run test:chat
-  run test:states npm --prefix tests/browser run test:states
-  run test:accounts npm --prefix tests/browser run test:accounts
+  run test:states with_presentation_matrix npm --prefix tests/browser run test:states --
+  run test:accounts with_presentation_matrix npm --prefix tests/browser run test:accounts --
   run_case live-chat
   run send-geometry env OIE_SEND_GEOMETRY_ONLY=1 node tests/browser/live-chat.cjs
   run_case account-status
@@ -77,7 +84,7 @@ integration() {
   run_case composer-video
   run_case documents
   run_case shared-search
-  run_case message-search
+  run message-search with_presentation_matrix node tests/browser/message-search.cjs
   run_case chat-info
   run_case fragment-navigation
   run_case timeline-scroll

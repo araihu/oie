@@ -8,7 +8,11 @@
     'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated',
     'conversation.room_session_changed', 'message.star_changed'
   ];
-  const inboxEvents = new Set(['account.registered', 'account.removed', 'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'message.created', 'message.updated']);
+  const inboxEvents = new Set([
+    'account.registered', 'account.removed', 'account.connection_changed',
+    'conversation.created', 'conversation.updated', 'conversation.history_pruned', 'conversation.room_session_changed',
+    'message.created', 'message.updated'
+  ]);
   const idleTimeout = 40000;
   const maxSequence = 9223372036854775807n;
   let source, retry, watchdog, lastActivity = 0, delay = 500;
@@ -162,5 +166,5 @@
     wake();
   });
 
-  window.OieEvents = {target, sync, wake, suspend, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
+  window.OieEvents = {target, sync, stop, wake, suspend, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
 })();

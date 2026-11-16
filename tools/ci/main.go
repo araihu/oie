@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -19,6 +20,7 @@ import (
 )
 
 const (
+	ciModes       = "all|checks|build|race|desktop|browser-consumer|browser-integration|release"
 	daggerVersion = "v0.21.9"
 	daggerImage   = "registry.dagger.io/engine:v0.21.9@sha256:3c4e0cedaea400d7e30155e050f94910ea5f381b6f5942dd2172382657628cb4"
 	goImage       = "golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea"
@@ -35,13 +37,13 @@ type runner struct {
 }
 
 func main() {
-	mode := flag.String("mode", "checks", "checks, desktop, release, or all")
+	mode := flag.String("mode", "checks", ciModes)
 	source := flag.String("source", "", "materialized source directory")
 	artifacts := flag.String("artifacts", "", "host evidence directory")
 	limit := flag.Duration("timeout", 30*time.Minute, "overall execution deadline")
 	flag.Parse()
-	if (*mode != "checks" && *mode != "desktop" && *mode != "release" && *mode != "all") || *source == "" || *artifacts == "" || *limit <= 0 {
-		fmt.Fprintln(os.Stderr, "ci requires -mode checks|desktop|release|all, -source, -artifacts and a positive timeout")
+	if !slices.Contains(strings.Split(ciModes, "|"), *mode) || *source == "" || *artifacts == "" || *limit <= 0 {
+		fmt.Fprintf(os.Stderr, "ci requires -mode %s, -source, -artifacts and a positive timeout\n", ciModes)
 		os.Exit(2)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -159,22 +161,24 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 	if mode == "desktop" {
 		return r.desktop(ctx, source)
 	}
-	// Prepare lint tools before adding source so edits reuse the tools layer.
 	base := client.Container().From(goImage).
 		WithMountedCache("/go/pkg/mod", client.CacheVolume("oie-ci-go-mod-v1")).
 		WithMountedCache("/root/.cache/go-build", client.CacheVolume("oie-ci-go-build-v1")).
-		WithMountedCache("/root/.cache/golangci-lint", client.CacheVolume("oie-ci-golangci-lint-v1")).
 		// Bound both Go's runtime and its default package/build parallelism on
 		// shared runners. Child processes still keep their production deadlines.
 		WithEnvVariable("GOMAXPROCS", "4").
 		WithEnvVariable("GOWORK", "off")
-	base, err := r.withLinters(ctx, base)
-	if err != nil {
-		return err
-	}
-	base, err = r.stage(ctx, "setup", base.WithExec([]string{"vacuum", "version"}))
-	if err != nil {
-		return err
+	// Prepare lint tools before adding source so edits reuse the tools layer.
+	if mode == "checks" || mode == "build" || mode == "all" {
+		var err error
+		base, err = r.withLinters(ctx, base.WithMountedCache("/root/.cache/golangci-lint", client.CacheVolume("oie-ci-golangci-lint-v1")))
+		if err != nil {
+			return err
+		}
+		base, err = r.stage(ctx, "setup", base.WithExec([]string{"vacuum", "version"}))
+		if err != nil {
+			return err
+		}
 	}
 	docker := client.Container().From(dockerImage)
 	// SQLite fixtures create and migrate databases in t.TempDir. Match the
@@ -190,36 +194,56 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		// Go 1.27's t.TempDir honors GOTMPDIR. Remove it from test executables
 		// so their fixtures use TMPDIR while the compiler still uses disk.
 		WithEnvVariable("OIE_GO_TEST_EXEC", "env -u GOTMPDIR")
+	switch mode {
+	case "race":
+		_, err := r.stage(ctx, "race", goContainer.WithExec([]string{"make", "test-race"}))
+		return err
+	case "browser-consumer", "browser-integration":
+		built, err := r.stage(ctx, "build", goContainer.WithExec([]string{"make", "build"}))
+		if err != nil {
+			return err
+		}
+		if mode == "browser-consumer" {
+			built, err = r.buildMock(ctx, built)
+			if err != nil {
+				return err
+			}
+		}
+		return r.browsers(ctx, mode, source, goContainer, built)
+	}
+
 	checked, err := r.stage(ctx, "checks", goContainer.WithExec([]string{"make", "check"}))
 	if err != nil {
 		return err
 	}
-	checked, err = r.stage(ctx, "race", checked.WithExec([]string{"make", "test-race"}))
-	if err != nil {
-		return err
+	if mode != "build" {
+		checked, err = r.stage(ctx, "race", checked.WithExec([]string{"make", "test-race"}))
+		if err != nil {
+			return err
+		}
 	}
 	checked, err = r.stage(ctx, "build", checked.WithExec([]string{"make", "build", "build-cli"}))
 	if err != nil {
 		return err
 	}
-	checked, err = r.stage(ctx, "mock-build", checked.WithExec([]string{"go", "build", "-o", "bin/oie-mock", "./cmd/oie-mock"}))
+	checked, err = r.buildMock(ctx, checked)
 	if err != nil {
 		return err
 	}
-	if mode == "checks" {
+	if mode != "all" {
 		return nil
 	}
 	if err := r.desktop(ctx, source); err != nil {
 		return err
 	}
-	return r.integration(ctx, source, goContainer, checked)
+	return r.browsers(ctx, mode, source, goContainer, checked)
 }
 
-func (r runner) integration(ctx context.Context, source *dagger.Directory, goContainer, checked *dagger.Container) (err error) {
-	runID := os.Getenv("OIE_CI_RUN_ID")
-	if runID == "" {
-		return errors.New("OIE_CI_RUN_ID is required for isolated services")
-	}
+func (r runner) buildMock(ctx context.Context, container *dagger.Container) (*dagger.Container, error) {
+	return r.stage(ctx, "mock-build", container.WithExec([]string{"go", "build", "-o", "bin/oie-mock", "./cmd/oie-mock"}))
+}
+
+func (r runner) integration(ctx context.Context, source *dagger.Directory, goContainer, browser *dagger.Container, runID string) (err error) {
 	client := r.client
 	const browserFixtures = "OIE_XMPP_BROWSER_FIXTURES"
 	const startsDir = "/run/oie-ci-prosody"
@@ -263,7 +287,26 @@ exec sh /opt/oie/start.sh
 python3 scripts/test-xmpp.py --host xmpp --ca-file "$OIE_XMPP_CA_FILE"
 exec go test -exec "$OIE_GO_TEST_EXEC" -race -count=1 -p 1 -v ./tests/xmpp ./tests/cli
 `})
-	browser := client.Container().From(nodeImage).
+	if _, err := r.stage(ctx, "xmpp", integrated); err != nil {
+		return err
+	}
+	browser = browser.
+		WithFile("/tmp/xmpp-ca.crt", ca).WithServiceBinding("xmpp", xmpp).
+		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
+		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
+		WithEnvVariable(browserFixtures, "1").
+		WithExec([]string{"sh", "-c", browserCommand, "sh", "integration", "ci.log"}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
+	evaluated, err := r.stage(ctx, "browser", browser)
+	return r.exportBrowserEvidence(ctx, evaluated, "ci.log", err)
+}
+
+func (r runner) browsers(ctx context.Context, mode string, source *dagger.Directory, goContainer, built *dagger.Container) error {
+	runID := os.Getenv("OIE_CI_RUN_ID")
+	if runID == "" {
+		return errors.New("OIE_CI_RUN_ID is required for isolated browser runs")
+	}
+	client := r.client
+	setup := client.Container().From(nodeImage).
 		WithMountedCache("/root/.npm", client.CacheVolume("oie-ci-npm-v1")).
 		WithMountedCache("/root/.cache/ms-playwright", client.CacheVolume("oie-ci-playwright-1.62.1")).
 		WithWorkdir("/src/tests/browser").
@@ -271,29 +314,27 @@ exec go test -exec "$OIE_GO_TEST_EXEC" -race -count=1 -p 1 -v ./tests/xmpp ./tes
 		WithFile("package-lock.json", source.File("tests/browser/package-lock.json")).
 		WithExec([]string{"sh", "-ec", "apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*"}).
 		WithExec([]string{"npm", "ci"}).WithExec([]string{"npx", "playwright", "install", "--with-deps", "chromium"})
-	xmppResult := make(chan error, 1)
-	go func() {
-		_, err := r.stage(ctx, "xmpp", integrated)
-		xmppResult <- err
-	}()
-	browser, browserSetupErr := r.stage(ctx, "browser-setup", browser)
-	if err := errors.Join(<-xmppResult, browserSetupErr); err != nil {
+	browser, err := r.stage(ctx, "browser-setup", setup)
+	if err != nil {
 		return err
 	}
 	const browserScratch = "/tmp/oie-browser"
 	browser = browser.WithDirectory("/src", source).
-		WithFile("/src/bin/oie", checked.File("/src/bin/oie")).WithWorkdir("/src").
+		WithFile("/src/bin/oie", built.File("/src/bin/oie")).WithWorkdir("/src").
 		WithMountedTemp(browserScratch, dagger.ContainerWithMountedTempOpts{Size: 2 << 30}).
 		WithEnvVariable("TMPDIR", browserScratch).
+		WithEnvVariable("OIE_CI_BROWSER_FULL_MATRIX", os.Getenv("OIE_CI_BROWSER_FULL_MATRIX")).
 		WithEnvVariable("OIE_CI_RUN_ID", runID)
-	consumer := browser.WithFile("/src/bin/oie-mock", checked.File("/src/bin/oie-mock")).
+	if mode == "browser-integration" {
+		return r.integration(ctx, source, goContainer, browser, runID)
+	}
+
+	consumer := browser.WithFile("/src/bin/oie-mock", built.File("/src/bin/oie-mock")).
 		WithExec([]string{"sh", "-c", browserCommand, "sh", "consumer", "consumer.log"}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
-	browser = browser.
-		WithFile("/tmp/xmpp-ca.crt", ca).WithServiceBinding("xmpp", xmpp).
-		WithMountedCache(startsDir, starts).WithEnvVariable("OIE_CI_PROSODY_STARTS_FILE", startsFile).
-		WithEnvVariable("OIE_XMPP_CA_FILE", "/tmp/xmpp-ca.crt").WithEnvVariable("OIE_XMPP_ENDPOINT", "xmpp:5222").
-		WithEnvVariable(browserFixtures, "1").
-		WithExec([]string{"sh", "-c", browserCommand, "sh", "integration", "ci.log"}, dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
+	if mode == "browser-consumer" {
+		evaluated, err := r.stage(ctx, "browser-consumer", consumer)
+		return r.exportBrowserEvidence(ctx, evaluated, "consumer.log", err)
+	}
 	// The consumer fixtures need neither the XMPP binding nor the live browser's
 	// loopback ports. Keep each group's processes and filesystem in its own container.
 	type browserResult struct {
@@ -305,19 +346,16 @@ exec go test -exec "$OIE_GO_TEST_EXEC" -race -count=1 -p 1 -v ./tests/xmpp ./tes
 		evaluated, err := r.stage(ctx, "browser-consumer", consumer)
 		consumerResult <- browserResult{evaluated, err}
 	}()
-	browser, liveErr := r.stage(ctx, "browser", browser)
+	liveErr := r.integration(ctx, source, goContainer, browser, runID)
 	result := <-consumerResult
 	// Merge the disjoint evidence files sequentially on the host.
-	if result.err == nil {
-		result.err = r.exportBrowserEvidence(ctx, result.container, "consumer.log")
-	}
-	if liveErr == nil {
-		liveErr = r.exportBrowserEvidence(ctx, browser, "ci.log")
-	}
-	return errors.Join(result.err, liveErr)
+	return errors.Join(liveErr, r.exportBrowserEvidence(ctx, result.container, "consumer.log", result.err))
 }
 
-func (r runner) exportBrowserEvidence(ctx context.Context, browser *dagger.Container, logName string) error {
+func (r runner) exportBrowserEvidence(ctx context.Context, browser *dagger.Container, logName string, stageErr error) error {
+	if stageErr != nil {
+		return stageErr
+	}
 	// Export evidence before deciding whether the workflow failed. A failure can
 	// never become a passing CI just because the export succeeded.
 	if _, err := browser.Directory("/src/tests/browser/artifacts").Export(ctx, filepath.Join(r.logs, "browser")); err != nil {

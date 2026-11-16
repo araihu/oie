@@ -31,6 +31,11 @@ templ conversationRequestContent(v view) {
   } else {
    @conversationRequestPreference(v,"acceptRequest",v.Text.AcceptMessageRequest,button.TonePrimary,heroicons.Icon16SolidCheck)
   }
+  if v.canRemoveFromChats() {
+   @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAlpine(&button.AlpineConfig{OnClick:"$dispatch('oie:conversation-remove-open')"})){
+    {v.Text.RemoveFromChats}
+   }
+  }
   if !v.Selected.Archived {
    @conversationRequestPreference(v,"archived",v.Text.ArchiveRequest,button.ToneWarning,heroicons.Icon16SolidFolder)
   }
