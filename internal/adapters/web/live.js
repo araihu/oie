@@ -1219,7 +1219,11 @@ window.OieRuntime.register('live', life => {
     }).catch(() => {});
   }
   function readSendAcceptance(operation) {
-    const receipt = parseDraft(localStorage.getItem(acceptedSendPrefix + operation));
+    const key = acceptedSendPrefix + operation;
+    let receipt = parseDraft(localStorage.getItem(key));
+    if (!receipt) {
+      try { receipt = parseDraft(sessionStorage.getItem(key)); } catch {}
+    }
     return receipt?.accepted && canonicalID(receipt.messageId) && canonicalID(receipt.nextKey) ? receipt : null;
   }
   function rememberSendAcceptance(operation, result, scope = offlineKey) {
@@ -1312,6 +1316,14 @@ window.OieRuntime.register('live', life => {
   }
   life.on(window, 'storage', event => {
     if (event.storageArea !== localStorage) return;
+    if (event.key?.startsWith(acceptedSendPrefix) && event.newValue) {
+      const operation = event.key.slice(acceptedSendPrefix.length);
+      if (journal?.key === operation || [...inMemory.values()].some(draft => draft?.key === operation)) {
+        // Keep the receipt with the stale tab even after the shared cache turns over.
+        try { sessionStorage.setItem(event.key, event.newValue); } catch {}
+      }
+      return;
+    }
     if (!event.key?.startsWith(offlinePrefix)) {
       if (event.key === ordinaryDraftKey || event.key?.startsWith(recoveredDraftPrefix)) renderDraftSwitch();
       return;
