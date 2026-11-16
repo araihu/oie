@@ -233,9 +233,9 @@ make test-race
 make test-live-browser # real UI + engine + Prosody; browser dependencies required
 ```
 
-Build/generation tools are pinned in the `tools` module; root go.mod contains
-application dependencies. Vacuum stays isolated under `tools/vacuum` so its templ
-dependency cannot change the application generator/runtime graph. SQL queries are
+Go generation tools are pinned in the `tools` module. Vacuum and golangci-lint
+use the checksum-verified releases pinned in [tools/ci/linters.json](tools/ci/linters.json).
+SQL queries are
 generated with sqlc; golang-migrate applies embedded migrations on startup and
 preserves the earlier foundation database. One process owns each engine data
 directory. No sibling checkout or local module replacement is required.

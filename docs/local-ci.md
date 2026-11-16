@@ -276,9 +276,11 @@ snapshot, runner process and optional SSH tunnel owned by that invocation.
 The Dagger checks download the precompiled Vacuum and golangci-lint releases
 for the engine's architecture and verify their SHA-256 digests. The desktop lane
 uses the amd64 golangci-lint binary. The pinned golangci-lint release reads the
-export data produced by the application's Go toolchain. Direct `make check`
-runs the versions pinned in the tools modules, with optional `VACUUM` and
-`GOLANGCI_LINT` overrides.
+export data produced by the application's Go toolchain. Direct `make check` and
+the oiectl release use the same pins in `tools/ci/linters.json`. The first local
+run downloads the binaries under `$XDG_CACHE_HOME/oie/linters` or
+`~/.cache/oie/linters`. Set `VACUUM` or `GOLANGCI_LINT` to use a separately
+installed binary.
 
 `make check-ci-tools` checks the CI module and shell lifecycle regressions and is
 part of `make check`. The CI module uses the `http2legacy` build tag for Dagger's
