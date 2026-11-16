@@ -1,5 +1,5 @@
-name: Publish Arai Hû APT repository
-run-name: Publish Arai Hû APT repository${{ inputs.release_tag && format(' for {0}', inputs.release_tag) || '' }}${{ inputs.desktop_run && format(' (desktop run {0})', inputs.desktop_run) || '' }}
+name: Publish Arai Hû Linux package repositories
+run-name: Publish Arai Hû Linux package repositories${{ inputs.release_tag && format(' for {0}', inputs.release_tag) || '' }}${{ inputs.desktop_run && format(' (desktop run {0})', inputs.desktop_run) || '' }}
 
 on:
   workflow_dispatch:
@@ -26,6 +26,7 @@ jobs:
     outputs:
       index_sha256: ${{ steps.proof.outputs.index_sha256 }}
       sources_sha256: ${{ steps.proof.outputs.sources_sha256 }}
+      linux_repositories_sha256: ${{ steps.proof.outputs.linux_repositories_sha256 }}
       version: ${{ steps.proof.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -37,7 +38,7 @@ jobs:
       - name: Stage published desktop packages
         id: stage
         run: |
-          python3 scripts/stage_apt_releases.py dist/pages
+          python3 scripts/stage_package_releases.py dist/pages --linux-packages dist/linux-packages
           shopt -s nullglob
           packages=(dist/pages/apt/pool/main/o/oie/*.deb)
           if (( ${#packages[@]} < 3 )) &&
@@ -60,7 +61,12 @@ jobs:
           python3 scripts/package-distribution.py --version "$BOOTSTRAP_TAG" --deb-only \
             --assets dist/bootstrap --output dist/bootstrap-package --nfpm "$RUNNER_TEMP/nfpm"
           cp dist/bootstrap-package/native/*.deb dist/pages/apt/pool/main/o/oie/
-      - name: Index and sign the archive
+      - name: Install repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            apt-utils createrepo-c flatpak libarchive-tools makepkg ostree pacman-package-manager rpm zstd
+      - name: Index and sign the Linux repositories
         env:
           APT_SIGNING_KEY: ${{ secrets.OIE_APT_SIGNING_KEY }}
         run: |
@@ -68,17 +74,18 @@ jobs:
             echo 'OIE_APT_SIGNING_KEY is missing from the apt-signing environment' >&2
             exit 1
           fi
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends apt-utils
           keyring=$(mktemp -d)
           trap 'gpgconf --homedir "$keyring" --kill gpg-agent; rm -r "$keyring"' EXIT
           printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --homedir "$keyring" --import
-          bash scripts/build-apt-repository.sh dist/pages "$keyring" "$(cat packaging/apt/fingerprint)"
+          fingerprint=$(cat packaging/apt/fingerprint)
+          bash scripts/build-apt-repository.sh dist/pages "$keyring" "$fingerprint"
+          bash scripts/build-linux-repositories.sh dist/pages dist/linux-packages "$keyring" "$fingerprint"
       - name: Verify the package can be acquired by name
         run: bash tests/packaging/smoke_apt.sh dist/pages
       - name: Record the signed archive checksums
         id: proof
         run: |
+          echo "linux_repositories_sha256=$(sha256sum dist/pages/linux-repositories.sha256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
           cd dist/pages/apt
           echo "index_sha256=$(sha256sum dists/oie/InRelease | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
           echo "sources_sha256=$(sha256sum oie.sources | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
@@ -116,3 +123,8 @@ jobs:
           EXPECTED_VERSION: ${{ needs.build.outputs.version }}
           ARCHIVE_URL: ${{ steps.publish.outputs.page_url }}apt/
         run: bash tests/packaging/smoke_apt.sh "$ARCHIVE_URL" "$INDEX_SHA256" "$SOURCES_SHA256" "$EXPECTED_VERSION"
+      - name: Verify the public RPM, pacman and Flatpak indexes
+        env:
+          REPOSITORIES_URL: ${{ steps.publish.outputs.page_url }}
+          EXPECTED_SHA256: ${{ needs.build.outputs.linux_repositories_sha256 }}
+        run: bash tests/packaging/smoke_linux_repositories.sh "$REPOSITORIES_URL" "$EXPECTED_SHA256"

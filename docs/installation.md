@@ -199,7 +199,9 @@ GitHub Pages serves the three most recent indexed
 releases, ranked by SemVer. The first publication can bootstrap from a public
 release that provides the Linux binary and its corresponding source archive.
 The `apt-signing` environment provides `OIE_APT_SIGNING_KEY` with only the
-archive signing subkey. The primary key fingerprint is pinned in
+archive signing subkey. The same archive key signs the RPM, pacman and Flatpak
+repositories published in the same GitHub Pages deployment. The primary key
+fingerprint is pinned in
 [`packaging/apt/fingerprint`](../packaging/apt/fingerprint).
 
 ## Package-manager builds
@@ -211,18 +213,73 @@ archive checksums before packaging. The packages retain the release's license
 notices and source links. For releases with [corresponding source archives](release-source.md),
 the build also verifies those archives against the published checksum list.
 
-### Install generated packages
+### Install with DNF on Fedora
+
+On Fedora x86-64, add the Arai Hû repository once and install `oie`. DNF
+verifies the signatures on the index and the package.
+
+```sh
+curl -fLO https://araihu.github.io/oie/rpm/oie.repo
+sudo install -m 0644 oie.repo /etc/yum.repos.d/araihu-oie.repo
+sudo dnf install oie
+```
+
+Check the key fingerprint at DNF's import prompt against
+`CA0A 410F B344 E22A B7FB 8011 21CB CCC4 11B0 03A9`. To update, quit Oiê
+and run `sudo dnf upgrade --refresh oie`.
+
+### Install with pacman on Arch Linux
+
+On Arch Linux x86-64, download the archive key and check that `gpg` shows the
+fingerprint `CA0A 410F B344 E22A B7FB 8011 21CB CCC4 11B0 03A9`. Then add it to
+pacman's keyring and sign it locally.
+
+```sh
+curl -fLO https://araihu.github.io/oie/oie-archive-keyring.asc
+gpg --show-keys --fingerprint oie-archive-keyring.asc
+sudo pacman-key --add oie-archive-keyring.asc
+sudo pacman-key --lsign-key CA0A410FB344E22AB7FB801121CBCCC411B003A9
+```
+
+Add this section to `/etc/pacman.conf` after the Arch Linux repositories.
+
+```ini
+[araihu-oie]
+SigLevel = Required
+Server = https://araihu.github.io/oie/pacman/$arch
+```
+
+Run `sudo pacman -Syu araihu-oie/oie` to install. For later updates, quit Oiê
+and run `sudo pacman -Syu`.
+
+### Install with Flatpak
+
+Add the Arai Hû remote for the app and Flathub for its GNOME runtime. The
+`.flatpakrepo` file configures signature verification for the Oiê remote.
+
+```sh
+flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak remote-add --user --if-not-exists araihu-oie https://araihu.github.io/oie/flatpak/oie.flatpakrepo
+flatpak install --user araihu-oie com.araihu.oie
+```
+
+To switch an existing `com.araihu.oie` bundle installation to this remote, quit
+Oiê and use `flatpak install --user --reinstall araihu-oie com.araihu.oie`.
+Your profile stays in the same data directory. To update from the remote, quit
+Oiê and run `flatpak update --user com.araihu.oie`.
+
+### Install release files directly
 
 Download the package for your platform from the assets of a release built by
-the **Desktop release** workflow. The following commands use `v0.0.1-rc.1`
-as a filename example for packages built [locally](#build-and-distribute).
+the **Desktop release** workflow. The following commands use `v0.0.1-rc.28`
+as a filename example.
 
 | Platform | Install from the directory containing the package |
 | --- | --- |
-| Ubuntu 24.04 x86_64, APT | `sudo apt install ./oie_0.0.1~rc.1-1_amd64.deb` |
-| Fedora x86_64, DNF | `sudo dnf install ./oie-0.0.1~rc.1-1.x86_64.rpm` |
-| Arch Linux x86_64, pacman | `sudo pacman -U ./oie-0.0.1rc.1-1-x86_64.pkg.tar.zst` |
-| Linux x86_64, Flatpak | `flatpak install --user ./oie-v0.0.1-rc.1-x86_64.flatpak` |
+| Ubuntu 24.04 x86_64, APT | `sudo apt install ./oie_v0.0.1-rc.28_linux_amd64.deb` |
+| Fedora x86_64, DNF | `sudo dnf install ./oie-0.0.1.rc.28-1.x86_64.rpm` |
+| Arch Linux x86_64, pacman | `sudo pacman -U ./oie-0.0.1rc.28-1-x86_64.pkg.tar.zst` |
+| Linux x86_64, Flatpak | `flatpak install --user ./oie-v0.0.1-rc.28-x86_64.flatpak` |
 
 The new bundle uses the GNOME 51 runtime from Flathub. Bundles through rc.8
 use GNOME 50. If you have not enabled Flathub
@@ -304,6 +361,13 @@ Maintainers can run `gh workflow run publish-homebrew.yml --ref main` to retry
 the dispatch. The Arai Hû Assets Distribution GitHub App must be installed on
 `araihu/homebrew-oie` with Actions write access. The dispatch uses the existing
 app credentials and requests a token scoped to that repository and permission.
+
+The same desktop release starts [Linux repository publication](../.github/workflows/publish-apt.yml)
+on `main`. It downloads the RPM, pacman package and Flatpak bundle from the
+newest published desktop release that contains all three, verifies each
+against `SHA256SUMS`, and signs their indexes and payloads. GitHub Pages serves
+the repositories together with APT. To retry a deployment, run
+`gh workflow run publish-apt.yml --ref main`.
 
 To build the package-manager files from existing release assets locally with
 Python 3.10+ and Go 1.27.4+, run:
