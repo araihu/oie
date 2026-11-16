@@ -287,6 +287,11 @@ type copy struct {
 	ScheduleReviewChanged, AttachmentTooLarge                                  string
 	AttachmentPreparing, AttachmentUnavailable                                 string
 	AttachImage, AttachFile                                                    string
+	RecordAudio, AudioPreparing, AudioRecording, AudioRecordingFailed          string
+	AudioRecordingFile, AudioRecordingStop, AudioRecordingCancel               string
+	AudioRecordingPlay, AudioRecordingPause, AudioRecordingPosition            string
+	AudioPlay, AudioPause, AudioLoading                                        string
+	AudioPosition, AudioDuration, AudioDownload                                string
 	DismissLinkPreview                                                         string
 
 	Scheduled, Schedule, Reschedule, ScheduleWhen, ScheduleEmpty, ScheduleUnavailable, ScheduleReview, ScheduleBack, ScheduleCancel, ScheduleEditMode, ScheduleSave, ScheduleSaved, SendNow, ScheduleTimeInvalid, ScheduleTimeAmbiguous, AttachmentFailed, AttachmentLimit, RemoveAttachment string
@@ -938,6 +943,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/forwarding.js":          {"text/javascript", forwardingScript},
 		"/ui/scheduling.js":          {"text/javascript", schedulingScript},
 		"/ui/scheduling.css":         {"text/css", schedulingStylesheet},
+		"/ui/wavesurfer/LICENSE":     {"text/plain; charset=utf-8", waveSurferLicense},
+		"/ui/wavesurfer/player.mjs":  {"text/javascript", waveSurferPlayer},
+		"/ui/wavesurfer/record.mjs":  {"text/javascript", waveSurferRecorder},
+		"/ui/message-audio.js":       {"text/javascript", messageAudioScript},
+		"/ui/audio-duration.js":      {"text/javascript", audioDurationScript},
 		"/ui/sidebar.js":             {"text/javascript", sidebarScript},
 		"/ui/masonry.js":             {"text/javascript", masonryScript},
 		"/ui/presentation-time.js":   {"text/javascript", presentationTimeScript},

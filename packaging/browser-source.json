@@ -3,6 +3,10 @@
     "internal/adapters/web/brand/SOURCE.json": "0bcdd90f39a8d794dc74fa29552c792c864242b374359ba7d99d3472c75da2bf",
     "internal/adapters/web/cache_vendor/manifest.json": "d5f93763d96f0b961ec57b11d71729cd9cec0c0535622ec8066a14ef1584f9ad",
     "internal/adapters/web/pdfjs/manifest.json": "852a64b04dbcd2daaf6707892ad03c13609da8a1f81c233f56382b8e51017519",
+    "internal/adapters/web/wavesurfer/manifest.json": "104569829ccf07d0e97ffcd864285cdd7a2ecbc38fdb8422cfdebea9001684a9",
+    "internal/adapters/web/wavesurfer/player.mjs": "ff2222536e300c20c2d09bfb5f025b3c019406c7858bc32549e91a6c1294a62c",
+    "internal/adapters/web/wavesurfer/record.mjs": "b1e7a0a78e88c339b39184e5c3816d4863dedab350b425ad64a4d343441a76e2",
+    "internal/adapters/web/wavesurfer/LICENSE": "0fc992dc27cc34dde78bfeb024b4cadff6320f0dcbee2f1228efaeb533ca1364",
     "tools/icons/.iconpack.lock.yaml": "025348b07e4727f731842483bb9a5c3f9488cbfbf88783d42f4fe55fc155511f",
     "vendor/github.com/araihu/goshtoso/assets/favicon.svg": "56e8b185f2572ad4c7ea6fa8e715aa7dacd7381422b431ce07c35965ab05b3b7",
     "vendor/github.com/araihu/goshtoso/assets/icons/heroicons.svg": "75e282de7a19efba9cf0285b44af0641c1527361f921b7d7f8020efc1f1f0fb7",
@@ -14,6 +18,14 @@
     "vendor/modernc.org/libc/builder.json": "fddd398fddbb3bb9a85444491d29ba3033ed47363444d8dfdaa3e1fa74df096b"
   },
   "archives": [
+    {
+      "name": "wavesurfer.js-8.1.0.tar.gz",
+      "url": "https://codeload.github.com/katspaugh/wavesurfer.js/tar.gz/refs/tags/8.1.0",
+      "sha256": "85d1b97928c7a4956c816ec511db1431537b7725aca6b3aa5d0061c6d783674b",
+      "include": ["LICENSE", "README.md", "package.json", "yarn.lock", "rollup.config.js", "tsconfig.json", "scripts", "src"],
+      "packaged_name": "wavesurfer.js-8.1.0-source.tar",
+      "packaged_sha256": "fa8f7918d876dec1f427f1b968f599eb19641f155ce88dd8d67afa56f9fcb261"
+    },
     {
       "name": "alpine-3.17.2.tar.gz",
       "url": "https://codeload.github.com/alpinejs/alpine/tar.gz/refs/tags/v3.17.2",

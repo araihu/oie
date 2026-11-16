@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"time"
+	"github.com/araihu/goshtoso/components/badge"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/chatbubble"
 	"github.com/araihu/goshtoso/components/combobox"
@@ -356,15 +357,15 @@ templ outgoingAttachments(v view,m engineapi.Message) {
 	if m.Attachments != nil && len(*m.Attachments)>0 {
 		<div class="oie-message-attachments" data-message-attachments>
 			for _, a := range *m.Attachments {
-				if audioMediaType(a.MediaType) != "" {
-					@audioPlayer(v,a.Id,a.FileName,v.stagedAttachmentHref(m.ConversationId,a.Id,false),v.stagedAttachmentHref(m.ConversationId,a.Id,true))
+				if mediaType:=audioMediaType(a.MediaType); mediaType!="" {
+					@audioPlayer(v,a.Id,a.FileName,v.stagedAttachmentHref(m.ConversationId,a.Id,false),v.stagedAttachmentHref(m.ConversationId,a.Id,true),mediaType)
 				} else {
-				@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
-					if rasterAttachment(a.MediaType) {
-						<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt="" width="224" height="128" loading="lazy"/>
+					@link.Link(v.stagedAttachmentHref(m.ConversationId,a.Id,true),link.WithAttrs(templ.Attributes{"download":a.FileName})) {
+						if rasterAttachment(a.MediaType) {
+							<img src={templ.URL(v.stagedAttachmentHref(m.ConversationId,a.Id,false))} alt="" width="224" height="128" loading="lazy"/>
+						}
+						<span>{a.FileName}</span>
 					}
-					<span>{a.FileName}</span>
-				}
 				}
 			}
 		</div>
@@ -394,5 +395,28 @@ func schedulePrimaryAction(v view) splitbutton.Action {
 
 templ schedulePrimaryContent(v view) {
 	<span data-schedule-send-icon>@glyph(heroicons.Icon16SolidArrowUp)</span>
+	<span data-record-audio-icon hidden>@glyph(heroicons.Icon16SolidMicrophone)</span>
+	<span data-stop-audio-icon aria-hidden="true" hidden></span>
 	<span data-schedule-save-label>{v.Text.ScheduleSave}</span>
+}
+
+templ composerAudio(v view) {
+	<div class="oie-composer-audio" data-record-audio hidden
+		data-record-label={v.Text.RecordAudio} data-stop-label={v.Text.AudioRecordingStop}
+		data-play-label={v.Text.AudioRecordingPlay} data-pause-label={v.Text.AudioRecordingPause}
+		data-play-failed={v.Text.AudioUnavailable}
+		data-preparing={v.Text.AudioPreparing} data-recording={v.Text.AudioRecording}
+		data-failed={v.Text.AudioRecordingFailed} data-filename={v.Text.AudioRecordingFile}>
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-record-audio-remove":"","aria-label":v.Text.AudioRecordingCancel,"title":v.Text.AudioRecordingCancel})){ @glyph(heroicons.Icon16SolidTrash) }
+		<span class="oie-audio-recording-dot" aria-hidden="true">@badge.AnimatingDot(badge.ToneDanger)</span>
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-record-audio-play":"","aria-label":v.Text.AudioRecordingPlay,"hidden":true})){
+			<span data-record-play-icon>@glyph(heroicons.Icon16SolidPlay)</span>
+			<span data-record-pause-icon hidden>@glyph(heroicons.Icon16SolidPause)</span>
+		}
+		<time data-record-audio-time aria-hidden="true">0:00</time>
+		<div data-record-audio-wave data-position-label={v.Text.AudioRecordingPosition}></div>
+		<audio data-record-audio-media aria-label={v.Text.RecordAudio} preload="metadata"></audio>
+		<span class="sr-only" data-record-audio-status role="status"></span>
+		@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-record-audio-retry":"","hidden":true})){ {v.Text.Retry} }
+	</div>
 }

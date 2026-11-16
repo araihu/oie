@@ -169,7 +169,10 @@ if [ "$target_os" = darwin ]; then
   mv "$doc_dir/icons.icns" "$doc_dir/oie.icns"
   # The embedded Wails catalog is template artwork. Oiê uses its generated ICNS.
   rm -f "$doc_dir/Assets.car"
+  mkdir -p "$doc_dir/pt-BR.lproj"
+  copy_file "$tooling_dir/packaging/macos/pt-BR.lproj/InfoPlist.strings" "$doc_dir/pt-BR.lproj/InfoPlist.strings"
   plutil -lint "$bundle/Contents/Info.plist"
+  plutil -lint "$doc_dir/pt-BR.lproj/InfoPlist.strings"
 fi
 copy_file "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$doc_dir/"
 mkdir -p "$doc_dir/licenses"

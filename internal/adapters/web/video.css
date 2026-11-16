@@ -22,7 +22,7 @@
 
 .oie-shared-actions [id^="shared-thumbnail-"][hidden]{display:none}
 
-.oie-audio-card{display:grid;gap:.25rem;width:18rem;max-width:100%;min-width:0;font-size:.875rem}
+.oie-audio-card{display:grid;grid-template-columns:minmax(0,1fr);gap:.25rem;inline-size:min(16rem,58vw);max-inline-size:100%;font-size:.75rem}
 .oie-audio-card>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .oie-audio-controls{min-width:0;height:3.375rem;display:flex;align-items:center}
 .oie-audio-controls audio{width:100%;height:100%}

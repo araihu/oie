@@ -56,6 +56,14 @@ The browser ESM build is served locally. The license and pinned archive/source
 checksums are in `internal/adapters/web/cache_vendor`. Reproduce the asset with
 `python3 tools/vendor-lru-cache.py`. Project: https://github.com/isaacs/node-lru-cache.
 
+## WaveSurfer.js browser assets
+
+The audio recorder and player use WaveSurfer.js 8.1.0 under BSD-3-Clause.
+The license is included alongside the assets in `internal/adapters/web/wavesurfer`
+and served at `/ui/wavesurfer/LICENSE`. The manifest in that directory pins the
+npm archive and the bundled ESM files. The corresponding source archive includes
+the upstream TypeScript source.
+
 ## Unicode emoji data
 
 The localized picker catalogs and protocol reaction validation bases derive from

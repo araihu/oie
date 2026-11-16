@@ -175,14 +175,14 @@ window.OieRuntime.register('audio', life => {
   }, true);
 
   life.on(document, 'error', event => {
-    if (event.target.matches?.('[data-audio-player]')) recover(event.target);
+    if (event.target.matches?.('[data-audio-player]') && !event.target.closest('[data-waveform-player]')) recover(event.target);
   }, true);
 
   life.on(document, 'click', async event => {
     const action = event.target.closest('[id^="save-audio-"]');
     if (!action || action.disabled) return;
     const id = action.id.slice('save-audio-'.length);
-    const card = document.querySelector(`[data-audio-id="${CSS.escape(id)}"]`);
+    const card = action.closest('[data-message-bubble]')?.querySelector(`[data-audio-id="${CSS.escape(id)}"]`);
     if (!card?.dataset.audioDownload) return;
     const address = card.dataset.audioDownload, name = card.dataset.audioFilename;
     try {

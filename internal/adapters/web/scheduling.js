@@ -388,8 +388,33 @@ window.OieRuntime.register('scheduling', life => {
     let dragDepth = 0;
     let uploading = false;
     let nativeSelection = null;
-    files = snapshot().files || [];
-    locked = snapshot().editBlocked;
+    const primary = composer.querySelector('#composer-send');
+    const recordIcon = primary.querySelector('[data-record-audio-icon]');
+    const stopIcon = primary.querySelector('[data-stop-audio-icon]');
+    const recordPanel = composer.querySelector('[data-record-audio]');
+    const recordStatus = recordPanel.querySelector('[data-record-audio-status]');
+    const recordWave = recordPanel.querySelector('[data-record-audio-wave]');
+    let recordMedia = recordPanel.querySelector('audio');
+    const recordTime = recordPanel.querySelector('time');
+    const recordRemove = recordPanel.querySelector('[data-record-audio-remove]');
+    const recordPlay = recordPanel.querySelector('[data-record-audio-play]');
+    const recordRetry = recordPanel.querySelector('[data-record-audio-retry]');
+    const recordLabel = recordPanel.dataset.recordLabel;
+    const stopLabel = recordPanel.dataset.stopLabel;
+    const sendLabel = document.getElementById('oie-live-copy').dataset.send;
+    const audioFormats = [
+      ['audio/webm;codecs=opus', 'weba'],
+      ['audio/mp4', 'm4a'],
+      ['audio/ogg;codecs=opus', 'ogg'],
+    ];
+    const audioFormat = navigator.mediaDevices?.getUserMedia &&
+      audioFormats.find(([type]) => window.MediaRecorder?.isTypeSupported(type));
+    let recording, audioPreview;
+    const recordingDraft = () => [...pending.values(), ...files].find(file => file.recordedAudio);
+    const initialDraft = snapshot();
+    files = initialDraft.files || [];
+    locked = initialDraft.locked;
+    let editingSent = initialDraft.editingSent;
 
     function renderFiles() {
       const active = document.activeElement;
@@ -397,9 +422,11 @@ window.OieRuntime.register('scheduling', life => {
       const action = ['data-file-download', 'data-draft-video-play', 'data-retry-attachment', 'data-remove-attachment']
         .find(attribute => active?.hasAttribute(attribute));
       items.replaceChildren();
-      attachments.hidden = !files.length && !pending.size;
       const order = file => selectionOrder.get(file.id) || 0;
-      const display = [...files, ...pending.values()].sort((a,b) => order(a) - order(b));
+      const display = [...files, ...pending.values()].filter(file => !file.recordedAudio)
+        .sort((a,b) => order(a) - order(b));
+      attachments.hidden = !display.length;
+      renderAudio();
       for (const file of display) {
         const row = template.content.firstElementChild.cloneNode(true);
         row.dataset.draftAttachment = file.id;
@@ -448,13 +475,340 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     function syncAttachmentControls() {
-      const disabled = !available() || locked || !!nativeSelection ||
+      const disabled = !available() || locked || !!recording || !!nativeSelection ||
         (!!window.OieDesktop?.attachFiles && pending.size > 0);
       for (const action of attachmentActions) action.disabled = disabled;
       menuTrigger.disabled = disabled && scheduleAction.disabled;
       for (const remove of items.querySelectorAll('[data-remove-attachment]')) remove.disabled = locked || !!nativeSelection;
       for (const retry of items.querySelectorAll('[data-retry-attachment]')) retry.disabled = !available() || locked;
+      recordRemove.disabled = locked || !!nativeSelection;
+      recordRetry.disabled = locked || (!!recordingDraft()?.failed && !available());
+      queueMicrotask(syncRecordButton);
     }
+
+    function canRecord() {
+      return !!audioFormat && available() && !locked && !nativeSelection && !pending.size &&
+        !files.length && !input.value.trim() && !input.readOnly && !primary.disabled &&
+        !composer.hasAttribute('data-editing-schedule') && composer.dataset.editing !== 'true';
+    }
+
+    function syncRecordButton() {
+      if (life.signal.aborted) return;
+      const enabled = canRecord();
+      if (recording && !enabled) {
+        cancelRecording();
+        return;
+      }
+      const mode = recording ? stopLabel : enabled ? recordLabel : '';
+      primary.toggleAttribute('data-record-mode', mode === recordLabel);
+      primary.toggleAttribute('data-stop-recording', !!recording);
+      recordIcon.hidden = mode !== recordLabel;
+      stopIcon.hidden = !recording;
+      if (recording && recording.recorder?.state !== 'recording') primary.setAttribute('aria-disabled', 'true');
+      else primary.removeAttribute('aria-disabled');
+      if (mode || [recordLabel, stopLabel].includes(primary.getAttribute('aria-label'))) {
+        primary.setAttribute('aria-label', mode || sendLabel);
+        primary.title = mode || sendLabel;
+      }
+    }
+
+    function showAudioTime(seconds) {
+      const total = Math.floor(Number.isFinite(seconds) ? seconds : 0);
+      recordTime.textContent = Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
+    }
+
+    function createWave(WaveSurfer, options) {
+      return WaveSurfer.create({
+        container: recordWave,
+        waveColor: getComputedStyle(recordWave).color,
+        height: 20,
+        barWidth: 2,
+        barGap: 2,
+        barRadius: 2,
+        cursorWidth: 0,
+        ...options,
+      });
+    }
+
+    async function monitorRecording(take) {
+      try {
+        const [{default: WaveSurfer}, {default: RecordPlugin}] = await Promise.all([
+          import('/ui/wavesurfer/player.mjs'), import('/ui/wavesurfer/record.mjs'),
+        ]);
+        if (recording !== take) return;
+        take.wave = createWave(WaveSurfer, {interact: false});
+        const plugin = take.wave.registerPlugin(RecordPlugin.create({scrollingWaveform: true}));
+        take.stopWave = plugin.renderMicStream(take.stream).onDestroy;
+      } catch {
+        // Recording and the elapsed time remain available if the waveform cannot be drawn.
+      }
+    }
+
+    function closeAudioPreview() {
+      if (!audioPreview) return;
+      const preview = audioPreview;
+      audioPreview = null;
+      preview.controller.abort();
+      preview.wave?.destroy();
+      recordMedia.pause();
+      recordMedia.removeAttribute('src');
+      recordMedia.removeAttribute('controls');
+      recordMedia.load();
+      // currentSrc can still point to the discarded clip while the element resets.
+      const freshMedia = recordMedia.cloneNode(false);
+      recordMedia.replaceWith(freshMedia);
+      recordMedia = freshMedia;
+      for (const attribute of ['role', 'tabindex', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow']) {
+        recordWave.removeAttribute(attribute);
+      }
+      if (preview.url) URL.revokeObjectURL(preview.url);
+    }
+
+    async function loadAudioPreview(file, preview) {
+      const deadline = life.timeout(() => preview.controller.abort(), 20000);
+      try {
+        let blob = file.file;
+        if (!blob) {
+          const response = await life.fetch(fileURL(file.id), {signal: preview.controller.signal});
+          if (!response.ok) throw Error('audio unavailable');
+          blob = new Blob([await response.blob()], {type: file.mediaType});
+        }
+        const {audioDuration, waveformDurationLimit} = await import('/ui/audio-duration.js');
+        const duration = await audioDuration(blob, preview.controller.signal);
+        if (audioPreview !== preview) return;
+        try {
+          if (!Number.isFinite(duration) || duration <= 0 || duration > waveformDurationLimit) throw Error('waveform unavailable');
+          const {default: WaveSurfer} = await import('/ui/wavesurfer/player.mjs');
+          if (audioPreview !== preview) return;
+          const progressColor = getComputedStyle(recordWave).getPropertyValue('--oie-accent').trim();
+          preview.wave = createWave(WaveSurfer, {media: recordMedia, progressColor});
+          await preview.wave.loadBlob(blob, undefined, duration);
+          if (audioPreview !== preview) return;
+          preview.ready = true;
+          recordWave.setAttribute('role', 'slider');
+          recordWave.tabIndex = 0;
+          recordWave.setAttribute('aria-label', recordWave.dataset.positionLabel);
+          recordWave.setAttribute('aria-valuemin', '0');
+          recordWave.setAttribute('aria-valuemax', duration);
+        } catch {
+          if (audioPreview !== preview) return;
+          preview.wave?.destroy();
+          preview.wave = null;
+          preview.url = URL.createObjectURL(blob);
+          recordMedia.src = preview.url;
+          recordMedia.toggleAttribute('controls', true);
+        }
+      } catch {
+        if (audioPreview !== preview) return;
+        preview.failed = true;
+        if (!editingSent) errorToast(recordPanel.dataset.playFailed);
+      } finally {
+        clearTimeout(deadline);
+      }
+      if (audioPreview === preview) renderAudio();
+    }
+
+    function updateAudioPlayer() {
+      if (!audioPreview) return;
+      const playing = !recordMedia.paused;
+      recordPlay.setAttribute('aria-label', playing ? recordPanel.dataset.pauseLabel : recordPanel.dataset.playLabel);
+      recordPlay.querySelector('[data-record-play-icon]').hidden = playing;
+      recordPlay.querySelector('[data-record-pause-icon]').hidden = !playing;
+      const duration = audioPreview.wave?.getDuration() || recordMedia.duration;
+      const currentTime = recordMedia.currentTime;
+      if (recordWave.matches('[role="slider"]')) recordWave.setAttribute('aria-valuenow', Math.min(currentTime, duration));
+      showAudioTime(currentTime || duration);
+    }
+
+    function renderAudio() {
+      const file = recordingDraft();
+      recordPanel.hidden = editingSent || (!file && !recording);
+      if (editingSent) {
+        recordMedia.pause();
+        return;
+      }
+      recordPanel.toggleAttribute('data-capturing', !!recording);
+      if (file && audioPreview?.id !== file.id) {
+        closeAudioPreview();
+        showAudioTime(0);
+        const preview = audioPreview = {id: file.id, controller: new AbortController()};
+        void loadAudioPreview(file, preview);
+      } else if (!file) {
+        closeAudioPreview();
+      }
+      const fallback = recordMedia.hasAttribute('controls');
+      recordWave.hidden = fallback;
+      recordPlay.hidden = !file || fallback;
+      recordPlay.disabled = !audioPreview?.ready;
+      recordRetry.hidden = !file?.failed && !audioPreview?.failed;
+      if (file) {
+        recordStatus.textContent = file.failed ? labels.failed : audioPreview?.failed ? recordPanel.dataset.playFailed :
+          file.file ? labels.preparing : file.fileName;
+        updateAudioPlayer();
+      }
+    }
+
+    function finishRecording(take) {
+      if (recording !== take) return;
+      recording = null;
+      take.stream?.getTracks().forEach(track => track.stop());
+      clearInterval(take.timer);
+      take.stopWave?.();
+      take.wave?.destroy();
+      composer.removeAttribute('data-capturing-audio');
+    }
+
+    function cancelRecording() {
+      if (!recording) return;
+      finishRecording(recording);
+      if (life.signal.aborted) return;
+      syncPending();
+      input.focus({preventScroll: true});
+    }
+
+    async function startRecording() {
+      const take = recording = {chunks: [], size: 0, keep: false};
+      composer.setAttribute('data-capturing-audio', '');
+      showAudioTime(0);
+      recordStatus.textContent = recordPanel.dataset.preparing;
+      syncPending();
+      try {
+        take.stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        if (recording !== take) {
+          take.stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        if (!canRecord()) {
+          cancelRecording();
+          return;
+        }
+        const [mimeType, extension] = audioFormat;
+        const recorder = take.recorder = new MediaRecorder(take.stream, {mimeType});
+        recorder.ondataavailable = ({data}) => {
+          if (recording !== take || !data.size) return;
+          take.size += data.size;
+          if (take.size > maxFileSize) {
+            cancelRecording();
+            errorToast(labels.limit);
+            return;
+          }
+          take.chunks.push(data);
+        };
+        recorder.onstop = () => {
+          if (recording !== take) return;
+          if (take.keep && take.size && canRecord()) {
+            finishRecording(take);
+            const file = new File(take.chunks, recordPanel.dataset.filename + '.' + extension, {type: mimeType.split(';')[0]});
+            addFiles([file], true);
+            recordRemove.focus({preventScroll: true});
+          } else {
+            cancelRecording();
+            errorToast(recordPanel.dataset.failed);
+          }
+        };
+        recorder.onerror = () => {
+          if (recording !== take) return;
+          cancelRecording();
+          errorToast(recordPanel.dataset.failed);
+        };
+        recorder.start(1000);
+        const start = performance.now();
+        take.timer = setInterval(() => showAudioTime((performance.now() - start) / 1000), 200);
+        recordStatus.textContent = recordPanel.dataset.recording;
+        syncRecordButton();
+        void monitorRecording(take);
+      } catch {
+        if (recording !== take) return;
+        cancelRecording();
+        errorToast(recordPanel.dataset.failed);
+      }
+    }
+
+    life.on(primary, 'click', event => {
+      if (!recording && !canRecord()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!recording) {
+        void startRecording();
+      } else if (recording.recorder?.state === 'recording' && !recording.keep) {
+        recording.keep = true;
+        recording.recorder.stop();
+        syncRecordButton();
+      }
+    }, true);
+    life.on(input, 'input', syncRecordButton);
+    life.on(recordRemove, 'click', () => {
+      if (recording) cancelRecording();
+      else if (!locked && !nativeSelection) {
+        const file = recordingDraft();
+        if (pending.has(file?.id)) {
+          forget(file);
+          syncPending();
+        } else if (file) {
+          composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail: {files: files.filter(item => item.id !== file.id)}}));
+        }
+        input.focus({preventScroll: true});
+      }
+    });
+    life.on(recordRetry, 'click', () => {
+      const file = recordingDraft();
+      if (file?.failed && !locked && available()) {
+        recordRemove.focus({preventScroll: true});
+        file.failed = false;
+        renderAudio();
+        stageNext();
+      } else if (audioPreview?.failed) {
+        recordRemove.focus({preventScroll: true});
+        closeAudioPreview();
+        renderAudio();
+      }
+    });
+    life.on(recordPlay, 'click', () => {
+      if (recordMedia.paused) void recordMedia.play().catch(error => {
+        if (error.name !== 'AbortError') errorToast(recordPanel.dataset.playFailed);
+      });
+      else recordMedia.pause();
+    });
+    life.on(recordWave, 'keydown', event => {
+      const wave = audioPreview?.wave;
+      if (!wave) return;
+      const duration = wave.getDuration();
+      const next = {
+        ArrowLeft: recordMedia.currentTime - 5, ArrowDown: recordMedia.currentTime - 5,
+        ArrowRight: recordMedia.currentTime + 5, ArrowUp: recordMedia.currentTime + 5,
+        Home: 0, End: duration,
+      }[event.key];
+      if (!Number.isFinite(next)) return;
+      event.preventDefault();
+      wave.setTime(Math.max(0, Math.min(duration, next)));
+    });
+    for (const event of ['timeupdate', 'loadedmetadata', 'play', 'pause', 'ended']) {
+      life.on(recordPanel, event, event => {
+        if (event.target === recordMedia) updateAudioPlayer();
+      }, true);
+    }
+    life.on(recordPanel, 'error', event => {
+      if (event.target !== recordMedia || !audioPreview || audioPreview.failed) return;
+      const focused = recordPanel.contains(document.activeElement);
+      const id = audioPreview.id;
+      closeAudioPreview();
+      audioPreview = {id, failed: true, controller: new AbortController()};
+      renderAudio();
+      if (focused) recordRetry.focus({preventScroll: true});
+      if (!editingSent) errorToast(recordPanel.dataset.playFailed);
+    }, true);
+    life.on(composer, 'keydown', event => {
+      if (event.key === 'Escape' && recording) {
+        event.preventDefault();
+        cancelRecording();
+      }
+    });
+    life.on(window, 'pagehide', cancelRecording);
+    life.on(window, 'oie:desktop-hide', cancelRecording);
+    life.cleanup(() => {
+      if (recording) finishRecording(recording);
+      closeAudioPreview();
+    });
 
     function syncPending() {
       composer.toggleAttribute('data-attachments-pending', pending.size > 0 || !!nativeSelection);
@@ -612,6 +966,7 @@ window.OieRuntime.register('scheduling', life => {
         if (controller.signal.aborted || !available()) throw Error('staging unavailable');
         pending.delete(file.id);
         const order = item => selectionOrder.get(item.id) || 0;
+        if (file.recordedAudio) metadata.recordedAudio = true;
         const detail = {files: [...files, metadata].sort((a,b) => order(a) - order(b))};
         composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
         if (!detail.applied) {
@@ -623,6 +978,7 @@ window.OieRuntime.register('scheduling', life => {
         if (life.signal.aborted || pending.get(file.id) !== file) return;
         file.failed = true;
         status.textContent = labels.failed;
+        if (file.recordedAudio) errorToast(labels.failed);
       } finally {
         clearTimeout(timeout);
         delete file.request;
@@ -632,9 +988,9 @@ window.OieRuntime.register('scheduling', life => {
       }
     }
 
-    function addFiles(picked) {
+    function addFiles(picked, recordedAudio = false) {
       if (!picked.length || !chat.getClientRects().length) return;
-      if (!available() || locked || nativeSelection || document.querySelector('dialog[open]')) {
+      if (!available() || locked || recording || nativeSelection || document.querySelector('dialog[open]')) {
         errorToast(labels.unavailable);
         return;
       }
@@ -643,14 +999,14 @@ window.OieRuntime.register('scheduling', life => {
         return;
       }
       const selected = picked.map(file => ({
-        file, id: newID(), fileName: file.name, thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
+        file, id: newID(), fileName: file.name, recordedAudio, thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
       }));
       for (const file of selected) {
         pending.set(file.id, file);
         selectionOrder.set(file.id, ++sequence);
       }
       status.textContent = labels.preparing;
-      input.focus({preventScroll:true});
+      if (!recordedAudio) input.focus({preventScroll:true});
       syncPending();
       stageNext();
     }
@@ -661,10 +1017,15 @@ window.OieRuntime.register('scheduling', life => {
       const changed = JSON.stringify(files) !== JSON.stringify(event.detail.files);
       files = event.detail.files;
       locked = event.detail.locked;
+      const editChanged = editingSent !== event.detail.editingSent;
+      editingSent = event.detail.editingSent;
       if (changed) {
         syncVideos();
         renderFiles();
-      } else syncAttachmentControls();
+      } else {
+        if (editChanged) renderAudio();
+        syncAttachmentControls();
+      }
       stageNext();
     });
     function discardPending() {
@@ -714,7 +1075,7 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     life.on(composer, 'oie:compose-add', event => {
-      if (!['image', 'file'].includes(event.detail) || !available() || locked || nativeSelection) return;
+      if (!['image', 'file'].includes(event.detail) || !available() || locked || recording || nativeSelection) return;
       const choose = window.OieDesktop?.attachFiles;
       const imagesOnly = event.detail === 'image';
       if (choose) {
@@ -739,12 +1100,12 @@ window.OieRuntime.register('scheduling', life => {
       if (!fileDrag(event)) return;
       event.preventDefault();
       dragDepth++;
-      chat.toggleAttribute('data-file-drag', available() && !locked && !nativeSelection);
+      chat.toggleAttribute('data-file-drag', available() && !locked && !recording && !nativeSelection);
     });
     life.on(chat, 'dragover', event => {
       if (!fileDrag(event)) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = available() && !locked && !nativeSelection ? 'copy' : 'none';
+      event.dataTransfer.dropEffect = available() && !locked && !recording && !nativeSelection ? 'copy' : 'none';
     });
     life.on(chat, 'dragleave', event => {
       if (!fileDrag(event)) return;

@@ -335,7 +335,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  // Touch gestures compose the same scoped, read-only preparation and public
  // Dropdown trigger as keyboard/menu use. Scrolling and native controls win.
  let gesture=null,lastTap=null,suppressClick=null,delayedPrimary=null;
- const nativeTarget=target=>target.closest('a,button,input,textarea,select,video,audio,[contenteditable],[role=button],[data-message-menu-slot]');
+ const nativeTarget=target=>target.closest('a,button,input,textarea,select,video,audio,[contenteditable],[role=button],[role=slider],[data-message-menu-slot]');
  function cancelGesture(){if(gesture)clearTimeout(gesture.timer);gesture=null}
  function cancelPrimary(){if(delayedPrimary)clearTimeout(delayedPrimary.timer);delayedPrimary=null}
  function openMessageMenu(source){const trigger=document.querySelector('[data-message-menu-trigger="'+CSS.escape(source.dataset.messageBubble)+'"]');if(trigger&&!trigger.disabled&&trigger.getAttribute('aria-expanded')!=='true')trigger.click()}

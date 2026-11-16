@@ -65,6 +65,8 @@ shutil.copyfile(Path(os.environ["OIE_TEST_ASSETS"]) / url.removeprefix(base), ar
             plist = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
             require(plist["CFBundleIdentifier"] == "org.araihu.oie", "unexpected bundle identifier")
             require(plist["OieVersion"] == args.version and plist["OieSourceRevision"] == args.revision, "incorrect bundle source/version")
+            require(bool(plist.get("NSMicrophoneUsageDescription")), "missing microphone permission text")
+            subprocess.run(["plutil", "-lint", str(bundle / "Contents/Resources/pt-BR.lproj/InfoPlist.strings")], check=True)
             icon = bundle / "Contents/Resources" / plist["CFBundleIconFile"]
             require(icon.name == "oie.icns" and icon.read_bytes().startswith(b"icns"), "missing or invalid Oiê bundle icon")
             subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)

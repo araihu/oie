@@ -131,6 +131,7 @@ templ page(v view) {
 <script src="/ui/conversation-search.js" defer></script>
 <script src="/ui/previews.js" defer></script>
 <script src="/ui/videos.js" defer></script>
+<script src="/ui/message-audio.js" defer></script>
 <script src="/ui/video-thumbnails.js" defer></script>
 <script src="/ui/cache.js" defer></script>
 <script src="/ui/documents.js" defer></script>
@@ -585,6 +586,9 @@ if v.scheduleAllowed() {
 <div class="oie-composer-field">
 @textarea.Textarea(textarea.Config{ID:"message-composer",Name:"originalText",Value:v.field("originalText"),Rows:1,Disabled:!v.composeAllowed(),RootClass:"oie-composer-input",InputAttrs:templ.Attributes{"aria-label":v.Text.Message,"style":"resize:none;field-sizing:content;min-height:var(--oie-composer-control-size,2.75rem);line-height:1.25rem;padding-block:calc((var(--oie-composer-control-size,2.75rem) - 1.25rem - 2px)/2);max-height:min(12rem,calc(var(--oie-workspace-height,100dvh) * .3));overflow-y:auto;background:var(--oie-raised);border-color:var(--oie-border);border-radius:1.5rem;color:var(--oie-text)"}})
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-edit-cancel"),button.WithAttrs(templ.Attributes{"data-edit-cancel":"","hidden":true,"aria-label":v.Text.CancelEdit,"title":v.Text.CancelEdit})){@glyph(heroicons.Icon16SolidXMark)}
+if v.scheduleAllowed() {
+@composerAudio(v)
+}
 <div class="oie-composer-emoji">@emojiPicker(v)</div>
 </div>
 @mentionPicker(v)
@@ -1219,7 +1223,7 @@ for _,item:=range v.messageVideos(m.Id) {
 }
 </div>
 for _,item:=range v.MessageAudio[m.Id] {
-@audioPlayer(v,item.Id,v.sharedTitle(item),documentSource(v,item),documentSource(v,item)+"&download=1")
+@audioPlayer(v,item.Id,v.sharedTitle(item),documentSource(v,item),documentSource(v,item)+"&download=1",audioURLMediaType(item.Url))
 }
 
 }
