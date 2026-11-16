@@ -883,7 +883,8 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-composer-field:has([data-edit-cancel]:not([hidden])) textarea {
   padding-inline-end:var(--oie-composer-control-size);
 }
-#message-composer::placeholder {white-space:nowrap;text-overflow:ellipsis}
+#message-composer {overflow-x:hidden}
+#message-composer::placeholder {overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 
 @media (max-width:720px), (pointer:coarse) {
   /* A legible focus size also avoids WebKit enlarging the whole page. */
