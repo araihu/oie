@@ -397,12 +397,12 @@ window.OieRuntime.register('live', life => {
       const saved = await withOfflineLock(offlineKey, () => {
         if (life.signal.aborted || stopped || key !== draftStorageKey()) return false;
         const queued = parseDraft(localStorage.getItem(offlineKey));
-        const accepted = readSendAcceptance(record.key);
-        if (accepted?.identity === identity) return accepted;
-        const previous = parseDraft(localStorage.getItem(normalAttemptKey(record.key)));
+        const operation = reservation ? sendOperationState(record.key, queued) : selectSendOperation(record, identity, queued);
+        if (!operation) return false;
+        if (operation.accepted?.identity === identity) return operation.accepted;
         if (hasDraft(queued) && (isOfflineIntent(queued) || key !== offlineKey || !sameComposition(queued, record))) return false;
-        if (reservation ? previous?.token !== reservation.token : previous) return false;
-        if (accepted) pending.key = localOperationKey();
+        if (reservation ? operation.attempt?.token !== reservation.token : operation.attempt) return false;
+        pending.key = operation.key;
         const source = parseDraft(localStorage.getItem(key));
         // Keep another window's draft when it diverged from this composition.
         localStorage.setItem(offlineKey, JSON.stringify(pending));
@@ -1193,30 +1193,47 @@ window.OieRuntime.register('live', life => {
   function normalAttemptKey(operation) {
     return offlineKey.replace('oie.offline-send.v1', 'oie.send-attempt.v1') + ':' + operation;
   }
+  function splitSendOperation(key, identity) {
+    // Keep the UUIDv7 timestamp and variant. Tabs with the same original draft
+    // and edited composition must derive the same operation after a split.
+    const prefix = key.slice(0, 20);
+    const random = key.slice(20).replace('-', '');
+    const mask = BigInt(`0x${identity.slice(-15)}`) || 1n;
+    const suffix = (BigInt(`0x${random}`) ^ mask).toString(16).padStart(15, '0');
+    return `${prefix}${suffix.slice(0, 3)}-${suffix.slice(3)}`;
+  }
+  function sendOperationState(key, queued) {
+    const attemptKey = normalAttemptKey(key);
+    return {key, attemptKey, accepted:readSendAcceptance(key),
+      attempt:parseDraft(localStorage.getItem(attemptKey)),
+      offline:isOfflineIntent(queued) && queued.key === key ? queued : null};
+  }
+  function selectSendOperation(record, identity, queued) {
+    const matches = operation => operation.accepted?.identity === identity ||
+      operation.attempt?.identity === identity || sameComposition(operation.offline, {...record, key:operation.key});
+    const occupied = operation => operation.accepted || operation.attempt || operation.offline;
+    const original = sendOperationState(record.key, queued);
+    if (matches(original)) return original;
+    const split = sendOperationState(splitSendOperation(record.key, identity), queued);
+    if (matches(split)) return split;
+    if (!occupied(original)) return original;
+    if (!occupied(split)) return split;
+    return null;
+  }
   async function reserveNormalSend(record) {
     try {
       const identity = await sendIdentity(record);
       return await withOfflineLock(offlineKey, () => {
         if (life.signal.aborted || stopped) return false;
-        const accepted = readSendAcceptance(record.key);
-        if (accepted?.identity === identity) return accepted;
         const queued = parseDraft(localStorage.getItem(offlineKey));
-        const offline = isOfflineIntent(queued) ? queued : null;
-        let key = normalAttemptKey(record.key);
-        let previous = parseDraft(localStorage.getItem(key));
-        if (offline?.key === record.key) {
-          if (sameComposition(offline, record)) return false;
-        } else if (previous?.identity === identity && previous.until > Date.now()) {
-          return false;
-        }
-        if (accepted || offline?.key === record.key || previous && previous.identity !== identity) {
-          record.key = localOperationKey();
-          key = normalAttemptKey(record.key);
-          previous = null;
-        }
+        const operation = selectSendOperation(record, identity, queued);
+        if (!operation) return false;
+        if (operation.accepted?.identity === identity) return operation.accepted;
+        if (operation.offline || operation.attempt?.until > Date.now()) return false;
         const token = localOperationKey();
-        localStorage.setItem(key, JSON.stringify({token, identity, until:Date.now() + 30000}));
-        return {key, token, identity, operation:record.key, firstAttempt:!previous};
+        localStorage.setItem(operation.attemptKey, JSON.stringify({token, identity, until:Date.now() + 30000}));
+        record.key = operation.key;
+        return {key:operation.attemptKey, token, identity, operation:operation.key, firstAttempt:!operation.attempt};
       });
     } catch {
       // Sending online still works when the device cannot coordinate retries.
@@ -1332,7 +1349,11 @@ window.OieRuntime.register('live', life => {
     if (event.storageArea !== localStorage) return;
     if (event.key?.startsWith(acceptedSendPrefix) && event.newValue) {
       const operation = event.key.slice(acceptedSendPrefix.length);
-      if (journal?.key === operation || [...inMemory.values()].some(draft => draft?.key === operation)) {
+      const identity = parseDraft(event.newValue)?.identity;
+      const matches = draft => draft?.key === operation ||
+        (canonicalID(draft?.key) && typeof identity === 'string' && /[0-9a-f]{15}$/.test(identity) &&
+          splitSendOperation(draft.key, identity) === operation);
+      if (matches(journal) || [...inMemory.values()].some(matches)) {
         // Keep the receipt with the stale tab even after the shared cache turns over.
         try { sessionStorage.setItem(event.key, event.newValue); } catch {}
       }

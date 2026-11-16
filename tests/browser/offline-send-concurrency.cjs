@@ -121,6 +121,63 @@ async function checkFrozenIntent(browser, url, state, until) {
   }
 }
 
+async function checkDivergentOfflineDraft(browser, url, state, until) {
+  const context = await browser.newContext();
+  try {
+    const first = await openChat(context, url);
+    await composer(first).fill('An unconfirmed attempt from the first tab');
+    const sharedKey = await formKey(first);
+    const second = await openChat(context, url);
+    assert.equal(await formKey(second), sharedKey);
+
+    await first.route('**/ui/messages/send', route => route.abort('connectionreset'));
+    await submit(first);
+    await pending(first).locator('[data-pending-send-retry]').waitFor();
+    const edited = 'A separate composition queued from the second tab';
+    await composer(second).fill(edited);
+    assert.equal(await formKey(second), sharedKey, 'editing leaves the draft key in place');
+    const stale = await openChat(context, url);
+    assert.equal(await composer(stale).inputValue(), edited);
+    assert.equal(await formKey(stale), sharedKey);
+    await context.setOffline(true);
+    await submit(second);
+    await waiting(second).waitFor();
+    const queuedKey = await pending(second).getAttribute('data-operation-key');
+    assert.notEqual(queuedKey, sharedKey, 'queuing the different composition reserves a separate key');
+
+    state.engineDown = true;
+    await context.setOffline(false);
+    const stalePosts = [];
+    await stale.route('**/ui/messages/send', route => {
+      stalePosts.push(route.request().postData());
+      return route.continue();
+    });
+    await submit(stale);
+    await stale.locator('#send-message-form[data-busy="false"]').waitFor();
+    assert.equal(await composer(stale).inputValue(), edited);
+    assert.deepEqual(stalePosts, [], 'the same draft cannot race its queued copy');
+
+    state.engineDown = false;
+    await wake(second);
+    await until(() => state.operations.has(queuedKey), 'the independent offline composition was accepted');
+    await pending(second).waitFor({state:'detached'});
+    assert.equal(state.operations.get(queuedKey).acceptedMessage.originalText, edited);
+    assert(!state.operations.has(sharedKey), 'the earlier uncertain send was not retried');
+    await stale.waitForFunction(key => Object.keys(sessionStorage).some(name =>
+      name.startsWith('oie.send-accepted.v1:') && name.endsWith(key)), queuedKey);
+    await second.evaluate(key => {
+      const receipt = Object.keys(localStorage).find(name => name.startsWith('oie.send-accepted.v1:') && name.endsWith(key));
+      localStorage.removeItem(receipt);
+    }, queuedKey);
+    await submit(stale);
+    await until(async () => await composer(stale).inputValue() === '', 'the stale copy restored the shared receipt');
+    assert.deepEqual(stalePosts, [], 'the stale copy cannot deliver the accepted composition again');
+  } finally {
+    state.engineDown = false;
+    await context.close();
+  }
+}
+
 async function checkIndependentDraft(browser, url, state, until) {
   const context = await browser.newContext();
   try {
@@ -343,6 +400,8 @@ module.exports = async function offlineSendConcurrency({browser, base, chat, sta
   findings.push('Other tabs cannot retry an active automatic attempt or cancel a concurrently running send');
   await checkFrozenIntent(browser, url, state, until);
   findings.push('A stale tab cannot replace an offline send with a different body under the original operation key');
+  await checkDivergentOfflineDraft(browser, url, state, until);
+  findings.push('A pending receipt in one tab does not block queuing a different composition from another');
   await checkIndependentDraft(browser, url, state, until);
   findings.push('An unsent draft from another tab survives a previous offline send and reopening');
   await checkAcceptedBeforeOutage(browser, url, state, until);
