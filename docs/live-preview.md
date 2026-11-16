@@ -44,15 +44,15 @@ Passwords are never restored into the form or saved in browser draft journals.
 The engine retains them in its private files as described in the engine notes.
 Browser drafts and unresolved submission keys are scoped to that device and engine.
 
-## Hosted engine or separate development BFF
+## Separate development BFF
 
 ```sh
-bin/oie --role hosted --listen 127.0.0.1:18084 --data-dir ./data/live-engine \
+bin/oie --role local --listen 127.0.0.1:18084 --data-dir ./data/live-engine \
   --xmpp-ca-file bin/xmpp-localhost.crt
 bin/oie --role bff --listen 127.0.0.1:8080 --engine-url http://127.0.0.1:18084
 ```
 
-This is how the current live preview runs. The engine, BFF and optional development
+For a public deployment, see [hosted authentication](hosted-auth.md). The engine, BFF and optional development
 TCP bridge are detached from verification sessions so closing a test does not
 stop them. They are not installed as permanent system services. Process records
 and logs live under `/tmp/oie-live-*`; engine data remains in `data/live-engine`.

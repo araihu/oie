@@ -38,6 +38,9 @@ cmp internal/adapters/web/bffapi/api.gen.go "$tmp/bff.gen.go"
 sed "s|^output:.*|output: $tmp/cache.gen.go|" api/cache.codegen.yaml > "$tmp/cache-codegen.yaml"
 GOWORK=off go tool -modfile=tools/go.mod oapi-codegen --config "$tmp/cache-codegen.yaml" api/cache.openapi.yaml
 cmp internal/adapters/web/cacheapi/api.gen.go "$tmp/cache.gen.go"
+sed "s|^output:.*|output: $tmp/probe.gen.go|" api/probe.codegen.yaml > "$tmp/probe-codegen.yaml"
+GOWORK=off go tool -modfile=tools/go.mod oapi-codegen --config "$tmp/probe-codegen.yaml" api/probe.openapi.yaml
+cmp internal/adapters/probeapi/api.gen.go "$tmp/probe.gen.go"
 GOWORK=off go tool -modfile=tools/go.mod templ generate -check
 root=$(pwd)
 "$@" bundle --composed "$root/api/openapi.yaml" "$tmp/bundle.yaml" > /dev/null

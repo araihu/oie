@@ -1,19 +1,22 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.34.0
+  version: 0.35.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
     are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel="help".
     Send Prefer: oie-problem-documentation to include the URL in the Problem Details body.
+    Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.
   contact:
     name: Arai Hû
     url: https://github.com/araihu/oie
 servers:
 - url: http://127.0.0.1:8080
   description: Local development engine
-security: []
+security:
+- hostedBearer: []
+- {}
 tags:
 - name: System
   description: Engine identity and readiness
@@ -66,6 +69,8 @@ paths:
           maximum: 100
           default: 50
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Saved contacts with independent provider observation coverage
           content:
@@ -145,6 +150,8 @@ paths:
           maximum: 100
           default: 50
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Bounded message hits and current metadata coverage, including an empty page when nothing matches
           content:
@@ -253,6 +260,8 @@ paths:
           type: boolean
           default: false
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Shared items and catalog indexing progress in the selected account/conversation scope
           content:
@@ -279,6 +288,8 @@ paths:
       summary: Read a retained video thumbnail state
       description: Reads local cache state for a current video reference without retrieving provider bytes. A missing cache record is represented as not_requested. Removed references return 404.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current source-linked thumbnail metadata, including not requested or unavailable state
           content:
@@ -302,6 +313,8 @@ paths:
         this operation returns 503 without retrieving video bytes. Clients may use a bounded media range
         to generate a preview locally.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Thumbnail already retained
           content:
@@ -362,6 +375,8 @@ paths:
           type: string
           maxLength: 1024
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Complete media/document response; the provider may have ignored Range.
           headers:
@@ -568,6 +583,8 @@ paths:
           maximum: 100
           default: 50
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Retained context window including the target
           content:
@@ -591,6 +608,8 @@ paths:
       summary: Read the conversation and presentation data for a retained message jump
       description: Returns the engine identity, owning conversation and a window of up to 16 visible messages around the source. Optional fields are scoped to that conversation and window. Missing optional fields represent unavailable data. Preview reads can register local preview metadata as on the corresponding preview endpoints. This operation does not fetch provider history or mark messages read.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Conversation, retained context and available presentation data.
           content:
@@ -622,6 +641,8 @@ paths:
       description: App-owned state independent of message content revisions and protocol support. Before the first
         change, starred is false and revisionId and updatedAt are null. Reading does not create state or provider traffic.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current star state
           content:
@@ -658,6 +679,8 @@ paths:
             schema:
               $ref: '#/components/schemas/SetMessageStar'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -691,6 +714,8 @@ paths:
       summary: Read retained conversation read state
       description: Reads app-owned read state without changing messages or sending provider receipts.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current read state and unread count
           content:
@@ -738,6 +763,8 @@ paths:
             schema:
               $ref: '#/components/schemas/MarkMessagesRead'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -792,6 +819,8 @@ paths:
           items:
             $ref: '#/components/schemas/ID'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current states, including explicit false and null revisions for untouched messages
           content:
@@ -843,6 +872,8 @@ paths:
           maximum: 100
           default: 50
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current starred-message page
           content:
@@ -888,6 +919,8 @@ paths:
           - 019a5df0-0000-7000-8000-000000000001
           items: *id001
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Cached structured previews, including queued or unavailable metadata
           content:
@@ -914,6 +947,8 @@ paths:
             schema:
               $ref: '#/components/schemas/DraftLinkPreviewRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Metadata and optional raster image for the submitted URL.
           content:
@@ -940,6 +975,8 @@ paths:
         description: Stable entity UUID.
         schema: *id001
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current preview state
           content:
@@ -969,6 +1006,8 @@ paths:
         description: Stable preview entity UUID.
         schema: *id001
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '202':
           description: Refresh queued with existing metadata preserved
           content:
@@ -1001,6 +1040,8 @@ paths:
         description: Stable entity UUID.
         schema: *id001
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Original already retained
           content:
@@ -1043,6 +1084,8 @@ paths:
           type: string
           maxLength: 1024
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Retained image bytes. Content-Type identifies PNG, JPEG or GIF.
           headers:
@@ -1083,6 +1126,8 @@ paths:
       summary: Check engine readiness
       description: Returns ready only when the database can be queried.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Engine ready
           content:
@@ -1101,6 +1146,8 @@ paths:
       summary: Read the persistent engine identity
       description: Read eventCursor before fetching snapshots. After fetching them, pass that cursor as Last-Event-ID to GET /api/v1/events to replay changes that occurred while the snapshots were being read.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Engine identity and current event boundary
           content:
@@ -1120,6 +1167,8 @@ paths:
       operationId: getGlobalRetention
       summary: Read engine-wide message retention
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current engine-wide retention settings
           content:
@@ -1145,6 +1194,8 @@ paths:
             schema: {$ref: '#/components/schemas/SetGlobalRetention'}
             example: {expectedRevision: '0', roomDays: 180, directDays: 0}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Updated engine-wide retention settings
           content:
@@ -1191,6 +1242,8 @@ paths:
                   enum:
                   - delete
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '204':
           description: Data deleted and empty engine ready.
         '400':
@@ -1221,6 +1274,8 @@ paths:
           maximum: 100
           default: 50
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: A page of accounts
           content:
@@ -1275,6 +1330,8 @@ paths:
               address: alice@localhost
               label: Personal
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -1345,6 +1402,8 @@ paths:
       summary: Read an account
       description: Returns the retained account and its current revision.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Registered account
           content:
@@ -1371,6 +1430,8 @@ paths:
       summary: Remove an account from Oiê
       description: Disconnects this account, forgets its saved credentials, and removes its conversations, retained history and pending sends from this engine. The provider account and its server history are unaffected. Repeating the request for the same UUID is safe.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '204':
           description: The account is absent from this engine.
         '400':
@@ -1395,6 +1456,8 @@ paths:
               $ref: '#/components/schemas/SetAccountLabel'
             example: {label: Personal, expectedRevisionId: '019a5df0-0000-7000-8000-000000000002'}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: The account with its current name and revision.
           content:
@@ -1436,6 +1499,8 @@ paths:
             example:
               image: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMIseoCAAH+ARmwLUGoAAAAAElFTkSuQmCC
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '204':
           description: The photo is published and retained.
         '400':
@@ -1466,6 +1531,8 @@ paths:
         description: Maximum page size.
         schema: {type: integer, minimum: 1, maximum: 100, default: 100}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Known profile metadata, ordered by stable avatar UUID
           content:
@@ -1498,6 +1565,8 @@ paths:
         description: Previously received content ETag.
         schema: {type: string}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Static PNG thumbnail, at most 256 pixels on either axis
           headers:
@@ -1531,6 +1600,8 @@ paths:
         Complete means the last authorized text recovery pass finished; it is not a full protocol-feature claim.
         Saved rooms are read-only in this increment. Provider permission failures remain partial coverage.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Persistent recovery state and retained counts
           content:
@@ -1564,6 +1635,8 @@ paths:
         does not prove that a client-level feature is unsupported. Discovery runs once
         per connection; room evidence is also collected during history recovery.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current account capability evidence
           content:
@@ -1606,6 +1679,8 @@ paths:
           type: boolean
           default: false
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Durable operation receipt
           content:
@@ -1653,6 +1728,8 @@ paths:
           type: string
           maxLength: 64
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: SSE stream whose data fields follow the Event schema
           content:
@@ -1679,6 +1756,8 @@ paths:
       summary: Read account connection state
       description: State is runtime evidence, distinct from saved account metadata.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current resource
           content:
@@ -1705,6 +1784,8 @@ paths:
         retried with the same settings once the underlying problem is resolved. An unchanged configuration leaves
         a running connection or retry loop in place. Ordinary engine restart reloads enabled configurations.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -1752,6 +1833,8 @@ paths:
       description: Keeps protocol credentials local for a later explicit configuration; does not delete account
         history or pending sends. Repeating disconnect is safe.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current resource
           content:
@@ -1787,6 +1870,8 @@ paths:
         description: Restrict automatic lookups to MUC services advertised by the account server. Other destinations return unavailable without an XMPP request.
         schema: {type: boolean, default: false}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Available public room information or its lookup state.
           content:
@@ -1812,6 +1897,8 @@ paths:
         description: Optional XMPP room service domain. Defaults to discovered services.
         schema: {type: string, maxLength: 253}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Public room directory results.
           content:
@@ -1841,6 +1928,8 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/OpenRoom'}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '202':
           description: Saved conversation with an accepted or replayed entry request.
           content:
@@ -1873,6 +1962,8 @@ paths:
       description: Keyset pages ordered by descending engine activity. Search matches conversation address/title
         and latest text preview; this is not full message search.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current resource
           content:
@@ -1952,6 +2043,8 @@ paths:
       description: Finds an existing conversation for the canonical account/peer or creates one. Durable operation
         keys retain original results. Opening a removed direct conversation adds it back to chat lists. Does not add a contact or send presence subscriptions.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -2036,6 +2129,8 @@ paths:
       summary: Read current room participants
       description: Returns participants observed by the joined account in its current room session. The read does not join the room or query its public directory.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current room participants.
           content:
@@ -2074,6 +2169,8 @@ paths:
         schema:
           $ref: '#/components/schemas/ID'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Room management snapshot.
           content:
@@ -2105,6 +2202,8 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/ManageRoom'}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Provider outcome or submission receipt for this action.
           content:
@@ -2127,6 +2226,8 @@ paths:
       summary: Read this engine's room session and durable join intent
       description: Reads local state without joining. Active denotes a durable intent to rejoin, not observed membership. A joined state requires confirmed self-presence. Missing room intent has no intent identifiers.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current own room-session projection
           content:
@@ -2159,6 +2260,8 @@ paths:
             schema:
               $ref: '#/components/schemas/JoinRoom'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -2208,6 +2311,8 @@ paths:
           description: Room removed from chat lists, or a replay of that removal.
         '400':
           $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2239,6 +2344,8 @@ paths:
           description: Direct conversation removed from chat lists, or a replay of that removal.
         '400':
           $ref: '#/components/responses/Invalid'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2268,6 +2375,8 @@ paths:
             schema:
               $ref: '#/components/schemas/LeaveRoom'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -2306,6 +2415,8 @@ paths:
         only when the protocol adapter has a valid disclosed target; otherwise
         sending preserves the same readable text without protocol metadata.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Available room candidates and explicit observation state
           content:
@@ -2327,6 +2438,8 @@ paths:
       operationId: getConversationRetention
       summary: Read conversation message retention
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current conversation retention settings
           content:
@@ -2352,6 +2465,8 @@ paths:
             schema: {$ref: '#/components/schemas/SetConversationRetention'}
             example: {expectedRevision: '0', days: 90}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Updated conversation retention settings
           content:
@@ -2379,6 +2494,8 @@ paths:
       summary: Read room archive recovery settings and progress
       description: Reads retained state for the room without sending a protocol request.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current room archive state
           content:
@@ -2406,6 +2523,8 @@ paths:
               $ref: '#/components/schemas/SetRoomArchiveMode'
             example: {mode: on_demand}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Saved mode and current progress
           content:
@@ -2444,6 +2563,8 @@ paths:
               $ref: '#/components/schemas/RoomArchiveRequest'
             example: {action: focus}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Archive read outcome and canonical stored messages
           content:
@@ -2472,6 +2593,8 @@ paths:
         message. Occupant discovery is a bounded snapshot, never a complete member
         roster. Missing presence remains unknown. Disconnect clears observations.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '503':
           description: Engine state is temporarily unavailable.
           content:
@@ -2497,6 +2620,8 @@ paths:
       summary: Read a conversation
       description: Returns the current conversation projection.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current resource
           content:
@@ -2557,6 +2682,8 @@ paths:
               expectedRevisionId: 019a5df0-0000-7000-8000-000000000002
               archived: true
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -2613,6 +2740,8 @@ paths:
         retained conversation-scoped anchor, without skipping to the latest page. Both directions return newest-first.
         nextCursor continues in the requested direction. Reads never fetch provider history or mark messages as read.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current resource
           content:
@@ -2660,6 +2789,8 @@ paths:
 
         Omitting scheduledAt makes the intent immediately eligible. A future schedule never blocks another eligible send. A missed schedule dispatches when the owning engine and destination become available again. Optional expectedReplyRevisionId and expectedReplyExcerptSha256 bind a new scheduled reply to the reviewed source and excerpt. A changed source rejects acceptance with state_conflict and replySourceChanged set to true. Idempotency includes the complete composition, normalized instant and any reply preconditions. A matching replay returns the original acceptance snapshot even after the scheduled time passes, attachment availability changes or the source is corrected. Different input with the same key yields idempotency_conflict. Read the message for current state. Ambiguous transmission remains unknown.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: The request body exceeds the one MiB engine limit or an attachment exceeds the known provider upload limit.
           content:
@@ -2762,6 +2893,8 @@ paths:
       summary: Read retained reactions and current own mutation eligibility
       description: Read-only canonical source snapshot. Missing revisions are null until an observed or submitted reaction set exists. Does not fetch provider data, mark read or allocate revisions.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Scoped retained reaction snapshot
           content:
@@ -2794,6 +2927,8 @@ paths:
             schema:
               $ref: '#/components/schemas/SetMessageReactions'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -2852,6 +2987,8 @@ paths:
           items:
             $ref: '#/components/schemas/ID'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Scoped bounded reaction snapshots
           content:
@@ -2878,6 +3015,8 @@ paths:
       summary: Read a durable reaction command receipt
       description: Read-only reconciliation after lost responses. A missing receipt does not authorize a new key for the same uncertain intent. No provider call or dispatch is performed.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Immutable reaction intent and actual transmission state
           content:
@@ -2899,6 +3038,8 @@ paths:
       summary: Inspect eligibility and current content before editing
       description: Read-only eligibility for the canonical message. Initially only the latest own plain text message sent by this engine in the current verified protocol session can be corrected. Reply and mention payloads remain ineligible. Eligibility is advisory and rechecked atomically at acceptance and dispatch. No arbitrary time window is imposed.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Scoped current edit target and eligibility
           content:
@@ -2920,6 +3061,8 @@ paths:
       summary: Inspect the latest own retained message for keyboard editing
       description: Uses a durable transmission ordinal for original sends by this engine, independently of device clocks and the visible timeline page. Returns the latest own original transmission candidate even when it is ineligible; never silently skips it to edit an older one. Queued or cancelled originals which never reached dispatch, imported own messages and correction commands do not establish this order. Returns 404 when there is no retained engine transmission. Read-only and does not mark messages read or fetch provider history.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Latest original engine transmission and current eligibility
           content:
@@ -2955,6 +3098,8 @@ paths:
             schema:
               $ref: '#/components/schemas/EditMessage'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -3003,6 +3148,8 @@ paths:
       summary: Reconcile a correction command by its stable UUID
       description: Read-only durable receipt. A 404 does not authorize changing the key after an uncertain submission; repeat the same frozen request if needed. No provider calls or dispatch occur in this query.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Retained correction command and actual dispatch state
           content:
@@ -3037,6 +3184,8 @@ paths:
         description: Opaque position bound to the exact retained-history snapshot and owning scopes.
         schema: {type: string, maxLength: 2048}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Scoped retained content revisions and optional older-page cursor
           content:
@@ -3078,6 +3227,8 @@ paths:
       summary: Read the author's available published profile
       description: Resolves the author from the retained message and message-time protocol identity evidence. May issue a bounded read-only profile query to a known personal address. Room nicknames and current same-name occupants never establish a historical author's personal JID. Missing or undisclosed identity remains unavailable; user-provided vCard JABBERID does not establish it. Does not join rooms, add contacts, subscribe to presence or mark messages read.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '503':
           description: Engine state is temporarily unavailable.
           content:
@@ -3114,6 +3265,8 @@ paths:
         to its canonical logical message, whose id can differ from the requested messageId. Use the scoped
         context operation when explicit requestedTargetId alias proof is needed.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Current resource
           content:
@@ -3209,6 +3362,8 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/ForwardMessage'}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Original acceptance replayed.
           content:
@@ -3243,6 +3398,8 @@ paths:
       description: >-
         Requires the current revision and a queued, known-unsent message at the owning engine, including a future schedule. Cancellation and dispatch share an atomic cutoff before any external provider attempt for that intent, including attachment upload. A stale revision or ineligible state yields state_conflict with currentMessage. Cancellation retires the send intent and preserves any independent retained references. A matching idempotent replay returns the original cancellation snapshot.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '413':
           description: Request body exceeds the one MiB engine limit.
           content:
@@ -3319,6 +3476,8 @@ paths:
               properties:
                 file: {type: string, format: binary, example: hello}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: File durably staged
           headers:
@@ -3360,6 +3519,8 @@ paths:
       description: >-
         Reads local bytes in this conversation and account scope, for example when reopening an existing scheduled composition. Returns 404 when bytes are unavailable or the attachment is outside this scope.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Retained attachment bytes
           headers:
@@ -3411,6 +3572,8 @@ paths:
           description: Maximum number of scheduled messages in this page.
           schema: {type: integer, minimum: 1, maximum: 100, default: 50}
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: One page of pending scheduled messages
           content:
@@ -3447,6 +3610,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdatePendingMessage'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           $ref: '#/components/responses/PendingMessageUpdated'
         '400':
@@ -3480,6 +3645,8 @@ paths:
             schema:
               $ref: '#/components/schemas/SendScheduledMessageNow'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           $ref: '#/components/responses/PendingMessageUpdated'
         '400':
@@ -3495,6 +3662,11 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 components:
+  securitySchemes:
+    hostedBearer:
+      type: http
+      scheme: bearer
+      description: A full-access API key issued by the hosted Oiê operator.
   parameters:
     SearchAccountIDs:
       name: accountIds
@@ -3546,6 +3718,20 @@ components:
       schema:
         $ref: '#/components/schemas/ID'
   responses:
+    AuthenticationRequired:
+      description: The hosted engine requires a valid API key.
+      headers:
+        WWW-Authenticate:
+          schema: {type: string}
+          description: Bearer authentication challenge.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/AuthenticationProblem'}
+          example:
+            type: urn:oie:problem:authentication_required
+            title: Authentication required
+            status: 401
+            code: authentication_required
     Invalid:
       description: Invalid request
       content:
@@ -3871,6 +4057,7 @@ components:
           - 0.32.0
           - 0.33.0
           - 0.34.0
+          - 0.35.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -4231,6 +4418,32 @@ components:
         messageIds:
           type: array
           items: {$ref: '#/components/schemas/ID'}
+    AuthenticationProblem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      description: RFC 9457 Problem Details for a missing or invalid hosted API key.
+      properties:
+        type:
+          type: string
+          enum: ['urn:oie:problem:authentication_required']
+          example: urn:oie:problem:authentication_required
+        title:
+          type: string
+          enum: [Authentication required]
+          example: Authentication required
+        status:
+          type: integer
+          enum: [401]
+          example: 401
+        code:
+          type: string
+          enum: [authentication_required]
+          example: authentication_required
+        documentation:
+          type: string
+          format: uri
+          example: https://github.com/araihu/oie/blob/main/docs/engine-api-problems.md#authentication_required
     Problem:
       type: object
       example:

@@ -461,47 +461,43 @@ func TestCloseDeadlineKeepsStoreOwnedUntilNativeRequestFinishes(t *testing.T) {
 	}
 }
 
-func TestDataOnlyRolesExposeEngineWithoutPresentation(t *testing.T) {
-	for _, role := range []string{"local", "hosted"} {
-		t.Run(role, func(t *testing.T) {
-			s := testServer(t, Config{Role: role, DataOnly: true, Listen: "127.0.0.1:0", DataDir: t.TempDir()})
-			// Use one test-owned transport and finish each response before shutdown.
-			transport := http.DefaultTransport.(*http.Transport).Clone()
-			transport.DisableKeepAlives = true
-			client := &http.Client{Transport: transport, Timeout: 2 * time.Second}
-			c, err := engineapi.NewClientWithResponses(s.URL(), engineapi.WithHTTPClient(client))
-			if err != nil {
-				t.Fatal(err)
-			}
-			identity, err := c.GetEngineWithResponse(t.Context())
-			if err != nil || identity.JSON200 == nil || string(identity.JSON200.Role) != role {
-				t.Fatalf("engine identity: %v %#v", err, identity)
-			}
-			checkStatus := func(path string, status int) {
-				t.Helper()
-				res, err := client.Get(s.URL() + path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				_, readErr := io.Copy(io.Discard, res.Body)
-				closeErr := res.Body.Close()
-				if err := errors.Join(readErr, closeErr); err != nil {
-					t.Fatal(err)
-				}
-				if res.StatusCode != status {
-					t.Fatalf("data-only %s: status %d, want %d", path, res.StatusCode, status)
-				}
-			}
-			for _, path := range []string{"/", "/ui/events", "/assets/", "/ui/api/v1/previews/" + uuid.Must(uuid.NewV7()).String()} {
-				checkStatus(path, http.StatusNotFound)
-			}
-			checkStatus("/api/openapi.yaml", http.StatusOK)
-			w := httptest.NewRecorder()
-			s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/engine", nil))
-			if w.Code != 404 {
-				t.Fatal("data-only exposed a native presentation handler")
-			}
-		})
+func TestLocalDataOnlyExposesEngineWithoutPresentation(t *testing.T) {
+	s := testServer(t, Config{Role: "local", DataOnly: true, Listen: "127.0.0.1:0", DataDir: t.TempDir()})
+	// Use one test-owned transport and finish each response before shutdown.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DisableKeepAlives = true
+	client := &http.Client{Transport: transport, Timeout: 2 * time.Second}
+	c, err := engineapi.NewClientWithResponses(s.URL(), engineapi.WithHTTPClient(client))
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := c.GetEngineWithResponse(t.Context())
+	if err != nil || identity.JSON200 == nil || string(identity.JSON200.Role) != "local" {
+		t.Fatalf("engine identity: %v %#v", err, identity)
+	}
+	checkStatus := func(path string, status int) {
+		t.Helper()
+		res, err := client.Get(s.URL() + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, readErr := io.Copy(io.Discard, res.Body)
+		closeErr := res.Body.Close()
+		if err := errors.Join(readErr, closeErr); err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != status {
+			t.Fatalf("data-only %s: status %d, want %d", path, res.StatusCode, status)
+		}
+	}
+	for _, path := range []string{"/", "/ui/events", "/assets/", "/ui/api/v1/previews/" + uuid.Must(uuid.NewV7()).String()} {
+		checkStatus(path, http.StatusNotFound)
+	}
+	checkStatus("/api/openapi.yaml", http.StatusOK)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/engine", nil))
+	if w.Code != 404 {
+		t.Fatal("data-only exposed a native presentation handler")
 	}
 	for _, cfg := range []Config{{Role: "bff", DataOnly: true}, {Role: "local", DataOnly: true, PrivateAPI: true}} {
 		if err := validate(cfg); err == nil {
@@ -514,7 +510,11 @@ func TestEngineRolesStartMessageSearchIndexByDefault(t *testing.T) {
 	for _, role := range []string{"local", "hosted"} {
 		t.Run(role, func(t *testing.T) {
 			dir := t.TempDir()
-			testServer(t, Config{Role: role, Listen: "127.0.0.1:0", DataDir: dir})
+			cfg := Config{Role: role, Listen: "127.0.0.1:0", DataDir: dir}
+			if role == "hosted" {
+				cfg = hostedConfig(t, dir, false)
+			}
+			testServer(t, cfg)
 			path := url.URL{Scheme: "file", Path: filepath.Join(dir, "oie.sqlite"), RawQuery: "mode=ro"}
 			db, err := sql.Open("sqlite", path.String())
 			if err != nil {

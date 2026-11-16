@@ -1,4 +1,7 @@
 {{- if .Values.ingress.enabled }}
+{{- if not (or .Values.hosted.enabled .Values.externalAuthentication) }}
+{{- fail "Configure hosted authentication or set externalAuthentication for an authenticated proxy." }}
+{{- end }}
 {{- $host := required "Set ingress.host when enabling ingress." .Values.ingress.host }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

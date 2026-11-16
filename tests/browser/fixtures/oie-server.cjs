@@ -5,14 +5,26 @@ const { once } = require('node:events');
 const { mkdtemp, rm } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 
-async function startOie(binary, args, readyPath) {
+async function loopbackAddress() {
   const probe = net.createServer().listen(0, '127.0.0.1');
   await once(probe, 'listening');
   const listen = '127.0.0.1:' + probe.address().port;
   await new Promise(resolve => probe.close(resolve));
+  return listen;
+}
 
+async function startOie(binary, args, readyPath, configure) {
+  const listen = await loopbackAddress();
   const dir = await mkdtemp(path.join(tmpdir(), 'oie-browser-'));
-  const child = spawn(binary, [...args, '--listen', listen, '--data-dir', dir], {
+  let options;
+  try {
+    options = await configure?.({listen, dir});
+  } catch (error) {
+    await rm(dir, {recursive: true, force: true});
+    throw error;
+  }
+  const child = spawn(binary, [...args, ...(options?.args ?? []), '--listen', listen, '--data-dir', dir], {
+    env: options?.env,
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let stderr = '', spawnError;
@@ -21,7 +33,7 @@ async function startOie(binary, args, readyPath) {
   });
   child.once('error', error => { spawnError = error; });
   const closed = new Promise(resolve => child.once('close', resolve));
-  const url = 'http://' + listen;
+  const url = options?.url ?? 'http://' + listen;
   const stop = async () => {
     child.kill();
     const deadline = setTimeout(() => child.kill('SIGKILL'), 8000);
@@ -39,9 +51,9 @@ async function startOie(binary, args, readyPath) {
       if (spawnError) throw spawnError;
       if (child.exitCode !== null || child.signalCode !== null) break;
       try {
-        const response = await fetch(url + readyPath, { signal: AbortSignal.timeout(1000) });
+        const response = await fetch((options?.readyOrigin ?? url) + readyPath, { signal: AbortSignal.timeout(1000) });
         await response.body?.cancel();
-        if (response.ok) return { url, stop };
+        if (response.ok) return { url, dir, stop, stderr: () => stderr };
       } catch {
         // The listener can become ready after the first connection attempt.
       }
@@ -54,4 +66,4 @@ async function startOie(binary, args, readyPath) {
   }
 }
 
-module.exports = { startOie };
+module.exports = { loopbackAddress, startOie };

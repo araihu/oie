@@ -1,0 +1,184 @@
+# Host Oiê with authentication
+
+Hosted mode gives one configured OIDC identity full access to one Oiê engine.
+API keys have the same engine permissions, including reading history, sending
+messages, changing protocol accounts, and resetting engine data. The owner
+can create keys from Settings in the hosted workspace. Host commands run
+as the Oiê service user.
+
+## Register the owner and start the engine
+
+1. Register a confidential web client at your OIDC provider. Set its exact
+   redirect URI to `https://oie.example.com/auth/callback`. Obtain the issuer
+   URL and the owner's `sub` claim for this client. Some providers assign a
+   client-specific subject. Save the client secret in a file readable by the
+   Oiê service user.
+2. Initialize authentication using the same data directory the server uses.
+   This command leaves an existing owner binding in place.
+
+   ```sh
+   oie auth init --data-dir /srv/oie/data \
+     --issuer https://id.example.com --subject OWNER_SUBJECT
+   ```
+
+3. Start Oiê with a certificate for its public hostname and open that HTTPS URL
+   in your browser.
+
+   ```sh
+   oie --role hosted --listen 0.0.0.0:443 --data-dir /srv/oie/data \
+     --public-url https://oie.example.com \
+     --tls-cert-file /run/secrets/oie/tls.crt \
+     --tls-key-file /run/secrets/oie/tls.key \
+     --oidc-client-id OIE_CLIENT_ID \
+     --oidc-client-secret-file /run/secrets/oie/client-secret
+   ```
+
+If sign-in is required when opening a conversation, a message notification,
+or a workspace search, Oiê opens the requested view after sign-in.
+Clicking a hosted notification opens its link in a browser window. Signing
+out ends the browser session across tabs. If the session expires before a new
+message submission reaches the engine, sign in again to continue from its
+saved draft.
+
+Use a hostname dedicated to Oiê. Browsers share cookies across HTTPS ports
+on the same hostname. If the service user cannot bind port 443 directly, use a
+high port and forward TLS to it, or terminate TLS at a trusted proxy. In proxy mode, replace the certificate and key flags with
+`--trusted-tls-proxies 127.0.0.1/32` and bind to `127.0.0.1:8080` when the
+proxy shares the host. The proxy must preserve the public `Host` and overwrite
+`X-Forwarded-Proto` with `https` on HTTPS requests. For a separate proxy,
+allow its actual private source addresses and keep the HTTP hop on a private
+network. Forward the full origin, including `/auth/`, and disable buffering
+or short response timeouts for SSE. Keep OAuth callback query strings and
+authorization headers out of proxy logs.
+
+Local and development BFF roles are for trusted access. Use `--role hosted`
+for a public installation. The hosted browser holds a seven-day session and has
+a **Sign out** action in Settings. API clients use bearer keys. All engine API
+routes require a key, including health, events, and the served API contract.
+[Diagnostics](diagnostics.md#access-server-diagnostics) uses the same owner
+session or API key.
+`--data-only` serves the authenticated API without the browser interface.
+
+## Configure with environment variables
+
+Environment variables supply defaults for the corresponding flags. An explicit
+flag takes precedence. Store the OIDC client secret and any direct TLS private
+key in files readable by the service user. Set the file paths in the environment.
+
+| Variable | Flag | Use |
+| --- | --- | --- |
+| `OIE_ROLE` | `--role` | Set to `hosted`. |
+| `OIE_DATA_DIR` | `--data-dir` | Use the same persistent directory for the server and all `oie auth` commands. |
+| `OIE_LISTEN` | `--listen` | Application listener address. |
+| `OIE_PROBE_LISTEN` | `--probe-listen` | Optional private HTTP probe listener address. |
+| `OIE_PUBLIC_URL` | `--public-url` | Public HTTPS origin. |
+| `OIE_TRUSTED_TLS_PROXIES` | `--trusted-tls-proxies` | Private source CIDRs for TLS-terminating proxies. |
+| `OIE_TLS_CERT_FILE` | `--tls-cert-file` | Certificate PEM for direct TLS. |
+| `OIE_TLS_KEY_FILE` | `--tls-key-file` | Private key PEM for direct TLS. |
+| `OIE_OIDC_CLIENT_ID` | `--oidc-client-id` | OIDC application client ID. |
+| `OIE_OIDC_CLIENT_SECRET_FILE` | `--oidc-client-secret-file` | File containing the OIDC client secret. |
+| `OIE_OIDC_ISSUER` | `--issuer` | Exact issuer URL for `oie auth init` and `oie auth recover`. |
+| `OIE_OIDC_SUBJECT` | `--subject` | Exact owner subject for `oie auth init` and `oie auth recover`. |
+
+The example below uses a proxy on the same host. Run the commands as the
+service user.
+
+```sh
+export OIE_DATA_DIR=/srv/oie/data
+OIE_OIDC_ISSUER=https://id.example.com OIE_OIDC_SUBJECT=OWNER_SUBJECT oie auth init
+
+export OIE_ROLE=hosted OIE_LISTEN=127.0.0.1:8080
+export OIE_PUBLIC_URL=https://oie.example.com OIE_TRUSTED_TLS_PROXIES=127.0.0.1/32
+export OIE_OIDC_CLIENT_ID=OIE_CLIENT_ID
+export OIE_OIDC_CLIENT_SECRET_FILE=/run/secrets/oie/client-secret
+oie
+```
+
+The service reads the client secret at startup. Restart Oiê after replacing
+the file with a rotated secret.
+
+## Configure internal probes
+
+Set `--probe-listen 127.0.0.1:8081` for a local health checker. For a remote
+load balancer, bind to an address reachable on its private network. Use HTTP
+on that listener and point the checker at `GET /readyz`. The probe listener
+is opt-in for standalone deployments.
+
+| Path | Use |
+| --- | --- |
+| `/readyz` | Startup, readiness, and load balancing. Returns 200 while the engine and database are available or 503 while they are unavailable. |
+| `/livez` | Liveness. Checks whether the process responds independently of the database. |
+
+The probe listener takes no credentials. Keep it off public ingress and
+restrict access to infrastructure that needs it. Kubernetes can reach the
+pod's probe port directly. The hosted engine API, including `/api/v1/health`,
+still requires a bearer key. See the [internal OpenAPI contract](../api/probe.openapi.yaml).
+
+## Connect the desktop app
+
+1. Open the hosted site and sign in with OIDC.
+2. In **Settings → General → Access keys**, enter a name such as
+   “Laptop” and choose **Create access key**, then **Copy key**. The key
+   grants full access and expires after 90 days.
+3. In the desktop app, open **Settings → General → Engine → Remote**.
+   Enter the hosted HTTPS address, paste the key, and select **Save**.
+
+The desktop saves the connection in a private file in its profile after
+verifying access to the server. The key is only sent to the selected HTTPS
+origin. If you change the address after pasting a key, paste the key for
+the final address. To replace a saved key, enter a new key for the same
+address. Use the host's
+`key-list` and `key-revoke` commands to identify and revoke an old key.
+
+## Create and revoke API keys
+
+Run these commands as the service user while the engine is running or stopped.
+Use a separate key per client. The default lifetime is 90 days.
+
+```sh
+umask 077
+oie auth key-create --data-dir /srv/oie/data --name automation --ttl 720h > oie.key
+oie auth key-list --data-dir /srv/oie/data
+```
+
+The create command prints the secret once. The list command returns key IDs,
+labels and expiry times. To use a key with a CLI built from this source:
+
+```sh
+OIECTL_TOKEN="$(cat oie.key)" oiectl --server https://oie.example.com system health
+```
+
+Other API clients send `Authorization: Bearer <key>` over HTTPS. For the
+native desktop client, launch `oie-desktop --engine-url https://oie.example.com
+--engine-token-file /path/to/oie.key` with a private key file (mode 0600).
+Supply the HTTPS engine URL explicitly whenever you launch with a key file.
+
+To rotate a key, create a replacement, update the client, then revoke the old
+key by ID.
+
+```sh
+oie auth key-revoke --data-dir /srv/oie/data --id KEY_ID
+```
+
+Revocation blocks new requests. Active streams close on the next credential
+check, normally within one second. Accepted sends remain in the engine outbox.
+
+## Recover access
+
+Obtain the replacement issuer and subject, then run:
+
+```sh
+oie auth recover --data-dir /srv/oie/data \
+  --issuer https://id.example.com --subject REPLACEMENT_SUBJECT
+```
+
+Recovery revokes all browser sessions and API keys in the same operation as
+changing the owner. Run it with the currently configured identity to revoke
+all credentials without changing identity. When changing providers, also
+update the client ID and secret and restart the server. The owner and key
+state lives in `host-auth/` under the data directory and survives chat data
+reset. If you restore a backup of that directory, run recovery before exposing
+the server to invalidate credentials from the snapshot.
+
+See the [Helm chart](../charts/oie/README.md#remote-access) for a Kubernetes
+deployment behind a TLS-terminating gateway.

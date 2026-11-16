@@ -11,6 +11,7 @@ templ engineModeSettings(v view) {
 		<form id="engine-mode-form" class="oie-engine-mode" action="/ui/engine-mode" method="post" novalidate data-failed={ v.Text.EngineModeUnavailable }>
 			<input type="hidden" name="csrf" value={ v.CSRF }/>
 			<input type="hidden" name="selection" value={ v.EngineMode.selection }/>
+			<input type="hidden" name="apiKeyAddress"/>
 			<fieldset class="grid gap-3">
 				<div role="radiogroup" aria-label={ v.Text.EngineMode }>
 					@radio.RadioBar() {
@@ -18,10 +19,16 @@ templ engineModeSettings(v view) {
 						@radio.Radio(radio.Config{ID: "engine-mode-remote", Name: "mode", Value: "remote", Label: v.Text.EngineModeRemote, Checked: v.EngineMode.url != "", Segmented: true})
 					}
 				</div>
-				<div data-engine-address>
+				<div class="grid gap-3" data-engine-address>
 					@textinput.TextInput(textinput.Config{
 						ID: "engine-mode-url", Name: "url", Label: v.Text.EngineModeAddress,
 						Type: textinput.TypeURL, Value: v.EngineMode.url, MaxLength: 2048, Autocomplete: "off",
+					})
+					@textinput.TextInput(textinput.Config{
+						ID: "engine-mode-key", Name: "apiKey", Label: v.Text.EngineModeKey,
+						Type: textinput.TypePassword, MaxLength: 512, Autocomplete: "off",
+						Placeholder: engineKeyPlaceholder(v),
+						InputAttrs: templ.Attributes{"data-saved-placeholder": engineKeyPlaceholder(v)},
 					})
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
@@ -34,4 +41,11 @@ templ engineModeSettings(v view) {
 			</fieldset>
 		</form>
 	}
+}
+
+func engineKeyPlaceholder(v view) string {
+	if v.EngineMode.hasKey {
+		return v.Text.EngineModeKeySaved
+	}
+	return ""
 }
