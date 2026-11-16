@@ -124,6 +124,9 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-conversation-pane>.oie-chat-pane{flex:1}
 .oie-chat-pane{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--oie-chat)}
 :is(.oie-chat-header,.oie-chat-skeleton-header){height:65px;min-height:65px;display:flex;align-items:center;gap:11px;padding:10px 20px;background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
+.oie-chat-avatar{position:relative;display:flex;flex:none}
+.oie-chat-avatar .oie-chat-avatar-trigger{position:absolute;inset:0;padding:0;border-radius:50%}
+.oie-chat-avatar-trigger:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-chat-identity{flex:1;min-width:0}.oie-chat-identity h2{font-weight:650;font-size:14px;margin:0 0 3px}.oie-chat-identity p{font-size:11px;color:var(--oie-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
 .oie-back-button{display:none;color:var(--oie-text)}
 .oie-preview-note{margin:0;padding:7px 20px;text-align:center;font-size:11px;color:var(--oie-muted);background:var(--oie-panel);border-bottom:1px solid var(--oie-border)}
