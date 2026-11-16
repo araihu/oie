@@ -78,6 +78,27 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   const phoneContext=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2,locale:'pt-BR',reducedMotion:'reduce'});
   const phone=await phoneContext.newPage();
+  for (const theme of ['light', 'dark']) {
+   await phone.goto(base+'/?lang=pt-BR&theme='+theme);
+   const switcher = phone.locator('.oie-list-account .oie-profile-trigger');
+   await switcher.waitFor();
+   const safeArea = await switcher.evaluate(trigger => {
+    document.documentElement.style.setProperty('--oie-safe-bottom', '34px');
+    const shell = document.querySelector('.oie-shell');
+    const pane = document.querySelector('.oie-list-pane');
+    const paneBottom = pane.getBoundingClientRect().bottom;
+    return {
+     shellBackground: getComputedStyle(shell).backgroundColor,
+     paneBackground: getComputedStyle(pane).backgroundColor,
+     inset: shell.getBoundingClientRect().bottom - paneBottom,
+     triggerBottom: trigger.getBoundingClientRect().bottom,
+     paneBottom,
+    };
+   });
+   assert.equal(safeArea.shellBackground, safeArea.paneBackground, theme+' safe area continues the panel background');
+   assert.equal(safeArea.inset, 34, 'the system gesture area is reserved');
+   assert(safeArea.triggerBottom <= safeArea.paneBottom, 'the account switcher stays above the gesture area');
+  }
   await phone.goto(base+'/?open=accounts&accountPage=add&lang=pt-BR');
   const addDrawer=phone.getByRole('dialog',{name:'Contas',exact:true});
   const close=addDrawer.getByRole('button',{name:'Fechar',exact:true});
