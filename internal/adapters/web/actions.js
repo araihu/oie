@@ -27,13 +27,32 @@ window.OieRuntime.register('actions', life => {
 (() => {
   'use strict';
 
+  function clearKey(form) {
+    form.elements.apiKey.value = '';
+    form.elements.apiKeyAddress.value = '';
+  }
+
   function clearMismatchedKey(form) {
-    const {url, apiKey, apiKeyAddress} = form.elements;
+    const {url, apiKeyAddress} = form.elements;
     if (apiKeyAddress.value !== url.value) {
-      apiKey.value = '';
-      apiKeyAddress.value = '';
+      clearKey(form);
     }
   }
+
+  function clearEngineKey() {
+    const form = document.getElementById('engine-mode-form');
+    if (form) clearKey(form);
+  }
+
+  for (const type of ['drawer:close', 'drawer:close-request']) {
+    window.addEventListener(type, event => {
+      if (event.detail?.id !== 'engine-settings') return;
+      queueMicrotask(() => {
+        if (!event.defaultPrevented) clearEngineKey();
+      });
+    });
+  }
+  window.addEventListener('pagehide', clearEngineKey);
 
   document.addEventListener('input', event => {
     const input = event.target;
@@ -73,7 +92,7 @@ window.OieRuntime.register('actions', life => {
         method: 'POST', body, headers: {Accept: 'application/json'},
       });
       if (response.status === 204) {
-        key.value = '';
+        clearKey(form);
         window.OieEvents?.suspend();
         location.replace('/');
         return;

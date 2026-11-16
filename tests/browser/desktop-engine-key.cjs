@@ -63,7 +63,18 @@ const second = 'https://two.example.test';
     assert.equal(staleRequest.get('url'), first);
     assert.equal(staleRequest.get('apiKey'), '');
     assert.equal(staleRequest.get('apiKeyAddress'), '');
-    console.log('PASS: editing the engine address clears a drafted key before submitting to another origin');
+
+    for (const type of ['drawer:close', 'drawer:close-request', 'pagehide']) {
+      await key.fill('abandoned-fixture-key');
+      await page.evaluate(eventType => {
+        window.dispatchEvent(new CustomEvent(eventType, {detail: {id: 'engine-settings'}}));
+      }, type);
+      assert.equal(await key.inputValue(), '');
+      const request = await save();
+      assert.equal(request.get('apiKey'), '');
+      assert.equal(request.get('apiKeyAddress'), '');
+    }
+    console.log('PASS: editing the engine address or leaving settings discards the drafted key');
   } finally {
     await browser.close();
   }
