@@ -284,7 +284,7 @@ func connectRetractionStream(t *testing.T, management *mx.StreamManagement, inte
 	if err := right.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	var client net.Conn = left
+	client := left
 	if interrupt {
 		client = interruptedRetractionConn{left}
 	}
