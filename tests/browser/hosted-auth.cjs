@@ -67,7 +67,7 @@ async function create(api, endpoint, sequence, data) {
     assert.equal(keyCheck.status(), 200);
     assert.equal((await keyCheck.json()).id, engine.id);
     await keyDrawer.getByRole('button', {name: 'Back to settings', exact: true}).click();
-    assert.equal(await generatedKey.inputValue(), '');
+    assert.equal(await page.locator('#created-access-key').inputValue(), '');
 
     const staleCheck = Promise.withResolvers();
     const releaseCheck = Promise.withResolvers();
