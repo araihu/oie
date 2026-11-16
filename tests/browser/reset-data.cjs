@@ -1,12 +1,12 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { startOie } = require('./fixtures/oie-server.cjs');
+const { startHostedOie } = require('./fixtures/hosted-oie.cjs');
 
 const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/oie');
 
-async function openSettings(page, url, fixture) {
-  await page.goto(url + '/?open=settings&lang=' + fixture.locale + '&theme=' + fixture.theme);
+async function openSettings(page, server, fixture) {
+  await server.signIn(page, '/?open=settings&lang=' + fixture.locale + '&theme=' + fixture.theme);
   const settings = page.getByRole('dialog', { name: fixture.settings, exact: true });
   const footer = settings.locator('footer');
   await footer.getByRole('button', { name: fixture.about, exact: true }).waitFor();
@@ -55,16 +55,16 @@ async function openSettings(page, url, fixture) {
   return { actions, dialog: page.getByRole('dialog', { name: fixture.action, exact: true }) };
 }
 
-async function testReset(browser, url, fixture) {
-  const before = await (await fetch(url + '/api/v1/engine')).json();
-  const registered = await fetch(url + '/api/v1/accounts', {
-    method: 'POST',
+async function testReset(browser, server, fixture) {
+  const {api, url} = server;
+  const before = await (await api.get('/api/v1/engine')).json();
+  const registered = await api.post('/api/v1/accounts', {
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': '019a5df0-0000-7000-8000-000000000001' },
-    body: JSON.stringify({ protocol: 'xmpp', address: 'alice@localhost', label: 'Temporary account' }),
+    data: { protocol: 'xmpp', address: 'alice@localhost', label: 'Temporary account' },
   });
-  assert.equal(registered.status, 201, await registered.text());
+  assert.equal(registered.status(), 201, await registered.text());
 
-  const context = await browser.newContext({ locale: fixture.locale, viewport: fixture.viewport });
+  const context = await browser.newContext({ locale: fixture.locale, viewport: fixture.viewport, ignoreHTTPSErrors: true });
   try {
     if (fixture.blockCompletionStorage) {
       await context.addInitScript(() => {
@@ -76,7 +76,7 @@ async function testReset(browser, url, fixture) {
       });
     }
     const page = await context.newPage();
-    const { actions, dialog } = await openSettings(page, url, fixture);
+    const { actions, dialog } = await openSettings(page, server, fixture);
     const input = dialog.getByRole('textbox', { name: fixture.confirmation });
     const submit = dialog.locator('button[type="submit"]');
     await dialog.waitFor();
@@ -87,7 +87,7 @@ async function testReset(browser, url, fixture) {
     assert(await submit.isEnabled());
     await input.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
-    assert.equal((await (await fetch(url + '/api/v1/accounts')).json()).items.length, 1);
+    assert.equal((await (await api.get('/api/v1/accounts')).json()).items.length, 1);
 
     assert(await actions.isVisible(), 'cancelling the confirmation keeps destructive actions open');
     const entry = actions.getByRole('button', { name: fixture.action, exact: true });
@@ -177,7 +177,7 @@ async function testReset(browser, url, fixture) {
     }), before.id);
     assert.deepEqual(storage, { draft: null, session: null, forwarding: null, legacyForwarding: null, unrelated: 'keep me' });
     assert(!(await context.cookies()).some(cookie => cookie.name === 'oie_theme' || cookie.name === 'oie_lang'));
-    assert.deepEqual((await (await fetch(url + '/api/v1/accounts')).json()).items, []);
+    assert.deepEqual((await (await api.get('/api/v1/accounts')).json()).items, []);
     await page.reload();
     await page.waitForFunction(() => window.OieRuntime?.generation > 0);
     assert.equal(await page.getByText(fixture.success, { exact: true }).count(), 0);
@@ -189,12 +189,11 @@ async function testReset(browser, url, fixture) {
 }
 
 (async () => {
-  const server = await startOie(binary, ['--role', 'hosted'], '/api/v1/health');
-  const { url } = server;
+  const server = await startHostedOie(binary);
   let browser;
   try {
     browser = await chromium.launch();
-    await testReset(browser, url, {
+    await testReset(browser, server, {
       locale: 'en', viewport: { width: 1440, height: 900 }, action: 'Delete all data',
       settings: 'Settings', general: 'General', about: 'About', theme: 'light',
       destructiveActions: 'Destructive actions', back: 'Back to settings',
@@ -202,7 +201,7 @@ async function testReset(browser, url, fixture) {
       confirmation: 'Type delete to confirm', failure: 'Could not delete all data.',
       pending: 'Deleting…', success: 'All Oiê data was deleted. Add an account to start again.', addAccount: 'Add account',
     });
-    await testReset(browser, url, {
+    await testReset(browser, server, {
       locale: 'pt-BR', viewport: { width: 390, height: 844 }, action: 'Apagar todos os dados',
       settings: 'Configurações', general: 'Geral', about: 'Sobre', theme: 'dark',
       destructiveActions: 'Ações destrutivas', back: 'Voltar às configurações',

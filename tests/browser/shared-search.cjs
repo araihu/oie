@@ -15,7 +15,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const start=args=>{const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie'),args,{stdio:['ignore','ignore','pipe']});let stderr='';child.stderr.on('data',v=>stderr+=v);children.push(child);child.stderrText=()=>stderr;return child};
  try{
   const engine='http://127.0.0.1:'+await port(),base='http://127.0.0.1:'+await port();
-  start(['--role','hosted','--listen',new URL(engine).host,'--data-dir',path.join(temp,'engine')]);
+  start(['--role','local','--data-only','--listen',new URL(engine).host,'--data-dir',path.join(temp,'engine')]);
   await until(async()=>{try{return(await fetch(engine+'/api/v1/engine')).ok}catch{return false}},'engine startup');
   const post=async(url,body)=>{const res=await fetch(engine+url,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':id(++sequence)},body:JSON.stringify(body)});const value=await res.json();assert(res.ok,JSON.stringify(value));return value};
   const alpha=await post('/api/v1/accounts',{protocol:'xmpp',address:'alpha@fixture.invalid',label:'Personal'}),beta=await post('/api/v1/accounts',{protocol:'xmpp',address:'beta@fixture.invalid',label:'Work'});

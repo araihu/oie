@@ -269,6 +269,7 @@ exec go test -exec "$OIE_GO_TEST_EXEC" -race -count=1 -p 1 -v ./tests/xmpp ./tes
 		WithWorkdir("/src/tests/browser").
 		WithFile("package.json", source.File("tests/browser/package.json")).
 		WithFile("package-lock.json", source.File("tests/browser/package-lock.json")).
+		WithExec([]string{"sh", "-ec", "apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*"}).
 		WithExec([]string{"npm", "ci"}).WithExec([]string{"npx", "playwright", "install", "--with-deps", "chromium"})
 	xmppResult := make(chan error, 1)
 	go func() {
