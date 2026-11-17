@@ -99,8 +99,12 @@ class SourcePackageTest(unittest.TestCase):
                 }.items():
                     self.assertEqual(archive.extractfile(prefix + member).read(), expected)
                 self.assertEqual(archive.getnames().count(prefix + "release-tooling/packaging/browser-source.json"), 1)
-                archive.extractall(directory, filter="data")
-            extracted = directory / "oie_v0.0.1_source"
+                extracted = directory / "oie_v0.0.1_source"
+                for member in ("oie/main.go", "oie/packaging/browser-source.json", "browser-sources/runtime.tgz",
+                               "release-tooling/packaging/browser-source.json"):
+                    path = extracted / member
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(archive.extractfile(prefix + member).read())
             (extracted / "release-tooling/packaging/browser-source.json").write_text('{"inputs": {".muamba.lock.yaml": "wrong"}}')
             VERIFY.verify_browser_sources(extracted)
 
