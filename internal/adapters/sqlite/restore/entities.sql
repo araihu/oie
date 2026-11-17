@@ -40,7 +40,15 @@ SET provider_id=CASE WHEN d.provider_id=e.original_id THEN '' ELSE d.provider_id
 FROM restore_witness_echoes e WHERE d.id=e.echo_id
 AND (d.provider_id=e.original_id OR json_extract(d.payload,'$.OwnOriginID') IS NOT e.original_id);
 
-INSERT INTO messages SELECT m.* FROM backup.messages m JOIN restore_messages x ON x.id=m.id AND x.is_new=1;
+UPDATE messages AS d SET provider_id=e.provider_id,payload=json_set(d.payload,'$.ProviderID',e.provider_id)
+FROM restore_direct_mention_echo_keys e WHERE d.id=e.id AND e.is_local=1;
+
+INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms,timeline_at_ms,submitted_at_ms)
+SELECT m.id,m.revision_id,m.account_id,m.conversation_id,COALESCE(e.provider_id,m.provider_id),m.is_own,m.state,
+       CASE WHEN e.id IS NULL THEN m.payload ELSE json_set(m.payload,'$.ProviderID',e.provider_id) END,
+       m.created_at_ms,m.timeline_at_ms,m.submitted_at_ms
+FROM backup.messages m JOIN restore_messages x ON x.id=m.id AND x.is_new=1
+LEFT JOIN restore_direct_mention_echo_keys e ON e.id=m.id AND e.is_local=0;
 INSERT INTO message_revisions SELECT r.* FROM backup.message_revisions r JOIN restore_messages x ON x.id=r.entity_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_canonical_aliases(alias_id,canonical_id)
@@ -92,8 +100,16 @@ WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO room_message_moderation SELECT r.* FROM backup.room_message_moderation r JOIN restore_accounts x ON x.id=r.account_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 
-INSERT INTO message_edit_commands SELECT e.* FROM backup.message_edit_commands e JOIN restore_messages x ON x.id=e.message_id
-WHERE e.state IN ('submitted','failed') ON CONFLICT(id) DO NOTHING;
+INSERT INTO operations
+SELECT receipt.id,receipt.fingerprint,receipt.resource_id,
+       CASE WHEN edit.eligible=1 THEN receipt.result ELSE 'null' END,receipt.created_at,receipt.kind
+FROM backup.operations receipt JOIN restore_local_edit_commands edit ON edit.id=receipt.id
+WHERE TRUE ON CONFLICT(id) DO UPDATE SET result=excluded.result
+WHERE operations.result='null' AND excluded.result<>'null' AND operations.fingerprint=excluded.fingerprint
+  AND operations.kind=excluded.kind AND operations.resource_id=excluded.resource_id;
+INSERT INTO message_edit_commands
+SELECT command.* FROM backup.message_edit_commands command JOIN restore_local_edit_commands edit ON edit.id=command.id
+WHERE edit.eligible=1 ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_correction_facts SELECT f.* FROM backup.message_correction_facts f JOIN restore_messages x ON x.id=f.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_correction_facts(message_id,scope,author,remote_id,target_id,source_hash,source_revision_id)

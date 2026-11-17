@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -51,7 +52,9 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 				if len(message.Attachments) != 0 && message.AttachmentWireText == "" {
 					message.AttachmentWireText = submitted.AttachmentWireText
 				}
-				if message.WireMentions == "" || (message.WireMentions == submitted.WireMentions && message.WireMentionDigest == "") {
+				if message.ProviderID == string(message.ID) && message.AttachmentWireText == submitted.AttachmentWireText &&
+					hasSubmittedWireMentionProof(submitted) {
+					// Keep the mention proof paired with its actual wire body.
 					message.WireMentions, message.WireMentionDigest = submitted.WireMentions, submitted.WireMentionDigest
 				}
 			}
@@ -116,6 +119,21 @@ func matchesNativeComposition(current, submitted domain.Message) bool {
 		reflect.DeepEqual(current.Attachments, submitted.Attachments) &&
 		reflect.DeepEqual(current.Mentions, submitted.Mentions) &&
 		reflect.DeepEqual(current.OutboundReply, submitted.OutboundReply)
+}
+
+func hasSubmittedWireMentionProof(message domain.Message) bool {
+	if !message.IsOwn || message.ProviderID != string(message.ID) || !message.DispatchStarted || message.SendState != "submitted" {
+		return false
+	}
+	switch message.WireMentions {
+	case domain.WireMentionsAbsent:
+		return message.WireMentionDigest == ""
+	case domain.WireMentionsPresent:
+		digest, err := hex.DecodeString(message.WireMentionDigest)
+		return err == nil && len(digest) == 32 && hex.EncodeToString(digest) == message.WireMentionDigest
+	default:
+		return false
+	}
 }
 
 func matchesUncertainNativeComposition(current, submitted domain.Message) bool {

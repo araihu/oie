@@ -164,6 +164,12 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if _, err := tx.ExecContext(ctx, restoreScript("select"), sql.Named("now_ms", now.UnixMilli())); err != nil {
 		return result, fmt.Errorf("select backup entities: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, restoreScript("select_edit_commands")); err != nil {
+		return result, fmt.Errorf("select backup edit receipts: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, restoreScript("select_history")); err != nil {
+		return result, fmt.Errorf("select backup history metadata: %w", err)
+	}
 	var conflict bool
 	if err := tx.QueryRowContext(ctx, restoreScript("conflicts")).Scan(&conflict); err != nil {
 		return result, err

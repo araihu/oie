@@ -41,6 +41,14 @@ func init() {
 		}
 		return number(m.MatchesWireMentions(domain.WireMentionProof{Evidence: domain.WireMentionEvidence(observed), Digest: digest})), nil
 	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_direct_mention_echo_provider_id", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var m domain.Message
+		if err := json.Unmarshal([]byte(payload), &m); err != nil {
+			return nil, err
+		}
+		return directMentionEchoProviderID(m), nil
+	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_outbound_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		payload, _ := args[0].(string)
 		var m domain.Message

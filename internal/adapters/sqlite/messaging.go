@@ -500,6 +500,7 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 	}
 	incomingKind := c.Kind
+	archiveAlreadyBound := false
 	if m.ArchiveID != "" {
 		var existingID string
 		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
@@ -515,18 +516,27 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			if chat.AccountID != string(c.AccountID) || chat.Address != c.Address {
 				return application.ErrInvalid
 			}
-			if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
-				return err
+			var distinct bool
+			if c.Kind == "direct" && ownStructuredMentionEcho(m) {
+				distinct, err = distinctDirectMentionEcho(retained, m)
+				if err != nil {
+					return err
+				}
 			}
-			if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
-				return err
+			if !distinct {
+				if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+					return err
+				}
+				if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
+					return err
+				}
+				if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
+					return err
+				}
+				return tx.Commit()
 			}
-			if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
-				return err
-			}
-			return tx.Commit()
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+			archiveAlreadyBound = true
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 	}
@@ -572,6 +582,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if !m.IsOwn {
 		m.Sender.ID = c.PeerID
 	}
+	if err = normalizeDirectMentionEchoProvider(ctx, q, c, &m); err != nil {
+		return err
+	}
 	if err = matchArchivedAttachmentWireBody(ctx, q, c, &m); err != nil {
 		return err
 	}
@@ -579,8 +592,10 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		var existing dbgen.Message
 		existing, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
 		if err == nil {
-			if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
-				return err
+			if !archiveAlreadyBound {
+				if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
+					return err
+				}
 			}
 			if err = recordCorrectionMetadata(ctx, q, existing.ID, m); err != nil {
 				return err
@@ -608,8 +623,10 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = insertMessage(ctx, q, m); err != nil {
 		return err
 	}
-	if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
-		return err
+	if !archiveAlreadyBound {
+		if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
+			return err
+		}
 	}
 	if !correctionValid(m.Correction) || m.Correction.TargetID == "" {
 		fresh, err := q.GetConversation(ctx, string(c.ID))
@@ -649,6 +666,48 @@ func matchArchivedAttachmentWireBody(ctx context.Context, q *dbgen.Queries, chat
 		echo.ProviderID = origin
 	}
 	return err
+}
+
+func ownStructuredMentionEcho(m domain.Message) bool {
+	return m.IsOwn && m.OwnOriginID != "" && m.WireMentions == domain.WireMentionsPresent
+}
+
+func directMentionEchoProviderID(m domain.Message) string {
+	identity := string(m.OwnOriginID) + "\x00" + m.SourceBodyHash() + "\x00" + m.WireMentionDigest
+	if m.WireMentionDigest == "" {
+		identity += "\x00" + m.ArchiveScope + "\x00" + m.ArchiveID
+	}
+	return "direct-echo:" + bodyHash(identity)
+}
+
+func distinctDirectMentionEcho(row dbgen.Message, echo domain.Message) (bool, error) {
+	retained, err := decodeMessage(row)
+	if err != nil {
+		return false, err
+	}
+	return !retained.IsOwn || !retained.MatchesWireBody(echo.OriginalText) ||
+		!retained.MatchesWireMentions(domain.WireMentionProof{Evidence: echo.WireMentions, Digest: echo.WireMentionDigest}), nil
+}
+
+func normalizeDirectMentionEchoProvider(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, echo *domain.Message) error {
+	if chat.Kind != "direct" || !ownStructuredMentionEcho(*echo) || echo.ProviderID != string(echo.OwnOriginID) {
+		return nil
+	}
+	retained, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{
+		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: echo.ProviderID, IsOwn: 1,
+	})
+	if err == nil {
+		distinct, err := distinctDirectMentionEcho(retained, *echo)
+		if err != nil || !distinct {
+			return err
+		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	// Direct stanzas reuse the origin as the provider key. Hold the distinct
+	// packet separately without ceding the original send's key or retry proof.
+	echo.ProviderID = directMentionEchoProviderID(*echo)
+	return nil
 }
 
 func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, echo *domain.Message, revision domain.ID) error {
