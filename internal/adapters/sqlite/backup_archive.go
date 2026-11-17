@@ -57,18 +57,30 @@ func VerifyBackup(ctx context.Context, filename string) (summary BackupSummary, 
 	if check != "ok" {
 		return summary, errors.New("backup database failed integrity verification")
 	}
-	counts, err := dbgen.New(db).SummarizeBackup(ctx)
+	q := dbgen.New(db)
+	counts, err := q.SummarizeBackup(ctx)
 	if err != nil {
 		return summary, err
 	}
 	if counts.RoomPasswords != 0 {
 		return summary, errors.New("backup database contains room passwords")
 	}
+	paused := int64(0)
+	var hasRecovered bool
+	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name='recovered_sends' AND type='table')").Scan(&hasRecovered); err != nil {
+		return summary, err
+	}
+	if hasRecovered {
+		paused, err = q.CountRecoveredSends(ctx)
+		if err != nil {
+			return summary, err
+		}
+	}
 	return BackupSummary{
 		Version: manifest.Version, IncludesMedia: manifest.IncludesMedia,
 		SourceEngine: manifest.SourceEngine, CreatedAt: manifest.CreatedAt,
 		Accounts: counts.Accounts, Conversations: counts.Conversations,
-		Messages: counts.Messages, PendingSends: counts.PendingSends,
+		Messages: counts.Messages, PendingSends: counts.PendingSends + paused,
 		MediaFiles: len(manifest.Files) - 1,
 	}, nil
 }

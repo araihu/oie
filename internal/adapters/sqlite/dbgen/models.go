@@ -197,6 +197,10 @@ type DiscardedMessageReference struct {
 	AgeMs     int64
 }
 
+type DiscardedRecoveredSend struct {
+	MessageID string
+}
+
 type DownloadDevice struct {
 	DeviceID   string
 	Days       int64
@@ -479,6 +483,24 @@ type PreviewRevision struct {
 	Parents   string
 	Payload   string
 	CreatedAt string
+}
+
+type RecoveredSend struct {
+	MessageID      string
+	ConversationID string
+	SourceEngineID string
+	RevisionID     string
+	OriginalState  string
+	AttemptCount   int64
+	ScheduledAt    string
+	Payload        string
+	CreatedAtMs    int64
+}
+
+type RecoveredSendOperation struct {
+	OperationID string
+	MessageID   string
+	Result      string
 }
 
 type RetainedMessageRetraction struct {

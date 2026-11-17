@@ -9,6 +9,56 @@ import (
 	"context"
 )
 
+const countRecoveredSends = `-- name: CountRecoveredSends :one
+SELECT COUNT(*) FROM recovered_sends
+`
+
+func (q *Queries) CountRecoveredSends(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRecoveredSends)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteRecoveredSend = `-- name: DeleteRecoveredSend :exec
+DELETE FROM recovered_sends WHERE message_id = ?
+`
+
+func (q *Queries) DeleteRecoveredSend(ctx context.Context, messageID string) error {
+	_, err := q.db.ExecContext(ctx, deleteRecoveredSend, messageID)
+	return err
+}
+
+const discardRecoveredSend = `-- name: DiscardRecoveredSend :exec
+INSERT INTO discarded_recovered_sends(message_id) VALUES (?) ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) DiscardRecoveredSend(ctx context.Context, messageID string) error {
+	_, err := q.db.ExecContext(ctx, discardRecoveredSend, messageID)
+	return err
+}
+
+const getRecoveredSend = `-- name: GetRecoveredSend :one
+SELECT message_id, conversation_id, source_engine_id, revision_id, original_state, attempt_count, scheduled_at, payload, created_at_ms FROM recovered_sends WHERE message_id = ?
+`
+
+func (q *Queries) GetRecoveredSend(ctx context.Context, messageID string) (RecoveredSend, error) {
+	row := q.db.QueryRowContext(ctx, getRecoveredSend, messageID)
+	var i RecoveredSend
+	err := row.Scan(
+		&i.MessageID,
+		&i.ConversationID,
+		&i.SourceEngineID,
+		&i.RevisionID,
+		&i.OriginalState,
+		&i.AttemptCount,
+		&i.ScheduledAt,
+		&i.Payload,
+		&i.CreatedAtMs,
+	)
+	return i, err
+}
+
 const listBackupMedia = `-- name: ListBackupMedia :many
 SELECT 'avatars' AS subdir, CAST(hash || '.png' AS TEXT) AS filename, hash, -1 AS size
 FROM (
@@ -58,12 +108,109 @@ func (q *Queries) ListBackupMedia(ctx context.Context) ([]ListBackupMediaRow, er
 	return items, nil
 }
 
+const listRecoveredSends = `-- name: ListRecoveredSends :many
+SELECT r.message_id, r.conversation_id, r.source_engine_id, r.revision_id, r.original_state, r.attempt_count, r.scheduled_at, r.payload, r.created_at_ms, c.address, c.account_id FROM recovered_sends r
+JOIN conversations c ON c.id = r.conversation_id
+ORDER BY r.created_at_ms, r.message_id
+`
+
+type ListRecoveredSendsRow struct {
+	MessageID      string
+	ConversationID string
+	SourceEngineID string
+	RevisionID     string
+	OriginalState  string
+	AttemptCount   int64
+	ScheduledAt    string
+	Payload        string
+	CreatedAtMs    int64
+	Address        string
+	AccountID      string
+}
+
+func (q *Queries) ListRecoveredSends(ctx context.Context) ([]ListRecoveredSendsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecoveredSends)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecoveredSendsRow{}
+	for rows.Next() {
+		var i ListRecoveredSendsRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.ConversationID,
+			&i.SourceEngineID,
+			&i.RevisionID,
+			&i.OriginalState,
+			&i.AttemptCount,
+			&i.ScheduledAt,
+			&i.Payload,
+			&i.CreatedAtMs,
+			&i.Address,
+			&i.AccountID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recoveredSendHasDestinationEvidence = `-- name: RecoveredSendHasDestinationEvidence :one
+SELECT CAST(EXISTS(SELECT 1 FROM messages m WHERE m.id=?1
+  OR (m.account_id=?2 AND m.conversation_id=?3
+      AND m.is_own=1 AND m.provider_id=?1))
+OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=?1
+  AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
+OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1) AS INTEGER)
+`
+
+type RecoveredSendHasDestinationEvidenceParams struct {
+	MessageID      string
+	AccountID      string
+	ConversationID string
+}
+
+func (q *Queries) RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, recoveredSendHasDestinationEvidence, arg.MessageID, arg.AccountID, arg.ConversationID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const removeBackupRoomPasswords = `-- name: RemoveBackupRoomPasswords :exec
 DELETE FROM room_invitation_credentials
 `
 
 func (q *Queries) RemoveBackupRoomPasswords(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, removeBackupRoomPasswords)
+	return err
+}
+
+const removeReconciledRecoveredSends = `-- name: RemoveReconciledRecoveredSends :exec
+DELETE FROM recovered_sends
+WHERE EXISTS(SELECT 1 FROM messages m WHERE m.id=recovered_sends.message_id)
+`
+
+func (q *Queries) RemoveReconciledRecoveredSends(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, removeReconciledRecoveredSends)
+	return err
+}
+
+const restoreReviewedSendReceipts = `-- name: RestoreReviewedSendReceipts :exec
+UPDATE operations SET result=(SELECT h.result FROM recovered_send_operations h WHERE h.operation_id=operations.id)
+WHERE id IN (SELECT h.operation_id FROM recovered_send_operations h WHERE h.message_id=?)
+`
+
+func (q *Queries) RestoreReviewedSendReceipts(ctx context.Context, messageID string) error {
+	_, err := q.db.ExecContext(ctx, restoreReviewedSendReceipts, messageID)
 	return err
 }
 

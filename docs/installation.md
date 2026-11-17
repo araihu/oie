@@ -674,8 +674,40 @@ in a private location. Connection credentials, hosted credentials and room
 passwords are omitted. The command creates a private file and refuses to
 overwrite an existing backup. Verification checks the SQLite file and the
 SHA-256 of each entry and reports the account, conversation, message, pending
-send and media counts. Merge restoration is tracked in
-[the specification](oie-spec.md#12-backup-and-merge-restore).
+send and media counts.
+
+### Restore into an existing profile
+
+Quit Oiê or stop the hosted engine before restoring. The restore command
+verifies the archive, keeps the destination's identity and applies the changes
+in one transaction. Existing removals, retractions and retention rules remain
+in force. If the same XMPP address has separate account or conversation
+identities, Oiê reports the conflict and leaves the profile data intact.
+
+```sh
+bin/oie backup restore --data-dir "/path/to/profile" "$HOME/oie-backup.zip"
+bin/oie backup pending --data-dir "/path/to/profile"
+```
+
+Restored sends stay paused across restarts. Review the destination, message,
+schedule and original send state in the pending list. To discard a recovered
+send, use the message and revision IDs from that list.
+
+```sh
+bin/oie backup discard --data-dir "/path/to/profile" --message-id ID --revision-id REVISION
+```
+
+When you have confirmed that a recovered send was never transmitted, resume it
+from its original engine. A different engine, an earlier attempt, local
+delivery or cancellation evidence, or an unavailable attachment prevents
+resuming. Opening a room on the destination restores access to its composer.
+
+```sh
+bin/oie backup resume --data-dir "/path/to/profile" --message-id ID --revision-id REVISION --confirm-not-sent
+```
+
+An overdue schedule becomes eligible when the original engine next runs and
+can send. See [merge semantics](oie-spec.md#12-backup-and-merge-restore).
 
 If the desktop window does not open after an update, start Oiê from a
 terminal to see the error. For the default macOS app, run

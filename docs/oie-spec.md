@@ -1034,14 +1034,21 @@ Explicit resume still requires reconciliation of unknown outcomes and current ow
 
 **OPEN O15:** archive format, encryption, credential inclusion, running-engine backup mechanics, interruption recovery, and interaction with active sync/dispatch. Backup/import is not a replacement for app sync.
 
-**IMPLEMENTATION SCOPE:** the initial manual backup commands export a consistent
-snapshot of a stopped profile in a versioned ZIP with SHA-256 checks, with
-optional retained media. The archive excludes connection credentials, room
-passwords and hosted authentication state. Verification reads the archive in a
-temporary directory and gives counts for review. See
-[manual backup](installation.md#create-and-verify-a-manual-backup).
-Applying a backup to a destination profile, reconciling revisions and
-deletions at import, and reviewing or resuming recovered sends remain pending.
+**IMPLEMENTATION SCOPE:** the engine CLI exports and verifies a versioned ZIP
+with optional media. `oie backup restore` merges the verified archive into a
+stopped profile. Existing conversation preferences, removal decisions and
+retention apply at the destination. Account, message and star revision graphs
+retain alternatives and use the existing ancestry rules. The merge refuses
+identity collisions that require the mapping in O04. Connection credentials,
+room passwords and hosted authentication state are omitted.
+
+Newly recovered sends stay in a separate review list across restarts and
+backups. `oie backup pending` shows the original owner and composition.
+Discarding a send prevents the same item from returning through an older
+archive. Explicit resume requires the original engine, confirmation that the
+send was never transmitted, the reviewed revision, and no conflicting local
+evidence. Previously attempted or uncertain sends remain paused for
+reconciliation. See [manual backup and restore](installation.md#create-and-verify-a-manual-backup).
 
 ## 13. Reliability boundaries and operational state
 

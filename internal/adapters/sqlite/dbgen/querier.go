@@ -33,6 +33,7 @@ type Querier interface {
 	CountDownloadsByHash(ctx context.Context, arg CountDownloadsByHashParams) (int64, error)
 	CountImageDownloadSources(ctx context.Context, sourceID string) (int64, error)
 	CountMessageSearchRoomPrefix(ctx context.Context, arg CountMessageSearchRoomPrefixParams) (int64, error)
+	CountRecoveredSends(ctx context.Context) (int64, error)
 	CountRoomArchiveMessages(ctx context.Context, arg CountRoomArchiveMessagesParams) (int64, error)
 	// Match ListSharedContent's scope, categories and search. Any matching rows
 	// suffice for the capped count, so stop at the limit without sorting them.
@@ -42,7 +43,9 @@ type Querier interface {
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
+	DeleteRecoveredSend(ctx context.Context, messageID string) error
 	DiscardPendingImageDownloads(ctx context.Context, sourceID string) error
+	DiscardRecoveredSend(ctx context.Context, messageID string) error
 	DropDeviceDownloads(ctx context.Context, deviceID string) ([]DeviceDownload, error)
 	DropExpiredDownloads(ctx context.Context, nowMs int64) ([]DeviceDownload, error)
 	DropExpiredMessageEvents(ctx context.Context, ids string) error
@@ -95,6 +98,7 @@ type Querier interface {
 	GetMessageStar(ctx context.Context, messageID string) (GetMessageStarRow, error)
 	GetOperation(ctx context.Context, id string) (Operation, error)
 	GetOutbox(ctx context.Context, messageID string) (Outbox, error)
+	GetRecoveredSend(ctx context.Context, messageID string) (RecoveredSend, error)
 	GetRoomArchive(ctx context.Context, conversationID string) (GetRoomArchiveRow, error)
 	GetRoomIntent(ctx context.Context, conversationID string) (RoomIntent, error)
 	GetRoomInvitationCredential(ctx context.Context, conversationID string) (string, error)
@@ -184,6 +188,7 @@ type Querier interface {
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
+	ListRecoveredSends(ctx context.Context) ([]ListRecoveredSendsRow, error)
 	ListRetainedDownloadHashes(ctx context.Context) ([]string, error)
 	ListRetentionAccountScopes(ctx context.Context) ([]string, error)
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
@@ -242,16 +247,19 @@ type Querier interface {
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
 	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error)
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveBackupRoomPasswords(ctx context.Context) error
 	RemoveDownloadGarbage(ctx context.Context, arg RemoveDownloadGarbageParams) error
 	RemoveLegacyDownloadDevice(ctx context.Context) error
 	RemoveMessageSearchException(ctx context.Context, messageID string) error
+	RemoveReconciledRecoveredSends(ctx context.Context) error
 	RemoveRoomBannedNickname(ctx context.Context, arg RemoveRoomBannedNicknameParams) error
 	ResetAccountDiscoveryCheckpoints(ctx context.Context) error
 	ResetAllRoomReactionPrivacy(ctx context.Context) error
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
+	RestoreReviewedSendReceipts(ctx context.Context, messageID string) error
 	ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubContentHeadInboundQuoteParams) error
 	ScrubConversationEventPreviews(ctx context.Context, payload string) error
 	ScrubConversationReceiptPreviews(ctx context.Context, resourceID string) error
