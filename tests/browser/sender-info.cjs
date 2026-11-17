@@ -52,7 +52,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const route=(chat,locale='en')=>base+'/?'+new URLSearchParams({account,chat,lang:locale,theme:'dark'});
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
-  const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en'});await context.route('**/*',r=>{if(new URL(r.request().url()).origin!==base){external.push(r.request().url());return r.abort()}return r.continue()});
+  const fixtureRequests=r=>{if(new URL(r.request().url()).origin!==base){external.push(r.request().url());return r.abort()}return r.continue()};
+  const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en'});await context.route('**/*',fixtureRequests);
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));let documents=0;page.on('request',r=>{if(r.isNavigationRequest()&&r.frame()===page.mainFrame())documents++});
   await page.goto(route(room));await page.locator('[data-open-sender]:visible').first().waitFor();await until(()=>streams.size>0,'initial SSE ready');await page.waitForTimeout(350);
   const avatar=page.locator('[data-open-sender]:visible').last(),draft='Preserve my draft 😀';await page.locator('#message-composer').fill(draft);await avatar.scrollIntoViewIfNeeded();await avatar.focus();
@@ -81,9 +82,24 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.oldProfileEngine=true;await page.locator('[data-open-sender]:visible').last().click();await drawer.waitFor({state:'visible'});await page.locator('[data-sender-info]').waitFor();assert.equal(await page.locator('[data-sender-name]').textContent(),'bob@fixture');assert.equal(await page.locator('[data-sender-address]').count(),0);await page.keyboard.press('Escape');await drawer.waitFor({state:'hidden'});state.oldProfileEngine=false;
   findings.push('Older engines without the optional profile endpoint keep the retained sender name and room context');
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});
+  const touch=await browser.newContext({viewport:{width:390,height:960},hasTouch:true,isMobile:true});
+  await touch.route('**/*',fixtureRequests);
   for(const width of [390,1440])for(const locale of ['en','pt-BR']){
-   const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.setViewportSize({width,height:960});await p.goto(route(room,locale));await p.locator('[data-open-sender]:visible').last().click();const title=locale==='en'?'User information':'Informações do usuário';await p.getByRole('dialog',{name:title,exact:true}).waitFor({state:'visible'});await p.locator('[data-sender-info]').waitFor();await p.waitForTimeout(230);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await p.getByRole('dialog',{name:title,exact:true}).boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale}`);await p.screenshot({path:path.join(artifacts,`sender-info-${width}-${locale}.png`)});await p.close();findings.push({width,locale,axe:0});
+   const mobile=width===390,p=await (mobile?touch:context).newPage();
+   p.on('pageerror',e=>errors.push(e.message));await p.goto(route(room,locale));
+   const sender=p.locator('[data-open-sender]:visible').last();
+   if(mobile){
+    const avatarStack=sender.locator('.oie-avatar-stack');
+    const initials=avatarStack.locator('[data-avatar-initials]');
+    await initials.waitFor({state:'visible'});
+    const detailsTrigger=p.locator('#chat-header .oie-chat-avatar-trigger');
+    assert.equal(await avatarStack.evaluate(el=>getComputedStyle(el).userSelect),'none','sender avatar initials cannot be selected on touch');
+    assert.equal(await detailsTrigger.evaluate(el=>getComputedStyle(el).userSelect),'none','the conversation avatar control suppresses touch selection');
+    await initials.tap();
+   }else await sender.click();
+   const title=locale==='en'?'User information':'Informações do usuário';await p.getByRole('dialog',{name:title,exact:true}).waitFor({state:'visible'});await p.locator('[data-sender-info]').waitFor();await p.waitForTimeout(230);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await p.getByRole('dialog',{name:title,exact:true}).boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${locale}`);await p.screenshot({path:path.join(artifacts,`sender-info-${width}-${locale}.png`)});await p.close();findings.push({width,locale,axe:0});
   }
+  await touch.close();
   const native=await context.newPage();await native.goto(route(room)+'&open=sender&senderMessage='+id(223));await native.getByRole('dialog',{name:'User information',exact:true}).waitFor({state:'visible'});await native.locator('[data-sender-info]').waitFor();assert.equal(await native.locator('[data-sender-info]').getAttribute('data-sender-message'),id(223));await native.close();findings.push('Addressable sender URL renders and opens the same scoped drawer');
   assert.deepEqual(state.writes,[]);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await fs.writeFile(path.join(artifacts,'sender-info-report.json'),JSON.stringify({findings,mutationEffects:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: sender drawer scoped identity, direct cached profile, room privacy, keyboard/focus, fragment/draft/scroll preservation, retry/stale guards, responsive accessibility and zero writes');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
