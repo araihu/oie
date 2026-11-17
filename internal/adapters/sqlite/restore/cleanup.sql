@@ -1,14 +1,16 @@
 DROP VIEW restore_source_echoes;
 DROP VIEW restore_pre_wire_sends;
+DROP VIEW restore_native_unknown_sends;
 DROP VIEW restore_represented_echo_references;
 DROP TABLE restore_represented_echoes;
 DROP TABLE restore_suppressed_echoes;
-DROP TABLE restore_suppressed_echo_corrections;
+DROP TABLE restore_verified_correction_roots;
 DROP VIEW restore_own_echo_aliases;
 DROP TABLE restore_conflicting_relayed_echo_refs;
 DROP TABLE restore_conflicting_relayed_echo_aliases;
 DROP TABLE restore_witness_echoes;
 DROP TABLE restore_messages;
+DROP VIEW restore_message_candidates;
 DROP TABLE restore_chats;
 DROP TABLE restore_accounts;
 DROP TABLE archive_held_operations;

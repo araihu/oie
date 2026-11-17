@@ -73,9 +73,15 @@ WHERE is_new=0 AND EXISTS (
     )
 );
 
-CREATE TEMP TABLE restore_messages (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
-INSERT INTO restore_messages
-SELECT m.id, d.id IS NULL FROM backup.messages m
+CREATE TEMP VIEW restore_message_candidates AS
+SELECT m.id,d.id IS NULL AS is_new,a.canonical_id,
+       COALESCE(r.days,CASE json_extract(c.payload,'$.Kind') WHEN 'room' THEN g.rooms_days ELSE g.direct_days END) AS days,
+       COALESCE(
+         (SELECT COALESCE(root.submitted_at_ms,root.timeline_at_ms,root.created_at_ms)
+          FROM backup.messages root WHERE root.id=a.canonical_id),
+         m.submitted_at_ms,m.timeline_at_ms,m.created_at_ms
+       ) AS age_ms
+FROM backup.messages m
 JOIN restore_chats chat ON chat.id=m.conversation_id
 JOIN backup.conversations c ON c.id=chat.id AND c.account_id=m.account_id
 LEFT JOIN messages d ON d.id=m.id
@@ -84,31 +90,28 @@ LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
 LEFT JOIN conversation_retention r ON r.conversation_id=m.conversation_id
 CROSS JOIN global_retention g
 WHERE (d.id IS NOT NULL OR (
-  -- Apply the destination's policy before inserting any new history. Aliases
-  -- follow the root's age/star, and cannot revive an excluded root.
+  -- A correction can follow an older retained root, but expiry evidence
+  -- and the exclusion of active sends apply to every candidate.
   NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
   AND NOT EXISTS (
     SELECT 1 FROM expired_message_references e
     JOIN backup.message_references ref ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
     WHERE e.conversation_id=m.conversation_id AND ref.message_id IN (m.id,a.canonical_id)
   )
-  AND (
-    COALESCE(r.days,CASE json_extract(c.payload,'$.Kind') WHEN 'room' THEN g.rooms_days ELSE g.direct_days END)=0
-    OR COALESCE(
-        (SELECT COALESCE(root.submitted_at_ms,root.timeline_at_ms,root.created_at_ms)
-         FROM backup.messages root WHERE root.id=a.canonical_id),
-        m.submitted_at_ms,m.timeline_at_ms,m.created_at_ms
-    ) >= @now_ms - 86400000 * COALESCE(r.days,CASE json_extract(c.payload,'$.Kind') WHEN 'room' THEN g.rooms_days ELSE g.direct_days END)
-    OR EXISTS (
-      SELECT 1 FROM backup.message_stars s WHERE s.starred=1 AND (
-        s.message_id=COALESCE(a.canonical_id,m.id)
-        OR s.message_id IN (SELECT al.alias_id FROM backup.message_canonical_aliases al WHERE al.canonical_id=COALESCE(a.canonical_id,m.id))
-      )
-    )
-  )
 ))
 AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
 AND m.state NOT IN ('queued','dispatching','unknown');
+
+CREATE TEMP TABLE restore_messages (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
+INSERT INTO restore_messages
+SELECT m.id,m.is_new FROM restore_message_candidates m
+WHERE m.is_new=0 OR m.days=0 OR m.age_ms>=@now_ms - 86400000 * m.days
+   OR EXISTS (
+       SELECT 1 FROM backup.message_stars s WHERE s.starred=1 AND (
+         s.message_id=COALESCE(m.canonical_id,m.id)
+         OR s.message_id IN (SELECT al.alias_id FROM backup.message_canonical_aliases al WHERE al.canonical_id=COALESCE(m.canonical_id,m.id))
+       )
+   );
 
 -- Restore send evidence onto the original local row. An own archive echo
 -- retained under another row ID would duplicate that message in the timeline.
@@ -204,12 +207,23 @@ DELETE FROM restore_suppressed_echoes WHERE EXISTS (
 );
 DELETE FROM restore_messages WHERE id IN (SELECT source_id FROM restore_suppressed_echoes);
 
--- A separately retained witness can carry verified corrections after the
--- native send is already local. Keep the child sources of an exact root.
-CREATE TEMP TABLE restore_suppressed_echo_corrections AS
+-- A separately retained witness or a re-export of the native send can
+-- carry corrections for an exact root already in the destination.
+CREATE TEMP TABLE restore_verified_correction_roots AS
+WITH originals AS (
+  SELECT source_id,retained_id FROM restore_suppressed_echoes
+  UNION ALL
+  SELECT archived.id,retained.id
+  FROM restore_messages selected JOIN backup.messages archived ON archived.id=selected.id
+  JOIN messages retained ON retained.id=archived.id AND retained.account_id=archived.account_id
+    AND retained.conversation_id=archived.conversation_id
+  JOIN conversations chat ON chat.id=retained.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
+  WHERE selected.is_new=0 AND archived.is_own=1 AND archived.id=archived.provider_id AND archived.state='submitted'
+    AND retained.is_own=1 AND retained.id=retained.provider_id AND retained.state='submitted'
+)
 SELECT e.source_id,e.retained_id,f.scope,f.author,f.remote_id,f.target_id,f.source_hash,
        native.revision_id AS source_revision_id
-FROM restore_suppressed_echoes e
+FROM originals e
 JOIN backup.messages echo ON echo.id=e.source_id
 JOIN backup.message_correction_facts f ON f.message_id=e.source_id AND f.target_id=''
 JOIN backup.message_revisions archived ON archived.id=f.source_revision_id AND archived.entity_id=e.source_id
@@ -234,13 +248,54 @@ WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
       AND COALESCE(alias.canonical_id,owner.id)<>e.retained_id
   );
 
+-- A room's minimum can keep a native send beyond the age cutoff. Its exact
+-- correction sources follow the retained root only through verified links.
+WITH RECURSIVE retained_edits(source_id,scope,author,remote_id,account_id,conversation_id,id,is_new) AS (
+  SELECT root.source_id,root.scope,root.author,root.remote_id,native.account_id,native.conversation_id,NULL,0
+  FROM restore_verified_correction_roots root
+  JOIN messages native ON native.id=root.retained_id AND native.state='submitted'
+  JOIN conversations chat ON chat.id=native.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
+  WHERE NOT EXISTS (
+      SELECT 1 FROM expired_message_references expired
+      WHERE expired.conversation_id=chat.id AND expired.scope=root.scope
+        AND expired.remote_id=root.remote_id AND expired.author=root.author
+  )
+  UNION
+  SELECT parent.source_id,parent.scope,parent.author,fact.remote_id,parent.account_id,parent.conversation_id,child.id,child.is_new
+  FROM retained_edits parent
+  JOIN backup.message_correction_facts fact ON fact.scope=parent.scope AND fact.author=parent.author AND fact.target_id=parent.remote_id
+  JOIN restore_message_candidates child ON child.id=fact.message_id AND child.canonical_id=parent.source_id
+  JOIN backup.messages archived ON archived.id=child.id AND archived.account_id=parent.account_id
+    AND archived.conversation_id=parent.conversation_id
+  JOIN backup.message_revisions revision ON revision.id=fact.source_revision_id AND revision.entity_id=child.id
+  WHERE fact.remote_id<>''
+    AND fact.source_hash=COALESCE(NULLIF(json_extract(archived.payload,'$.WireBodySHA256'),''),
+                                 oie_source_hash(json_extract(archived.payload,'$.OriginalText')))
+    AND fact.source_hash=COALESCE(NULLIF(json_extract(revision.payload,'$.WireBodySHA256'),''),
+                                 oie_source_hash(json_extract(revision.payload,'$.OriginalText')))
+    AND NOT EXISTS (
+        SELECT 1 FROM expired_message_references expired
+        WHERE expired.conversation_id=parent.conversation_id AND expired.scope=fact.scope
+          AND expired.remote_id=fact.remote_id AND expired.author=fact.author
+    )
+    AND NOT EXISTS (
+        SELECT 1 FROM message_correction_facts existing JOIN messages owner ON owner.id=existing.message_id
+          AND owner.account_id=parent.account_id AND owner.conversation_id=parent.conversation_id
+        WHERE existing.scope=fact.scope AND existing.author=fact.author AND existing.remote_id=fact.remote_id
+          AND existing.message_id<>child.id
+    )
+)
+INSERT INTO restore_messages
+SELECT id,is_new FROM retained_edits WHERE id IS NOT NULL
+ON CONFLICT DO NOTHING;
+
 DELETE FROM restore_messages
 WHERE is_new=1 AND EXISTS (
   SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=restore_messages.id
   AND NOT EXISTS(SELECT 1 FROM restore_messages root WHERE root.id=a.canonical_id)
   AND NOT EXISTS(SELECT 1 FROM messages root WHERE root.id=a.canonical_id)
   AND NOT EXISTS (
-    SELECT 1 FROM restore_suppressed_echo_corrections e
+    SELECT 1 FROM restore_verified_correction_roots e
     JOIN backup.message_correction_facts f ON f.message_id=a.alias_id AND f.scope=e.scope AND f.author=e.author
     WHERE e.source_id=a.canonical_id AND f.target_id<>''
   )

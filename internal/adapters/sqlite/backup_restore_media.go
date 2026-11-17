@@ -19,7 +19,8 @@ import (
 )
 
 type restoreDownloadSchema struct {
-	cleanup, lineage, legacy, admissions, unclaimedAdmissions, legacyImageClaims bool
+	cleanup, lineage, legacy, admissions, unclaimedAdmissions bool
+	legacyImageClaims, activeLegacyImageClaims                bool
 }
 
 func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, schema restoreDownloadSchema, now time.Time) ([]string, error) {
@@ -45,6 +46,11 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 	if schema.legacyImageClaims {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_legacy_image_claims")); err != nil {
 			return nil, fmt.Errorf("restore legacy image claims: %w", err)
+		}
+	}
+	if schema.activeLegacyImageClaims {
+		if _, err := tx.ExecContext(ctx, restoreScript("media_relayed_active_image_claims")); err != nil {
+			return nil, fmt.Errorf("restore relayed active image claims: %w", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_active_legacy_image_claims")); err != nil {

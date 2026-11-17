@@ -30,6 +30,14 @@ type AccountCommunicationPreference struct {
 	SendReadReceipts int64
 }
 
+type ActiveLegacyImageClaim struct {
+	MessageID      string
+	Url            string
+	SourceRevision string
+	Hash           string
+	Size           int64
+}
+
 type ArchiveAlias struct {
 	AccountID string
 	Scope     string

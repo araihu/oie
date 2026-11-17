@@ -45,6 +45,11 @@ JOIN restore_chats x ON x.id=m.conversation_id
 WHERE m.is_own=1 AND m.state=o.state
   AND (m.state='queued' OR (m.state='dispatching' AND o.wire_stage='awaiting'));
 
+CREATE TEMP VIEW restore_native_unknown_sends AS
+SELECT m.id FROM messages m JOIN outbox o ON o.message_id=m.id
+JOIN restore_chats x ON x.id=m.conversation_id
+WHERE m.is_own=1 AND m.id=m.provider_id AND m.state='unknown' AND o.state='unknown';
+
 CREATE TEMP TABLE restore_send_evidence (
     id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT,payload TEXT,timeline_at_ms INTEGER,submitted_at_ms INTEGER
 ) WITHOUT ROWID;
@@ -60,14 +65,22 @@ LEFT JOIN recovered_sends p ON p.message_id=m.id AND p.conversation_id=c.id
 LEFT JOIN restore_messages selected ON selected.id=m.id
 LEFT JOIN messages d ON d.id=m.id AND d.conversation_id=m.conversation_id AND d.account_id=m.account_id AND d.is_own=1
 LEFT JOIN restore_pre_wire_sends active ON active.id=d.id
+LEFT JOIN restore_native_unknown_sends uncertain ON uncertain.id=d.id
 WHERE m.is_own=1 AND COALESCE(o.state,m.state) IN ('cancelled','submitted','failed','dispatching','unknown')
   AND (p.message_id IS NOT NULL OR active.id IS NOT NULL
+       OR (uncertain.id IS NOT NULL AND m.id=m.provider_id AND m.state='submitted' AND COALESCE(o.state,m.state)='submitted')
        OR (d.id IS NULL AND selected.id IS NULL AND COALESCE(o.state,m.state) IN ('cancelled','submitted','failed')));
 
 -- Another engine can retain our verified own echo under a different local
 -- row ID. The scoped sender ID is still the UUID of the original send.
+-- A witnessed reply carries metadata outside the message payload.
 INSERT INTO restore_send_evidence
-SELECT b.wire_id,'submitted',r.created_at,b.payload,NULL,NULL
+SELECT b.wire_id,CASE WHEN EXISTS (
+    SELECT 1 FROM backup.message_replies reply WHERE reply.message_id=b.id
+    AND reply.body_hash=COALESCE(NULLIF(json_extract(b.payload,'$.WireBodySHA256'),''),
+                                 oie_source_hash(json_extract(b.payload,'$.OriginalText')))
+  ) THEN 'unknown' ELSE 'submitted' END,
+  r.created_at,b.payload,NULL,NULL
 FROM restore_source_echoes b
 JOIN backup.message_revisions r ON r.id=b.revision_id AND r.entity_id=b.id
 WHERE (

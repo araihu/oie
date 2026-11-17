@@ -1,6 +1,6 @@
--- A named membership prevents a backup of the global original from reopening
--- its storage outside the device policy, even when this backup omits media.
-INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+-- A named membership observed in a backup is weaker than a local claim.
+-- Remember it even when this backup omits the media files.
+INSERT INTO active_legacy_image_claims(message_id,url,source_revision,hash,size)
 SELECT p.message_id,p.url,named.source_revision,named.hash,named.size
 FROM backup.device_downloads named JOIN backup.message_previews p ON p.id=named.source_id
 JOIN restore_messages selected ON selected.id=p.message_id

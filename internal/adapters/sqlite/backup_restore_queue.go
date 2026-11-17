@@ -42,6 +42,9 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 			if err := json.Unmarshal([]byte(payload.String), &submitted); err != nil {
 				return err
 			}
+			if message.SendState == "unknown" && !matchesUncertainNativeComposition(message, submitted) {
+				continue
+			}
 			if !matchesSubmittedComposition(message, submitted) {
 				state = "unknown"
 			} else if submitted.ID == message.ID && len(message.Attachments) != 0 && message.AttachmentWireText == "" {
@@ -56,7 +59,8 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 			}
 		}
 		publishSchedule := message.ScheduledAt != nil && (state == "submitted" || state == "failed" || state == "unknown")
-		if message.TimelineAt == nil && (timeline.Valid || publishSchedule) {
+		confirmedTimeline := message.SendState == "unknown" && state == "submitted" && timeline.Valid
+		if confirmedTimeline || (message.TimelineAt == nil && (timeline.Valid || publishSchedule)) {
 			// Place the restored send at its historical time. The restore summary
 			// updates the conversation under its existing activity and revision.
 			millis := at.UnixMilli()
@@ -71,11 +75,6 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 				return err
 			}
 		}
-		if submittedAt.Valid {
-			if err := q.SetMessageSubmittedAt(ctx, dbgen.SetMessageSubmittedAtParams{ID: id, SubmittedAtMs: &submittedAt.Int64}); err != nil {
-				return err
-			}
-		}
 		revision, err := uuid.NewV7()
 		if err != nil {
 			return err
@@ -83,16 +82,36 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 		if _, err := updateMessage(ctx, q, message, state, domain.ID(revision.String()), at, now, false); err != nil {
 			return err
 		}
+		if submittedAt.Valid {
+			if err := q.SetMessageSubmittedAt(ctx, dbgen.SetMessageSubmittedAtParams{ID: id, SubmittedAtMs: &submittedAt.Int64}); err != nil {
+				return err
+			}
+		}
 	}
 	return rows.Err()
 }
 
 func matchesSubmittedComposition(current, submitted domain.Message) bool {
+	if current.ID != submitted.ID {
+		// An independently witnessed echo records the wire text. For a plain
+		// send, that text is the same proof used to reconcile a live echo.
+		return current.OutboundReply == nil && len(current.Mentions) == 0 &&
+			len(current.Attachments) == 0 && current.AttachmentWireText == "" &&
+			submitted.OutboundReply == nil && len(submitted.Mentions) == 0 &&
+			len(submitted.Attachments) == 0 && len(submitted.FileReferences) == 0 &&
+			len(submitted.AudioURLs) == 0 && len(submitted.FileDigests) == 0 && len(submitted.MediaThumbnails) == 0 &&
+			current.MatchesWireBody(submitted.OriginalText)
+	}
 	return current.OriginalText == submitted.OriginalText &&
 		reflect.DeepEqual(current.Composition, submitted.Composition) &&
 		reflect.DeepEqual(current.Attachments, submitted.Attachments) &&
 		reflect.DeepEqual(current.Mentions, submitted.Mentions) &&
 		reflect.DeepEqual(current.OutboundReply, submitted.OutboundReply)
+}
+
+func matchesUncertainNativeComposition(current, submitted domain.Message) bool {
+	return current.ID == submitted.ID && matchesSubmittedComposition(current, submitted) &&
+		(current.AttachmentWireText == "" || current.AttachmentWireText == submitted.AttachmentWireText)
 }
 
 func mergeRestoredQueue(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, engine domain.ID, hasRecovered, hasHistory bool) error {

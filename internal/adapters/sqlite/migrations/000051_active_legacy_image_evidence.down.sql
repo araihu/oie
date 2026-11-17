@@ -1,0 +1,1 @@
+DROP TABLE active_legacy_image_claims;

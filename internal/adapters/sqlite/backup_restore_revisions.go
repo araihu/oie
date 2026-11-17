@@ -147,6 +147,11 @@ func selectRestoredMessageRevision(ctx context.Context, q *dbgen.Queries, id, re
 	if next.ID != id || next.RevisionID != revision || next.AccountID != current.AccountID || next.ConversationID != current.ConversationID {
 		return errors.New("invalid message revision in backup")
 	}
+	if current.SendState == "unknown" && current.ProviderID == string(id) && !matchesUncertainNativeComposition(current, next) {
+		// Keep the uncertain composition while retaining the incoming source
+		// revision for history. Reapplying it must keep the same proof boundary.
+		return nil
+	}
 	next.ProviderID, next.ArchiveID, next.ArchiveScope = current.ProviderID, current.ArchiveID, current.ArchiveScope
 	if current.OwnOriginID != "" {
 		next.OwnOriginID = current.OwnOriginID

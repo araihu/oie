@@ -56,10 +56,18 @@ WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND c
   -- destination device expires its claimed bytes later.
   AND (f.device_id<>'legacy' OR f.kind<>'image' OR NOT EXISTS (
       SELECT 1 FROM backup.message_previews archived
+      JOIN legacy_image_claims claim ON claim.message_id=archived.message_id AND claim.url=archived.url
+        AND claim.source_revision=f.source_revision AND claim.hash=f.hash AND claim.size=f.size
+      WHERE archived.id=f.source_id
+  ))
+  -- A separately observed named membership cannot revoke an exact global
+  -- companion already admitted here before that evidence arrived.
+  AND (f.device_id<>'legacy' OR f.kind<>'image' OR unclaimed.source_engine_id IS NOT NULL OR NOT EXISTS (
+      SELECT 1 FROM backup.message_previews archived
       WHERE archived.id=f.source_id AND (
           EXISTS (
-              SELECT 1 FROM legacy_image_claims claim WHERE claim.message_id=archived.message_id AND claim.url=archived.url
-                AND claim.source_revision=f.source_revision AND claim.hash=f.hash AND claim.size=f.size
+              SELECT 1 FROM active_legacy_image_claims seen WHERE seen.message_id=archived.message_id AND seen.url=archived.url
+                AND seen.source_revision=f.source_revision AND seen.hash=f.hash AND seen.size=f.size
           ) OR EXISTS (
               SELECT 1 FROM message_previews local
               JOIN device_downloads assigned ON assigned.source_id=local.id AND assigned.kind=f.kind
