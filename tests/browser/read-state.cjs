@@ -102,7 +102,7 @@ async function until(fn,label){for(let i=0;i<240;i++){if(await fn())return;await
   assert.equal(await roomMark.count(),1,'older acknowledgement preserved the new mention');
   await page.locator('a[data-conversation-id="'+other+'"]').click();await until(async()=>await page.locator('#oie-app').getAttribute('data-conversation-id').then(v=>v===other),'other chat route');await page.evaluate(()=>window.testFocus=true);await until(()=>count(other)===0,'other conversation read');assert.equal(count(chat),1);
   assert.equal(documents,1);assert.deepEqual(errors,[]);
-  await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
+  await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
   for(const [width,lang] of [[1440,'en'],[390,'pt-BR']]){
    const viewport=await context.newPage();viewport.on('pageerror',e=>errors.push(e.message));await viewport.setViewportSize({width,height:900});await viewport.goto(base+'/?chat='+chat+'&lang='+lang);
    const row=viewport.locator('[data-message-id="'+racing.id+'"]');

@@ -67,8 +67,10 @@ The selected Goshtoso version supplies public `modal.Dialog`, `card`, `button`
 and `link` components. Oie composes their slots with application-owned document
 content. Goshtoso does not provide a PDF decoder in the selected version.
 Mozilla PDF.js 6.5.438 supplies its public display API, worker and text layer.
-Its assets load from the BFF when a PDF preview enters view or a PDF is opened. No PDF scripting
-sandbox or third-party CDN is used. The selected assets, licenses and pinned
+Its assets load from the BFF when a PDF preview enters view or a PDF is opened.
+The embedded Liberation Sans faces let PDF.js render Helvetica text when a
+compatible system font is unavailable. The distribution excludes the PDF
+scripting sandbox. The selected assets, licenses and pinned
 checksums are described in [the third-party notices](../THIRD_PARTY_NOTICES.md).
 
 The shared-content parser version is 2. The existing bounded derived-index

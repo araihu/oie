@@ -209,7 +209,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const mobile=await fresh({viewport:{width:390,height:844},locale:'pt-BR',hasTouch:true});await mobile.goto(base+'/?chat='+chat.id+'&account='+account+'&lang=pt-BR&theme=light');
   await openMenu(mobile);assert.equal((await action(mobile,'archived').textContent()).trim(),'Arquivar conversa');assert.equal((await action(mobile,'favorite').textContent()).trim(),'Adicionar às favoritas');await mobile.keyboard.press('Escape');
   await keyboardAction(mobile,'favorite');await settled(mobile,'favorite',true);
-  await mobile.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const audit=await mobile.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
+  await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const audit=await mobile.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
   assert.deepEqual(audit.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.equal(state.providerEffects,0,'preference actions never send protocol messages or other mutations');assert.deepEqual(errors,[]);
   await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await fs.writeFile(path.join(__dirname,'artifacts/conversation-preferences-report.json'),JSON.stringify({findings,preferenceEffects:state.effects,requests:state.patches,providerEffects:state.providerEffects,pageErrors:errors,mobileAxe:audit.violations.length},null,2));

@@ -73,7 +73,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     await page.locator('[data-account-back]').click();await action.waitFor({state:'visible'});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    }
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(a11y.violations.map(v=>v.id),[]);
+   await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(a11y.violations.map(v=>v.id),[]);
    results.push({width,mode,locale,accounts:35,axe:0});const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});if(width===818&&mode==='dark'&&locale==='pt-BR')await page.screenshot({path:path.join(artifacts,'account-drawer-overflow.png')});await page.close();
   }
   const phoneContext=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2,locale:'pt-BR',reducedMotion:'reduce'});

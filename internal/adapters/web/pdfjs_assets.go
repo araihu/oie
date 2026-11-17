@@ -2,20 +2,14 @@ package web
 
 import (
 	"bytes"
-	"embed"
-	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 	"time"
-)
 
-// The display layer, worker, fonts and image decoders are served locally.
-// The PDF scripting sandbox is deliberately absent from this distribution.
-//
-//go:embed all:pdfjs
-var pdfJSAssets embed.FS
+	"github.com/araihu/oie/internal/adapters/cachehttp"
+)
 
 func (s *Server) servePDFJS(w http.ResponseWriter, r *http.Request) bool {
 	if !strings.HasPrefix(r.URL.Path, "/ui/pdfjs/") {
@@ -50,6 +44,8 @@ func (s *Server) servePDFJS(w http.ResponseWriter, r *http.Request) bool {
 		kind = "image/svg+xml"
 	case ".png":
 		kind = "image/png"
+	case ".ttf":
+		kind = "font/ttf"
 	}
 	if strings.Contains(path.Base(name), "LICENSE") {
 		kind = "text/plain; charset=utf-8"

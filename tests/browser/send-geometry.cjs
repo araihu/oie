@@ -38,7 +38,7 @@ module.exports=async({browser,base,chat,state,emit,until,id})=>{
     const violations=await row.evaluate(async row=>{const result=await axe.run(row,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,checks:n.any.map(c=>c.data)}))}))});
     assert.deepEqual(violations,[],JSON.stringify({width,mode,libraryTheme,phase,violations}));
    };
-   if(originalText===texts[0])await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   if(originalText===texts[0])await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
    let release;const gate=new Promise(resolve=>release=resolve);
    await page.route('**/ui/messages/send',async route=>{await gate;await route.continue()});
    await page.locator('#message-composer').fill(originalText);await page.locator('[data-send-message]').click();

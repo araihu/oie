@@ -895,7 +895,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       assert(await variant.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'search has no horizontal page overflow '+width+'/'+design+'/'+theme);
       let axeViolations=null;
       if(fullMatrix||(widthIndex+designIndex+themeIndex)%2===0){
-        await variant.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+        await variant.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
         const audit=await variant.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
         assert.deepEqual(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
         axeViolations=audit.violations.length;

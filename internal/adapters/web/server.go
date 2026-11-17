@@ -1765,8 +1765,12 @@ var videoThumbnailsScript []byte
 //go:embed cache.js
 var cacheScript []byte
 
-//go:embed cache_vendor/lru-cache.min.mjs
-var cacheLibrary []byte
+//go:embed cache_vendor/dist/esm/index.min.js
+var cacheLibrarySource string
+
+const cacheLibraryLicenseNotice = "\n/*! lru-cache 11.2.6. Blue Oak Model License 1.0.0: https://blueoakcouncil.org/license/1.0.0 */\n"
+
+var cacheLibrary = []byte(cacheLibrarySource + cacheLibraryLicenseNotice)
 
 //go:embed cache_vendor/LICENSE.md
 var cacheLibraryLicense []byte

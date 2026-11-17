@@ -8,11 +8,12 @@ CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM ?= python3 tools/ci/linter.py vacuum
 GOLANGCI_LINT ?= python3 tools/ci/linter.py golangci-lint
 CLI_GENERATOR = GOWORK=off $(GO) -C tools run ./cmd/generate-oiectl
+PDFJS_GENERATOR = GOWORK=off $(GO) -C tools run ./cmd/generate-pdfjs-embed
 GO_TEST_EXEC = $(if $(OIE_GO_TEST_EXEC),-exec "$(OIE_GO_TEST_EXEC)")
 
 .PHONY: generate generate-cli lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
-generate:
+generate: generate-pdfjs-embed
 	python3 tools/generate-reaction-emoji-bases.py
 	$(CODEGEN) sqlc generate
 	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
@@ -63,13 +64,21 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh $(VACUUM)
 
-check: lint lint-go check-generated check-api-compatibility check-ci-tools test-packaging
+check: lint lint-go check-generated check-api-compatibility check-ci-tools check-vendored-assets test-packaging
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd cli/cmd/oiectl/oiectl.go)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
 	GOWORK=off $(GO) -C tools vet ./cmd/...
 	$(MAKE) test
 	$(COMPOSE) config --quiet
+
+.PHONY: generate-pdfjs-embed check-vendored-assets
+generate-pdfjs-embed:
+	$(PDFJS_GENERATOR)
+
+check-vendored-assets:
+	$(CODEGEN) muamba verify --strict > /dev/null
+	$(PDFJS_GENERATOR) -check
 
 .PHONY: check-ci-tools
 check-ci-tools:

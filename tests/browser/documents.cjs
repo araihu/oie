@@ -328,7 +328,31 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     await close(page);
     await toast.waitFor({state:'detached'});
    }finally{state.failure=false}
-  }await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
+  }await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
+  stage='bundled PDF font fallback';
+  state.pdfCatalog=[pdf];
+  const fallback=await contextFor();
+  // Make the PDF.js font fall through to its URL even on runners with Helvetica or Arial installed.
+  await fallback.context.addInitScript(()=>{
+   window.FontFace=new Proxy(window.FontFace,{
+    construct(FontFace,args){
+     const url=typeof args[1]==='string'&&args[1].match(/url\(\/ui\/pdfjs\/standard_fonts\/[^)]+\)/)?.[0];
+     return Reflect.construct(FontFace,url?[args[0],url,args[2]]:args);
+    }
+   });
+  });
+  const fontResponse=fallback.page.waitForResponse(response=>new URL(response.url()).pathname==='/ui/pdfjs/standard_fonts/LiberationSans-Regular.ttf');
+  await fallback.page.goto(docsURL());
+  const font=await fontResponse;
+  assert.equal(new URL(font.url()).origin,base);
+  assert.equal(font.status(),200);
+  assert.equal(font.headers()['content-type'],'font/ttf');
+  await until(async()=>await card(fallback.page,pdf).getAttribute('data-document-preview-state')==='ready','PDF preview with bundled font');
+  await open(fallback.page,pdf);
+  await fallback.page.waitForFunction(()=>document.querySelector('[data-document-page]').dataset.current==='1'
+   && [...document.fonts].some(font=>font.family.startsWith('g_')&&font.status==='loaded'));
+  await fallback.context.close();
+  findings.push('PDF previews and the viewer load the bundled Liberation Sans font with compatible system fonts unavailable');
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'documents-report.json'),JSON.stringify({findings,pdf:pdfProof,sparsePDF:{originalBytes:sparseBytes.length,previewBytes:sparseTransferred,rangeRequests:sparseRanges.length},budgetPDF:{originalBytes:budgetBytes.length,previewBytes:budgetTransferred,rangeRequests:budgetRanges.length},rangeConcurrency:{peakReaders:state.peakReaders,busyReaders:state.busyReaders},contentReads:state.reads,unexpectedMutations:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: on-demand original documents, escaped text, actual PDF rendering/navigation, exact downloads, retry/offline/abort, drawer focus and localized accessible layouts');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Document failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,nativePDF:navigator.pdfViewerEnabled,viewer:document.querySelector('#oie-document-viewer')?.outerHTML.slice(0,5000),focus:document.activeElement?.outerHTML.slice(0,300)})).catch(()=>({unavailable:true}))),JSON.stringify({reads:state.reads,pending:state.pending.length,aborted:state.aborted,errors,errorEvidence}));throw error}finally{release();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

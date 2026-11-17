@@ -45,7 +45,7 @@ const id='019a5df0-0000-7000-8000-000000000001';
    assert(await page.evaluate(token=>token===window.settingsDocumentToken,token),'opening settings preserves document');
    if(width===390)await page.locator('#mobile-navigation-panel').waitFor({state:'hidden'});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
    const audit=()=>dialog.evaluate(async node=>(await axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})));
    if(section==='chats'){
     const pt=locale==='pt-BR';

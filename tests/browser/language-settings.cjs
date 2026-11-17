@@ -38,7 +38,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     const content=await label.evaluate(el=>getComputedStyle(el,'::before').content);
     assert(content.includes(flag[locale])&&content.endsWith('/ ""'),content);
    };
-   await verifyLeading(trigger,initial);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});await trigger.focus();await trigger.press('ArrowDown');
+   await verifyLeading(trigger,initial);await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});await trigger.focus();await trigger.press('ArrowDown');
    for(const locale of ['en','pt-BR']){const option=page.getByRole('option',{name:name[locale],exact:true});await option.waitFor({state:'visible'});await verifyLeading(option,locale);assert.equal(await option.getAttribute('aria-selected'),String(locale===initial));}
    const openAxe=await page.getByRole('dialog',{name:initial==='en'?'Settings':'Configurações',exact:true}).evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(openAxe.violations.map(item=>({id:item.id,nodes:item.nodes.map(node=>node.target)})),[],'open language list is accessible');
    const search=page.getByRole('textbox',{name:initial==='en'?'Search languages':'Buscar idiomas',exact:true});

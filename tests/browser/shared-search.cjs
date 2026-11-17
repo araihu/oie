@@ -132,7 +132,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await until(async()=>await page.locator('[data-shared-item]').count()===3,'reloading preserves a cleared catalog selection');
    assert.equal(await page.locator('#shared-account [role=option][aria-selected=true]').count(),0);
    await assertGlobalAccount();
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
    const axe=await page.evaluate(async()=>{
     await document.fonts.ready;
     await new Promise(requestAnimationFrame);

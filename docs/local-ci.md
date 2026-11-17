@@ -293,8 +293,10 @@ node tests/browser/message-search.cjs --full-matrix
 The Dagger Go graph and shell entrypoint are under `tools/ci`. Dagger dependencies
 remain separate from the root application and generation-tool modules. Images
 are pinned by digest. Go modules,
-Go compilation, golangci-lint results, npm packages and Playwright browsers have
-persistent engine caches.
+Go compilation, golangci-lint results, Playwright's npm packages and browser
+binaries have persistent engine caches. The browser tests load the axe-core
+bundle checked into their fixtures. `make check-vendored-assets` verifies it
+with Muamba.
 The runner prints stage progress every 30 seconds and saves command output under
 `tests/browser/artifacts/ci`. Browser evidence is under its `browser` subdirectory.
 `checks`, `race` and `build` run as separate stages with their own logs.

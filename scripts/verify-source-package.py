@@ -16,6 +16,18 @@ def digest(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def verify_browser_sources(root):
+    source = root / "oie"
+    manifest = json.loads((source / "packaging/browser-source.json").read_text())
+    for path, expected in manifest["inputs"].items():
+        if digest(source / path) != expected:
+            raise ValueError(f"update packaging/browser-source.json for changed asset input {path}")
+    for item in manifest["archives"]:
+        path = root / item.get("directory", "browser-sources") / item.get("packaged_name", item["name"])
+        if digest(path) != item.get("packaged_sha256", item["sha256"]):
+            raise ValueError(f"upstream source checksum mismatch for {path.name}")
+
+
 def verify(archive, version, revision, report):
     with TemporaryDirectory(prefix="oie-source-check-") as temporary:
         stage = Path(temporary)
@@ -24,15 +36,7 @@ def verify(archive, version, revision, report):
         root = stage / f"oie_{version}_source"
         if json.loads((root / "source-info.json").read_text()) != {"version": version, "revision": revision}:
             raise ValueError("source archive version or revision differs from the build")
-        tooling = root / "release-tooling"
-        manifest = json.loads((tooling / "packaging/browser-source.json").read_text())
-        for path, expected in manifest["inputs"].items():
-            if digest(root / "oie" / path) != expected:
-                raise ValueError(f"update packaging/browser-source.json for changed asset input {path}")
-        for item in manifest["archives"]:
-            path = root / item.get("directory", "browser-sources") / item.get("packaged_name", item["name"])
-            if digest(path) != item.get("packaged_sha256", item["sha256"]):
-                raise ValueError(f"upstream source checksum mismatch for {path.name}")
+        verify_browser_sources(root)
 
         # A fresh module/build cache and disabled module resolution prove that
         # the extracted vendor trees supply the Go build on this platform.

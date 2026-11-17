@@ -6,7 +6,7 @@ const { presentationVariants } = require('./fixtures/presentation-variants.cjs')
 
 const base = process.env.OIE_BROWSER_URL || 'http://127.0.0.1:8080';
 const artifacts = path.join(__dirname, 'artifacts');
-const axePath = require.resolve('axe-core/axe.min.js');
+const axePath = require.resolve('./fixtures/axe-core/axe.min.js');
 
 async function openFixture(browser, variant, reducedMotion = 'no-preference') {
   const { width, theme, mode, locale } = variant;

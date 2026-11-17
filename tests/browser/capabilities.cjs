@@ -57,7 +57,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     return table?.getBoundingClientRect().width>0 && table.querySelectorAll('[data-capability-id]').length===23;
    });
    assert.equal(await p.locator('[data-account-capabilities-title]').textContent(),locale==='en'?'Capabilities':'Recursos');assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-   await p.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${theme} ${mode} ${locale}`);
+   await p.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${theme} ${mode} ${locale}`);
    if(theme==='goshtoso')await p.screenshot({path:path.join(artifacts,`capabilities-${width}-${mode}-${locale}.png`)});findings.push({width,theme,mode,locale,axe:0});await p.close();
   }
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await fs.writeFile(path.join(artifacts,'capabilities-report.json'),JSON.stringify({findings,cachedReadCount:state.reads,mutationEffects:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: scoped capability comparison, management priority, unknown/partial/error/legacy recovery, live focus/drafts,16 responsive theme/locale variants and zero mutations');

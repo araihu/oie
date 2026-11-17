@@ -15,6 +15,9 @@ from tempfile import TemporaryDirectory, TemporaryFile
 from urllib.request import urlopen
 
 
+BROWSER_SOURCE_MANIFEST = "packaging/browser-source.json"
+
+
 def go(cwd, *args, env=None):
     return subprocess.check_output(["go", *args], cwd=cwd, env=env, text=True)
 
@@ -71,7 +74,7 @@ def filtered_tar(data, output, exclude, include=()):
 
 
 def upstream_sources(archive, manifest, prefix):
-    for item in json.loads(manifest.read_text())["archives"]:
+    for item in manifest["archives"]:
         with urlopen(item["url"], timeout=60) as response, TemporaryFile() as data, TemporaryFile() as selected:
             checksum = hashlib.sha256()
             while chunk := response.read(1024 * 1024):
@@ -99,44 +102,59 @@ def upstream_sources(archive, manifest, prefix):
 
 def package(source, tooling, version, revision, output):
     prefix = f"oie_{version}_source"
+    tooling_manifest = f"{prefix}/release-tooling/{BROWSER_SOURCE_MANIFEST}"
+
+    def tooling_file(member):
+        if member.name == tooling_manifest or "__pycache__" in Path(member.name).parts:
+            return None
+        return member
+
     with TemporaryDirectory(prefix="oie-vendor-") as temporary:
         vendors = Path(temporary)
         go(source, "mod", "vendor", "-o", str(vendors / "app"))
         go(source / "cli", "mod", "vendor", "-o", str(vendors / "cli"))
         with output.open("xb") as stream, gzip.GzipFile(fileobj=stream, mode="wb", mtime=0) as compressed:
             with tarfile.open(fileobj=compressed, mode="w|") as archive:
-                add_tree(archive, source, revision, prefix)
+                manifest = add_tree(archive, source, revision, prefix)
                 archive.add(vendors / "app", arcname=f"{prefix}/oie/vendor")
                 archive.add(vendors / "cli", arcname=f"{prefix}/oie/cli/vendor")
                 for path in ("scripts/package-desktop.sh", "scripts/package-source.py",
                              "scripts/verify-source-package.py", "scripts/collect-licenses.sh",
                              "scripts/install.sh", "packaging", "tests/packaging", "tools/go.mod", "tools/go.sum"):
-                    archive.add(tooling / path, arcname=f"{prefix}/release-tooling/{path}",
-                                filter=lambda m: None if "__pycache__" in Path(m.name).parts else m)
+                    archive.add(tooling / path, arcname=f"{prefix}/release-tooling/{path}", filter=tooling_file)
+                # Preserve the tooling copy for readers of previous source archives.
+                add_bytes(archive, tooling_manifest, manifest)
                 # Module archives retain generation inputs omitted by go mod vendor,
                 # including Wails TypeScript, Goshtoso's asset recipe and SQLite translations.
                 for module in modules(source):
                     file = Path(module["Zip"])
                     path = proxy_path(module["Path"])
                     archive.add(file, arcname=f"{prefix}/go-sources/{path}/{file.name}")
-                upstream_sources(archive, tooling / "packaging/browser-source.json", prefix)
+                upstream_sources(archive, json.loads(manifest), prefix)
                 archive.add(tooling / "docs/release-source.md", arcname=f"{prefix}/README.md")
                 identity = json.dumps({"version": version, "revision": revision}).encode()
-                member = tarfile.TarInfo(f"{prefix}/source-info.json")
-                member.size = len(identity)
-                archive.addfile(member, io.BytesIO(identity))
+                add_bytes(archive, f"{prefix}/source-info.json", identity)
+
+
+def add_bytes(archive, name, data):
+    member = tarfile.TarInfo(name)
+    member.size = len(data)
+    archive.addfile(member, io.BytesIO(data))
 
 
 def add_tree(archive, source, revision, prefix):
     if (source / ".git").exists():
         data = subprocess.check_output(["git", "archive", revision], cwd=source)
         with tarfile.open(fileobj=io.BytesIO(data)) as tree:
+            manifest = tree.extractfile(BROWSER_SOURCE_MANIFEST).read()
             for member in tree:
                 content = tree.extractfile(member) if member.isfile() else None
                 member.name = f"{prefix}/oie/{member.name}"
                 archive.addfile(member, content)
     else:
+        manifest = (source / BROWSER_SOURCE_MANIFEST).read_bytes()
         archive.add(source, arcname=f"{prefix}/oie")
+    return manifest
 
 
 if __name__ == "__main__":

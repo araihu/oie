@@ -64,7 +64,7 @@ async function assertNoOverflow(page) {
 }
 
 async function assertAccessibleControls(page) {
-  await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
+  await page.addScriptTag({ path: require.resolve("./fixtures/axe-core/axe.min.js") });
   const failures = await page.evaluate(async selectors => {
     const { violations } = await axe.run({ include: selectors }, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },

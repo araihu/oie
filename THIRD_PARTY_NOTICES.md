@@ -31,10 +31,9 @@ SOFTWARE.
 ## PDF.js browser assets
 
 The document viewer uses the display API and worker from Mozilla PDF.js
-6.5.438, distributed as `pdfjs-dist` under Apache License 2.0. The pinned
-package source, integrity and individual file checksums are recorded in
-`internal/adapters/web/pdfjs/manifest.json`. Its license is included beside the
-assets and is available at `/ui/pdfjs/LICENSE`.
+6.5.438, distributed as `pdfjs-dist` under Apache License 2.0. Muamba records the
+pinned archive and individual file checksums in `.muamba.lock.yaml`. The license
+ships beside the assets and is available at `/ui/pdfjs/LICENSE`.
 
 The PDF.js worker includes the MIT-licensed Brotli JavaScript decoder.
 The release packages and OCI image include the decoder's MIT notice.
@@ -42,19 +41,26 @@ The release packages and OCI image include the decoder's MIT notice.
 The distribution also includes Adobe character maps, PDFium/Foxit font data,
 image decoders and an ICC profile. Their notices are included in the respective
 `cmaps`, `standard_fonts`, `wasm` and `iccs` directories. They use BSD, MIT and
-CC0 terms. Liberation fonts and the PDF JavaScript scripting sandbox are not
-included. Missing standard sans-serif font data uses the browser's system fonts.
+CC0 terms. The four unmodified Liberation Sans 1.07.4 faces from this PDF.js
+distribution provide a local fallback when system fonts are unavailable. The
+fonts are licensed under GPL-2.0 with the Liberation font exception, included
+at `/ui/pdfjs/standard_fonts/LICENSE_LIBERATION`. The release source archive
+includes the upstream Liberation Fonts sources from the Debian archive.
+The PDF JavaScript scripting sandbox is excluded.
 
-Run `python3 tools/vendor-pdfjs.py` to verify the assets without network access.
-Use `python3 tools/vendor-pdfjs.py --update` to restore the exact pinned package.
-The tool verifies its SHA-512 package integrity before writing selected assets.
+Run `make check-vendored-assets` to verify the committed files once the Go tool
+dependencies are available. Restore the pinned files with
+`go tool -modfile=tools/go.mod muamba sync --strict pdfjs`.
+After changing the lock, run `make generate-pdfjs-embed` to update the exact
+set of PDF.js files embedded by the server.
 
 ## lru-cache browser runtime
 
 `lru-cache` 11.2.6 is distributed under the Blue Oak Model License 1.0.0.
-The browser ESM build is served locally. The license and pinned archive/source
-checksums are in `internal/adapters/web/cache_vendor`. Reproduce the asset with
-`python3 tools/vendor-lru-cache.py`. Project: https://github.com/isaacs/node-lru-cache.
+Muamba pins the npm archive, browser ESM build and license in
+`.muamba.lock.yaml`. The UI serves the module with its license notice and
+provides the full license at `/ui/cache/LICENSE.md`. Restore the pinned files
+with `go tool -modfile=tools/go.mod muamba sync --strict lru-cache`.
 
 ## WaveSurfer.js browser assets
 
@@ -76,6 +82,13 @@ Unicode 17.0 and CLDR 48 data under Unicode-3.0. Copyright © 1991-2025 Unicode,
 Inc. The license is included at `internal/adapters/web/emoji/LICENSE.txt` and
 served at `/ui/emoji/LICENSE.txt`. Regenerate the validation base table with
 `python3 tools/generate-reaction-emoji-bases.py`.
+
+## Browser accessibility test assets
+
+The browser tests use the axe-core 4.13.0 bundle pinned by Muamba alongside its
+MPL-2.0 license and third-party notices in `tests/browser/fixtures/axe-core`.
+The release source archive includes the editable upstream sources for this
+[axe-core release](https://github.com/dequelabs/axe-core/releases/tag/v4.13.0).
 
 ## Interface icons and browser runtime
 

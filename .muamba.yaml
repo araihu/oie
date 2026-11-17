@@ -1,0 +1,58 @@
+schema: 1
+resources:
+  axe-core:
+    version: "4.13.0"
+    directories:
+      browser-tests:
+        url: https://registry.npmjs.org/axe-core/-/axe-core-${version}.tgz
+        archive: tar.gz
+        path: tests/browser/fixtures/axe-core
+        strip_components: 1
+        include:
+          - LICENSE
+          - LICENSE-3RD-PARTY.txt
+          - axe.min.js
+        max_size: 2MiB
+        max_files: 128
+        max_unpacked_size: 8MiB
+  lru-cache:
+    version: "11.2.6"
+    directories:
+      browser:
+        url: https://registry.npmjs.org/lru-cache/-/lru-cache-${version}.tgz
+        archive: tar.gz
+        path: internal/adapters/web/cache_vendor
+        strip_components: 1
+        include:
+          - LICENSE.md
+          - dist/esm/index.min.js
+        max_size: 2MiB
+        max_files: 128
+        max_unpacked_size: 4MiB
+  pdfjs:
+    version: "6.5.438"
+    directories:
+      display:
+        url: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-${version}.tgz
+        archive: tar.gz
+        path: internal/adapters/web/pdfjs
+        strip_components: 1
+        include:
+          - LICENSE
+          - build/pdf.mjs
+          - build/pdf.renderer.mjs
+          - build/pdf.worker.mjs
+          - cmaps/**
+          - iccs/**
+          - standard_fonts/Foxit*.pfb
+          - standard_fonts/LiberationSans-*.ttf
+          - standard_fonts/LICENSE_FOXIT
+          - standard_fonts/LICENSE_LIBERATION
+          - wasm/**
+          - web/images/**
+          - web/pdf_viewer.css
+        exclude:
+          - wasm/*[Qq][Uu][Ii][Cc][Kk][Jj][Ss]*
+        max_size: 16MiB
+        max_files: 1024
+        max_unpacked_size: 64MiB
