@@ -505,7 +505,7 @@ type copy struct {
 	RoomLeaveRequested                                                                                                                                                                                       string
 	RoomQueueHint                                                                                                                                                                                            string
 	NavFailed                                                                                                                                                                                                string
-	InfoSharedContent                                                                                                                                                                                        string
+	InfoConversationActions                                                                                                                                                                                  string
 	InfoStarred                                                                                                                                                                                              string
 	InfoConnection                                                                                                                                                                                           string
 	InfoBack                                                                                                                                                                                                 string

@@ -176,6 +176,7 @@ async function until(test, label) {
     assert.equal(refused.status(), 409, 'a stale confirmation was refused');
     assert((await session(room)).active);
     await destroy.waitFor({state:'hidden'});
+    await until(() => page.locator('#room-destroy-open').evaluate(button => document.activeElement === button), 'restore delete action focus after refusal');
     await until(async () => await destroy.locator('[name=expectedRevision]').inputValue() !== oldRevision, 'new room controls');
     await page.locator('#room-destroy-open').click();
     await destroy.getByRole('button', {name:'Excluir sala para todos', exact:true}).click();

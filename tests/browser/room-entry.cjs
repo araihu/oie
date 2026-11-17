@@ -561,6 +561,45 @@ async function waitFor(predicate) {
     await destructiveDrawer.getByRole('button',{name:'Voltar aos detalhes',exact:true}).click();
     await roomPanel.waitFor({state:'visible'});
     assert.equal(managementCommands.length,beforeDestroy);
+    for (const nextRevision of [managementRevision, 'after-destroy-review']) {
+      const reviewedRevision = await destroyForm.locator('[name=expectedRevision]').inputValue();
+      await page.keyboard.press('Escape');
+      await roomPanel.waitFor({state:'hidden'});
+      const requested = Promise.withResolvers();
+      const releaseRefresh = Promise.withResolvers();
+      await page.route('**/ui/rooms/manage-fragment?**', async route => {
+        requested.resolve();
+        await releaseRefresh.promise;
+        await route.continue();
+      }, {times:1});
+      try {
+        await page.locator('[aria-controls=chat-options-panel]').click();
+        await page.locator('#chat-manage-room').click();
+        await requested.promise;
+        await destructiveActions.click();
+        await destroyToggle.click();
+        await page.waitForFunction(() => document.activeElement.matches('#room-destroy-form [data-room-action-cancel]'));
+        managementRevision = nextRevision;
+      } finally {
+        releaseRefresh.resolve();
+      }
+      await page.waitForFunction(() => !document.querySelector('[data-room-management]').hasAttribute('aria-busy'));
+      if (nextRevision === reviewedRevision) {
+        assert.equal(await destroyForm.isVisible(),true);
+        assert(await destroyForm.locator('[data-room-action-cancel]').evaluate(button => document.activeElement === button));
+      } else {
+        assert.equal(await destroyForm.isVisible(),false,'a changed revision requires a new confirmation');
+        assert(await destroyToggle.evaluate(button => document.activeElement === button));
+        const conflict = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'A sala mudou.'});
+        await conflict.waitFor();
+        await conflict.locator('button[aria-label="Fechar"]').evaluate(button => button.click());
+        await conflict.waitFor({state:'hidden'});
+      }
+      assert.equal(await destroyForm.locator('[name=expectedRevision]').inputValue(),nextRevision);
+      assert.equal(managementCommands.length,beforeDestroy);
+      await destructiveDrawer.getByRole('button',{name:'Voltar aos detalhes',exact:true}).click();
+      await roomPanel.waitFor({state:'visible'});
+    }
     await roomPanel.getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
     await roomPanel.locator('#room-avatar-removal').getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
     await image.waitFor({state:'hidden'});

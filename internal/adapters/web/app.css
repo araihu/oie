@@ -239,6 +239,8 @@ html:not(.dark) .oie-message-body{--color-surface-alt:var(--oie-raised)}
  .oie-back-button,.oie-chat-skeleton .oie-chat-skeleton-back{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;flex-shrink:0}
  :is(.oie-chat-header,.oie-chat-skeleton-header){padding:10px;gap:8px}.oie-chat-header .oie-icon-button{width:44px;min-width:44px;height:44px;min-height:44px;min-block-size:44px;min-inline-size:44px}
  :is(.oie-timeline,.oie-chat-skeleton-timeline){padding:18px 12px 24px}.oie-message{max-width:96%;font-size:13px}.oie-media-message{max-width:280px;margin-left:48px}.oie-preview-note{padding:6px 10px;font-size:10px}
+ .oie-timeline .oie-message-content{gap:6px}
+ .oie-timeline .oie-sender-avatar :is(.oie-avatar-initials,.oie-avatar-photo)>*{width:28px;height:28px;font-size:12px}
  :is(.oie-composer,.oie-chat-skeleton-composer){padding:9px;gap:6px}.oie-list-heading{padding:12px 14px}.oie-list-heading h2{font-size:22px}.oie-chat-link{height:82px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}

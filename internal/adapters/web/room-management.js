@@ -65,8 +65,8 @@ window.OieRuntime.register('room-management', life => {
     return '/ui/rooms/manage-fragment?' + new URLSearchParams({chat, account, engine, lang, ...extra});
   }
 
-  function managementError() {
-    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message:root.dataset.unavailable}}));
+  function managementError(message = root.dataset.unavailable) {
+    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message}}));
   }
 
   function closeParticipant(panel, focus = false) {
@@ -278,7 +278,6 @@ window.OieRuntime.register('room-management', life => {
         }
         render(template);
         restoreForms(content);
-        restoreForms(destructive);
       } else {
         const revision = template.content.querySelector('[name=expectedRevision]')?.value;
         if (!revision && !template.content.querySelector('.oie-room-management-tabs')) {
@@ -352,11 +351,21 @@ window.OieRuntime.register('room-management', life => {
 
   function render(template) {
     const destroyFragment = template.content.querySelector('[data-room-destroy-fragment]');
-    const destroyFocused = destructive.contains(document.activeElement);
+    const focused = document.activeElement;
+    const destroyFocused = destructive.contains(focused);
+    const reviewed = destructive.querySelector('#room-destroy-form:not([hidden])');
+    const incoming = destroyFragment?.querySelector('#room-destroy-form');
+    if (reviewed && reviewed.elements.expectedRevision.value !== incoming?.elements.expectedRevision.value) {
+      openForms.delete(identity(reviewed));
+      managementError(root.dataset.conflict);
+    }
     destructive.replaceChildren(...(destroyFragment?.childNodes || []));
     destroyFragment?.remove();
+    restoreForms(destructive);
     if (destroyFocused) {
-      const target = destructive.querySelector('#room-destroy-open') ||
+      const confirmation = destructive.querySelector('#room-destroy-form:not([hidden])');
+      const button = focused?.matches('[type=submit]') ? '[type=submit]' : '[data-room-action-cancel]';
+      const target = confirmation?.querySelector(button) || destructive.querySelector('#room-destroy-open') ||
         destructive.parentElement.querySelector('.oie-settings-back');
       target?.focus({preventScroll:true});
     }
@@ -607,16 +616,15 @@ window.OieRuntime.register('room-management', life => {
     pending.delete(form);
     const action = form.elements.managementAction.value;
     if (action === 'destroy') {
-      const focused = form.contains(document.activeElement);
+      const focused = form.contains(document.activeElement) ||
+        document.activeElement === document.body && destructive.getClientRects().length > 0;
       const trigger = setActionOpen(form, false);
       if (result.ok) {
         window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-destructive-actions'}}));
         window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-management'}}));
       } else {
         if (focused) trigger?.focus({preventScroll:true});
-        if (result.message) window.dispatchEvent(new CustomEvent('notify', {
-          detail: {kind:'toast', tone:'danger', message:result.message}
-        }));
+        if (result.message) managementError(result.message);
         life.timeout(() => {if (active) void load(true);}, 0);
       }
       return;
