@@ -568,30 +568,17 @@ window.OieRuntime.register('global-read-receipts', life => {
 });
 
 window.OieRuntime.register('conversation-read-receipt-settings', life => {
-  life.on(document, 'close', event => {
-    const dialog = event.target;
-    if (dialog.id !== 'inbox-read-receipts-dialog' || dialog.open) return;
-    const focused = document.activeElement;
-    if (focused !== document.body && !dialog.contains(focused)) return;
-    const chat = dialog.querySelector('#inbox-read-receipts-content')?.dataset.readReceiptsConversation;
-    if (!chat) return;
-    const row = document.querySelector(`#conversation-list [data-conversation-row="${CSS.escape(chat)}"]`);
-    const target = row?.querySelector('button[data-read-receipts-conversation]') ||
-      row?.querySelector('a[data-conversation-id]') || document.getElementById('conversation-search');
-    target?.focus({preventScroll: true});
-  }, true);
   life.on(document, 'htmx:after:request', event => {
     const ctx = event.detail.ctx;
     const target = ctx?.target;
-    if (!['inbox-read-receipts-content', 'inbox-read-receipts', 'conversation-read-receipts'].includes(target?.id)) return;
+    if (target?.id !== 'conversation-read-receipts') return;
     const chat = new URL(ctx.request.action, location.href).searchParams.get('chat');
     if (!target.isConnected || target.dataset.readReceiptsConversation !== chat) {
       event.preventDefault();
       return;
     }
     if (ctx.request.method.toUpperCase() !== 'GET') return;
-    const region = target.id === 'inbox-read-receipts-content' ? 'inbox-read-receipts' : target.id;
-    const fragment = new DOMParser().parseFromString(ctx.text || '', 'text/html').getElementById(region);
+    const fragment = new DOMParser().parseFromString(ctx.text || '', 'text/html').getElementById(target.id);
     if (fragment?.dataset.readReceiptsConversation !== chat) {
       event.preventDefault();
       target.textContent = target.dataset.unavailable;

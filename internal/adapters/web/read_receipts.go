@@ -24,10 +24,10 @@ func supportsReadReceipts(version engineapi.EngineApiVersion) bool {
 }
 
 type readReceiptsView struct {
-	Revision, Notice, Title string
-	Override                *bool
-	GlobalEnabled           bool
-	Loading, Saved, Inbox   bool
+	Revision, Notice string
+	Override         *bool
+	GlobalEnabled    bool
+	Loading, Saved   bool
 }
 
 func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
@@ -41,8 +41,7 @@ func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
 	v.CSRF = csrfToken(w, r)
 	ctx := r.Context()
 	id := r.URL.Query().Get("chat")
-	inbox := r.URL.Query().Get("inbox") == "1"
-	if id != "" && !validOperationKey(id) || inbox && id == "" {
+	if id != "" && !validOperationKey(id) {
 		http.NotFound(w, r)
 		return
 	}
@@ -89,12 +88,7 @@ func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	policy.Notice, policy.Saved, policy.Inbox = notice, saved, inbox
-	if inbox && policy.Revision != "" {
-		if chat, err := s.client.GetConversationWithResponse(ctx, id); err == nil && chat.JSON200 != nil {
-			policy.Title = chat.JSON200.Title
-		}
-	}
+	policy.Notice, policy.Saved = notice, saved
 	if saved && r.Header.Get("HX-Request") != "true" {
 		q := url.Values{"lang": {v.Locale}, "theme": {v.Theme}}
 		if id == "" {
@@ -178,13 +172,10 @@ func (s *Server) saveReadReceipts(ctx context.Context, id string, form url.Value
 	return readReceiptsView{Revision: out.JSON200.Revision, GlobalEnabled: out.JSON200.GlobalEnabled, Override: out.JSON200.Override}, http.StatusOK
 }
 
-func (v view) readReceiptsHref(id string, inbox bool) string {
+func (v view) readReceiptsHref(id string) string {
 	q := url.Values{"lang": {v.Locale}}
 	if id != "" {
 		q.Set("chat", id)
-	}
-	if inbox {
-		q.Set("inbox", "1")
 	}
 	return readReceiptsPath + "?" + q.Encode()
 }
@@ -213,8 +204,4 @@ func readReceiptOptions(v view, id string, data readReceiptsView) []selectfield.
 
 func (v view) canSetReadReceipts(c *engineapi.Conversation) bool {
 	return v.ReadReceiptsSupported && !v.Preview && c != nil && c.Request == nil && !removedConversation(c)
-}
-
-func (v view) inboxReadReceiptsLabel(c engineapi.Conversation) string {
-	return strings.ReplaceAll(v.Text.ReadReceiptsFor, "{conversation}", c.Title)
 }

@@ -33,8 +33,7 @@ Verification includes concurrent receive/read batches, partial visibility, offsc
 Settings → Engine → **Read receipts** sets the default for all conversations
 on that engine, initially **Send**. Open **Read receipts** in a direct
 conversation or room's details to set **Use the default**, **Send**, or
-**Do not send**. The inbox also offers this action for each conversation,
-without opening the timeline. Clients on the same engine share these settings.
+**Do not send**. Clients on the same engine share these settings.
 The policy is independent of the local unread counter and unread reminder.
 
 Oiê emits [XEP-0333 displayed markers](https://xmpp.org/extensions/xep-0333.html)

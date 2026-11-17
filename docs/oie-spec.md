@@ -810,8 +810,7 @@ Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, no
 Read-receipt sending defaults on where supported. Set the default for the
 selected engine in Settings → Engine → Read receipts. Each saved direct
 conversation and room can inherit that default, explicitly enable receipts or
-explicitly disable them using Read receipts in the inbox or in Conversation
-details. The inbox action is available before opening the conversation. Clients
+explicitly disable them using Read receipts in Conversation details. Clients
 of the same engine share the policy. Local read tracking and synchronization of
 read positions are independent of receipt sending.
 
@@ -1172,6 +1171,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B43** | In **Access keys**, list existing keys with their names and last-used times, indicate when a key has never been used, and allow revocation. Reveal the secret only immediately after creation and allow one successful copy in that view. Use the standard copy icon for the copy button. Original capture of the access-key panel (local) `backlog-evidence/b43-access-key-management.png`. |
 | **B44** | Show the version of the running Oiê build in **About**. Review whether the credits in that panel are sufficient for the assets and dependencies shipped with each distribution. Compare them with the existing third-party notices and bundled license files, and update the panel or its links where needed. The repository notices cover additional items such as interface icons, browser libraries, and the notification sound. [Third-party notices](../THIRD_PARTY_NOTICES.md). Original About panel capture (local) `backlog-evidence/b44-about-credits-version.png`. |
 | **B45** | Implemented. Long message bubbles use more of the available timeline width across responsive layouts. Sender avatars and their spacing stay compact in narrow conversation panes. Original browser capture at 803 px (local) `backlog-evidence/b45-message-bubble-width.png`. |
+| **B46** | Implemented. The **Read receipts** control for a conversation is in **Conversation details**. Conversation list rows use the space for the conversation preview and status. Original browser capture (local) `backlog-evidence/b46-inbox-read-receipts.png`. |
 
 A separate native daemon is an accepted future option. Wails desktop packaging is selected for the v0.0.1-rc.0/alpha sequence under section 2.1.1. Matrix, IRC, and Nostr remain likely future protocol candidates; desktop packaging does not select a separate daemon or implement those protocols.
 

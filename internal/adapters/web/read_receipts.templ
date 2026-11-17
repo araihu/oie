@@ -3,9 +3,6 @@ package web
 import (
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
-	"github.com/araihu/goshtoso/components/modal"
-	"github.com/araihu/goshtoso/expressions"
-	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	selectfield "github.com/araihu/goshtoso/components/select"
 )
 
@@ -15,7 +12,7 @@ templ readReceiptsIcon() {
 
 templ globalReadReceiptsSettings(v view) {
 	<section id="engine-read-receipts-settings" class="oie-settings-section oie-engine-retention" aria-labelledby="engine-read-receipts-title"
-		hx-get={v.readReceiptsHref("",false)} hx-trigger="intersect once, oie:refresh-read-receipts"
+		hx-get={v.readReceiptsHref("")} hx-trigger="intersect once, oie:refresh-read-receipts"
 		hx-target="#engine-read-receipts" hx-swap="outerHTML settle:0ms show:none" hx-sync="this:queue last">
 		<h2 id="engine-read-receipts-title">@readReceiptsIcon()<span>{v.Text.CapabilityReadReceipts}</span></h2>
 		<div data-read-receipts-settings>
@@ -31,18 +28,13 @@ templ globalReadReceiptsSettings(v view) {
 
 templ readReceiptsRegion(v view, id string, p readReceiptsView) {
 	{{ region := "engine-read-receipts" }}
-	if p.Inbox {
-		{{ region = "inbox-read-receipts" }}
-	} else if id != "" {
+	if id != "" {
 		{{ region = "conversation-read-receipts" }}
 	}
 	<div id={region} class="oie-retention" data-read-receipts-conversation={id} data-unavailable={v.Text.ReadReceiptsUnavailable} x-data="{failed:false}" x-on:htmx:error="failed = true">
 		if p.Revision != "" {
-			if p.Title != "" {
-				<p class="oie-receipts-conversation-title">{p.Title}</p>
-			}
-			<form class="oie-retention-form" method="post" action={templ.URL(v.readReceiptsHref(id,p.Inbox))}
-				hx-post={v.readReceiptsHref(id,p.Inbox)} hx-target={"#"+region} hx-swap="outerHTML settle:0ms show:none" hx-disable="find fieldset"
+			<form class="oie-retention-form" method="post" action={templ.URL(v.readReceiptsHref(id))}
+				hx-post={v.readReceiptsHref(id)} hx-target={"#"+region} hx-swap="outerHTML settle:0ms show:none" hx-disable="find fieldset"
 				if id == "" {
 					hx-sync="#engine-read-receipts-settings:queue last"
 				} else {
@@ -78,7 +70,7 @@ templ readReceiptsRegion(v view, id string, p readReceiptsView) {
 		} else {
 			<div class="oie-retention-load"
 				if p.Loading && id != "" {
-					hx-get={v.readReceiptsHref(id,p.Inbox)} hx-trigger="intersect once"
+					hx-get={v.readReceiptsHref(id)} hx-trigger="intersect once"
 					hx-target={"#"+region} hx-swap="outerHTML settle:0ms show:none" hx-sync="#oie-app:queue last"
 				}
 			>
@@ -89,55 +81,17 @@ templ readReceiptsRegion(v view, id string, p readReceiptsView) {
 					<p role="alert">{p.Notice}</p>
 				}
 				if id != "" {
-					@button.Button(button.WithType("button"),button.WithAttrs(readReceiptsRetryAttrs(v,id,region,p.Inbox,p.Loading))){ {v.Text.Retry} }
+					@button.Button(button.WithType("button"),button.WithAttrs(readReceiptsRetryAttrs(v,id,region,p.Loading))){ {v.Text.Retry} }
 				}
 			</div>
 		}
 	</div>
 }
 
-func readReceiptsRetryAttrs(v view, id, region string, inbox, loading bool) templ.Attributes {
-	attrs := templ.Attributes{"hx-get": v.readReceiptsHref(id,inbox), "hx-target": "#"+region, "hx-swap": "outerHTML settle:0ms show:none", "hx-disable":"this", "hx-sync":"#oie-app:queue last"}
+func readReceiptsRetryAttrs(v view, id, region string, loading bool) templ.Attributes {
+	attrs := templ.Attributes{"hx-get": v.readReceiptsHref(id), "hx-target": "#"+region, "hx-swap": "outerHTML settle:0ms show:none", "hx-disable":"this", "hx-sync":"#oie-app:queue last"}
 	if loading {
 		attrs["x-show"], attrs["x-cloak"] = "failed", true
 	}
 	return attrs
-}
-
-
-templ inboxReadReceiptsDialog(v view) {
-	@modal.Dialog(modal.DialogConfig{
-		ID: "inbox-read-receipts-dialog",
-		Title: v.Text.CapabilityReadReceipts,
-		Content: inboxReadReceiptsContent(v),
-	}).WithExpressions(expressions.Modal{DialogCloseAriaLabel: v.Text.Close})
-}
-
-templ inboxReadReceiptsContent(v view) {
-	<div id="inbox-read-receipts-content" aria-live="polite" data-unavailable={v.Text.ReadReceiptsUnavailable}></div>
-}
-
-templ inboxReadReceiptsButton(v view, c engineapi.Conversation) {
-	@button.Button(
-		button.WithType("button"),
-		button.WithAppearance(button.AppearancePlain),
-		button.WithRootClass("oie-icon-button oie-chat-receipts-button"),
-		button.WithAttrs(templ.Attributes{
-			"aria-label": v.inboxReadReceiptsLabel(c),
-			"title": v.Text.CapabilityReadReceipts,
-			"aria-haspopup": "dialog",
-			"aria-controls": "inbox-read-receipts-dialog",
-			"data-loading": v.Text.ReadReceiptsLoading,
-			"data-unavailable": v.Text.ReadReceiptsUnavailable,
-			"data-read-receipts-conversation": c.Id,
-			"hx-get": v.readReceiptsHref(c.Id,true),
-			"hx-target": "#inbox-read-receipts-content",
-			"hx-swap": "innerHTML settle:0ms show:none",
-			"hx-sync": "#oie-app:queue last",
-			"x-on:htmx:error": "const content = document.getElementById('inbox-read-receipts-content'); if (content?.dataset.readReceiptsConversation === $el.dataset.readReceiptsConversation) content.textContent = $el.dataset.unavailable",
-		}),
-		button.WithAlpine(&button.AlpineConfig{Data: "{}", OnClick: "const content = document.getElementById('inbox-read-receipts-content'); content.dataset.readReceiptsConversation = $el.dataset.readReceiptsConversation; content.textContent = $el.dataset.loading; $dispatch('modal:open', {id:'inbox-read-receipts-dialog'})"}),
-	) {
-		@readReceiptsIcon()
-	}
 }
