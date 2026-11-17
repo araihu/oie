@@ -1,0 +1,3 @@
+DROP VIEW conversation_read_receipt_policy;
+DROP TABLE conversation_read_receipt_settings;
+DROP TABLE engine_read_receipt_settings;

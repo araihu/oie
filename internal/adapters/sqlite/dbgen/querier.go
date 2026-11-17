@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AcknowledgeMessageSearchPending(ctx context.Context, arg AcknowledgeMessageSearchPendingParams) error
 	AcquireWriteLock(ctx context.Context) error
+	AdvanceDisplayedHead(ctx context.Context, arg AdvanceDisplayedHeadParams) (int64, error)
 	AdvanceDownloadGeneration(ctx context.Context, deviceID string) error
 	AdvanceMessageSearchIndex(ctx context.Context, arg AdvanceMessageSearchIndexParams) (int64, error)
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
@@ -73,10 +74,12 @@ type Querier interface {
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	GetConversationOpenedAt(ctx context.Context, entityID string) (string, error)
 	GetConversationReadHead(ctx context.Context, conversationID string) (GetConversationReadHeadRow, error)
+	GetConversationReadReceipts(ctx context.Context, conversationID string) (GetConversationReadReceiptsRow, error)
 	GetConversationRetention(ctx context.Context, conversationID string) (GetConversationRetentionRow, error)
 	GetCorrectionFacts(ctx context.Context, messageID string) ([]MessageCorrectionFact, error)
 	GetDeviceDownload(ctx context.Context, arg GetDeviceDownloadParams) (DeviceDownload, error)
 	GetDownloadDevice(ctx context.Context, deviceID string) (GetDownloadDeviceRow, error)
+	GetGlobalReadReceipts(ctx context.Context) (GetGlobalReadReceiptsRow, error)
 	GetGlobalRetention(ctx context.Context) (GetGlobalRetentionRow, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
 	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
@@ -148,6 +151,8 @@ type Querier interface {
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
 	IsExpiredReplyReference(ctx context.Context, arg IsExpiredReplyReferenceParams) (bool, error)
+	// XEP-0333 signals a position, so an eligible target must precede any unread message.
+	LatestDisplayedTarget(ctx context.Context, arg LatestDisplayedTargetParams) (LatestDisplayedTargetRow, error)
 	LatestLogicalMessage(ctx context.Context, conversationID string) (Message, error)
 	LatestOwnMessage(ctx context.Context, conversationID string) (Message, error)
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)
@@ -214,7 +219,9 @@ type Querier interface {
 	PutContactSource(ctx context.Context, arg PutContactSourceParams) error
 	PutContentHead(ctx context.Context, arg PutContentHeadParams) error
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
+	PutConversationReadReceipts(ctx context.Context, arg PutConversationReadReceiptsParams) error
 	PutConversationRetention(ctx context.Context, arg PutConversationRetentionParams) error
+	PutGlobalReadReceipts(ctx context.Context, enabled int64) error
 	PutGlobalRetention(ctx context.Context, arg PutGlobalRetentionParams) error
 	PutGuardedArchiveCheckpoint(ctx context.Context, arg PutGuardedArchiveCheckpointParams) (int64, error)
 	PutGuardedRoomArchiveProgress(ctx context.Context, arg PutGuardedRoomArchiveProgressParams) (int64, error)
@@ -232,6 +239,7 @@ type Querier interface {
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
+	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveDownloadGarbage(ctx context.Context, arg RemoveDownloadGarbageParams) error

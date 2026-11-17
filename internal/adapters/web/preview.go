@@ -43,7 +43,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 		}
 	}
 	v.InfoView = q.Get("infoView")
-	if v.InfoView != "shared" && v.InfoView != "stars" && v.InfoView != "participants" && v.InfoView != "retention" {
+	if v.InfoView != "shared" && v.InfoView != "stars" && v.InfoView != "participants" && v.InfoView != "retention" && v.InfoView != "read-receipts" {
 		v.InfoView = ""
 	}
 	v.InfoType = q.Get("infoType")

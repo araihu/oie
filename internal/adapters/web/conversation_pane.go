@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
@@ -18,14 +19,14 @@ func (v view) conversationScope() string {
 
 // Reuse requires the same row links and presentation, including filter and theme.
 func (v view) inboxCacheScope() string {
-	data, _ := json.Marshal([]string{v.conversationScope(), v.Filter, v.Theme})
+	data, _ := json.Marshal([]string{v.conversationScope(), v.Filter, v.Theme, strconv.FormatBool(v.ReadReceiptsSupported)})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
 
 // Compare server data rather than DOM enhanced by HTMX, avatars and local time.
 func (v view) conversationListVersion() string {
-	data, _ := json.Marshal([]any{v.Chats, v.Accounts, v.Locale, v.Section, v.Filter, v.Query})
+	data, _ := json.Marshal([]any{v.Chats, v.Accounts, v.Locale, v.Section, v.Filter, v.Query, v.ReadReceiptsSupported})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
@@ -33,7 +34,7 @@ func (v view) conversationListVersion() string {
 // Enhancement changes local times and avatars, so compare server row data.
 func (v view) conversationRowVersion(c engineapi.Conversation) string {
 	c.LatestMessagePageCount = nil
-	data, _ := json.Marshal([]any{c, v.Accounts, v.Locale})
+	data, _ := json.Marshal([]any{c, v.Accounts, v.Locale, v.ReadReceiptsSupported})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }

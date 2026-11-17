@@ -75,6 +75,7 @@ type Message struct {
 	IsOwn                                     bool
 	SendState                                 string
 	ProviderID                                string
+	ReadReceiptID                             string `json:",omitempty"`
 	ArchiveScope, ArchiveID                   string
 	Historical                                bool
 	ReceivedAt                                time.Time          `json:"-"`

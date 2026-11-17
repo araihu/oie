@@ -23,11 +23,34 @@ reviewed revision. The user can retry after the fresh state loads.
 
 Mark as unread adds a reminder to the inbox and the unread filter. A reminder
 with no unread messages is shown as a dot. The reminder remains until an explicit
-Mark as read. Message read evidence continues to follow visibility. XMPP read
-receipts, persistent offline commands and replication across independent engines
+Mark as read. Message read evidence continues to follow visibility. Persistent offline read commands and replication across independent engines
 remain open.
 
 Verification includes concurrent receive/read batches, partial visibility, offscreen messages, focus and visibility guards, modal overlays, lost acknowledgements with stable keys, later arrivals, atomic rollback, account/conversation isolation, restart persistence and preservation of message/outbox state. Browser fixtures use an isolated local API and BFF. They do not connect to the real account or change its unread counters.
+
+## XMPP read receipts
+
+Settings → Engine → **Read receipts** sets the default for all conversations
+on that engine, initially **Send**. Open **Read receipts** in a direct
+conversation or room's details to set **Use the default**, **Send**, or
+**Do not send**. The inbox also offers this action for each conversation,
+without opening the timeline. Clients on the same engine share these settings.
+The policy is independent of the local unread counter and unread reminder.
+
+Oiê emits [XEP-0333 displayed markers](https://xmpp.org/extensions/xep-0333.html)
+after automatic or explicit **Mark as read**. A direct message must request a
+marker, and its sender must be allowed to see the account's presence. A joined
+room must advertise XEP-0359, assign a verifiable stanza ID, and provide
+enough verified occupant identity to exclude the account's own messages across
+resources. Markers use the original direct message ID or the ID assigned by
+the room. Own messages, recovered history and incoming markers do not request a response.
+
+The engine associates observed reads with the active transport and effective
+policy. A later read can close a gap and advance to an earlier observation
+from that transport and policy. Immediately before attempting a send, the engine checks for
+earlier unread messages and records the attempted position. Repeated reads
+cannot claim it twice. Queued work is tied to the connected transport. XMPP
+stream resumption preserves stanzas already submitted on that stream.
 
 ## Verification on 2026-11-08
 

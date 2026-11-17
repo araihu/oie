@@ -138,6 +138,9 @@ func claimContactGate(ctx context.Context, gate chan struct{}) bool {
 }
 
 func (m *Manager) refreshContacts(ctx context.Context, host application.ContactHost, e *entry, s *mx.Session) ([]application.ContactInput, bool, error) {
+	e.mu.RLock()
+	generation := e.rosterPushGeneration
+	e.mu.RUnlock()
 	items, err := m.readContacts(ctx, e, s)
 	// Hold session ownership through persistence so a replaced connection
 	// cannot overwrite a newer provider snapshot.
@@ -149,7 +152,7 @@ func (m *Manager) refreshContacts(ctx context.Context, host application.ContactH
 	if current {
 		if err == nil {
 			err = host.ContactsReceived(ctx, e.account.ID, items)
-			if err == nil {
+			if err == nil && e.rosterPushGeneration == generation {
 				e.updateContactSubscriptions(items)
 			}
 		}
@@ -195,7 +198,9 @@ func captureContactRequest(e *entry, p stanza.Presence) {
 			e.contactRequests[p.From.String()] = struct{}{}
 		}
 	case stanza.UnsubscribePresence:
+		e.rosterPushGeneration++
 		delete(e.contactRequests, p.From.String())
+		delete(e.readReceiptAudience, p.From.String())
 	}
 }
 
@@ -347,8 +352,15 @@ func (m *Manager) rosterPush(e *entry, iq stanza.IQ, payload contactRosterPayloa
 	}
 	item := items[0]
 	e.mu.Lock()
+	e.rosterPushGeneration++
 	if item.Subscription == "from" || item.Subscription == "both" {
 		delete(e.contactRequests, item.Address)
+		if e.readReceiptAudience == nil {
+			e.readReceiptAudience = make(map[string]bool)
+		}
+		e.readReceiptAudience[item.Address] = true
+	} else {
+		delete(e.readReceiptAudience, item.Address)
 	}
 	if item.Subscription == "to" || item.Subscription == "both" {
 		if e.contactSubscriptions == nil {

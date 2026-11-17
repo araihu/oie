@@ -169,7 +169,7 @@ func TestLiveRoomSenderUsesCurrentPublicIdentityOnly(t *testing.T) {
 	if got := liveRoomSenderAddress(e, from, "", ""); got != "juliet@example.test" {
 		t.Fatalf("authorized observed target lost: %q", got)
 	}
-	if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "fresh", "", "", fileSharingMetadata{}); err != nil {
+	if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "fresh", "", "", fileSharingMetadata{}, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(host.received) != 1 || host.received[0].SenderAddress != "juliet@example.test" {

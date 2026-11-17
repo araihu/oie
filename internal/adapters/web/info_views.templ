@@ -8,7 +8,7 @@ import (
 
 templ infoEntry(v view,kind,label string,symbol templ.Component){
 {{ screen:="shared" }}
-if kind=="stars" || kind=="participants" || kind=="retention" {
+if kind=="stars" || kind=="participants" || kind=="retention" || kind=="read-receipts" {
 {{screen=kind}}
 }
 @link.Link(v.infoHref(screen,kind,"infoQuery",""),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){

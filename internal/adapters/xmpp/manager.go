@@ -89,6 +89,9 @@ type entry struct {
 	presenceWake         chan struct{}
 	typingPeers          map[string]typingPeer
 	pendingTyping        *uint32
+	readReceiptAudience  map[string]bool
+	rosterPushGeneration uint64
+	displayedTransport   string
 	contactsGate         chan struct{}
 	contactRequests      map[string]struct{}
 	contactSubscriptions map[string]bool
@@ -436,6 +439,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.replaying = session.StreamManagement().Resumed
 			e.archiveSessionCtx = historyCtx
 			e.raw = raw
+			e.displayedTransport = randomQueryID()
 			previous := e.suspended
 			if previous == nil {
 				e.correctionSession = randomQueryID()
@@ -459,6 +463,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if !e.replaying {
 				e.contactRequests = make(map[string]struct{})
 				e.contactSubscriptions = nil
+				e.readReceiptAudience = nil
 				e.initialPeerPresence = make(map[string]map[string]peerResource)
 			}
 			e.historyWake = make(chan struct{}, 1)
@@ -919,6 +924,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			reactionMetadata
 			roomModerationMetadata
 			typingMetadata
+			displayedMarkerMetadata
 			Subject     *string        `xml:"jabber:client subject"`
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
@@ -1007,7 +1013,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage {
-			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)
+			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, len(msg.Displayed) != 0, msg.correctionMetadata)
 		}
 		if msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil
@@ -1024,9 +1030,13 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if len(msg.Origins) == 0 && usableID(msg.ID) {
 			refs = append(refs, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 		}
+		var readReceiptID string
+		if msg.Delay.Stamp == "" && msg.Delay.From == "" {
+			readReceiptID = msg.requestedID(msg.ID)
+		}
 		_, requestsEnabled := m.host.(application.ConversationRequestHost)
 		own, _ := jid.Parse(e.account.Address)
-		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

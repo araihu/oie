@@ -522,3 +522,79 @@ window.OieRuntime.register('access-keys', life => {
     }
   });
 });
+
+window.OieRuntime.register('global-read-receipts', life => {
+  const section = document.getElementById('engine-read-receipts-settings');
+  const tab = section?.closest('[role=tabpanel]');
+  const dialog = section?.closest('[role=dialog]');
+  if (!tab || !dialog) return;
+  const form = section.querySelector('[data-read-receipts-settings]');
+  const loading = section.querySelector('[data-read-receipts-loading]');
+  const error = section.querySelector('[data-read-receipts-load-error]');
+  const refresh = () => section.dispatchEvent(new Event('oie:refresh-read-receipts'));
+  const isRefresh = ctx => ctx?.target?.id === 'engine-read-receipts' && ctx.request.method.toUpperCase() === 'GET';
+  let visible = Boolean(section.getClientRects().length);
+  let attempted = false;
+  const observer = new MutationObserver(() => {
+    const showing = Boolean(section.getClientRects().length);
+    if (showing && !visible && attempted) refresh();
+    visible = showing;
+  });
+  observer.observe(tab, { attributes: true, attributeFilter: ['hidden', 'style'] });
+  observer.observe(dialog, { attributes: true, attributeFilter: ['hidden', 'style'] });
+  life.cleanup(() => observer.disconnect());
+  life.on(section.querySelector('[data-read-receipts-retry]'), 'click', refresh);
+  life.on(section, 'htmx:before:request', event => {
+    if (!isRefresh(event.detail.ctx)) return;
+    attempted = true;
+    form.hidden = true;
+    loading.hidden = false;
+    error.hidden = true;
+  });
+  life.on(section, 'htmx:after:request', event => {
+    const ctx = event.detail.ctx;
+    if (!isRefresh(ctx)) return;
+    const fragment = new DOMParser().parseFromString(ctx.text || '', 'text/html').querySelector('#engine-read-receipts form');
+    ctx.oieReadReceiptsReady = ctx.response?.status === 200 && Boolean(fragment);
+    if (!ctx.oieReadReceiptsReady) event.preventDefault();
+  });
+  life.on(section, 'htmx:finally:request', event => {
+    const ctx = event.detail.ctx;
+    if (!isRefresh(ctx)) return;
+    loading.hidden = true;
+    form.hidden = !ctx.oieReadReceiptsReady;
+    error.hidden = Boolean(ctx.oieReadReceiptsReady);
+  });
+});
+
+window.OieRuntime.register('conversation-read-receipt-settings', life => {
+  life.on(document, 'close', event => {
+    const dialog = event.target;
+    if (dialog.id !== 'inbox-read-receipts-dialog' || dialog.open) return;
+    const focused = document.activeElement;
+    if (focused !== document.body && !dialog.contains(focused)) return;
+    const chat = dialog.querySelector('#inbox-read-receipts-content')?.dataset.readReceiptsConversation;
+    if (!chat) return;
+    const row = document.querySelector(`#conversation-list [data-conversation-row="${CSS.escape(chat)}"]`);
+    const target = row?.querySelector('button[data-read-receipts-conversation]') ||
+      row?.querySelector('a[data-conversation-id]') || document.getElementById('conversation-search');
+    target?.focus({preventScroll: true});
+  }, true);
+  life.on(document, 'htmx:after:request', event => {
+    const ctx = event.detail.ctx;
+    const target = ctx?.target;
+    if (!['inbox-read-receipts-content', 'inbox-read-receipts', 'conversation-read-receipts'].includes(target?.id)) return;
+    const chat = new URL(ctx.request.action, location.href).searchParams.get('chat');
+    if (!target.isConnected || target.dataset.readReceiptsConversation !== chat) {
+      event.preventDefault();
+      return;
+    }
+    if (ctx.request.method.toUpperCase() !== 'GET') return;
+    const region = target.id === 'inbox-read-receipts-content' ? 'inbox-read-receipts' : target.id;
+    const fragment = new DOMParser().parseFromString(ctx.text || '', 'text/html').getElementById(region);
+    if (fragment?.dataset.readReceiptsConversation !== chat) {
+      event.preventDefault();
+      target.textContent = target.dataset.unavailable;
+    }
+  });
+});

@@ -81,13 +81,14 @@ func migrateFixtureToVersion(t *testing.T, store *Store, version uint) {
 
 func TestMessageRetractionsMigrateFromAccountCommunication(t *testing.T) {
 	ctx := t.Context()
-	store, engine, chat := outboxFixture(t)
+	store, _, chat := outboxFixture(t)
 	migrateFixtureToVersion(t, store, 34)
-	prefs, err := engine.SetAccountCommunicationPreferences(ctx, chat.AccountID, "", "dnd", new(false))
-	if err != nil {
+	prefs := domain.AccountCommunicationPreferences{RevisionID: migrationID(), Presence: "dnd"}
+	if _, err := store.db.ExecContext(ctx, `INSERT INTO account_communication_preferences
+		(account_id,revision_id,presence,send_typing) VALUES(?,?,?,0)`, chat.AccountID, prefs.RevisionID, prefs.Presence); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.Close(); err != nil {
+	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
 	upgraded, err := Open(ctx, store.dir, migrationID())
@@ -96,11 +97,39 @@ func TestMessageRetractionsMigrateFromAccountCommunication(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upgraded.Close() })
 	if saved, err := upgraded.AccountCommunicationPreferences(ctx, chat.AccountID); err != nil || saved != prefs {
-		t.Fatalf("communication preferences after retraction migration: %+v, %v", saved, err)
+		t.Fatalf("communication preferences after upgrading from version 34: %+v, %v", saved, err)
 	}
 	retraction := application.IncomingRetraction{Scope: "xmpp:correct:sender:" + chat.Address, RemoteID: "retained-message", At: time.Now().UTC()}
 	if err = upgraded.RecordMessageRetraction(ctx, chat.AccountID, chat.Kind, chat.Address, retraction); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReadReceiptPolicyMigratesPreviewOptOut(t *testing.T) {
+	ctx := t.Context()
+	store, _, chat := outboxFixture(t)
+	migrateFixtureToVersion(t, store, 37)
+	if _, err := store.db.ExecContext(ctx, `INSERT INTO account_communication_preferences
+		(account_id,revision_id,presence,send_typing,send_read_receipts) VALUES(?,?,'available',1,0)`,
+		chat.AccountID, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = upgraded.Close() })
+	policy, err := upgraded.ConversationReadReceipts(ctx, chat.ID)
+	if err != nil || !policy.GlobalEnabled || policy.EffectiveEnabled || policy.Override == nil || *policy.Override {
+		t.Fatal(policy, err)
+	}
+	migrateFixtureToVersion(t, upgraded, 37)
+	var oldSetting int
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT send_read_receipts FROM account_communication_preferences WHERE account_id=?", chat.AccountID).Scan(&oldSetting); err != nil || oldSetting != 0 {
+		t.Fatal("rollback lost the preview opt-out", oldSetting, err)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,6 +190,14 @@ func TestDevelopmentContactActionsAndAvailability(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer manager.Close()
+	workers := make(chan error, 1)
+	go func() { workers <- engine.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-workers; err != nil {
+			t.Errorf("engine workers: %v", err)
+		}
+	}()
 	account, err := engine.Register(ctx, id(), application.RegisterInput{Protocol: "xmpp", Address: "alice@localhost", Label: "Alice"})
 	if err != nil {
 		t.Fatal(err)
@@ -229,6 +238,7 @@ func TestDevelopmentContactActionsAndAvailability(t *testing.T) {
 		Show string `xml:"jabber:client show"`
 	}
 	observed := make(chan presence, 64)
+	markers := make(chan string, 16)
 	go func() {
 		_ = bob.Serve(mx.HandlerFunc(func(tokens xmlstream.TokenReadEncoder, start *xml.StartElement) error {
 			d := xml.NewTokenDecoder(xmlstream.MultiReader(xmlstream.Token(*start), tokens))
@@ -243,6 +253,19 @@ func TestDevelopmentContactActionsAndAvailability(t *testing.T) {
 					case observed <- p:
 					default:
 					}
+				}
+			case "message":
+				var message struct {
+					stanza.Message
+					Displayed *struct {
+						ID string `xml:"id,attr"`
+					} `xml:"urn:xmpp:chat-markers:0 displayed"`
+				}
+				if err := d.Decode(&message); err != nil {
+					return err
+				}
+				if message.Displayed != nil && message.From.Bare().String() == "alice@localhost" {
+					markers <- message.Displayed.ID
 				}
 			case "iq":
 				var iq stanza.IQ
@@ -321,7 +344,120 @@ func TestDevelopmentContactActionsAndAvailability(t *testing.T) {
 	if state, err := engine.AccountCommunicationPreferences(ctx, owner); err != nil || state != saved {
 		t.Fatal(state, err)
 	}
+	verifyDirectDisplayedMarkers(t, ctx, engine, owner, bob, alice, markers)
 	if err := bob.Send(ctx, stanza.Presence{To: alice, Type: stanza.UnsubscribePresence}.Wrap(nil)); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func verifyDirectDisplayedMarkers(t *testing.T, ctx context.Context, engine *application.Engine, owner domain.ID, peer *mx.Session, recipient jid.JID, markers <-chan string) {
+	t.Helper()
+	chat, err := engine.OpenConversation(ctx, id(), owner, "bob@localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	send := func(markable bool) domain.Message {
+		t.Helper()
+		wire := string(id())
+		message := stanza.Message{To: recipient, Type: stanza.ChatMessage, ID: wire}
+		payload := "<body>Receipt fixture " + wire + "</body>"
+		if markable {
+			payload += `<markable xmlns="urn:xmpp:chat-markers:0"/>`
+		}
+		if err := peer.Send(ctx, message.Wrap(xml.NewDecoder(strings.NewReader(payload)))); err != nil {
+			t.Fatal(err)
+		}
+		var received domain.Message
+		eventually(t, func() bool {
+			current, err := engine.Conversation(ctx, chat.Conversation.ID)
+			if err != nil || !allowFixtureConversation(ctx, engine, current) {
+				return false
+			}
+			messages, err := engine.Messages(ctx, chat.Conversation.ID, "", 20)
+			if err != nil {
+				return false
+			}
+			for _, item := range messages {
+				if item.ProviderID == wire {
+					received = item
+					return true
+				}
+			}
+			return false
+		})
+		return received
+	}
+	markAll := func() {
+		t.Helper()
+		c, err := engine.Conversation(ctx, chat.Conversation.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = engine.UpdateConversationPreferences(ctx, id(), c.ID, application.ConversationPreferencesInput{
+			AccountID: owner, ExpectedRevisionID: c.RevisionID, Read: new(true),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	await := func(want string) {
+		t.Helper()
+		select {
+		case got := <-markers:
+			if got != want {
+				t.Fatalf("received displayed marker for %q, want %q", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("displayed marker for %q did not arrive", want)
+		}
+	}
+	first := send(true)
+	if result, err := engine.MarkMessagesRead(ctx, id(), first.ConversationID, []domain.ID{first.ID}); err != nil || result.DisplayedMarker == nil {
+		t.Fatalf("automatic read: %+v %v", result, err)
+	}
+	await(first.ProviderID)
+	setPreference := func(enabled bool) {
+		t.Helper()
+		prefs, err := engine.GlobalReadReceipts(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prefs.Enabled = enabled
+		saved, err := engine.SetGlobalReadReceipts(ctx, prefs)
+		if err != nil || saved.Enabled != enabled {
+			t.Fatal(saved, err)
+		}
+	}
+	setPreference(false)
+	send(true)
+	markAll()
+	if state, err := engine.ConversationReadState(ctx, first.ConversationID); err != nil || state.UnreadCount != 0 {
+		t.Fatal("the preference disabled local reading", state, err)
+	}
+	setOverride := func(value *bool) {
+		t.Helper()
+		policy, err := engine.ConversationReadReceipts(ctx, chat.Conversation.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := engine.SetConversationReadReceipts(ctx, chat.Conversation.ID, policy.Revision, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setOverride(new(true))
+	send(false)
+	markAll()
+	explicit := send(true)
+	markAll()
+	await(explicit.ProviderID)
+
+	setPreference(true)
+	setOverride(new(false))
+	send(true)
+	markAll()
+	setOverride(nil)
+	newest := send(true)
+	markAll()
+	// The next valid wire marker proves the globally disabled, unrequested
+	// and explicitly disabled messages emitted no marker.
+	await(newest.ProviderID)
 }

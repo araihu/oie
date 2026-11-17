@@ -20,6 +20,7 @@ type ConversationPreferencesMutation struct {
 	ConversationID, AccountID, ExpectedRevisionID, RevisionID domain.ID
 	Archived, Favorite, Read                                  *bool
 	ReadRevisionID                                            domain.ID
+	DisplayedTransport                                        string
 	AcceptRequest                                             bool
 }
 
@@ -42,7 +43,7 @@ func copyPreference(value *bool) *bool {
 
 // UpdateConversationPreferences changes only supplied flags. The repository
 // serializes its receipt, precondition and projection updates in one transaction.
-// No protocol call or send intent is involved.
+// A committed Mark as read may queue a best-effort displayed marker.
 func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, conversationID domain.ID, in ConversationPreferencesInput) (ConversationResult, error) {
 	if !validID(key) || !validID(conversationID) || !validID(in.AccountID) || !validID(in.ExpectedRevisionID) || (in.Archived == nil && in.Favorite == nil && in.Read == nil && !in.AcceptRequest) || ((in.AcceptRequest || in.Read != nil) && (in.Archived != nil || in.Favorite != nil)) || (in.AcceptRequest && in.Read != nil) {
 		return ConversationResult{}, ErrInvalid
@@ -57,11 +58,13 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 		return ConversationResult{}, err
 	}
 	var readRevision domain.ID
+	var displayedTransport string
 	if in.Read != nil && *in.Read {
 		readRevision, err = e.newID()
 		if err != nil {
 			return ConversationResult{}, err
 		}
+		displayedTransport = e.displayedMarkerTransport(in.AccountID)
 	}
 	const kind = "update_conversation_preferences"
 	requestFingerprint := fingerprint(kind, struct {
@@ -81,10 +84,11 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 	result, err := repo.UpdateConversationPreferences(ctx, ConversationPreferencesMutation{
 		Operation:      Operation{ID: key, ResourceID: conversationID, Kind: kind, CreatedAt: e.now().UTC()},
 		Fingerprint:    requestFingerprint,
-		ConversationID: conversationID, AccountID: in.AccountID, ExpectedRevisionID: in.ExpectedRevisionID, RevisionID: revision, Archived: archived, Favorite: favorite, AcceptRequest: in.AcceptRequest, Read: read, ReadRevisionID: readRevision,
+		ConversationID: conversationID, AccountID: in.AccountID, ExpectedRevisionID: in.ExpectedRevisionID, RevisionID: revision, Archived: archived, Favorite: favorite, AcceptRequest: in.AcceptRequest, Read: read, ReadRevisionID: readRevision, DisplayedTransport: displayedTransport,
 	})
 	if err == nil && (in.AcceptRequest || read != nil) && !result.Replayed {
 		e.notifyEvents()
+		e.queueDisplayedMarker(result.DisplayedMarker)
 	}
 	return result, err
 }

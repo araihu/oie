@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.38.0",
+    "version": "0.39.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -2341,6 +2341,107 @@
         "x-cli-name": "engine"
       }
     },
+    "/api/v1/engine/read-receipts": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "getGlobalReadReceipts",
+        "summary": "Read engine-wide read receipt settings",
+        "responses": {
+          "200": {
+            "description": "Current engine-wide read receipt settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalReadReceipts"
+                },
+                "example": {
+                  "revision": "0",
+                  "enabled": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-group": [
+          "engine",
+          "read-receipts"
+        ],
+        "x-cli-name": "get"
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "setGlobalReadReceipts",
+        "summary": "Change engine-wide read receipt settings",
+        "description": "Use the revision from the current snapshot. A stale revision yields a conflict.",
+        "requestBody": {
+          "required": true,
+          "description": "The current revision and the desired setting.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetGlobalReadReceipts"
+              },
+              "example": {
+                "expectedRevision": "0",
+                "enabled": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated engine-wide read receipt settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalReadReceipts"
+                },
+                "example": {
+                  "revision": "0",
+                  "enabled": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-group": [
+          "engine",
+          "read-receipts"
+        ],
+        "x-cli-name": "set"
+      }
+    },
     "/api/v1/engine/retention": {
       "get": {
         "tags": [
@@ -4421,6 +4522,116 @@
           }
         },
         "x-cli-name": "mentions"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/read-receipts": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "operationId": "getConversationReadReceipts",
+        "summary": "Read conversation read receipt settings",
+        "responses": {
+          "200": {
+            "description": "Current conversation read receipt settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationReadReceipts"
+                },
+                "example": {
+                  "revision": "0:0",
+                  "override": null,
+                  "effectiveEnabled": true,
+                  "globalEnabled": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-group": [
+          "conversations",
+          "read-receipts"
+        ],
+        "x-cli-name": "get"
+      },
+      "put": {
+        "tags": [
+          "Conversations"
+        ],
+        "operationId": "setConversationReadReceipts",
+        "summary": "Change conversation read receipt settings",
+        "description": "Use the revision from the current snapshot. A stale revision yields a conflict.",
+        "requestBody": {
+          "required": true,
+          "description": "The current revision and the desired setting.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetConversationReadReceipts"
+              },
+              "example": {
+                "expectedRevision": "0:0",
+                "override": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated conversation read receipt settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationReadReceipts"
+                },
+                "example": {
+                  "revision": "0:0",
+                  "override": null,
+                  "effectiveEnabled": true,
+                  "globalEnabled": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-group": [
+          "conversations",
+          "read-receipts"
+        ],
+        "x-cli-name": "set"
       }
     },
     "/api/v1/conversations/{conversationId}/retention": {
@@ -7152,6 +7363,101 @@
         "description": "Compare-and-set token from the most recent retention snapshot.",
         "example": "1"
       },
+      "GlobalReadReceipts": {
+        "type": "object",
+        "description": "Default read receipt setting for all conversations on the engine.",
+        "additionalProperties": false,
+        "required": [
+          "revision",
+          "enabled"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "example": "0"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether to send read receipts by default. Initially true."
+          }
+        }
+      },
+      "SetGlobalReadReceipts": {
+        "type": "object",
+        "description": "Replace the default read receipt setting.",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevision",
+          "enabled"
+        ],
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "example": "0"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "ConversationReadReceipts": {
+        "type": "object",
+        "description": "Read receipt settings for a saved direct conversation or room.",
+        "additionalProperties": false,
+        "required": [
+          "revision",
+          "override",
+          "effectiveEnabled",
+          "globalEnabled"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "pattern": "^[0-9]+:[0-9]+$",
+            "example": "0:0"
+          },
+          "override": {
+            "type": "boolean",
+            "example": true,
+            "nullable": true,
+            "description": "Explicit setting, or null to inherit the engine default."
+          },
+          "effectiveEnabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "globalEnabled": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "SetConversationReadReceipts": {
+        "type": "object",
+        "description": "Replace the override or restore inheritance.",
+        "additionalProperties": false,
+        "required": [
+          "expectedRevision",
+          "override"
+        ],
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "pattern": "^[0-9]+:[0-9]+$",
+            "example": "0:0"
+          },
+          "override": {
+            "type": "boolean",
+            "example": true,
+            "nullable": true,
+            "description": "Use null to inherit the engine default, true to send, or false to suppress."
+          }
+        }
+      },
       "GlobalRetention": {
         "type": "object",
         "description": "Engine-wide periods for rooms and direct conversations.",
@@ -7290,7 +7596,8 @@
               "0.35.0",
               "0.36.0",
               "0.37.0",
-              "0.38.0"
+              "0.38.0",
+              "0.39.0"
             ]
           },
           "eventCursor": {

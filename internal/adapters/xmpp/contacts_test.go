@@ -360,3 +360,44 @@ func TestContactRosterAcceptsExactlyTenThousandUniqueItems(t *testing.T) {
 		t.Fatal("maximum bounded roster rejected", len(items), err)
 	}
 }
+
+func TestRosterSnapshotCannotReinstateRevokedReceiptAudience(t *testing.T) {
+	const peer = "bob@example.test"
+	release := make(chan struct{})
+	var once sync.Once
+	defer once.Do(func() { close(release) })
+	m, e, host, cancel, _, requests := contactLoopFixture(t, func(iq stanza.IQ, number int) string {
+		if number == 0 {
+			select {
+			case <-release:
+			case <-t.Context().Done():
+			}
+		}
+		return contactResult(iq, "", `<item jid="bob@example.test" subscription="from"/>`)
+	})
+	defer cancel()
+	select {
+	case <-requests:
+	case <-time.After(3 * time.Second):
+		t.Fatal("roster request did not start")
+	}
+	e.mu.Lock()
+	e.readReceiptAudience = map[string]bool{peer: true}
+	e.mu.Unlock()
+	wire := `<iq xmlns="jabber:client" type="set" id="revoke"><query xmlns="jabber:iq:roster"><item jid="bob@example.test" subscription="none"/></query></iq>`
+	if _, err := contactPushWire(t, m, e, wire); err != nil {
+		t.Fatal(err)
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-host.received:
+	case <-time.After(3 * time.Second):
+		t.Fatal("in-flight roster request did not finish")
+	}
+	e.mu.RLock()
+	authorized := e.readReceiptAudience[peer]
+	e.mu.RUnlock()
+	if authorized {
+		t.Fatal("an old roster result restored a revoked presence subscription")
+	}
+}

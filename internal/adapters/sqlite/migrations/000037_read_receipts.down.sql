@@ -1,0 +1,3 @@
+DROP INDEX message_reads_by_revision;
+DROP TABLE conversation_displayed_heads;
+ALTER TABLE account_communication_preferences DROP COLUMN send_read_receipts;

@@ -644,8 +644,14 @@ func (e *Engine) processPreview(ctx context.Context, r PreviewRepository, p doma
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	done := make(chan error, 6)
+	done := make(chan error, 7)
 	workers := 2
+	if protocol, ok := e.protocols.(DisplayedMarkerProtocol); ok {
+		if _, ok := e.repo.(displayedMarkerRepository); ok {
+			workers++
+			go func() { done <- e.runDisplayedMarkers(ctx, protocol) }()
+		}
+	}
 	if repo, ok := e.repo.(retentionRepository); ok {
 		workers++
 		go func() { done <- e.runRetention(ctx, repo) }()

@@ -77,6 +77,7 @@ integration() {
   run_case desktop-engine-key
   run_case reset-data
   run_case retention
+  run_case read-receipts
   run_case appearance-settings
   run_case language-settings
   run_case shared-content-scroll
