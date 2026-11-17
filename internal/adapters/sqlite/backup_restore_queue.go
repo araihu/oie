@@ -52,6 +52,18 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 				return err
 			}
 		}
+		if message.ScheduledAt != nil && message.TimelineAt == nil && (state == "submitted" || state == "failed" || state == "unknown") {
+			// Place the restored send at its historical time. The restore summary
+			// updates the conversation under its existing activity and revision.
+			millis := at.UnixMilli()
+			if err := q.SetMessageTimelineAt(ctx, dbgen.SetMessageTimelineAtParams{ID: id, TimelineAtMs: &millis}); err != nil {
+				return err
+			}
+			setTimelineTime(&message, &millis)
+			if _, err := tx.ExecContext(ctx, "UPDATE restore_chats SET history_changed=1 WHERE id=?", message.ConversationID); err != nil {
+				return err
+			}
+		}
 		revision, err := uuid.NewV7()
 		if err != nil {
 			return err

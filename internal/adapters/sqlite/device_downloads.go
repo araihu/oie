@@ -85,6 +85,12 @@ func (s *Store) SaveDownload(ctx context.Context, download domain.Download) erro
 		}); err != nil {
 			return err
 		}
+		if err := q.KeepLegacyDownloadMembership(ctx, dbgen.KeepLegacyDownloadMembershipParams{
+			DeviceID: string(download.DeviceID), SourceID: string(download.SourceID),
+			SourceRevision: string(download.SourceRevision), Kind: download.Kind,
+		}); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -100,6 +106,9 @@ func (s *Store) SaveDownloadedPreview(ctx context.Context, p domain.MessagePrevi
 	}
 	switch p.DownloadState {
 	case "ready":
+		if err := q.KeepLegacyImageCompletions(ctx, string(p.ID)); err != nil {
+			return err
+		}
 		err = q.FinishImageDownloads(ctx, dbgen.FinishImageDownloadsParams{
 			Hash: p.FileHash, MimeType: p.FileMimeType, Size: p.FileSize, VerifiedAlgorithm: p.VerifiedAlgorithm,
 			DownloadedAtMs: downloadedAt.UnixMilli(), SourceID: string(p.ID),

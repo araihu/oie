@@ -297,6 +297,47 @@ func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDown
 	return result.RowsAffected()
 }
 
+const keepLegacyDownloadMembership = `-- name: KeepLegacyDownloadMembership :exec
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT d.device_id,?1,?2,?3 FROM download_devices d
+WHERE d.device_id=?4 AND d.generation>0 AND NOT EXISTS (
+  SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+)
+ON CONFLICT DO NOTHING
+`
+
+type KeepLegacyDownloadMembershipParams struct {
+	SourceID       string
+	SourceRevision string
+	Kind           string
+	DeviceID       string
+}
+
+func (q *Queries) KeepLegacyDownloadMembership(ctx context.Context, arg KeepLegacyDownloadMembershipParams) error {
+	_, err := q.db.ExecContext(ctx, keepLegacyDownloadMembership,
+		arg.SourceID,
+		arg.SourceRevision,
+		arg.Kind,
+		arg.DeviceID,
+	)
+	return err
+}
+
+const keepLegacyImageCompletions = `-- name: KeepLegacyImageCompletions :exec
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT f.device_id,f.source_id,f.source_revision,f.kind
+FROM device_downloads f JOIN download_devices d ON d.device_id=f.device_id
+WHERE f.kind='image' AND f.source_id=?1 AND f.hash='' AND d.generation>0 AND NOT EXISTS (
+  SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+)
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) KeepLegacyImageCompletions(ctx context.Context, sourceID string) error {
+	_, err := q.db.ExecContext(ctx, keepLegacyImageCompletions, sourceID)
+	return err
+}
+
 const listDownloadGarbage = `-- name: ListDownloadGarbage :many
 SELECT kind, hash FROM download_garbage
 `

@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads bool, now time.Time) ([]string, error) {
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, hasLegacyAdmissions bool, now time.Time) ([]string, error) {
 	files := manifest.Files
 	if _, err := tx.ExecContext(ctx, restoreScript("media_download_devices")); err != nil {
 		return nil, fmt.Errorf("read backup download devices: %w", err)
@@ -42,6 +42,11 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 		sql.Named("media_files", jsonText(files)), sql.Named("now_ms", now.UnixMilli()),
 		sql.Named("source_engine", string(manifest.SourceEngine))); err != nil {
 		return nil, fmt.Errorf("restore media metadata: %w", err)
+	}
+	if hasLegacyAdmissions {
+		if _, err := tx.ExecContext(ctx, restoreScript("media_download_admissions")); err != nil {
+			return nil, fmt.Errorf("restore pending legacy download admissions: %w", err)
+		}
 	}
 	if err := updateRestoredImageDownloads(ctx, tx, now); err != nil {
 		return nil, fmt.Errorf("restore image downloads: %w", err)

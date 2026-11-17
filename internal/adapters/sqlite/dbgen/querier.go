@@ -161,6 +161,8 @@ type Querier interface {
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
 	IsExpiredReplyReference(ctx context.Context, arg IsExpiredReplyReferenceParams) (bool, error)
+	KeepLegacyDownloadMembership(ctx context.Context, arg KeepLegacyDownloadMembershipParams) error
+	KeepLegacyImageCompletions(ctx context.Context, sourceID string) error
 	// XEP-0333 signals a position, so an eligible target must precede any unread message.
 	LatestDisplayedTarget(ctx context.Context, arg LatestDisplayedTargetParams) (LatestDisplayedTargetRow, error)
 	LatestLogicalMessage(ctx context.Context, conversationID string) (Message, error)

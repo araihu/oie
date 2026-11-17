@@ -136,7 +136,13 @@ func (s *Store) resumeRecoveredSend(ctx context.Context, q *dbgen.Queries, recov
 		return errors.New("the destination already has evidence for this send")
 	}
 	if err := checkPendingReplyTarget(ctx, q, &m); err != nil {
-		return err
+		safe, lookupErr := recoveredReplyTargetExpired(ctx, q, m)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		if !safe {
+			return err
+		}
 	}
 	for _, attachment := range m.Attachments {
 		if err := validateRecoveredAttachment(ctx, q, s.dir, chat.ID, attachment); err != nil {
@@ -162,6 +168,18 @@ func (s *Store) resumeRecoveredSend(ctx context.Context, q *dbgen.Queries, recov
 		return err
 	}
 	return refreshConversationSummary(ctx, q, chat.ID, now)
+}
+
+func recoveredReplyTargetExpired(ctx context.Context, q *dbgen.Queries, m domain.Message) (bool, error) {
+	plan := m.OutboundReply
+	if plan == nil || plan.TargetID == "" || plan.Reference != nil || plan.Excerpt != "" ||
+		plan.SenderName != "" || len(plan.Fallback) != 0 || m.OriginalText != plan.BodyText || m.AttachmentWireText != "" {
+		return false, nil
+	}
+	if _, err := q.GetMessage(ctx, string(plan.TargetID)); !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	return q.IsExpiredMessage(ctx, string(plan.TargetID))
 }
 
 func validateRecoveredAttachment(ctx context.Context, q *dbgen.Queries, dir string, conversation domain.ID, file domain.StagedAttachment) error {

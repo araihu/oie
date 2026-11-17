@@ -125,9 +125,9 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if hasRecoveredRows && !recoveredSchemaValid {
 		return result, errors.New("backup has an invalid recovered sends schema")
 	}
-	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, extendedSchemaValid bool
+	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, hasLegacyAdmissions, extendedSchemaValid bool
 	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes,
-		&hasDownloadCleanup, &hasDownloadLineage, &hasLegacyDownloads, &extendedSchemaValid); err != nil {
+		&hasDownloadCleanup, &hasDownloadLineage, &hasLegacyDownloads, &hasLegacyAdmissions, &extendedSchemaValid); err != nil {
 		return result, err
 	}
 	if !extendedSchemaValid {
@@ -218,7 +218,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, now)
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, hasLegacyAdmissions, now)
 	if err != nil {
 		return result, err
 	}
