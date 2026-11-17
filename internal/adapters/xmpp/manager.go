@@ -1038,10 +1038,16 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		_, requestsEnabled := m.host.(application.ConversationRequestHost)
 		own, _ := jid.Parse(e.account.Address)
+		address := msg.From.Bare().String()
+		isOwn := msg.From.Bare().Equal(own.Bare())
+		var canonical domain.ID
+		if isOwn {
+			canonical, _ = domain.ParseID(msg.originID())
+		}
 		mentions := msg.wireMentionProof(msg.From.Bare().String(), msg.Body)
 		err := m.host.Receive(ctx, application.Incoming{
-			AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID,
-			OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address,
+			AccountID: e.account.ID, Kind: "direct", Address: address, ProviderID: msg.ID, CanonicalID: canonical,
+			OriginalText: msg.Body, CreatedAt: created, IsOwn: isOwn,
 			CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable),
 			References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false),
 			WireMentions: mentions.Evidence, WireMentionDigest: mentions.Digest,

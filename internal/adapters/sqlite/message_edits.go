@@ -113,7 +113,11 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if err != nil {
 			return out, err
 		}
-		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBody() != t.OriginalText {
+		source, err := decodeMessage(sourceRow)
+		if err != nil {
+			return out, err
+		}
+		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBodyHash() != source.SourceBodyHash() {
 			return deny("foreign_source")
 		}
 		t.OriginalText = p.Command.OriginalText
@@ -418,7 +422,7 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 	if err != nil {
 		return false, err
 	}
-	if m.OriginalText != p.WireBody() {
+	if m.SourceBodyHash() != p.WireBodyHash() {
 		return false, nil
 	}
 	facts, err := q.GetCorrectionFacts(ctx, row.ID)
@@ -429,7 +433,7 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 		return false, nil
 	}
 	f := facts[0]
-	return f.Scope == p.Plan.Scope && f.Author == p.Plan.Author && f.RemoteID == string(p.Command.ID) && f.TargetID == p.Plan.OriginalWireID && f.SourceHash == bodyHash(p.WireBody()), nil
+	return f.Scope == p.Plan.Scope && f.Author == p.Plan.Author && f.RemoteID == string(p.Command.ID) && f.TargetID == p.Plan.OriginalWireID && f.SourceHash == p.WireBodyHash(), nil
 }
 
 func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provider string, proof domain.MessageCorrection, text string, revision domain.ID, at time.Time) error {
@@ -456,7 +460,7 @@ func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provi
 	if err != nil {
 		return err
 	}
-	if p.Command.AccountID != account || p.WireBody() != text || p.Command.State == "submitted" || proof.Scope != p.Plan.Scope || proof.Author != p.Plan.Author || proof.ID != string(id) || proof.TargetID != p.Plan.OriginalWireID {
+	if p.Command.AccountID != account || !p.MatchesWireBody(text) || p.Command.State == "submitted" || proof.Scope != p.Plan.Scope || proof.Author != p.Plan.Author || proof.ID != string(id) || proof.TargetID != p.Plan.OriginalWireID {
 		return nil
 	}
 	observed, err := hasVerifiedEditEcho(ctx, q, p)
@@ -538,7 +542,7 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 		if err != nil {
 			return err
 		}
-		if source.OriginalText != p.WireBody() || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
+		if source.SourceBodyHash() != p.WireBodyHash() || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
 			return application.ErrStateConflict
 		}
 		source.Correction = proof
@@ -547,7 +551,7 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	source := domain.Message{ID: p.Command.ID, RevisionID: p.ContentRevisionID, AccountID: p.Command.AccountID, ConversationID: p.Command.ConversationID, Sender: base.Sender, OriginalText: p.WireBody(), OutboundReply: p.Reply, CreatedAt: at, IsOwn: true, SendState: "submitted", ProviderID: string(p.Command.ID), Correction: proof}
+	source := domain.Message{ID: p.Command.ID, RevisionID: p.ContentRevisionID, AccountID: p.Command.AccountID, ConversationID: p.Command.ConversationID, Sender: base.Sender, OriginalText: p.WireBody(), WireBodySHA256: p.WireBodySHA256, OutboundReply: p.Reply, CreatedAt: at, IsOwn: true, SendState: "submitted", ProviderID: string(p.Command.ID), Correction: proof}
 	return insertMessage(ctx, q, source)
 }
 
@@ -568,7 +572,7 @@ func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.
 	if err != nil {
 		return "", "", false, err
 	}
-	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.WireBody() != source.OriginalText || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
+	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.WireBodyHash() != source.SourceBodyHash() || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
 		return "", "", false, nil
 	}
 	op, err := q.GetOperation(ctx, remote)
@@ -580,6 +584,12 @@ func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.
 		return "", "", false, application.ErrProtocolUnavailable
 	}
 	parent, err := q.FirstContentRevisionSource(ctx, string(accepted.ExpectedRevisionID))
+	if errors.Is(err, sql.ErrNoRows) {
+		parent, err = q.WitnessedEditContentSource(ctx, dbgen.WitnessedEditContentSourceParams{
+			MessageID: string(accepted.MessageID), AccountID: string(accepted.AccountID),
+			ConversationID: string(accepted.ConversationID), ContentRevisionID: string(accepted.ExpectedRevisionID),
+		})
+	}
 	if err != nil {
 		return "", "", false, application.ErrProtocolUnavailable
 	}

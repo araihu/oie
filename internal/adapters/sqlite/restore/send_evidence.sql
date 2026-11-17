@@ -1,6 +1,4 @@
 -- Use the same scoped proof for queue eligibility and operation-key reservation.
--- The original wire ID may survive only as a direct sender reference after
--- the witness's own retention has removed its local message row.
 WITH proofs(account_id,conversation_id,wire_id) AS (
     SELECT b.account_id,b.conversation_id,b.wire_id FROM restore_source_echoes b
     JOIN conversations c ON c.id=b.conversation_id AND c.account_id=b.account_id
@@ -11,6 +9,16 @@ WITH proofs(account_id,conversation_id,wire_id) AS (
     WHERE d.is_own=1 AND d.state='submitted' AND d.id<>d.provider_id
       AND (json_extract(d.payload,'$.OwnOriginID')<>'' OR json_extract(c.payload,'$.Kind')='direct'
            OR json_extract(d.payload,'$.Historical')=0)
+      AND NOT EXISTS (
+          SELECT 1 FROM restore_legacy_direct_origins old
+          WHERE old.id=d.id AND old.provider_id=d.provider_id
+            AND COALESCE(json_extract(d.payload,'$.OwnOriginID'),'') IN ('',d.provider_id)
+      )
+    UNION
+    SELECT old.account_id,old.conversation_id,old.wire_id
+    FROM restore_legacy_direct_origins old
+    JOIN conversations c ON c.id=old.conversation_id AND c.account_id=old.account_id
+    WHERE json_extract(c.payload,'$.Kind')='direct'
     UNION
     SELECT c.account_id,c.id,r.remote_id FROM message_retractions r
     JOIN conversations c ON c.account_id=r.account_id AND c.address=r.address

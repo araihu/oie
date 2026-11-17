@@ -67,8 +67,34 @@ func init() {
 			}
 			m.OriginalText = plan.BodyText
 		}
-		plan.Excerpt, plan.SenderName, plan.Reference, plan.Fallback = "", "", nil, nil
+		clearOutboundQuote(plan)
 		data, err := json.Marshal(m)
+		return string(data), err
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_edit_wire_hash", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var edit domain.PendingMessageEdit
+		if err := json.Unmarshal([]byte(payload), &edit); err != nil {
+			return nil, err
+		}
+		return edit.WireBodyHash(), nil
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_edit_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var edit domain.PendingMessageEdit
+		if err := json.Unmarshal([]byte(payload), &edit); err != nil {
+			return nil, err
+		}
+		plan := edit.Reply
+		if plan == nil || (edit.WireText == "" && plan.SenderName == "" && plan.Excerpt == "" && plan.Reference == nil && len(plan.Fallback) == 0) {
+			return payload, nil
+		}
+		if edit.WireBody() != edit.Command.OriginalText {
+			edit.WireBodySHA256 = edit.WireBodyHash()
+		}
+		edit.WireText = ""
+		clearOutboundQuote(plan)
+		data, err := json.Marshal(edit)
 		return string(data), err
 	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_inbound_quote", 2, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
@@ -88,6 +114,10 @@ func init() {
 		data, err := json.Marshal(m)
 		return string(data), err
 	})
+}
+
+func clearOutboundQuote(plan *domain.OutboundReply) {
+	plan.Excerpt, plan.SenderName, plan.Reference, plan.Fallback = "", "", nil, nil
 }
 
 func correctionValid(c *domain.MessageCorrection) bool {

@@ -30,6 +30,7 @@ type PendingMessageEdit struct {
 	ContentRevisionID ID
 	Reply             *OutboundReply `json:",omitempty"`
 	WireText          string         `json:",omitempty"`
+	WireBodySHA256    string         `json:",omitempty"`
 }
 
 func (p PendingMessageEdit) WireBody() string {
@@ -37,4 +38,13 @@ func (p PendingMessageEdit) WireBody() string {
 		return p.WireText
 	}
 	return p.Command.OriginalText
+}
+
+// WireBodyHash stays bound to the original wire text when retention removes its quote.
+func (p PendingMessageEdit) WireBodyHash() string {
+	return (Message{OriginalText: p.WireBody(), WireBodySHA256: p.WireBodySHA256}).SourceBodyHash()
+}
+
+func (p PendingMessageEdit) MatchesWireBody(text string) bool {
+	return p.WireBodyHash() == (Message{OriginalText: text}).SourceBodyHash()
 }

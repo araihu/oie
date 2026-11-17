@@ -577,7 +577,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 				if editErr != nil && !errors.Is(editErr, ErrNotFound) {
 					return editErr
 				}
-				if editErr == nil && pending.Command.AccountID == a.ID && pending.WireBody() == in.OriginalText && in.WireMentions != domain.WireMentionsPresent {
+				if editErr == nil && pending.Command.AccountID == a.ID && pending.MatchesWireBody(in.OriginalText) && in.WireMentions != domain.WireMentionsPresent {
 					chat, err := r.Conversation(ctx, pending.Command.ConversationID)
 					if err != nil {
 						return err

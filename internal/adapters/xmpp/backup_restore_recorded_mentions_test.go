@@ -143,7 +143,11 @@ func testBackupRestoreRecordedNativeMentionWire(t *testing.T, localState string)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	var oldWire string
 	if err := db.QueryRowContext(ctx, "SELECT json_extract(payload,'$.WireMentions') FROM message_revisions WHERE entity_id=? AND id=?", pending.ID, localRevision).Scan(&oldWire); err != nil || oldWire != string(domain.WireMentionsAbsent) {
 		t.Fatalf("the prior raw revision changed: %q, %v", oldWire, err)

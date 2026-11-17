@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -517,10 +518,27 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 				return application.ErrInvalid
 			}
 			var distinct bool
-			if c.Kind == "direct" && ownStructuredMentionEcho(m) {
-				distinct, err = distinctDirectMentionEcho(retained, m)
+			nativeRoomSend := c.Kind == "room" && retained.IsOwn == 1 && retained.ID == retained.ProviderID && retained.ID == string(m.OwnOriginID)
+			if ownStructuredMentionEcho(m) && (c.Kind == "direct" || nativeRoomSend) {
+				previous, err := decodeMessage(retained)
 				if err != nil {
 					return err
+				}
+				distinct = distinctMentionEcho(previous, m)
+				if distinct && nativeRoomSend && len(m.References) > 0 {
+					// Old profiles could already have given the native row a reply
+					// target from this archive key. Preserve that retained owner.
+					references, err := q.GetMessageReferences(ctx, dbgen.GetMessageReferencesParams{
+						MessageID: retained.ID, SourceHash: previous.SourceBodyHash(),
+					})
+					if err != nil {
+						return err
+					}
+					m.References = slices.DeleteFunc(slices.Clone(m.References), func(ref domain.MessageReference) bool {
+						return ref.Scope == "room:"+c.Address && slices.ContainsFunc(references, func(known dbgen.GetMessageReferencesRow) bool {
+							return ref.Scope == known.Scope && ref.ID == known.RemoteID
+						})
+					})
 				}
 			}
 			if !distinct {
@@ -680,13 +698,9 @@ func directMentionEchoProviderID(m domain.Message) string {
 	return "direct-echo:" + bodyHash(identity)
 }
 
-func distinctDirectMentionEcho(row dbgen.Message, echo domain.Message) (bool, error) {
-	retained, err := decodeMessage(row)
-	if err != nil {
-		return false, err
-	}
+func distinctMentionEcho(retained, echo domain.Message) bool {
 	return !retained.IsOwn || !retained.MatchesWireBody(echo.OriginalText) ||
-		!retained.MatchesWireMentions(domain.WireMentionProof{Evidence: echo.WireMentions, Digest: echo.WireMentionDigest}), nil
+		!retained.MatchesWireMentions(domain.WireMentionProof{Evidence: echo.WireMentions, Digest: echo.WireMentionDigest})
 }
 
 func normalizeDirectMentionEchoProvider(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, echo *domain.Message) error {
@@ -697,8 +711,8 @@ func normalizeDirectMentionEchoProvider(ctx context.Context, q *dbgen.Queries, c
 		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: echo.ProviderID, IsOwn: 1,
 	})
 	if err == nil {
-		distinct, err := distinctDirectMentionEcho(retained, *echo)
-		if err != nil || !distinct {
+		previous, err := decodeMessage(retained)
+		if err != nil || !distinctMentionEcho(previous, *echo) {
 			return err
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {

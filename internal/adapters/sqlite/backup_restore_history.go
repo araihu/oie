@@ -207,20 +207,7 @@ func scrubRestoredQuotes(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, id s
 		return false, err
 	}
 	if len(excluded) > 0 {
-		ids := jsonText(excluded)
-		if err := q.ScrubMessageOutboundQuotes(ctx, dbgen.ScrubMessageOutboundQuotesParams{ConversationID: id, ExpiredIds: ids}); err != nil {
-			return false, err
-		}
-		if err := q.ScrubRevisionOutboundQuotes(ctx, dbgen.ScrubRevisionOutboundQuotesParams{OwnerID: id, ExpiredIds: ids}); err != nil {
-			return false, err
-		}
-		if err := q.ScrubEventOutboundQuotes(ctx, dbgen.ScrubEventOutboundQuotesParams{OwnerID: id, ExpiredIds: ids}); err != nil {
-			return false, err
-		}
-		if err := q.ScrubReceiptOutboundQuotes(ctx, dbgen.ScrubReceiptOutboundQuotesParams{OwnerID: id, ExpiredIds: ids}); err != nil {
-			return false, err
-		}
-		if err := scrubRecoveredSendQuotes(ctx, q, id, ids); err != nil {
+		if err := scrubOutboundQuotes(ctx, q, id, jsonText(excluded)); err != nil {
 			return false, err
 		}
 	}

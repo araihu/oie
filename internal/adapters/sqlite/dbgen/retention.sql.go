@@ -629,6 +629,22 @@ func (q *Queries) ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubCon
 	return err
 }
 
+const scrubContentHeadOutboundQuotes = `-- name: ScrubContentHeadOutboundQuotes :exec
+UPDATE message_content_heads SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE canonical_id IN (SELECT id FROM messages WHERE conversation_id=?1)
+AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubContentHeadOutboundQuotesParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubContentHeadOutboundQuotes(ctx context.Context, arg ScrubContentHeadOutboundQuotesParams) error {
+	_, err := q.db.ExecContext(ctx, scrubContentHeadOutboundQuotes, arg.OwnerID, arg.ExpiredIds)
+	return err
+}
+
 const scrubConversationEventPreviews = `-- name: ScrubConversationEventPreviews :exec
 UPDATE changes SET payload=json_set(payload,'$.LastMessage','')
 WHERE kind IN ('conversation.created','conversation.updated') AND json_extract(payload,'$.ID')=?
@@ -713,6 +729,22 @@ type ScrubInboundQuoteMetadataParams struct {
 
 func (q *Queries) ScrubInboundQuoteMetadata(ctx context.Context, arg ScrubInboundQuoteMetadataParams) error {
 	_, err := q.db.ExecContext(ctx, scrubInboundQuoteMetadata, arg.SourceID, arg.BodyHash)
+	return err
+}
+
+const scrubMessageEditOutboundQuotes = `-- name: ScrubMessageEditOutboundQuotes :exec
+UPDATE message_edit_commands SET payload=oie_strip_expired_edit_quote(payload)
+WHERE conversation_id=?1
+AND json_extract(payload,'$.Reply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubMessageEditOutboundQuotesParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubMessageEditOutboundQuotes(ctx context.Context, arg ScrubMessageEditOutboundQuotesParams) error {
+	_, err := q.db.ExecContext(ctx, scrubMessageEditOutboundQuotes, arg.OwnerID, arg.ExpiredIds)
 	return err
 }
 

@@ -237,7 +237,11 @@ func setLegacyDirectEchoProvider(t *testing.T, dir string, id, origin domain.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if _, err := db.ExecContext(t.Context(), `UPDATE messages SET provider_id=?,payload=json_set(payload,'$.ProviderID',?) WHERE id=?`, origin, origin, id); err != nil {
 		t.Fatal(err)
 	}

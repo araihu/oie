@@ -21,4 +21,8 @@ UNION
 SELECT e.id FROM expired_message_ids e
 JOIN recovered_sends s ON s.conversation_id=?1
 JOIN recovered_send_operations o ON o.message_id=s.message_id
-AND e.id=json_extract(o.result,'$.OutboundReply.TargetID');
+AND e.id=json_extract(o.result,'$.OutboundReply.TargetID')
+UNION
+SELECT e.id FROM expired_message_ids e
+JOIN message_edit_commands c ON c.conversation_id=?1
+AND e.id=json_extract(c.payload,'$.Reply.TargetID');

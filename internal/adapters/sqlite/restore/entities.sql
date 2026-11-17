@@ -86,6 +86,11 @@ WHERE NOT EXISTS (
   SELECT 1 FROM restore_conflicting_relayed_echo_aliases d
   WHERE d.account_id=a.account_id AND d.scope=a.scope AND d.archive_id=a.archive_id
 ) ON CONFLICT DO NOTHING;
+INSERT INTO archive_aliases(account_id,scope,archive_id,message_id)
+SELECT a.account_id,a.scope,a.archive_id,e.witness_id
+FROM backup.archive_aliases a JOIN restore_local_edit_witnesses e ON e.source_id=a.message_id
+JOIN messages witness ON witness.id=e.witness_id AND witness.account_id=a.account_id
+WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_references SELECT r.* FROM backup.message_references r JOIN restore_messages x ON x.id=r.message_id
 WHERE NOT EXISTS (
   SELECT 1 FROM restore_conflicting_relayed_echo_refs d
@@ -109,7 +114,13 @@ WHERE operations.result='null' AND excluded.result<>'null' AND operations.finger
   AND operations.kind=excluded.kind AND operations.resource_id=excluded.resource_id;
 INSERT INTO message_edit_commands
 SELECT command.* FROM backup.message_edit_commands command JOIN restore_local_edit_commands edit ON edit.id=command.id
-WHERE edit.eligible=1 ON CONFLICT(id) DO NOTHING;
+WHERE edit.eligible=1 ON CONFLICT(id) DO UPDATE SET
+  revision_id=excluded.revision_id,state=excluded.state,
+  payload=json_set(message_edit_commands.payload,
+       '$.Command.RevisionID',excluded.revision_id,'$.Command.State',excluded.state,
+       '$.Command.UpdatedAt',json_extract(excluded.payload,'$.Command.UpdatedAt'),
+       '$.Command.LastErrorCode',COALESCE(json_extract(excluded.payload,'$.Command.LastErrorCode'),''))
+WHERE message_edit_commands.state='queued' AND excluded.state='submitted';
 INSERT INTO message_correction_facts SELECT f.* FROM backup.message_correction_facts f JOIN restore_messages x ON x.id=f.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_correction_facts(message_id,scope,author,remote_id,target_id,source_hash,source_revision_id)

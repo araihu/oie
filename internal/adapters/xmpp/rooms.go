@@ -664,8 +664,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	wireMentions := meta.wireMentionProof(address, body)
 	var canonical domain.ID
 	var matchesTrackedSend bool
-	if ownsNickname && len(meta.Origins) == 1 && usableID(meta.Origins[0].ID) && meta.Origins[0].Text == "" && len(meta.Origins[0].Children) == 0 {
-		origin := meta.Origins[0].ID
+	if origin := meta.originID(); ownsNickname && origin != "" {
 		tracked, known := e.ownRoomMessages[origin]
 		// A delayed message can belong to a previous occupant of the same
 		// nickname. Require the tracked scope, body and exact wire mentions.

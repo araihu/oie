@@ -205,15 +205,13 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 	in.Correction = decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, in.Kind == "room", occupantVerified)
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
 	if in.IsOwn {
+		in.CanonicalID, _ = domain.ParseID(msg.originID())
 		mentions := msg.wireMentionProof(in.Address, body)
 		in.WireMentions, in.WireMentionDigest = mentions.Evidence, mentions.Digest
 	}
 	if in.Kind == "room" {
 		if provider := roomProviderID(msg.From, msg.ID, in.References); provider != "" {
 			in.ProviderID = provider
-		}
-		if in.IsOwn && len(msg.Origins) == 1 && usableID(msg.Origins[0].ID) && msg.Origins[0].Text == "" && len(msg.Origins[0].Children) == 0 {
-			in.CanonicalID, _ = domain.ParseID(msg.Origins[0].ID)
 		}
 	}
 	if in.Kind == "direct" && len(msg.Origins) == 0 && usableID(msg.ID) {

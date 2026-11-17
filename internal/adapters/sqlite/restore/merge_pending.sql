@@ -38,6 +38,11 @@ WHERE EXISTS(SELECT 1 FROM messages m WHERE m.id=restore_pending_candidates.mess
       WHERE d.account_id=c.account_id AND d.conversation_id=c.id AND d.is_own=1
         AND d.provider_id=restore_pending_candidates.message_id
         AND (json_extract(c.payload,'$.Kind')='direct' OR json_extract(d.payload,'$.Historical')=0)
+        AND NOT EXISTS (
+            SELECT 1 FROM restore_legacy_direct_origins old
+            WHERE old.id=d.id AND old.provider_id=d.provider_id
+              AND COALESCE(json_extract(d.payload,'$.OwnOriginID'),'') IN ('',d.provider_id)
+        )
   )
   OR EXISTS(
       SELECT 1 FROM operations d WHERE d.resource_id=restore_pending_candidates.message_id

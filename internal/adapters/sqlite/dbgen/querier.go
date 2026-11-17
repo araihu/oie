@@ -281,12 +281,14 @@ type Querier interface {
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	RestoreReviewedSendReceipts(ctx context.Context, messageID string) error
 	ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubContentHeadInboundQuoteParams) error
+	ScrubContentHeadOutboundQuotes(ctx context.Context, arg ScrubContentHeadOutboundQuotesParams) error
 	ScrubConversationEventPreviews(ctx context.Context, payload string) error
 	ScrubConversationReceiptPreviews(ctx context.Context, resourceID string) error
 	ScrubConversationRevisionPreviews(ctx context.Context, entityID string) error
 	ScrubEventInboundQuote(ctx context.Context, arg ScrubEventInboundQuoteParams) error
 	ScrubEventOutboundQuotes(ctx context.Context, arg ScrubEventOutboundQuotesParams) error
 	ScrubInboundQuoteMetadata(ctx context.Context, arg ScrubInboundQuoteMetadataParams) error
+	ScrubMessageEditOutboundQuotes(ctx context.Context, arg ScrubMessageEditOutboundQuotesParams) error
 	ScrubMessageInboundQuote(ctx context.Context, arg ScrubMessageInboundQuoteParams) error
 	ScrubMessageOutboundQuotes(ctx context.Context, arg ScrubMessageOutboundQuotesParams) error
 	ScrubReceiptOutboundQuotes(ctx context.Context, arg ScrubReceiptOutboundQuotesParams) error
@@ -327,6 +329,7 @@ type Querier interface {
 	UpdateRecoveredSend(ctx context.Context, arg UpdateRecoveredSendParams) error
 	UpsertRoomInvitationCredential(ctx context.Context, arg UpsertRoomInvitationCredentialParams) error
 	VerifyIndexedMessages(ctx context.Context, arg VerifyIndexedMessagesParams) ([]VerifyIndexedMessagesRow, error)
+	WitnessedEditContentSource(ctx context.Context, arg WitnessedEditContentSourceParams) (string, error)
 }
 
 var _ Querier = (*Queries)(nil)

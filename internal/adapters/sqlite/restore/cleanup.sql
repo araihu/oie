@@ -1,4 +1,5 @@
 DROP VIEW restore_source_echoes;
+DROP TABLE restore_legacy_direct_origins;
 DROP VIEW restore_pre_wire_sends;
 DROP VIEW restore_native_unknown_sends;
 DROP VIEW restore_represented_echo_references;
@@ -13,6 +14,7 @@ DROP TABLE restore_conflicting_relayed_echo_aliases;
 DROP TABLE restore_witness_echoes;
 DROP TABLE restore_local_edit_sources;
 DROP TABLE restore_local_edit_commands;
+DROP TABLE restore_local_edit_witnesses;
 DROP TABLE restore_messages;
 DROP VIEW restore_message_candidates;
 DROP TABLE restore_chats;

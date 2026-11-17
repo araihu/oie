@@ -113,6 +113,45 @@ WHERE m.is_new=0 OR m.days=0 OR m.age_ms>=@now_ms - 86400000 * m.days
        )
    );
 
+-- Earlier direct observations could keep the sender reference while taking
+-- the origin from the ordinary provider ID. Its exact scoped reference can
+-- prevent a resend without being sufficient to identify the wire contents.
+CREATE TEMP TABLE restore_legacy_direct_origins (
+  is_backup INTEGER NOT NULL,id TEXT NOT NULL,account_id TEXT NOT NULL,conversation_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,wire_id TEXT NOT NULL,PRIMARY KEY(is_backup,id)
+) WITHOUT ROWID;
+INSERT INTO restore_legacy_direct_origins
+WITH candidates(is_backup,id,account_id,conversation_id,provider_id,payload,remote_id,source_hash) AS (
+  SELECT 1,m.id,m.account_id,m.conversation_id,m.provider_id,m.payload,r.remote_id,r.source_hash
+  FROM backup.messages m JOIN restore_chats x ON x.id=m.conversation_id
+  JOIN backup.conversations c ON c.id=x.id AND c.account_id=m.account_id
+  JOIN backup.accounts a ON a.id=m.account_id
+  JOIN backup.message_references r ON r.message_id=m.id AND r.scope='sender:'||a.address AND r.author=a.address
+  WHERE json_extract(c.payload,'$.Kind')='direct' AND m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
+    AND COALESCE(json_extract(m.payload,'$.OwnOriginID'),'') IN ('',m.provider_id)
+    AND NOT EXISTS (
+        SELECT 1 FROM backup.message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>''
+    )
+  UNION ALL
+  SELECT 0,m.id,m.account_id,m.conversation_id,m.provider_id,m.payload,r.remote_id,r.source_hash
+  FROM messages m JOIN restore_chats x ON x.id=m.conversation_id
+  JOIN conversations c ON c.id=x.id AND c.account_id=m.account_id
+  JOIN accounts a ON a.id=m.account_id
+  JOIN message_references r ON r.message_id=m.id AND r.scope='sender:'||a.address AND r.author=a.address
+  WHERE json_extract(c.payload,'$.Kind')='direct' AND m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
+    AND COALESCE(json_extract(m.payload,'$.OwnOriginID'),'') IN ('',m.provider_id)
+    AND NOT EXISTS (
+        SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>''
+    )
+)
+SELECT is_backup,id,account_id,conversation_id,provider_id,MIN(remote_id) AS wire_id FROM candidates
+WHERE source_hash=COALESCE(NULLIF(json_extract(payload,'$.WireBodySHA256'),''),
+                           oie_source_hash(json_extract(payload,'$.OriginalText')))
+GROUP BY is_backup,id,account_id,conversation_id,provider_id
+HAVING COUNT(DISTINCT remote_id)=1 AND wire_id<>provider_id
+   AND wire_id GLOB '????????-????-7???-[89ab]???-????????????'
+   AND length(replace(wire_id,'-',''))=32 AND replace(wire_id,'-','') NOT GLOB '*[^0-9a-f]*';
+
 -- Restore send evidence onto the original local row. An own archive echo
 -- retained under another row ID would duplicate that message in the timeline.
 CREATE TEMP VIEW restore_source_echoes AS
@@ -120,6 +159,7 @@ SELECT m.*,COALESCE(NULLIF(json_extract(m.payload,'$.OwnOriginID'),''), m.provid
 FROM backup.messages m JOIN restore_chats x ON x.id=m.conversation_id
 JOIN backup.conversations c ON c.id=x.id AND c.account_id=m.account_id
 WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
+  AND NOT EXISTS (SELECT 1 FROM restore_legacy_direct_origins old WHERE old.is_backup=1 AND old.id=m.id)
   AND (json_extract(m.payload,'$.OwnOriginID')<>'' OR json_extract(c.payload,'$.Kind')='direct'
        OR json_extract(m.payload,'$.Historical')=0);
 
@@ -155,6 +195,7 @@ WITH echoes AS (
   FROM messages d JOIN restore_chats x ON x.id=d.conversation_id
   JOIN conversations c ON c.id=x.id AND c.account_id=d.account_id
   WHERE d.is_own=1 AND d.state='submitted' AND d.id<>d.provider_id
+    AND NOT EXISTS (SELECT 1 FROM restore_legacy_direct_origins old WHERE old.is_backup=0 AND old.id=d.id)
   UNION ALL
   SELECT b.id,b.account_id,b.conversation_id,b.provider_id,b.payload,
          json_extract(c.payload,'$.Kind') AS kind
@@ -162,6 +203,7 @@ WITH echoes AS (
   JOIN backup.message_canonical_aliases a ON a.alias_id=b.id
   JOIN backup.conversations c ON c.id=b.conversation_id AND c.account_id=b.account_id
   WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
+    AND NOT EXISTS (SELECT 1 FROM restore_legacy_direct_origins old WHERE old.is_backup=1 AND old.id=b.id)
     AND json_extract(b.payload,'$.OwnOriginID')=a.canonical_id
 ), pairs AS (
   SELECT e.id AS echo_id,b.id AS original_id,b.account_id,b.conversation_id,b.payload AS original_payload,

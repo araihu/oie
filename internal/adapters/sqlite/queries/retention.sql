@@ -176,6 +176,16 @@ UPDATE operations SET result=oie_strip_expired_outbound_quote(result)
 WHERE resource_id IN (SELECT id FROM messages WHERE conversation_id=sqlc.arg(owner_id))
 AND json_extract(result,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(sqlc.arg(expired_ids) AS TEXT)));
 
+-- name: ScrubContentHeadOutboundQuotes :exec
+UPDATE message_content_heads SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE canonical_id IN (SELECT id FROM messages WHERE conversation_id=sqlc.arg(owner_id))
+AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(sqlc.arg(expired_ids) AS TEXT)));
+
+-- name: ScrubMessageEditOutboundQuotes :exec
+UPDATE message_edit_commands SET payload=oie_strip_expired_edit_quote(payload)
+WHERE conversation_id=sqlc.arg(owner_id)
+AND json_extract(payload,'$.Reply.TargetID') IN (SELECT value FROM json_each(CAST(sqlc.arg(expired_ids) AS TEXT)));
+
 -- name: ListInboundQuotesInConversation :many
 SELECT r.message_id,CAST(COALESCE(a.canonical_id,r.message_id) AS TEXT) AS canonical_id,r.body_hash,r.payload
 FROM message_replies r JOIN messages m ON m.id=r.message_id

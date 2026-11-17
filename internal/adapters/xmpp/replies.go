@@ -54,6 +54,17 @@ func usableID(id string) bool {
 	return id != "" && len(id) <= 4096 && utf8.ValidString(id) && !strings.ContainsRune(id, 0)
 }
 
+func (m replyMetadata) originID() string {
+	if len(m.Origins) != 1 {
+		return ""
+	}
+	origin := m.Origins[0]
+	if !usableID(origin.ID) || origin.Text != "" || len(origin.Children) != 0 {
+		return ""
+	}
+	return origin.ID
+}
+
 func roomStanzaID(from jid.JID, ids []wireID) string {
 	var found *wireID
 	for i := range ids {
@@ -86,11 +97,8 @@ func decodeReplyMetadata(meta replyMetadata, body string, from jid.JID, account,
 			refs = append(refs, domain.MessageReference{Scope: scope, ID: id, Author: author})
 		}
 	} else if !room {
-		if len(meta.Origins) == 1 {
-			id := meta.Origins[0]
-			if usableID(id.ID) && id.Text == "" && len(id.Children) == 0 {
-				refs = append(refs, domain.MessageReference{Scope: scope, ID: id.ID, Author: author})
-			}
+		if id := meta.originID(); id != "" {
+			refs = append(refs, domain.MessageReference{Scope: scope, ID: id, Author: author})
 		}
 	}
 	if len(meta.Replies) != 1 {
