@@ -64,6 +64,20 @@ async function verifySignInAppearance(browser, origin) {
   }
 }
 
+async function closeSignOutDialog(dialog, close) {
+  // The native dialog becomes hidden before its queued close event resets Alpine's state.
+  const closed = await dialog.evaluateHandle(element => ({
+    event: new Promise(resolve => element.addEventListener('close', () => resolve(), {once: true})),
+  }));
+  try {
+    await close();
+    await withDeadline(closed.evaluate(state => state.event), 'sign-out dialog close event');
+    await dialog.waitFor({state: 'hidden'});
+  } finally {
+    await closed.dispose();
+  }
+}
+
 async function signOutConfirmation(page, copy) {
   const engine = page.getByRole('tabpanel', {name: copy.engine, exact: true});
   const open = engine.getByRole('button', {name: copy.action, exact: true});
@@ -80,13 +94,11 @@ async function signOutConfirmation(page, copy) {
     await dialog.waitFor();
     assert.equal(await dialog.locator('#hosted-sign-out-description').textContent(), copy.description);
     assert.equal(await confirm.evaluate(button => document.activeElement === button), false);
-    await cancel.click();
-    await dialog.waitFor({state: 'hidden'});
+    await closeSignOutDialog(dialog, () => cancel.click());
     assert(await open.evaluate(button => document.activeElement === button));
     await open.press('Enter');
     await dialog.waitFor();
-    await page.keyboard.press('Escape');
-    await dialog.waitFor({state: 'hidden'});
+    await closeSignOutDialog(dialog, () => page.keyboard.press('Escape'));
     assert.equal(logoutRequests, 0);
     assert.equal((await page.request.get(new URL('/auth/session', page.url()).href)).status(), 204);
     await open.press('Enter');
