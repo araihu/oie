@@ -100,7 +100,9 @@ function save(current, data) {
 }
 
 function progress(current, {engine, through}) {
-  if (current.blocked || engine !== current.engine || cursor(engine, through) <= cursor(engine, current.checkpoint)) return;
+  const checkpoint = cursor(engine, current.checkpoint);
+  if (current.blocked || engine !== current.engine || checkpoint < 0n ||
+      cursor(engine, through) !== checkpoint + 1n) return;
   return {...current, checkpoint: through};
 }
 
@@ -108,7 +110,7 @@ function invalidate(current, {engine, account, chat, through, confirmedMissing =
   if (current.blocked || engine !== current.engine || cursor(engine, through) < 0n) return;
   const sequence = cursor(engine, through);
   const minimum = newest(engine, current.minimum, through);
-  const checkpoint = newest(engine, current.checkpoint, through);
+  const checkpoint = confirmedMissing ? current.checkpoint : progress(current, {engine, through})?.checkpoint ?? current.checkpoint;
   const entries = current.entries.filter(entry => (account && entry.account !== account) || (chat && entry.chat !== chat) ||
     (confirmedMissing ? cursor(engine, entry.cursor) > sequence : cursor(engine, entry.cursor) >= sequence));
   let missing = current.missing;

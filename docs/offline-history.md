@@ -10,8 +10,9 @@ the normal composer.
 ## Storage
 
 The root service worker precaches a small page with English and Brazilian
-Portuguese variants, plus its script and stylesheet. It tries the network first
-for workspace navigation. The notification worker keeps its existing scope.
+Portuguese variants, plus its scripts and stylesheet. It tries the network first for full
+workspace navigation. Fragment requests stay on the page. A failed
+conversation navigation can reopen the cached view. The notification worker keeps its existing scope.
 The root worker is limited to the standalone web presentation on a secure
 origin, including localhost. Authenticated hosted sessions and the native
 desktop WebView do not register it.
@@ -21,8 +22,9 @@ account and conversation. A snapshot contains text from at most 50 messages
 in the latest loaded page. A snapshot is bounded to 192 KiB. The browser keeps at most
 12 such snapshots from the last seven days within a combined 1 MiB budget.
 Authentication responses, engine changes, resets and observed account,
-conversation or history removals discard affected snapshots. A replay gap
-discards snapshots from before the gap. The service worker does not cache
+conversation or history removals discard affected snapshots. A verified
+online navigation that discovers a gap in the events seen on this device
+discards older snapshots. Expired entries are removed on the next access. The service worker does not cache
 authenticated HTML, original withdrawn content, drafts, uploads or files.
 
 The configurable device limit, pinned offline conversations and search over

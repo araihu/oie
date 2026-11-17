@@ -53,6 +53,14 @@ async function checkNavigationAuthority(id) {
   assert(current.blocked && !current.entries.length, 'a newer network outage cannot conceal a confirmed denial');
 
   current = saved;
+  current = sandbox.invalidate(current, {engine, chat: id(9), through: engine + ':3', confirmedMissing: true});
+  assert.equal(current.checkpoint, engine + ':1', 'another chat’s 404 cannot certify an unobserved event gap');
+  assert.equal(sandbox.progress(current, {engine, through: engine + ':4'}), undefined, 'an isolated event cannot certify an earlier gap');
+  const afterGap = sandbox.verify(current, engine, engine + ':4');
+  assert.equal(afterGap.entries.length, 0, 'the unobserved gap still invalidates older history');
+  assert.equal(afterGap.checkpoint, engine + ':4');
+
+  current = saved;
   let reset;
   handlers.get('fetch')({
     request: {key: 'reset', method: 'POST', url: 'http://test/ui/engine/reset'},
