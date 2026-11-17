@@ -583,6 +583,12 @@ type RetainedMessageRetraction struct {
 	RetractedAt string
 }
 
+type RetiredRecoveredSend struct {
+	AccountID      string
+	ConversationID string
+	MessageID      string
+}
+
 type Revision struct {
 	ID        string
 	EntityID  string

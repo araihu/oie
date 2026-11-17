@@ -47,8 +47,13 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 			}
 			if !matchesSubmittedComposition(message, submitted, kind == "room") {
 				state = "unknown"
-			} else if submitted.ID == message.ID && len(message.Attachments) != 0 && message.AttachmentWireText == "" {
-				message.AttachmentWireText = submitted.AttachmentWireText
+			} else if submitted.ID == message.ID {
+				if len(message.Attachments) != 0 && message.AttachmentWireText == "" {
+					message.AttachmentWireText = submitted.AttachmentWireText
+				}
+				if message.WireMentions == "" || (message.WireMentions == submitted.WireMentions && message.WireMentionDigest == "") {
+					message.WireMentions, message.WireMentionDigest = submitted.WireMentions, submitted.WireMentionDigest
+				}
 			}
 		}
 		at := now
@@ -115,7 +120,9 @@ func matchesNativeComposition(current, submitted domain.Message) bool {
 
 func matchesUncertainNativeComposition(current, submitted domain.Message) bool {
 	return current.ID == submitted.ID && matchesNativeComposition(current, submitted) &&
-		(current.AttachmentWireText == "" || current.AttachmentWireText == submitted.AttachmentWireText)
+		(current.AttachmentWireText == "" || current.AttachmentWireText == submitted.AttachmentWireText) &&
+		(current.WireMentions == "" || submitted.WireMentions == "" ||
+			current.MatchesWireMentions(domain.WireMentionProof{Evidence: submitted.WireMentions, Digest: submitted.WireMentionDigest}))
 }
 
 func mergeRestoredQueue(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, engine domain.ID, hasRecovered, hasHistory bool) error {

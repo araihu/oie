@@ -1,6 +1,10 @@
 package domain
 
 import (
+	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"slices"
 	"strings"
 	"unicode"
@@ -16,14 +20,55 @@ const (
 	WireMentionsPresent WireMentionEvidence = "present"
 )
 
+type WireMentionProof struct {
+	Evidence WireMentionEvidence
+	Digest   string
+}
+
+type WireMentionRange struct {
+	URI        string
+	Begin, End int
+}
+
+func WireMentionDigest(references []WireMentionRange) string {
+	if len(references) == 0 {
+		return ""
+	}
+	ordered := slices.Clone(references)
+	slices.SortFunc(ordered, func(a, b WireMentionRange) int {
+		return cmp.Or(cmp.Compare(a.Begin, b.Begin), cmp.Compare(a.End, b.End), strings.Compare(a.URI, b.URI))
+	})
+	canonical, _ := json.Marshal(ordered)
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
+}
+
 func (m Message) ConfirmsNoWireMentions(room bool) bool {
 	return m.WireMentions == WireMentionsAbsent || (m.WireMentions == "" && !room)
 }
 
-func (m Message) MatchesWireMentionPresence(observed WireMentionEvidence) bool {
-	return observed != WireMentionsPresent || slices.ContainsFunc(m.Mentions, func(mention MessageMention) bool {
-		return mention.ReferenceMode == "structured"
-	})
+func (m Message) MatchesWireMentions(observed WireMentionProof) bool {
+	if m.WireMentions == WireMentionsAbsent {
+		return observed.Evidence != WireMentionsPresent
+	}
+	if m.WireMentions == WireMentionsPresent {
+		return observed.Evidence == WireMentionsPresent && observed.Digest != "" && m.WireMentionDigest == observed.Digest
+	}
+	offset := 0
+	if m.OutboundReply != nil {
+		offset = utf8.RuneCountInString(m.OriginalText) - utf8.RuneCountInString(m.OutboundReply.BodyText)
+	}
+	var expected []WireMentionRange
+	for _, mention := range m.Mentions {
+		if mention.ReferenceMode == "structured" {
+			expected = append(expected, WireMentionRange{URI: mention.URI, Begin: mention.Begin + offset, End: mention.End + offset})
+		}
+	}
+	if len(expected) == 0 {
+		return observed.Evidence != WireMentionsPresent
+	}
+	// Redaction may have removed the offset of the originally transmitted text.
+	return m.WireBodySHA256 == "" && observed.Evidence == WireMentionsPresent && observed.Digest != "" && WireMentionDigest(expected) == observed.Digest
 }
 
 // MentionBoundary follows Gajim's nickname delimiters and keeps Unicode marks

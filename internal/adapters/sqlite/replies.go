@@ -113,11 +113,13 @@ func verifiedAttachmentReferenceRoom(ctx context.Context, q *dbgen.Queries, old,
 	if !in.IsOwn || !old.IsOwn || in.OwnOriginID != old.ID || old.ProviderID != string(old.ID) {
 		return "", nil
 	}
-	matched := old.MatchesAttachmentWireBody(in.OriginalText)
+	matched := old.MatchesAttachmentWireBody(in.OriginalText) &&
+		old.MatchesWireMentions(domain.WireMentionProof{Evidence: in.WireMentions, Digest: in.WireMentionDigest})
 	if !matched {
 		var err error
 		matched, err = q.HasArchivedAttachmentWireBody(ctx, dbgen.HasArchivedAttachmentWireBodyParams{
 			MessageID: string(old.ID), AccountID: string(old.AccountID), ConversationID: string(old.ConversationID), WireBody: in.OriginalText,
+			ObservedMentions: string(in.WireMentions), ObservedMentionDigest: in.WireMentionDigest,
 		})
 		if err != nil || !matched {
 			return "", err

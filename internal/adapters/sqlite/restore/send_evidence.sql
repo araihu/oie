@@ -51,16 +51,19 @@ JOIN restore_chats x ON x.id=m.conversation_id
 WHERE m.is_own=1 AND m.id=m.provider_id AND m.state='unknown' AND o.state='unknown';
 
 CREATE TEMP TABLE restore_send_evidence (
-    id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT,payload TEXT,timeline_at_ms INTEGER,submitted_at_ms INTEGER
+    id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT,payload TEXT,timeline_at_ms INTEGER,submitted_at_ms INTEGER,
+    account_id TEXT NOT NULL,conversation_id TEXT NOT NULL
 ) WITHOUT ROWID;
 INSERT INTO restore_send_evidence
 SELECT m.id,CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed')
          THEN COALESCE(o.state,m.state) ELSE 'unknown' END,
     (SELECT r.created_at FROM backup.message_revisions r WHERE r.id=m.revision_id AND r.entity_id=m.id),m.payload,
     CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed') THEN m.timeline_at_ms END,
-    CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed') THEN m.submitted_at_ms END
+    CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed') THEN m.submitted_at_ms END,
+    m.account_id,m.conversation_id
 FROM backup.messages m LEFT JOIN backup.outbox o ON o.message_id=m.id
 JOIN restore_chats c ON c.id=m.conversation_id
+JOIN conversations scope ON scope.id=c.id AND scope.account_id=m.account_id
 LEFT JOIN recovered_sends p ON p.message_id=m.id AND p.conversation_id=c.id
 LEFT JOIN restore_messages selected ON selected.id=m.id
 LEFT JOIN messages d ON d.id=m.id AND d.conversation_id=m.conversation_id AND d.account_id=m.account_id AND d.is_own=1
@@ -80,7 +83,7 @@ SELECT b.wire_id,CASE WHEN EXISTS (
     AND reply.body_hash=COALESCE(NULLIF(json_extract(b.payload,'$.WireBodySHA256'),''),
                                  oie_source_hash(json_extract(b.payload,'$.OriginalText')))
   ) THEN 'unknown' ELSE 'submitted' END,
-  r.created_at,b.payload,NULL,NULL
+  r.created_at,b.payload,NULL,NULL,b.account_id,b.conversation_id
 FROM restore_source_echoes b
 JOIN backup.message_revisions r ON r.id=b.revision_id AND r.entity_id=b.id
 WHERE (
@@ -95,28 +98,40 @@ ON CONFLICT(id) DO NOTHING;
 
 -- Previously restored proof may survive after the echo's history expired.
 INSERT INTO restore_send_evidence
-SELECT m.id,'unknown',NULL,NULL,NULL,NULL FROM restore_pre_wire_sends m
+SELECT m.id,'unknown',NULL,NULL,NULL,NULL,m.account_id,m.conversation_id FROM restore_pre_wire_sends m
 JOIN restored_own_echoes e ON e.account_id=m.account_id AND e.conversation_id=m.conversation_id AND e.message_id=m.id
 WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 
 -- Expiry implies that the snapshot no longer had an executable send.
 INSERT INTO restore_send_evidence
-SELECT e.id,'unknown',NULL,NULL,NULL,NULL FROM backup.expired_message_ids e JOIN restore_pre_wire_sends m ON m.id=e.id
+SELECT e.id,'unknown',NULL,NULL,NULL,NULL,m.account_id,m.conversation_id
+FROM backup.expired_message_ids e JOIN restore_pre_wire_sends m ON m.id=e.id
+WHERE TRUE
+ON CONFLICT(id) DO NOTHING;
+
+-- A relay can carry proof of a terminal send after excluding its body.
+INSERT INTO restore_send_evidence
+SELECT m.id,'unknown',NULL,NULL,NULL,NULL,m.account_id,m.conversation_id FROM restore_pre_wire_sends m
+JOIN retired_recovered_sends e ON e.account_id=m.account_id AND e.conversation_id=m.conversation_id AND e.message_id=m.id
 WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 
 -- Once terminal evidence is available a stale next restore must not recreate
--- a review item, even when retention excluded the terminal message itself.
-INSERT INTO discarded_recovered_sends
-SELECT e.id FROM restore_send_evidence e
+-- a review item. A later eligible terminal body can still use its receipt.
+INSERT INTO retired_recovered_sends
+SELECT e.account_id,e.conversation_id,e.id FROM restore_send_evidence e
 WHERE e.state IN ('cancelled','submitted','failed')
   AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.id=e.id)
-ON CONFLICT(message_id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 DELETE FROM recovered_sends
 WHERE EXISTS(SELECT 1 FROM discarded_recovered_sends d WHERE d.message_id=recovered_sends.message_id)
    OR EXISTS(SELECT 1 FROM expired_message_ids d WHERE d.id=recovered_sends.message_id)
+   OR EXISTS(
+       SELECT 1 FROM retired_recovered_sends e JOIN conversations c ON c.id=e.conversation_id AND c.account_id=e.account_id
+       WHERE c.id=recovered_sends.conversation_id AND e.message_id=recovered_sends.message_id
+   )
    OR EXISTS(
        SELECT 1 FROM restored_own_echoes e JOIN conversations c ON c.id=e.conversation_id AND c.account_id=e.account_id
        WHERE c.id=recovered_sends.conversation_id AND e.message_id=recovered_sends.message_id

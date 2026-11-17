@@ -136,7 +136,7 @@ JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
 LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
 LEFT JOIN backup.outbox o ON o.message_id=m.id
 WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
-  AND (m.conversation_kind<>'room' OR oie_wire_mentions_match(d.payload,json_extract(m.payload,'$.WireMentions'))=1)
+  AND (m.conversation_kind<>'room' OR oie_wire_mentions_match(d.payload,json_extract(m.payload,'$.WireMentions'),json_extract(m.payload,'$.WireMentionDigest'))=1)
   AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
   AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
   AND NOT EXISTS (
@@ -180,7 +180,7 @@ WITH echoes AS (
     AND NOT EXISTS(SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=b.id)
     AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=b.id)
     AND json_type(e.payload,'$.OriginalText')='text' AND json_type(b.payload,'$.OriginalText')='text'
-    AND oie_wire_mentions_match(b.payload,json_extract(e.payload,'$.WireMentions'))=1
+    AND oie_wire_mentions_match(b.payload,json_extract(e.payload,'$.WireMentions'),json_extract(e.payload,'$.WireMentionDigest'))=1
 )
 SELECT echo_id,original_id FROM pairs p
 WHERE (json_type(original_payload,'$.Attachments[0]') IS NULL AND echo_hash=COALESCE(
@@ -238,7 +238,7 @@ JOIN messages native ON native.id=e.retained_id
 JOIN message_revisions retained ON retained.id=native.revision_id AND retained.entity_id=native.id
 WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
   AND json_type(native.payload,'$.Attachments[0]') IS NULL
-  AND (e.source_id=e.retained_id OR oie_wire_mentions_match(native.payload,json_extract(echo.payload,'$.WireMentions'))=1)
+  AND (e.source_id=e.retained_id OR oie_wire_mentions_match(native.payload,json_extract(echo.payload,'$.WireMentions'),json_extract(echo.payload,'$.WireMentionDigest'))=1)
   AND f.source_hash=COALESCE(NULLIF(json_extract(echo.payload,'$.WireBodySHA256'),''),
                             oie_source_hash(json_extract(echo.payload,'$.OriginalText')))
   AND f.source_hash=COALESCE(NULLIF(json_extract(archived.payload,'$.WireBodySHA256'),''),
@@ -326,6 +326,54 @@ WHERE is_new=1 AND id IN (SELECT id FROM restore_retained_correction_sources WHE
 INSERT INTO restore_messages
 SELECT id,is_new FROM restore_retained_correction_sources WHERE allowed=1
 ON CONFLICT DO NOTHING;
+
+-- Explicit expiry also applies when the root is within the normal age window
+-- or is being imported for the first time. Keep a deleted branch from becoming
+-- independent history simply because an intermediate correction is absent.
+WITH RECURSIVE verified_corrections AS MATERIALIZED (
+  SELECT m.id,m.account_id,m.conversation_id,COALESCE(a.canonical_id,m.id) AS root_id,
+         f.scope,f.author,f.remote_id,f.target_id,f.source_hash
+  FROM backup.message_correction_facts f
+  JOIN backup.messages m ON m.id=f.message_id AND m.state IN ('received','submitted')
+  JOIN restore_chats x ON x.id=m.conversation_id
+  JOIN backup.conversations chat ON chat.id=x.id AND chat.account_id=m.account_id
+  JOIN backup.message_revisions revision ON revision.id=f.source_revision_id AND revision.entity_id=m.id
+  LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
+  WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
+    AND (EXISTS(SELECT 1 FROM expired_message_ids) OR EXISTS (
+      SELECT 1 FROM expired_message_references e WHERE e.conversation_id=m.conversation_id
+    ))
+    AND json_extract(m.payload,'$.ID')=m.id AND json_extract(revision.payload,'$.ID')=m.id
+    AND json_extract(revision.payload,'$.RevisionID')=revision.id
+    AND json_extract(m.payload,'$.AccountID')=m.account_id AND json_extract(revision.payload,'$.AccountID')=m.account_id
+    AND json_extract(m.payload,'$.ConversationID')=m.conversation_id
+    AND json_extract(revision.payload,'$.ConversationID')=m.conversation_id
+    AND f.source_hash=COALESCE(NULLIF(json_extract(m.payload,'$.WireBodySHA256'),''),
+                               oie_source_hash(json_extract(m.payload,'$.OriginalText')))
+    AND f.source_hash=COALESCE(NULLIF(json_extract(revision.payload,'$.WireBodySHA256'),''),
+                               oie_source_hash(json_extract(revision.payload,'$.OriginalText')))
+), expired_branches(id,account_id,conversation_id,root_id,scope,author,remote_id) AS (
+  SELECT f.id,f.account_id,f.conversation_id,f.root_id,f.scope,f.author,f.remote_id
+  FROM verified_corrections f
+  WHERE EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (f.id,f.root_id))
+     OR EXISTS (
+        SELECT 1 FROM expired_message_references e WHERE e.conversation_id=f.conversation_id AND (
+          (e.scope=f.scope AND e.author=f.author AND e.remote_id IN (f.remote_id,f.target_id))
+          OR EXISTS (
+              SELECT 1 FROM backup.message_references ref WHERE ref.message_id=f.id AND ref.source_hash=f.source_hash
+                AND ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
+          )
+        )
+     )
+  UNION
+  SELECT child.id,child.account_id,child.conversation_id,child.root_id,child.scope,child.author,child.remote_id
+  FROM expired_branches parent JOIN verified_corrections child
+    ON child.account_id=parent.account_id AND child.conversation_id=parent.conversation_id
+    AND child.root_id=parent.root_id AND child.scope=parent.scope AND child.author=parent.author
+    AND child.target_id=parent.remote_id
+)
+DELETE FROM restore_messages
+WHERE is_new=1 AND id IN (SELECT id FROM expired_branches);
 
 DELETE FROM restore_messages
 WHERE is_new=1 AND EXISTS (

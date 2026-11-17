@@ -10,6 +10,8 @@ WHERE o.kind IN ('send_message','forward_message','update_pending_message','send
              WHERE e.account_id=c.account_id AND e.conversation_id=c.id AND e.message_id=p.message_id)
       OR EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id=p.message_id)
       OR EXISTS(SELECT 1 FROM discarded_recovered_sends e WHERE e.message_id=p.message_id)
+      OR EXISTS(SELECT 1 FROM retired_recovered_sends e
+                WHERE e.account_id=c.account_id AND e.conversation_id=c.id AND e.message_id=p.message_id)
   )
 ON CONFLICT(id) DO NOTHING;
 
@@ -17,6 +19,10 @@ DELETE FROM restore_pending_candidates
 WHERE EXISTS(SELECT 1 FROM messages m WHERE m.id=restore_pending_candidates.message_id)
   OR EXISTS(SELECT 1 FROM expired_message_ids m WHERE m.id=restore_pending_candidates.message_id)
   OR EXISTS(SELECT 1 FROM discarded_recovered_sends m WHERE m.message_id=restore_pending_candidates.message_id)
+  OR EXISTS(
+      SELECT 1 FROM retired_recovered_sends e JOIN conversations c ON c.id=e.conversation_id AND c.account_id=e.account_id
+      WHERE c.id=restore_pending_candidates.conversation_id AND e.message_id=restore_pending_candidates.message_id
+  )
   OR EXISTS(
       SELECT 1 FROM restored_own_echoes e JOIN conversations c ON c.id=e.conversation_id AND c.account_id=e.account_id
       WHERE c.id=restore_pending_candidates.conversation_id AND e.message_id=restore_pending_candidates.message_id

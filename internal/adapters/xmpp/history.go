@@ -205,7 +205,8 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 	in.Correction = decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, in.Kind == "room", occupantVerified)
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
 	if in.IsOwn {
-		in.WireMentions = msg.wireMentionEvidence()
+		mentions := msg.wireMentionProof(in.Address, body)
+		in.WireMentions, in.WireMentionDigest = mentions.Evidence, mentions.Digest
 	}
 	if in.Kind == "room" {
 		if provider := roomProviderID(msg.From, msg.ID, in.References); provider != "" {

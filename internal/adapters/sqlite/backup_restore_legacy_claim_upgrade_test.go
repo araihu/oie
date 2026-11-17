@@ -123,6 +123,30 @@ func testBackupRestoreReleasedLegacyImageClaim(t *testing.T, upgradeBeforeExpiry
 		if err := destination.CompleteDownloadGarbage(ctx, domain.DownloadGarbage{Kind: "image", Hash: preview.FileHash}, true); err != nil {
 			t.Fatal(err)
 		}
+		// An archive of the stopped release can predate the claim migration.
+		metadata, metadataDB, metadataScratch := backupRestoreFixture(t, destination, false)
+		relay := openLegacyDownloadDestination(t)
+		if _, err := relay.mergeBackup(ctx, metadataDB, metadataScratch, metadata, now); err != nil {
+			t.Fatal(err)
+		}
+		if result, err := relay.mergeBackup(ctx, database, scratch, archive, now); err != nil || result.MediaFiles != 0 {
+			t.Fatalf("old archive lost the retirement before upgrade: %+v, %v", result, err)
+		}
+		if _, err := os.Stat(filepath.Join(relay.dir, "media", "images", preview.FileHash)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("an expired legacy image was restored from the older archive: %v", err)
+		}
+
+		// The same archive must keep an independently retained local download.
+		retained := openLegacyDownloadDestination(t)
+		if result, err := retained.mergeBackup(ctx, database, scratch, archive, now); err != nil || result.MediaFiles != 1 {
+			t.Fatalf("fixture did not keep the original image: %+v, %v", result, err)
+		}
+		if _, err := retained.mergeBackup(ctx, metadataDB, metadataScratch, metadata, now); err != nil {
+			t.Fatal(err)
+		}
+		if policy, err := retained.DownloadPolicy(ctx, "legacy"); err != nil || policy.Count != 1 {
+			t.Fatalf("an independent local membership changed: %+v, %v", policy, err)
+		}
 		destination = upgradeDownloadFixture(t, destination, 0)
 	}
 	if err := checkRestoreDatabase(ctx, database); err != nil {

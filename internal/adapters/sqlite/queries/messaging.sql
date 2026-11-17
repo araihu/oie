@@ -72,6 +72,7 @@ SELECT EXISTS (
       AND json_extract(r.payload,'$.Attachments[0]') IS NOT NULL
       AND oie_attachment_wire_matches(json_extract(r.payload,'$.OriginalText'), json_extract(r.payload,'$.AttachmentWireText'),
           json_extract(r.payload,'$.WireBodySHA256'), CAST(sqlc.arg(wire_body) AS TEXT))=1
+      AND oie_wire_mentions_match(r.payload, CAST(sqlc.arg(observed_mentions) AS TEXT), CAST(sqlc.arg(observed_mention_digest) AS TEXT))=1
 );
 -- name: ListMessages :many
 SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id)

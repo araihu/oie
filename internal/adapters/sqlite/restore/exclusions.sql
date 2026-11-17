@@ -19,7 +19,7 @@ WITH bodies AS (
   JOIN conversations c ON c.id=d.conversation_id AND c.account_id=d.account_id
   JOIN accounts a ON a.id=d.account_id
   WHERE json_type(b.payload,'$.OriginalText')='text' AND json_type(d.payload,'$.OriginalText')='text'
-    AND oie_wire_mentions_match(d.payload,json_extract(b.payload,'$.WireMentions'))=1
+    AND oie_wire_mentions_match(d.payload,json_extract(b.payload,'$.WireMentions'),json_extract(b.payload,'$.WireMentionDigest'))=1
 )
 SELECT source_id,retained_id,account_id,conversation_id,account_address,address,kind,echo_hash,retained_hash
 FROM bodies e

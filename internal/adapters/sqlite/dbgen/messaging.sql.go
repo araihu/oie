@@ -210,14 +210,17 @@ SELECT EXISTS (
       AND json_extract(r.payload,'$.Attachments[0]') IS NOT NULL
       AND oie_attachment_wire_matches(json_extract(r.payload,'$.OriginalText'), json_extract(r.payload,'$.AttachmentWireText'),
           json_extract(r.payload,'$.WireBodySHA256'), CAST(?4 AS TEXT))=1
+      AND oie_wire_mentions_match(r.payload, CAST(?5 AS TEXT), CAST(?6 AS TEXT))=1
 )
 `
 
 type HasArchivedAttachmentWireBodyParams struct {
-	MessageID      string
-	AccountID      string
-	ConversationID string
-	WireBody       string
+	MessageID             string
+	AccountID             string
+	ConversationID        string
+	WireBody              string
+	ObservedMentions      string
+	ObservedMentionDigest string
 }
 
 func (q *Queries) HasArchivedAttachmentWireBody(ctx context.Context, arg HasArchivedAttachmentWireBodyParams) (bool, error) {
@@ -226,6 +229,8 @@ func (q *Queries) HasArchivedAttachmentWireBody(ctx context.Context, arg HasArch
 		arg.AccountID,
 		arg.ConversationID,
 		arg.WireBody,
+		arg.ObservedMentions,
+		arg.ObservedMentionDigest,
 	)
 	var exists bool
 	err := row.Scan(&exists)

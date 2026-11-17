@@ -31,17 +31,15 @@ func init() {
 		body, _ := args[3].(string)
 		return number(m.MatchesAttachmentWireBody(body)), nil
 	})
-	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_wire_mentions_match", 2, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_wire_mentions_match", 3, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		observed, _ := args[1].(string)
-		if domain.WireMentionEvidence(observed) != domain.WireMentionsPresent {
-			return int64(1), nil
-		}
+		digest, _ := args[2].(string)
 		payload, _ := args[0].(string)
 		var m domain.Message
 		if err := json.Unmarshal([]byte(payload), &m); err != nil {
 			return nil, err
 		}
-		return number(m.MatchesWireMentionPresence(domain.WireMentionsPresent)), nil
+		return number(m.MatchesWireMentions(domain.WireMentionProof{Evidence: domain.WireMentionEvidence(observed), Digest: digest})), nil
 	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_outbound_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		payload, _ := args[0].(string)

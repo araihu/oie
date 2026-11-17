@@ -643,6 +643,7 @@ func matchArchivedAttachmentWireBody(ctx context.Context, q *dbgen.Queries, chat
 	// ingress write lock while keeping the current message and revision intact.
 	matched, err := q.HasArchivedAttachmentWireBody(ctx, dbgen.HasArchivedAttachmentWireBodyParams{
 		MessageID: origin, AccountID: string(chat.AccountID), ConversationID: string(chat.ID), WireBody: echo.OriginalText,
+		ObservedMentions: string(echo.WireMentions), ObservedMentionDigest: echo.WireMentionDigest,
 	})
 	if matched {
 		echo.ProviderID = origin
@@ -678,7 +679,7 @@ func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming 
 		!queued.MatchesAttachmentWireBody(echo.OriginalText) {
 		return nil
 	}
-	if !queued.MatchesWireMentionPresence(echo.WireMentions) {
+	if !queued.MatchesWireMentions(domain.WireMentionProof{Evidence: echo.WireMentions, Digest: echo.WireMentionDigest}) {
 		return nil
 	}
 	echo.ProviderID = queued.ProviderID
@@ -939,7 +940,7 @@ func (s *Store) reconcileArchivedAuthor(ctx context.Context, q *dbgen.Queries, i
 	old.Sender.ID = in.AccountID
 	old.SendState = "submitted"
 	if old.SourceBodyHash() == in.SourceBodyHash() {
-		old.OwnOriginID, old.WireMentions = in.OwnOriginID, in.WireMentions
+		old.OwnOriginID, old.WireMentions, old.WireMentionDigest = in.OwnOriginID, in.WireMentions, in.WireMentionDigest
 	}
 	old.RevisionID = revision
 	at := time.Now().UTC()

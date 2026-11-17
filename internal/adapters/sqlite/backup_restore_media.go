@@ -52,6 +52,8 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 		if _, err := tx.ExecContext(ctx, restoreScript("media_relayed_active_image_claims")); err != nil {
 			return nil, fmt.Errorf("restore relayed active image claims: %w", err)
 		}
+	} else if _, err := tx.ExecContext(ctx, restoreScript("media_retired_legacy_image_claims")); err != nil {
+		return nil, fmt.Errorf("restore expired legacy image claims: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_active_legacy_image_claims")); err != nil {
 		return nil, fmt.Errorf("restore active legacy image claims: %w", err)

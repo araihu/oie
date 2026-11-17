@@ -39,7 +39,7 @@ type roomSlot struct {
 }
 type ownRoomMessage struct {
 	address, body string
-	mentions      bool
+	mentionDigest string
 }
 type roomSessionHost interface {
 	RoomSessionChanged(context.Context, domain.RoomSession) error
@@ -661,16 +661,17 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	nickname, ownOccupantID := slot.snapshot.Nickname, slot.ownOccupantID
 	ownsNickname := msg.From.Resourcepart() == nickname
 	own := ownsNickname && stamp == "" && delayFrom == ""
-	wireMentions := meta.wireMentionEvidence()
+	wireMentions := meta.wireMentionProof(address, body)
 	var canonical domain.ID
 	var matchesTrackedSend bool
 	if ownsNickname && len(meta.Origins) == 1 && usableID(meta.Origins[0].ID) && meta.Origins[0].Text == "" && len(meta.Origins[0].Children) == 0 {
 		origin := meta.Origins[0].ID
 		tracked, known := e.ownRoomMessages[origin]
 		// A delayed message can belong to a previous occupant of the same
-		// nickname. Require the tracked scope, body and mention presence.
+		// nickname. Require the tracked scope, body and exact wire mentions.
 		trackedBodyMatches := known && tracked.address == address && tracked.body == body
-		matchesTrackedSend = trackedBodyMatches && tracked.mentions == (wireMentions == domain.WireMentionsPresent)
+		matchesTrackedSend = trackedBodyMatches && ((wireMentions.Evidence == domain.WireMentionsAbsent && tracked.mentionDigest == "") ||
+			(wireMentions.Digest != "" && tracked.mentionDigest == wireMentions.Digest))
 		if matchesTrackedSend || own && (!known || trackedBodyMatches) {
 			canonical, _ = domain.ParseID(origin)
 			own = own || canonical != ""
@@ -726,7 +727,8 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 		AccountID: e.account.ID, Address: address, Kind: "room", ProviderID: provider, CanonicalID: canonical,
 		SenderName: msg.From.Resourcepart(), SenderAddress: senderAddress, OwnRoomNickname: nickname,
 		OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own,
-		References: refs, Reply: reply, Correction: correction, WireMentions: wireMentions, ReadReceiptID: readReceiptID,
+		References: refs, Reply: reply, Correction: correction, ReadReceiptID: readReceiptID,
+		WireMentions: wireMentions.Evidence, WireMentionDigest: wireMentions.Digest,
 		MediaThumbnails: decodeFileThumbnails(files), FileDigests: decodeFileDigests(files),
 		AudioURLs: decodeAudioURLs(files), FileReferences: decodeFileReferences(files),
 	})

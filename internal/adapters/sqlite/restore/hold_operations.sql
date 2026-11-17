@@ -27,13 +27,15 @@ WHERE d.result='null' AND d.kind IN ('send_message','forward_message','update_pe
   AND COALESCE(h.result,o.result)<>'null'
 ON CONFLICT(operation_id) DO NOTHING;
 
--- A newer archive might contain evidence of successful transmission. Keep the
--- original receipt usable once the logical message is present in history.
+-- Keep a reserved receipt usable once terminal history is eligible. A
+-- discarded review item keeps its existing reservation without the body.
 UPDATE operations SET result=(SELECT b.result FROM backup.operations b WHERE b.id=operations.id)
 WHERE result='null' AND EXISTS (
   SELECT 1 FROM backup.operations b JOIN restore_messages m ON m.id=b.resource_id AND m.is_new=1
+  JOIN messages retained ON retained.id=m.id AND retained.is_own=1 AND retained.state IN ('cancelled','submitted','failed')
   WHERE b.id=operations.id AND b.kind=operations.kind AND b.fingerprint=operations.fingerprint
     AND b.resource_id=operations.resource_id AND b.result<>'null'
+    AND b.kind IN ('send_message','forward_message','update_pending_message','send_scheduled_message_now','cancel_message')
     AND NOT EXISTS(SELECT 1 FROM discarded_recovered_sends x WHERE x.message_id=b.resource_id)
 );
 

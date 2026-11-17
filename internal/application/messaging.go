@@ -38,6 +38,7 @@ type Incoming struct {
 	FileDigests                               []domain.FileDigest
 	MediaThumbnails                           []domain.MediaThumbnail
 	WireMentions                              domain.WireMentionEvidence
+	WireMentionDigest                         string
 	AccountID                                 domain.ID
 	Address, ProviderID, OriginalText         string
 	CreatedAt                                 time.Time
@@ -68,7 +69,7 @@ type Outgoing struct {
 	Mentions              []domain.MessageMention
 	Correction            *domain.OutgoingCorrection
 	Attachments           []OutgoingAttachment
-	RecordWireAttempt     func(context.Context, string) error
+	RecordWireAttempt     func(context.Context, string, ...domain.WireMentionProof) error
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -560,7 +561,8 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
-		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.MatchesWireBody(in.OriginalText) && existing.MatchesWireMentionPresence(in.WireMentions) {
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.MatchesWireBody(in.OriginalText) &&
+			existing.MatchesWireMentions(domain.WireMentionProof{Evidence: in.WireMentions, Digest: in.WireMentionDigest}) {
 			chat, err := r.Conversation(ctx, existing.ConversationID)
 			if err != nil {
 				return err
@@ -646,7 +648,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 				m.OwnOriginID, _ = domain.ParseID(in.ProviderID)
 			}
 			if m.OwnOriginID != "" {
-				m.WireMentions = in.WireMentions
+				m.WireMentions, m.WireMentionDigest = in.WireMentions, in.WireMentionDigest
 			}
 		}
 	}

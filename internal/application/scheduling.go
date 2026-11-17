@@ -60,7 +60,7 @@ func (r ReplyReview) valid() bool {
 
 type SchedulingRepository interface {
 	ReplayMessageMutation(context.Context, domain.ID, string, string) (*domain.Message, error)
-	RecordOriginalWireAttempt(context.Context, domain.ID, domain.ID, Outgoing, string) error
+	RecordOriginalWireAttempt(context.Context, domain.ID, domain.ID, Outgoing, string, ...domain.WireMentionProof) error
 	UpdatePendingMessage(context.Context, PendingMutation) (MessageResult, error)
 	ScheduledMessages(context.Context, ScheduledQuery) ([]ScheduledMessage, error)
 	StageAttachment(context.Context, domain.ID, domain.StagedAttachment, io.Reader) (domain.StagedAttachment, bool, error)
@@ -343,8 +343,8 @@ func (e *Engine) attachOutgoingFiles(out *Outgoing, message domain.Message) erro
 	repo, ok := e.repo.(SchedulingRepository)
 	if ok {
 		frozen := Outgoing{OriginalText: out.OriginalText, Reply: out.Reply}
-		out.RecordWireAttempt = func(ctx context.Context, body string) error {
-			return repo.RecordOriginalWireAttempt(ctx, message.ID, message.RevisionID, frozen, body)
+		out.RecordWireAttempt = func(ctx context.Context, body string, mentions ...domain.WireMentionProof) error {
+			return repo.RecordOriginalWireAttempt(ctx, message.ID, message.RevisionID, frozen, body, mentions...)
 		}
 	}
 	if len(message.Attachments) == 0 {

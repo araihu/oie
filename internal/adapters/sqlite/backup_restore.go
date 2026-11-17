@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 51
+	newestRestoreSchema = 52
 )
 
 type RestoreSummary struct {
@@ -125,11 +125,12 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if hasRecoveredRows && !recoveredSchemaValid {
 		return result, errors.New("backup has an invalid recovered sends schema")
 	}
-	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, extendedSchemaValid bool
+	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, hasRetiredSends, extendedSchemaValid bool
 	var downloads restoreDownloadSchema
 	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes,
 		&downloads.cleanup, &downloads.lineage, &downloads.legacy, &downloads.admissions,
-		&downloads.unclaimedAdmissions, &downloads.legacyImageClaims, &downloads.activeLegacyImageClaims, &extendedSchemaValid); err != nil {
+		&downloads.unclaimedAdmissions, &downloads.legacyImageClaims, &downloads.activeLegacyImageClaims,
+		&hasRetiredSends, &extendedSchemaValid); err != nil {
 		return result, err
 	}
 	if !extendedSchemaValid {
@@ -185,6 +186,11 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	}
 	if hasOwnEchoes {
 		if _, err := tx.ExecContext(ctx, restoreScript("own_echoes")); err != nil {
+			return result, err
+		}
+	}
+	if hasRetiredSends {
+		if _, err := tx.ExecContext(ctx, restoreScript("retired_sends")); err != nil {
 			return result, err
 		}
 	}

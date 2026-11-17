@@ -131,6 +131,7 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 		m.OutboundReply, m.Mentions = changed.OutboundReply, changed.Mentions
 		m.ReplyReference, m.References = changed.ReplyReference, changed.References
 		m.AttachmentWireText = ""
+		m.WireMentions, m.WireMentionDigest = "", ""
 		if err = q.DeletePendingReplyMetadata(ctx, id); err != nil {
 			return application.MessageResult{}, err
 		}
@@ -166,7 +167,7 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 	return application.MessageResult{Message: m}, tx.Commit()
 }
 
-func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision domain.ID, frozen application.Outgoing, attachmentBody string) error {
+func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision domain.ID, frozen application.Outgoing, attachmentBody string, mentions ...domain.WireMentionProof) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -196,8 +197,13 @@ func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision doma
 	if !frozen.MatchesOriginalContent(current) {
 		return application.StateConflict{Current: current}
 	}
-	if attachmentBody != "" {
-		m.AttachmentWireText = attachmentBody
+	if attachmentBody != "" || len(mentions) != 0 {
+		if attachmentBody != "" {
+			m.AttachmentWireText = attachmentBody
+		}
+		if len(mentions) != 0 {
+			m.WireMentions, m.WireMentionDigest = mentions[0].Evidence, mentions[0].Digest
+		}
 		if err = q.UpdateMessage(ctx, dbgen.UpdateMessageParams{ID: string(id), RevisionID: string(revision), State: m.SendState, Payload: jsonText(m)}); err != nil {
 			return err
 		}
