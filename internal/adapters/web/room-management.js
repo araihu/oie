@@ -32,6 +32,7 @@ window.OieRuntime.register('room-management', life => {
   const root = document.querySelector('[data-room-management]');
   if (!root) return;
   const content = root.querySelector('[data-room-management-content]');
+  const destructive = document.querySelector('[data-room-destroy-content]');
   const loadError = root.querySelector('[data-room-management-error]');
   let request, opener, message = '', invite = false, active = false;
   let bansRequest, bansFresh = false, participantsDirty = false;
@@ -43,7 +44,8 @@ window.OieRuntime.register('room-management', life => {
   const drafts = new Map();
   const openForms = new Set();
   const isPending = form => form.dataset.busy === 'true' || pending.has(form);
-  const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
+  const managementForms = () => [...content.querySelectorAll('form'), ...destructive.querySelectorAll('form')];
+  const hasPending = () => managementForms().some(isPending);
   const participantViews = new Map();
   const listQueries = new Map();
   const tabSelected = id => content.querySelector('[aria-controls="' + id + '"]')?.getAttribute('aria-selected') === 'true';
@@ -63,8 +65,8 @@ window.OieRuntime.register('room-management', life => {
     return '/ui/rooms/manage-fragment?' + new URLSearchParams({chat, account, engine, lang, ...extra});
   }
 
-  function managementError() {
-    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message:root.dataset.unavailable}}));
+  function managementError(message = root.dataset.unavailable) {
+    window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message}}));
   }
 
   function closeParticipant(panel, focus = false) {
@@ -271,7 +273,7 @@ window.OieRuntime.register('room-management', life => {
       }
       if (replace) {
         if (hasPending()) return;
-        for (const form of content.querySelectorAll('form')) {
+        for (const form of managementForms()) {
           if (!form.closest('[data-room-profile-slot]')) remember(form);
         }
         render(template);
@@ -282,7 +284,7 @@ window.OieRuntime.register('room-management', life => {
           render(template);
         } else {
           const fresh = new Map([...template.content.querySelectorAll('form')].map(form => [identity(form), form]));
-          for (const form of content.querySelectorAll('form')) {
+          for (const form of managementForms()) {
             if (isPending(form) || form.closest('[data-room-profile-slot]')) continue;
             const freshForm = fresh.get(identity(form));
             const permissionChanged = form.elements.managementAction.value === 'update_details' &&
@@ -348,6 +350,25 @@ window.OieRuntime.register('room-management', life => {
   }
 
   function render(template) {
+    const destroyFragment = template.content.querySelector('[data-room-destroy-fragment]');
+    const focused = document.activeElement;
+    const destroyFocused = destructive.contains(focused);
+    const reviewed = destructive.querySelector('#room-destroy-form:not([hidden])');
+    const incoming = destroyFragment?.querySelector('#room-destroy-form');
+    if (reviewed && reviewed.elements.expectedRevision.value !== incoming?.elements.expectedRevision.value) {
+      openForms.delete(identity(reviewed));
+      managementError(root.dataset.conflict);
+    }
+    destructive.replaceChildren(...(destroyFragment?.childNodes || []));
+    destroyFragment?.remove();
+    restoreForms(destructive);
+    if (destroyFocused) {
+      const confirmation = destructive.querySelector('#room-destroy-form:not([hidden])');
+      const button = focused?.matches('[type=submit]') ? '[type=submit]' : '[data-room-action-cancel]';
+      const target = confirmation?.querySelector(button) || destructive.querySelector('#room-destroy-open') ||
+        destructive.parentElement.querySelector('.oie-settings-back');
+      target?.focus({preventScroll:true});
+    }
     const currentTabs = content.querySelector('.oie-room-management-tabs');
     const incomingTabs = template.content.querySelector('.oie-room-management-tabs');
     const sameTabs = currentTabs && incomingTabs && currentTabs.dataset.tabsConfig === incomingTabs.dataset.tabsConfig;
@@ -423,12 +444,12 @@ window.OieRuntime.register('room-management', life => {
     return trigger;
   }
 
-  function cancelAction(form) {
+  function cancelAction(form, restoreFocus = true) {
     if (isPending(form)) return;
     const trigger = setActionOpen(form, false);
     clearInputs(form);
     remember(form);
-    trigger?.focus({preventScroll:true});
+    if (restoreFocus) trigger?.focus({preventScroll:true});
   }
 
   function clearInputs(form) {
@@ -468,21 +489,21 @@ window.OieRuntime.register('room-management', life => {
       return;
     }
     const cancel = event.target.closest('[data-room-action-cancel]');
-    if (cancel && content.contains(cancel)) {
+    if (cancel && (content.contains(cancel) || destructive.contains(cancel))) {
       cancelAction(cancel.form);
       return;
     }
     const trigger = event.target.closest('[data-room-action-open]');
     if (trigger) {
       if (hasPending()) return;
-      const form = content.querySelector(`[data-room-action-form="${CSS.escape(trigger.id)}"]`);
+      const form = managementForms().find(form => form.dataset.roomActionForm === trigger.id);
       if (!form) return;
       if (!form.hidden && trigger.hasAttribute('aria-expanded')) {
         setActionOpen(form, false);
         return;
       }
-      for (const open of content.querySelectorAll('form[data-room-action-form]:not([hidden])')) {
-        if (open.dataset.roomActionForm) setActionOpen(open, false);
+      for (const open of managementForms()) {
+        if (open.dataset.roomActionForm && !open.hidden) setActionOpen(open, false);
       }
       setActionOpen(form, true);
       const focusTarget = form.hasAttribute('data-room-action-confirmation')
@@ -531,8 +552,9 @@ window.OieRuntime.register('room-management', life => {
         life.raf(open);
         return;
       }
-      for (const form of content.querySelectorAll('form')) remember(form);
+      for (const form of managementForms()) remember(form);
       content.replaceChildren();
+      destructive.replaceChildren();
     }
     message = nextMessage;
     invite = nextInvite;
@@ -562,8 +584,19 @@ window.OieRuntime.register('room-management', life => {
     else closeParticipant(slot.closest('[role=tabpanel]'), true);
   }, true);
 
+  function dismissDestroyConfirmation() {
+    const form = destructive.querySelector('#room-destroy-form:not([hidden])');
+    if (form) cancelAction(form, false);
+  }
+
+  life.on(window, 'drawer:close', event => {
+    if (event.detail?.id === 'room-destructive-actions') dismissDestroyConfirmation();
+  });
+
   life.on(window, 'drawer:close-request', event => {
-    if (event.detail?.id !== 'room-management') return;
+    const id = event.detail?.id;
+    if (id !== 'room-management' && id !== 'room-destructive-actions') return;
+    if (id === 'room-destructive-actions') dismissDestroyConfirmation();
     active = false;
     request?.abort();
     stopBans();
@@ -574,7 +607,7 @@ window.OieRuntime.register('room-management', life => {
 
   life.on(document, 'oie:room-management-result', event => {
     const {form, result} = event.detail;
-    if (!active || !root.contains(form)) return;
+    if (!active || (!root.contains(form) && !destructive.contains(form))) return;
     if (!result.ok && !result.rejected) {
       pending.set(form, true);
       for (const input of form.querySelectorAll('input:not([type=hidden]),textarea')) input.readOnly = true;
@@ -583,13 +616,15 @@ window.OieRuntime.register('room-management', life => {
     pending.delete(form);
     const action = form.elements.managementAction.value;
     if (action === 'destroy') {
-      setActionOpen(form, false);
+      const focused = form.contains(document.activeElement) ||
+        document.activeElement === document.body && destructive.getClientRects().length > 0;
+      const trigger = setActionOpen(form, false);
       if (result.ok) {
+        window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-destructive-actions'}}));
         window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-management'}}));
       } else {
-        if (result.message) window.dispatchEvent(new CustomEvent('notify', {
-          detail: {kind:'toast', tone:'danger', message:result.message}
-        }));
+        if (focused) trigger?.focus({preventScroll:true});
+        if (result.message) managementError(result.message);
         life.timeout(() => {if (active) void load(true);}, 0);
       }
       return;

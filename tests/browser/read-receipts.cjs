@@ -8,7 +8,7 @@ const enginePath = '/api/v1/engine/read-receipts';
 const fixtureKey = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const policyRoute = '**/ui/settings/read-receipts?*';
 
-async function verify(browser, server, {width, lang, engine, navigation, on, off, actionLabel, retry}) {
+async function verify(browser, server, {width, lang, engine, navigation, on, off, retry}) {
   const context = await browser.newContext({viewport: {width, height: 900}, hasTouch: width === 390, reducedMotion: 'reduce'});
   try {
     const page = await context.newPage();
@@ -101,52 +101,44 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     await expectMode('#engine-read-receipts-mode-trigger', on);
     assert.equal((await get(enginePath)).enabled, true);
 
-    // Users can make an exception without selecting the conversation.
+    // The conversation row remains a navigation link with no separate action.
     await page.goto(server.url + '/?inbox=1&lang=' + lang);
-    const route = page.url();
     assert.equal(await page.locator('#message-timeline').count(), 0);
-    const inbox = page.getByRole('button', {name: actionLabel, exact: true});
-    await inbox.focus();
     const row = page.locator(`[data-conversation-row="${chat.id}"]`);
-    const replaceInboxRow = async key => {
-      const rowVersion = await row.getAttribute('data-version');
-      const currentChat = await get(chatPath);
-      await call('PATCH', chatPath, {accountId: account.id, expectedRevisionId: currentChat.revisionId, favorite: !currentChat.favorite},
-        {'Idempotency-Key': fixtureKey(key)});
-      await page.waitForFunction(({id, version}) => {
-        const next = document.querySelector(`[data-conversation-row="${CSS.escape(id)}"]`);
-        return next && next.dataset.version !== version;
-      }, {id: chat.id, version: rowVersion});
-    };
-    await replaceInboxRow(width);
-    assert.equal(await inbox.evaluate(button => button === document.activeElement), true);
-    await inbox.press('Enter');
-    const modal = page.locator('#inbox-read-receipts-dialog');
-    const mode = modal.locator('#inbox-read-receipts-mode-trigger');
-    await expectMode('#inbox-read-receipts-mode-trigger', off);
-    await replaceInboxRow(width + 1);
-    await page.keyboard.press('Escape');
-    await modal.waitFor({state: 'hidden'});
-    await page.waitForFunction(id => {
-      const button = document.querySelector(`button[data-read-receipts-conversation="${CSS.escape(id)}"]`);
-      return document.activeElement === button;
-    }, chat.id);
-    await inbox.press('Enter');
-    await expectMode('#inbox-read-receipts-mode-trigger', off);
+    const rowLink = row.locator('a[data-conversation-id]');
+    await rowLink.focus();
+    assert.equal(await row.locator('button').count(), 0);
+    const rowVersion = await row.getAttribute('data-version');
+    const currentChat = await get(chatPath);
+    await call('PATCH', chatPath, {accountId: account.id, expectedRevisionId: currentChat.revisionId, favorite: !currentChat.favorite},
+      {'Idempotency-Key': fixtureKey(width)});
+    await page.waitForFunction(({id, version}) => {
+      const next = document.querySelector(`[data-conversation-row="${CSS.escape(id)}"]`);
+      return next && next.dataset.version !== version;
+    }, {id: chat.id, version: rowVersion});
+    assert.equal(await rowLink.evaluate(link => link === document.activeElement), true);
+    assert.equal(await row.locator('button').count(), 0);
+    await rowLink.press('Enter');
+    await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+    const entry = page.locator('[data-info-entry="read-receipts"]');
+    await entry.click();
+    const modeSelector = '#conversation-read-receipts-mode-trigger';
+    const mode = page.locator(modeSelector);
+    const save = page.locator('#conversation-read-receipts-save');
+    await expectMode(modeSelector, off);
     await choose(mode, on);
-    const releaseConversation = await holdSave(modal.locator('button[type=submit]'));
-    await page.keyboard.press('Escape');
-    await modal.waitFor({state: 'hidden'});
+    const releaseConversation = await holdSave(save);
+    assert.equal(await save.getAttribute('aria-disabled'), 'true');
     const conversationSaved = policyResponse('POST');
-    const conversationReloaded = policyResponse('GET');
-    await inbox.press('Enter');
     releaseConversation();
     await conversationSaved;
-    await conversationReloaded;
-    await expectMode('#inbox-read-receipts-mode-trigger', on);
+    await expectMode(modeSelector, on);
     assert.equal((await get(conversation)).override, true);
-    assert.equal(page.url(), route);
-    assert.equal(await page.locator('#message-timeline').count(), 0);
+    await page.locator('#chat-info-content [data-info-back]').click();
+    await mode.waitFor({state: 'hidden'});
+    await set(conversation, {override: false});
+    await entry.click();
+    await expectMode(modeSelector, off);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -159,10 +151,10 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
   try {
     browser = await chromium.launch();
     await verify(browser, server, {width: 1440, lang: 'pt-BR', engine: 'Motor', navigation: 'Abrir navegação',
-      on: 'Enviar', off: 'Não enviar', actionLabel: 'Confirmações de leitura em bruno@example.test', retry: 'Tentar novamente'});
+      on: 'Enviar', off: 'Não enviar', retry: 'Tentar novamente'});
     await verify(browser, server, {width: 390, lang: 'en', engine: 'Engine', navigation: 'Open navigation',
-      on: 'Send', off: 'Do not send', actionLabel: 'Read receipts for bruno@example.test', retry: 'Try again'});
-    console.log('PASS: read receipt failures and retry, fresh policy after reopen, queued saves and inbox scope');
+      on: 'Send', off: 'Do not send', retry: 'Try again'});
+    console.log('PASS: read receipt failures and retry, fresh policy after reopen, queued saves and conversation details');
   } finally {
     await browser?.close();
     await server.stop();

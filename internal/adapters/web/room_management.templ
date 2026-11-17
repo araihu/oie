@@ -27,7 +27,7 @@ import (
 templ roomManagementDrawer(v view) {
 	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview && !v.conversationRemoved() {
 		@workspaceDrawer(drawer.Config{ID: "room-management", Title: v.Text.RoomManage, PanelClass: "oie-conversation-details-drawer"}) {
-			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-unavailable={ v.Text.RoomManagementUnavailable }>
+			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-unavailable={ v.Text.RoomManagementUnavailable } data-conflict={ v.Text.RoomManagementConflict }>
 				@roomManagementSkeleton(v, "oie-room-management-skeleton")
 				<p data-room-management-error role="alert" hidden>{ v.Text.RoomManagementUnavailable }</p>
 				<div data-room-management-content></div>
@@ -35,6 +35,9 @@ templ roomManagementDrawer(v view) {
 					@roomManagementSkeleton(v, "oie-room-profile-skeleton")
 				</template>
 			</div>
+		}
+		@drawerSubpage("room-management", "room-destructive-actions", v.Text.DestructiveActions, v.Text.RoomBackToDetails) {
+			<div data-room-destroy-content></div>
 		}
 	}
 }
@@ -76,6 +79,11 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID st
 			{{ pages = append(pages, tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state)}) }}
 		}
 		@tabs.Tabs(tabs.Config{ID: "room-management-tabs", RootClass: "oie-room-management-tabs", Tabs: pages})
+		if slices.Contains(state.Actions, engineapi.Destroy) {
+			<div data-room-destroy-fragment hidden>
+				@roomDestroyControls(v, *state.Revision)
+			</div>
+		}
 	}
 }
 
@@ -98,12 +106,12 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 		<p class="oie-details-plain">{ v.managementTopic() }</p>
 	}
 	if slices.Contains(state.Actions, engineapi.Destroy) {
-		@roomDestroyControls(v, *state.Revision)
+		@drawerSubpageEntry("room-management", "room-destructive-actions", v.Text.DestructiveActions, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"}))
 	}
 }
 
 templ roomDestroyControls(v view, revision string) {
-	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"id": "room-destroy-open", "data-room-action-open": "", "aria-expanded": "false", "aria-controls": "room-destroy-form"})) {
+	@button.Button(button.WithType("button"), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"id": "room-destroy-open", "data-room-action-open": "", "aria-expanded": "false", "aria-controls": "room-destroy-form"})) {
 		{ v.Text.RoomDestroy }
 	}
 	@form.Form(form.Config{ID: "room-destroy-form", Action: "/ui/rooms/manage", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": "room-destroy-open", "data-room-action-confirmation": "", "hidden": true}}) {
@@ -197,7 +205,9 @@ templ roomManagementBans(v view, state engineapi.RoomManagement) {
 		@scrollregion.ScrollRegion(scrollregion.Config{Content: roomBanList(v, state, false), RootClass: "oie-room-bans-list"})
 		{{ id := "room-ban-by-address" }}
 		<footer class="oie-room-ban-footer">
-			@tooltip.Tooltip(id+"-tooltip", v.Text.RoomBanByAddress, tooltip.WithDescription(v.Text.RoomBanByAddressHelp), tooltip.WithTrigger(roomBanToggle(v, id)), tooltip.WithPortal(true))
+			<div class="oie-room-ban-trigger">
+				@tooltip.Tooltip(id+"-tooltip", v.Text.RoomBanByAddress, tooltip.WithDescription(v.Text.RoomBanByAddressHelp), tooltip.WithTrigger(roomBanToggle(v, id)), tooltip.WithPortal(true))
+			</div>
 			@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 		</footer>
 	</div>

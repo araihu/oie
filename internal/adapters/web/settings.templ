@@ -63,12 +63,16 @@ func settingsDrawerTransition(from, to string) string {
 }
 
 templ settingsSubpageEntry(id, title string, leading templ.Component) {
+	@drawerSubpageEntry("settings", id, title, leading)
+}
+
+templ drawerSubpageEntry(parent, id, title string, leading templ.Component) {
 	@button.Button(
 		button.WithType("button"),
 		button.WithAppearance(button.AppearancePlain),
 		button.WithRootClass("oie-settings-entry"),
 		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": id + "-body"}),
-		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition("settings", id)}),
+		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition(parent, id)}),
 	) {
 		@leading
 		<span>{ title }</span>
@@ -77,11 +81,15 @@ templ settingsSubpageEntry(id, title string, leading templ.Component) {
 }
 
 templ settingsSubpageBack(id, label string) {
+	@drawerSubpageBack("settings", id, label)
+}
+
+templ drawerSubpageBack(parent, id, label string) {
 	@button.Button(
 		button.WithType("button"),
 		button.WithAppearance(button.AppearancePlain),
 		button.WithRootClass("oie-settings-back"),
-		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition(id, "settings")}),
+		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition(id, parent)}),
 	) {
 		@glyph(heroicons.Icon16SolidChevronLeft)
 		<span>{ label }</span>
@@ -89,9 +97,15 @@ templ settingsSubpageBack(id, label string) {
 }
 
 templ settingsSubpage(id, title, backLabel string) {
+	@drawerSubpage("settings", id, title, backLabel) {
+		{ children... }
+	}
+}
+
+templ drawerSubpage(parent, id, title, backLabel string) {
 	@workspaceDrawer(drawer.Config{ID: id, Title: title}) {
 		<div class="oie-settings-section oie-settings-subpage">
-			@settingsSubpageBack(id, backLabel)
+			@drawerSubpageBack(parent, id, backLabel)
 			{ children... }
 		</div>
 	}

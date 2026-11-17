@@ -59,7 +59,7 @@ case "read-receipts":
 default:
 <div class="oie-conversation-details">
 <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
-<nav class="oie-info-rows" aria-label={v.Text.InfoSharedContent}>
+<nav class="oie-info-rows" aria-label={v.Text.InfoConversationActions}>
 @link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
 @infoEntry(v,"media",v.Text.SharedMediaTab,glyph(heroicons.Icon16SolidRectangleGroup))
 @infoEntry(v,"links",v.Text.SharedLinksTab,glyph(heroicons.Icon16SolidLink))
@@ -67,6 +67,10 @@ default:
 @infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
 if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
 @infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
+if v.canSetReadReceipts(v.Selected) {
+@infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
+}
+@infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
 <template data-info-participants-loading>
 	@infoParticipantsSkeleton(v)
 </template>
@@ -77,9 +81,11 @@ if !v.Preview && v.requestKind()=="" {
 	ID:"notification-mute",Label:v.Text.NotificationMute,Disabled:true,RootClass:"oie-device-toggle",
 	InputAttrs:templ.Attributes{"data-notification-mute":v.Selected.Id,"data-mute-engine":v.EngineID,"data-unsaved":v.Text.DevicePreferenceUnavailable},
 })
+if v.Selected.Kind!="room" {
 @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
 if v.canSetReadReceipts(v.Selected) {
 @infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
+}
 }
 }
 if v.RoomArchive != nil {

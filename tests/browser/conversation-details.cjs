@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),http=require('node:http'),path=requir
 const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
- const engine=id(1),account=id(2),direct=id(3),room=id(5),revision=id(4),streams=new Set(),state={seq:0,mode:'known',peer:'unknown',roster:'available',rosterReads:0,delayRoster:false,connection:'connected',reads:0,writes:0};
+ const engine=id(1),account=id(2),direct=id(3),room=id(5),revision=id(4),streams=new Set(),state={seq:0,engineVersion:'0.9.0',mode:'known',peer:'unknown',roster:'available',rosterReads:0,delayRoster:false,connection:'connected',reads:0,writes:0};
  const conversations=[{id:direct,revisionId:revision,accountId:account,kind:'direct',address:'bob@fixture',title:'Bob',lastMessage:'Hello',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false},{id:room,revisionId:revision,accountId:account,kind:'room',address:'room@fixture',title:'Saved room',lastMessage:'Archived room message',updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false}];
  const presence=(value,status)=>({state:value,statusText:status,observedAt:value==='unknown'?undefined:'2026-11-08T12:00:00Z'});
  const details=chat=>({conversationId:chat.id,accountId:state.mode==='foreign'?id(9):account,address:chat.address,kind:chat.kind,accountConnection:{accountId:account,state:state.connection,updatedAt:'2026-11-08T12:00:00Z'},state:['pending','partial','forbidden','unavailable','not_connected','unsupported','unknown'].includes(state.mode)?state.mode:'known',checkedAt:state.mode==='pending'?undefined:'2026-11-08T12:00:00Z',name:chat.kind==='room'?'Room <script>plain name</script>':undefined,description:chat.kind==='room'?'A public room with retained history':undefined,topic:chat.kind==='room'?'Topic <img src=x onerror="bad()">\nSecond line':undefined,roomSession:chat.kind==='room'?'not_joined':undefined,occupantCount:chat.kind==='room'&&!['pending','unknown'].includes(state.mode)?42:undefined,features:chat.kind==='room'?['public','persistent','moderated','members_only','anonymous']:[],participants:{scope:chat.kind==='room'?'occupants':'peer',state:state.mode==='forbidden'?'forbidden':state.mode==='pending'?'pending':'partial',truncated:chat.kind==='room'&&!['forbidden','pending','unknown'].includes(state.mode),checkedAt:'2026-11-08T12:00:00Z',items:chat.kind==='room'&&!['forbidden','pending','unknown'].includes(state.mode)?Array.from({length:18},(_,n)=>({id:'room/nick-'+n,displayName:n===0?'Nickname <img src=x>':'Participant '+n,source:n===0?'discovery':'presence',presence:presence(n===1?'away':n===2?'busy':'unknown')})):[]},peerPresence:chat.kind==='direct'?presence(state.peer,state.peer==='unknown'?undefined:'Working <img src=x onerror="bad()">'):undefined});
@@ -17,7 +17,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  ];
  const api=http.createServer((req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(req.method!=='GET'){state.writes++;return send(500,{status:500})}
-  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.9.0',eventCursor:engine+':'+state.seq});
+  if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:state.engineVersion,eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return send(200,{items:[{id:account,revisionId:revision,label:'Alice',address:'alice@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}]});
   if(u.pathname.endsWith('/connection'))return send(200,{accountId:account,state:'connected',updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname.endsWith('/history'))return send(200,{accountId:account,state:'complete',retainedMessages:2,conversations:2,updatedAt:'2026-11-08T12:00:00Z'});
@@ -78,6 +78,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert((await page.locator('#conversation-details-description').textContent()).includes('Topic <img'));
   const entry=page.locator('[data-info-entry="participants"]');
   assert.equal(await entry.evaluate(el=>el.previousElementSibling.dataset.infoEntry),'stars');
+  assert.equal(await entry.evaluate(el=>el.nextElementSibling.dataset.infoEntry),'retention');
   assert.equal(await page.locator('#conversation-details-identity [data-info-entry="participants"]').count(),0);
   assert.equal(state.rosterReads,0);
 
@@ -144,9 +145,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.goto(base+'/?'+params);assert.equal(await page.locator('#message-composer').inputValue(),draft);for(const [key,value]of params)assert.equal(new URL(page.url()).searchParams.get(key),value);
   findings.push('Room metadata states and GET retry remain independent of Participants. The direct draft and filters survive.');
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});
+  state.engineVersion='0.39.0';
   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
    state.mode='known';const p=await browser.newPage({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});p.on('pageerror',e=>errors.push(e.message));const q=new URLSearchParams(roomParams);q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);const {drawer}=await openFromMenu(p,locale==='en'?'Conversation details':'Detalhes da conversa');await p.waitForTimeout(230);await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await drawer.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);assert.equal(await p.locator('[data-info-room-participants]').count(),0);
    assert.equal(await drawer.locator('[data-info-entry="stars"]').textContent(),locale==='en'?'Starred messages':'Mensagens favoritadas');
+   const actions=drawer.getByRole('navigation',{name:locale==='en'?'Conversation actions':'Ações da conversa'});
+   const infoEntries=await actions.locator('[data-info-entry]').evaluateAll(entries=>entries.map(entry=>entry.dataset.infoEntry));
+   assert.deepEqual(infoEntries.slice(-3),['participants','read-receipts','retention']);
    await p.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${width} ${theme} ${mode} ${locale}`);
    if(theme==='goshtoso')await p.screenshot({path:path.join(artifacts,`conversation-details-${width}-${mode}-${locale}.png`)});
    await p.locator('[data-info-entry="participants"]').click();await p.locator('[data-info-room-participants]').waitFor();

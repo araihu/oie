@@ -291,6 +291,36 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
    await until(async()=>await shortcut.evaluate(n=>document.activeElement===n),'reaction source focus restored');assert.equal(await p.locator('#message-composer').inputValue(),'Draft retained');const readOnlyEffects=state.effects;await p.locator('[data-reaction-summary]').click();const details=p.locator('[data-reaction-details]');await details.locator('[data-reaction-filter="👍"]').waitFor({state:'visible'});await details.locator('[data-reaction-filter="👍"]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),2);assert.equal(await details.locator('[data-reaction-actor="alice@fixture"]').count(),0);await details.locator('[data-reaction-filter=""]').click();assert.equal(await details.locator('[data-reaction-actor]').count(),3);await until(async()=>await details.locator('[data-reaction-actor="bob@fixture"] img').evaluate(n=>n.complete&&n.naturalWidth>0),'cached reaction actor avatar loaded');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] [x-text]').first().textContent(),'C');assert.equal(await details.locator('[data-reaction-actor="carol@fixture"] img').count(),0,'missing avatar has initials without an empty image');await p.screenshot({path:path.join(__dirname,`artifacts/reaction-summary-${width}-${lang}-${theme}.png`)});const panelAxe=await details.evaluate(n=>window.axe.run(n,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(panelAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.equal(state.effects,readOnlyEffects,'summary and filters are read-only');await p.keyboard.press('Escape');await details.waitFor({state:'hidden'});await bubble.locator('[data-rendered-message]').first().evaluate(n=>n.textContent='👍');const compact=await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}});await p.locator('[data-reaction-summary-emojis]').evaluate(n=>n.textContent='👍 ❤️ 😂');await p.locator('[data-reaction-summary-count]').evaluate(n=>n.textContent='99999');assert.deepEqual(await bubble.evaluate(n=>{const r=n.parentElement.getBoundingClientRect();return{width:r.width,height:r.height}}),compact,'reaction capsule never widens a short message');await variant.close();findings.push({width,lang,theme,libraryTheme,axe:0});
   }
   source.isOwn=false;
+  for(const [width,height,hasTouch] of [[803,900,false],[1440,900,false],[844,390,true]]){
+   const page=await browser.newPage({viewport:{width,height},hasTouch,isMobile:hasTouch});
+   await page.goto(route('pt-BR','dark'));
+   if(!hasTouch){
+    const sidebar=page.locator('[data-sidebar-toggle]:visible');
+    if(await sidebar.getAttribute('aria-expanded')==='false')await sidebar.click();
+    await page.locator('#desktop-navigation').waitFor({state:'visible'});
+   }
+   const bubble=page.locator('[data-message-bubble="'+message+'"]');
+   await bubble.locator('[data-rendered-message]').evaluate(node=>{
+    node.textContent='Uma mensagem longa precisa de espaço para ser lida com conforto. '.repeat(12);
+   });
+   const layout=await bubble.evaluate(body=>{
+    const bubbleFrame=body.parentElement.getBoundingClientRect();
+    const width=body.closest('.oie-bubble').getBoundingClientRect().width;
+    const timeline=body.closest('#message-timeline').getBoundingClientRect();
+    const shortcut=body.querySelector('.oie-reaction-shortcut').getBoundingClientRect();
+    const row=body.closest('.oie-message-content');
+    const avatarWidth=row.querySelector('.oie-sender-avatar').getBoundingClientRect().width;
+    return {bubbleWidth:bubbleFrame.width, available:width, shortcutRight:shortcut.right, timelineRight:timeline.right,
+     avatarWidth, gap:getComputedStyle(row).gap};
+   });
+   assert(layout.bubbleWidth>layout.available*.82,'long messages use the available bubble width at '+width);
+   assert(layout.shortcutRight<=layout.timelineRight+1,'reaction shortcut stays in the conversation pane at '+width);
+   if(hasTouch){
+    assert.equal(layout.avatarWidth,28,'landscape mobile keeps the compact sender avatar');
+    assert.equal(layout.gap,'6px','landscape mobile keeps the compact gap');
+   }
+   await page.close();
+  }
   const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),phone=await touch.newPage();phone.on('pageerror',e=>errors.push(e.message));await phone.goto(route('pt-BR','light'));await until(async()=>await phone.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'touch runtime');const text=phone.locator('[data-message-bubble="'+message+'"] [data-rendered-message]').first(),phoneDialog=phone.locator('#oie-reaction-quick'),trigger=phone.locator('[data-message-menu-trigger="'+message+'"]');await text.waitFor();await phone.locator('#message-composer').fill('Rascunho móvel');
   const cdp=await touch.newCDPSession(phone);
   const startTouch=point=>cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
