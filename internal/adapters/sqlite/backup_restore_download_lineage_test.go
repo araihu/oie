@@ -116,22 +116,31 @@ func TestBackupRestoreOpensOlderDownloadArchiveWithoutCleanupRevision(t *testing
 	clearBackupDownloads(t, dest, device, now)
 	clearBackupDownloads(t, source, device, now)
 	redownloadBackupImage(t, source, preview, device, now)
-	migrateFixtureToVersion(t, source, 42)
-	older, archive, scratch := backupRestoreFixture(t, source, true)
-
-	fresh, err := Open(ctx, t.TempDir(), migrationID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = fresh.Close() })
-	if result, err := fresh.mergeBackup(ctx, archive, scratch, older, now); err != nil || result.MediaFiles != 1 {
-		t.Fatalf("an older archive could not restore media to a fresh destination: %+v, %v", result, err)
-	}
-	if result, err := dest.mergeBackup(ctx, archive, scratch, older, now); err != nil || result.MediaFiles != 0 {
-		t.Fatalf("an older archive bypassed the local cleanup: %+v, %v", result, err)
-	}
-	if policy, err := dest.DownloadPolicy(ctx, device); err != nil || policy.Count != 0 || policy.Generation != 1 {
-		t.Fatalf("older archive invalidated the destination cleanup: %+v, %v", policy, err)
+	for _, tc := range []struct {
+		name    string
+		version uint
+	}{
+		{name: "v43 without membership proof", version: 43},
+		{name: "v42 without cleanup revision", version: 42},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			migrateFixtureToVersion(t, source, tc.version)
+			older, archive, scratch := backupRestoreFixture(t, source, true)
+			fresh, err := Open(ctx, t.TempDir(), migrationID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = fresh.Close() })
+			if result, err := fresh.mergeBackup(ctx, archive, scratch, older, now); err != nil || result.MediaFiles != 1 {
+				t.Fatalf("an older archive could not restore media to a fresh destination: %+v, %v", result, err)
+			}
+			if result, err := dest.mergeBackup(ctx, archive, scratch, older, now); err != nil || result.MediaFiles != 0 {
+				t.Fatalf("an older archive bypassed the local cleanup: %+v, %v", result, err)
+			}
+			if policy, err := dest.DownloadPolicy(ctx, device); err != nil || policy.Count != 0 || policy.Generation != 1 {
+				t.Fatalf("older archive invalidated the destination cleanup: %+v, %v", policy, err)
+			}
+		})
 	}
 }
 

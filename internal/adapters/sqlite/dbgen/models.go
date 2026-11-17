@@ -205,6 +205,13 @@ type DiscardedRecoveredSend struct {
 	MessageID string
 }
 
+type DownloadCleanupParent struct {
+	DeviceID         string
+	Generation       int64
+	RevisionID       string
+	ParentRevisionID string
+}
+
 type DownloadCleanupRevision struct {
 	DeviceID   string
 	Generation int64
@@ -220,6 +227,14 @@ type DownloadDevice struct {
 type DownloadGarbage struct {
 	Kind string
 	Hash string
+}
+
+type DownloadMembershipCleanupRevision struct {
+	DeviceID          string
+	SourceID          string
+	SourceRevision    string
+	Kind              string
+	CleanupRevisionID string
 }
 
 type EffectiveRetention struct {

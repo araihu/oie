@@ -17,16 +17,29 @@ INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
 SELECT d.device_id,d.generation,sqlc.arg(revision_id) FROM download_devices d WHERE d.device_id=sqlc.arg(device_id)
 ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation,revision_id=excluded.revision_id;
 
+-- name: PutDownloadCleanupParent :exec
+INSERT INTO download_cleanup_parents(device_id,generation,revision_id,parent_revision_id)
+SELECT d.device_id,d.generation,sqlc.arg(revision_id),r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id
+WHERE d.device_id=sqlc.arg(device_id) AND d.generation=r.generation+1;
+
 -- name: GetDeviceDownload :one
 SELECT * FROM device_downloads WHERE device_id=? AND source_id=? AND source_revision=? AND kind='file';
 
--- name: InsertDeviceDownload :exec
+-- name: InsertDeviceDownload :execrows
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 VALUES(?,?,?,?,?,?,?,?,?)
 ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE
 SET hash=excluded.hash,mime_type=excluded.mime_type,size=excluded.size,
     verified_algorithm=excluded.verified_algorithm,downloaded_at_ms=excluded.downloaded_at_ms
 WHERE excluded.kind='file';
+
+-- name: PutDownloadMembershipCleanupRevision :exec
+INSERT INTO download_membership_cleanup_revisions(device_id,source_id,source_revision,kind,cleanup_revision_id)
+SELECT d.device_id,sqlc.arg(source_id),sqlc.arg(source_revision),sqlc.arg(kind),r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id AND r.generation=d.generation
+WHERE d.device_id=sqlc.arg(device_id)
+ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE SET cleanup_revision_id=excluded.cleanup_revision_id;
 
 -- name: FinishImageDownloads :exec
 UPDATE device_downloads SET hash=?,mime_type=?,size=?,verified_algorithm=?,downloaded_at_ms=?

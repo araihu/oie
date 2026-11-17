@@ -59,6 +59,30 @@ func (q *Queries) GetRecoveredSend(ctx context.Context, messageID string) (Recov
 	return i, err
 }
 
+const hasOwnTransmissionEvidence = `-- name: HasOwnTransmissionEvidence :one
+SELECT CAST(EXISTS(SELECT 1 FROM restored_own_echoes e WHERE e.account_id=?1
+   AND e.conversation_id=?2 AND e.message_id=?3)
+OR EXISTS(
+ SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
+ JOIN message_retractions r ON r.account_id=c.account_id AND r.address=c.address AND r.kind='direct'
+   AND r.scope='xmpp:correct:sender:'||a.address AND r.remote_id=?3
+ WHERE c.id=?2 AND c.account_id=?1 AND json_extract(c.payload,'$.Kind')='direct'
+) AS INTEGER)
+`
+
+type HasOwnTransmissionEvidenceParams struct {
+	AccountID      string
+	ConversationID string
+	MessageID      string
+}
+
+func (q *Queries) HasOwnTransmissionEvidence(ctx context.Context, arg HasOwnTransmissionEvidenceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, hasOwnTransmissionEvidence, arg.AccountID, arg.ConversationID, arg.MessageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const hasRecoveredSendReceipt = `-- name: HasRecoveredSendReceipt :one
 SELECT EXISTS(SELECT 1 FROM recovered_send_operations WHERE operation_id=?)
 `
@@ -254,15 +278,7 @@ SELECT CAST(EXISTS(SELECT 1 FROM messages m JOIN conversations chat ON chat.id=m
       )))
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=?1
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
-OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1)
-OR EXISTS(SELECT 1 FROM restored_own_echoes e WHERE e.account_id=?2
-   AND e.conversation_id=?3 AND e.message_id=?1)
-OR EXISTS(
- SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
- JOIN message_retractions r ON r.account_id=c.account_id AND r.address=c.address AND r.kind='direct'
-   AND r.scope='xmpp:correct:sender:'||a.address AND r.remote_id=?1
- WHERE c.id=?3 AND json_extract(c.payload,'$.Kind')='direct'
-) AS INTEGER)
+OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1) AS INTEGER)
 `
 
 type RecoveredSendHasDestinationEvidenceParams struct {

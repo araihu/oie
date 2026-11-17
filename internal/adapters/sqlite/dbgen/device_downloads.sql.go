@@ -258,7 +258,7 @@ func (q *Queries) ImagePreviewStillUsesHash(ctx context.Context, hash string) (b
 	return exists, err
 }
 
-const insertDeviceDownload = `-- name: InsertDeviceDownload :exec
+const insertDeviceDownload = `-- name: InsertDeviceDownload :execrows
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 VALUES(?,?,?,?,?,?,?,?,?)
 ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE
@@ -279,8 +279,8 @@ type InsertDeviceDownloadParams struct {
 	DownloadedAtMs    int64
 }
 
-func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) error {
-	_, err := q.db.ExecContext(ctx, insertDeviceDownload,
+func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertDeviceDownload,
 		arg.DeviceID,
 		arg.SourceID,
 		arg.SourceRevision,
@@ -291,7 +291,10 @@ func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDown
 		arg.VerifiedAlgorithm,
 		arg.DownloadedAtMs,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const listDownloadGarbage = `-- name: ListDownloadGarbage :many
@@ -348,6 +351,23 @@ func (q *Queries) ListRetainedDownloadHashes(ctx context.Context) ([]string, err
 	return items, nil
 }
 
+const putDownloadCleanupParent = `-- name: PutDownloadCleanupParent :exec
+INSERT INTO download_cleanup_parents(device_id,generation,revision_id,parent_revision_id)
+SELECT d.device_id,d.generation,?1,r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id
+WHERE d.device_id=?2 AND d.generation=r.generation+1
+`
+
+type PutDownloadCleanupParentParams struct {
+	RevisionID string
+	DeviceID   string
+}
+
+func (q *Queries) PutDownloadCleanupParent(ctx context.Context, arg PutDownloadCleanupParentParams) error {
+	_, err := q.db.ExecContext(ctx, putDownloadCleanupParent, arg.RevisionID, arg.DeviceID)
+	return err
+}
+
 const putDownloadCleanupRevision = `-- name: PutDownloadCleanupRevision :exec
 INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
 SELECT d.device_id,d.generation,?1 FROM download_devices d WHERE d.device_id=?2
@@ -361,6 +381,31 @@ type PutDownloadCleanupRevisionParams struct {
 
 func (q *Queries) PutDownloadCleanupRevision(ctx context.Context, arg PutDownloadCleanupRevisionParams) error {
 	_, err := q.db.ExecContext(ctx, putDownloadCleanupRevision, arg.RevisionID, arg.DeviceID)
+	return err
+}
+
+const putDownloadMembershipCleanupRevision = `-- name: PutDownloadMembershipCleanupRevision :exec
+INSERT INTO download_membership_cleanup_revisions(device_id,source_id,source_revision,kind,cleanup_revision_id)
+SELECT d.device_id,?1,?2,?3,r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id AND r.generation=d.generation
+WHERE d.device_id=?4
+ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE SET cleanup_revision_id=excluded.cleanup_revision_id
+`
+
+type PutDownloadMembershipCleanupRevisionParams struct {
+	SourceID       string
+	SourceRevision string
+	Kind           string
+	DeviceID       string
+}
+
+func (q *Queries) PutDownloadMembershipCleanupRevision(ctx context.Context, arg PutDownloadMembershipCleanupRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, putDownloadMembershipCleanupRevision,
+		arg.SourceID,
+		arg.SourceRevision,
+		arg.Kind,
+		arg.DeviceID,
+	)
 	return err
 }
 

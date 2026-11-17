@@ -18,13 +18,18 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, hasDownloadCleanup bool, now time.Time) ([]string, error) {
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, hasDownloadCleanup, hasDownloadLineage bool, now time.Time) ([]string, error) {
 	if _, err := tx.ExecContext(ctx, restoreScript("media_download_devices")); err != nil {
 		return nil, fmt.Errorf("read backup download devices: %w", err)
 	}
 	if hasDownloadCleanup {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_cleanup")); err != nil {
 			return nil, fmt.Errorf("read backup download cleanup revisions: %w", err)
+		}
+	}
+	if hasDownloadLineage {
+		if _, err := tx.ExecContext(ctx, restoreScript("media_download_lineage")); err != nil {
+			return nil, fmt.Errorf("read backup download membership and cleanup lineage: %w", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata"),

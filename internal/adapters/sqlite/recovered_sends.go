@@ -128,6 +128,13 @@ func (s *Store) resumeRecoveredSend(ctx context.Context, q *dbgen.Queries, recov
 	if hasEvidence != 0 {
 		return errors.New("the destination already has evidence for this send")
 	}
+	observed, err := hasOwnTransmissionEvidence(ctx, q, m)
+	if err != nil {
+		return err
+	}
+	if observed {
+		return errors.New("the destination already has evidence for this send")
+	}
 	if err := checkPendingReplyTarget(ctx, q, &m); err != nil {
 		return err
 	}
@@ -189,4 +196,11 @@ func rememberOwnOrigin(ctx context.Context, q *dbgen.Queries, chat domain.Conver
 		MessageID: string(m.OwnOriginID), AccountID: string(chat.AccountID),
 		Address: chat.Address, Kind: chat.Kind,
 	})
+}
+
+func hasOwnTransmissionEvidence(ctx context.Context, q *dbgen.Queries, m domain.Message) (bool, error) {
+	observed, err := q.HasOwnTransmissionEvidence(ctx, dbgen.HasOwnTransmissionEvidenceParams{
+		AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), MessageID: string(m.ID),
+	})
+	return observed != 0, err
 }

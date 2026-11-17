@@ -114,6 +114,7 @@ type Querier interface {
 	GetVisibleMessage(ctx context.Context, id string) (Message, error)
 	HasAcceptedDirectHistory(ctx context.Context, conversationID string) (bool, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
+	HasOwnTransmissionEvidence(ctx context.Context, arg HasOwnTransmissionEvidenceParams) (int64, error)
 	HasRecoveredSendReceipt(ctx context.Context, operationID string) (bool, error)
 	ImagePreviewStillUsesHash(ctx context.Context, hash string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
@@ -128,7 +129,7 @@ type Querier interface {
 	InsertConversationMessageReads(ctx context.Context, arg InsertConversationMessageReadsParams) ([]string, error)
 	InsertConversationRevision(ctx context.Context, arg InsertConversationRevisionParams) error
 	InsertCorrectionFact(ctx context.Context, arg InsertCorrectionFactParams) (int64, error)
-	InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) error
+	InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) (int64, error)
 	InsertEngineIdentity(ctx context.Context, id string) error
 	InsertMediaFile(ctx context.Context, arg InsertMediaFileParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
@@ -234,7 +235,9 @@ type Querier interface {
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutConversationReadReceipts(ctx context.Context, arg PutConversationReadReceiptsParams) error
 	PutConversationRetention(ctx context.Context, arg PutConversationRetentionParams) error
+	PutDownloadCleanupParent(ctx context.Context, arg PutDownloadCleanupParentParams) error
 	PutDownloadCleanupRevision(ctx context.Context, arg PutDownloadCleanupRevisionParams) error
+	PutDownloadMembershipCleanupRevision(ctx context.Context, arg PutDownloadMembershipCleanupRevisionParams) error
 	PutGlobalReadReceipts(ctx context.Context, enabled int64) error
 	PutGlobalRetention(ctx context.Context, arg PutGlobalRetentionParams) error
 	PutGuardedArchiveCheckpoint(ctx context.Context, arg PutGuardedArchiveCheckpointParams) (int64, error)

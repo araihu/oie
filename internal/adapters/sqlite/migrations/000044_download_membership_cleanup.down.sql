@@ -1,0 +1,2 @@
+DROP TABLE download_membership_cleanup_revisions;
+DROP TABLE download_cleanup_parents;

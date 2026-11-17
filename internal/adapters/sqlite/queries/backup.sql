@@ -55,14 +55,16 @@ SELECT CAST(EXISTS(SELECT 1 FROM messages m JOIN conversations chat ON chat.id=m
       )))
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=sqlc.arg(message_id)
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
-OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=sqlc.arg(message_id))
-OR EXISTS(SELECT 1 FROM restored_own_echoes e WHERE e.account_id=sqlc.arg(account_id)
+OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=sqlc.arg(message_id)) AS INTEGER);
+
+-- name: HasOwnTransmissionEvidence :one
+SELECT CAST(EXISTS(SELECT 1 FROM restored_own_echoes e WHERE e.account_id=sqlc.arg(account_id)
    AND e.conversation_id=sqlc.arg(conversation_id) AND e.message_id=sqlc.arg(message_id))
 OR EXISTS(
  SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
  JOIN message_retractions r ON r.account_id=c.account_id AND r.address=c.address AND r.kind='direct'
    AND r.scope='xmpp:correct:sender:'||a.address AND r.remote_id=sqlc.arg(message_id)
- WHERE c.id=sqlc.arg(conversation_id) AND json_extract(c.payload,'$.Kind')='direct'
+ WHERE c.id=sqlc.arg(conversation_id) AND c.account_id=sqlc.arg(account_id) AND json_extract(c.payload,'$.Kind')='direct'
 ) AS INTEGER);
 
 -- name: RestoreReviewedSendReceipts :exec

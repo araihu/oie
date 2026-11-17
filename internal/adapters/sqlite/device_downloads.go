@@ -70,13 +70,21 @@ func (s *Store) SaveDownload(ctx context.Context, download domain.Download) erro
 			}
 		}
 	}
-	err = q.InsertDeviceDownload(ctx, dbgen.InsertDeviceDownloadParams{
+	saved, err := q.InsertDeviceDownload(ctx, dbgen.InsertDeviceDownloadParams{
 		DeviceID: string(download.DeviceID), SourceID: string(download.SourceID), SourceRevision: string(download.SourceRevision),
 		Kind: download.Kind, Hash: download.Hash, MimeType: download.MimeType,
 		Size: download.Size, VerifiedAlgorithm: download.VerifiedAlgorithm, DownloadedAtMs: download.DownloadedAt.UnixMilli(),
 	})
 	if err != nil {
 		return err
+	}
+	if saved > 0 {
+		if err := q.PutDownloadMembershipCleanupRevision(ctx, dbgen.PutDownloadMembershipCleanupRevisionParams{
+			DeviceID: string(download.DeviceID), SourceID: string(download.SourceID),
+			SourceRevision: string(download.SourceRevision), Kind: download.Kind,
+		}); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -123,6 +131,11 @@ func (s *Store) PurgeDownloads(ctx context.Context, device domain.ID, now time.T
 			return revisionErr
 		}
 		if err = q.AdvanceDownloadGeneration(ctx, string(device)); err != nil {
+			return err
+		}
+		if err := q.PutDownloadCleanupParent(ctx, dbgen.PutDownloadCleanupParentParams{
+			DeviceID: string(device), RevisionID: string(revision),
+		}); err != nil {
 			return err
 		}
 		if err = q.PutDownloadCleanupRevision(ctx, dbgen.PutDownloadCleanupRevisionParams{

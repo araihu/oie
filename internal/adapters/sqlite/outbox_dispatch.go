@@ -75,6 +75,20 @@ func (s *Store) claimDispatchMessage(ctx context.Context, id, expected, roomInte
 	if conversation.AccountID != m.AccountID || (roomOnly && conversation.Kind != "room") {
 		return m, application.ErrInvalid
 	}
+	observed, err := hasOwnTransmissionEvidence(ctx, q, m)
+	if err != nil {
+		return m, err
+	}
+	if observed {
+		m, err = updateMessage(ctx, q, m, "unknown", revision, at, at, false)
+		if err != nil {
+			return m, err
+		}
+		if err := tx.Commit(); err != nil {
+			return m, err
+		}
+		return m, application.StateConflict{Current: m}
+	}
 	if conversation.Kind == "room" {
 		intent, err := q.GetRoomIntent(ctx, string(m.ConversationID))
 		if errors.Is(err, sql.ErrNoRows) {

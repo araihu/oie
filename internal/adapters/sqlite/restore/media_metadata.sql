@@ -11,20 +11,22 @@ OR EXISTS (SELECT 1 FROM messages m JOIN restore_messages x ON x.id=m.id
     WHERE m.conversation_id=f.conversation_id AND json_extract(a.value,'$.ID')=f.id)
 ON CONFLICT(id) DO NOTHING;
 
--- A destination with cleanup history can acquire a membership only from
--- the same cleanup revision. Independent clear operations can have equal
--- numeric generations and older snapshots can lack a revision entirely.
+-- A device's cleanup branch and a membership's own proof are independent.
+-- A surviving download on a profile that merged a cleanup keeps its old proof.
 CREATE TEMP TABLE restore_eligible_downloads AS
-SELECT f.*
+SELECT f.*, COALESCE(proof.cleanup_revision_id,'') AS cleanup_revision_id
 FROM backup.device_downloads f
 JOIN restore_download_devices source ON source.device_id=f.device_id
 LEFT JOIN download_devices destination ON destination.device_id=f.device_id
 LEFT JOIN download_cleanup_revisions cleanup ON cleanup.device_id=f.device_id AND cleanup.generation=destination.generation
+LEFT JOIN restore_download_membership_proofs proof ON proof.device_id=f.device_id AND proof.source_id=f.source_id
+    AND proof.source_revision=f.source_revision AND proof.kind=f.kind
+    AND proof.cleanup_revision_id=source.cleanup_revision
 JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
     AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
-WHERE (COALESCE(destination.generation,0)=0 OR (
-    destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision
-))
+WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision))
+  AND (source.generation=0 OR proof.cleanup_revision_id IS NOT NULL
+       OR (COALESCE(destination.generation,0)=0 AND source.has_membership_proofs=0))
   -- Settings claims legacy originals before clearing the real device.
   -- Older archives lack the identity of the device that claimed them.
   AND (f.device_id<>'legacy' OR NOT EXISTS (
@@ -60,7 +62,7 @@ WITH resolved_links AS MATERIALIZED (
     WHERE json_extract(payload,'$.Kind')='link' AND json_extract(payload,'$.State')='ready'
 )
 SELECT f.device_id, local.id AS source_id, f.source_revision, f.kind, f.hash, f.mime_type,
-       f.size, f.verified_algorithm, f.downloaded_at_ms
+       f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
 FROM restore_eligible_downloads f
 JOIN backup.shared_content source ON source.id=f.source_id
 JOIN restore_matching_media_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
@@ -68,7 +70,7 @@ JOIN shared_content local ON local.message_id=source.message_id AND local.url=so
 WHERE f.kind='file' AND oie_quote_preview_allowed(m.payload,source.url)
 UNION ALL
 SELECT f.device_id, COALESCE(local.id,source.id), f.source_revision, f.kind, f.hash, f.mime_type,
-       f.size, f.verified_algorithm, f.downloaded_at_ms
+       f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
 FROM restore_eligible_downloads f
 JOIN backup.message_previews source ON source.id=f.source_id
 JOIN restore_matching_media_messages m ON m.id=source.message_id

@@ -696,6 +696,17 @@ func ownMessageBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain
 }
 
 func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time, guardWire bool) (domain.Message, error) {
+	if m.SendState == "dispatching" && state == "queued" {
+		observed, err := hasOwnTransmissionEvidence(ctx, q, m)
+		if err != nil {
+			return m, err
+		}
+		// A NotSent result applies only to this attempt. A separate device
+		// may already have transmitted a copy of the original send.
+		if observed {
+			state = "unknown"
+		}
+	}
 	if state == "dispatching" {
 		outbox, err := q.GetOutbox(ctx, string(m.ID))
 		if err != nil {

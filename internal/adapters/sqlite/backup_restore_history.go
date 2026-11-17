@@ -53,6 +53,9 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 			return err
 		}
 	}
+	if _, err := tx.ExecContext(ctx, restoreScript("reply_fallbacks")); err != nil {
+		return err
+	}
 	if err := scrubRestoredQuotePreviews(ctx, tx, q); err != nil {
 		return err
 	}
