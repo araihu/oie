@@ -25,6 +25,10 @@ UNION ALL
       WHERE (e.echo_id=d.message_id AND e.original_id=b.message_id)
          OR (e.echo_id=b.message_id AND e.original_id=d.message_id)
     )
+    AND NOT EXISTS (
+      SELECT 1 FROM restore_conflicting_relayed_echo_aliases a
+      WHERE a.account_id=b.account_id AND a.scope=b.scope AND a.archive_id=b.archive_id
+    )
 UNION ALL
     SELECT 1 FROM backup.revisions b JOIN revisions d ON d.id=b.id WHERE d.entity_id<>b.entity_id
 UNION ALL

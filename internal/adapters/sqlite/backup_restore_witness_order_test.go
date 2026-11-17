@@ -137,6 +137,46 @@ func testRestoreTerminalAfterWitnessEcho(t *testing.T, kind string) {
 		}
 	}
 	assertHistory(dest, firstBody, witnessID)
+	if kind == "direct" {
+		t.Run("native_then_witness", func(t *testing.T) {
+			nativeFirst := copyRestoreFixture(t, fresh)
+			if _, err := nativeFirst.mergeBackup(ctx, laterDB, laterScratch, later, at.Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := nativeFirst.mergeBackup(ctx, earlierDB, earlierScratch, earlier, at.Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			history, err := nativeFirst.Messages(ctx, chat.ID, "", 10)
+			if err != nil || len(history) != 2 || history[0].ID != answer.ID || history[1].ID != pending.ID ||
+				history[1].OriginalText != firstBody || history[1].ProjectionSourceID == "" {
+				t.Fatalf("native-first merge did not restore the verified correction: %+v, %v", history, err)
+			}
+			base, err := nativeFirst.MessageSource(ctx, pending.ID)
+			if err != nil || base.RevisionID != terminal.RevisionID || base.OriginalText != composition.OriginalText {
+				t.Fatalf("merge changed the native source: %+v, %v", base, err)
+			}
+			edit, err := nativeFirst.MessageSource(ctx, history[1].ProjectionSourceID)
+			if err != nil || edit.RevisionID != history[1].RevisionID || edit.OriginalText != firstBody {
+				t.Fatalf("merge changed the correction source: %+v, %v", edit, err)
+			}
+			if reply := history[0].Reply; reply == nil || !reply.Available || reply.MessageID != pending.ID {
+				t.Fatalf("reply did not resolve to the native send: %+v", reply)
+			}
+			if edits, err := nativeFirst.ReadMessageEditHistory(ctx, pending.ID, false); err != nil || len(edits.Items) != 2 {
+				t.Fatalf("edit history lost its original or verified correction: %+v, %v", edits, err)
+			}
+			_, before, err := nativeFirst.Snapshot(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result, err := nativeFirst.mergeBackup(ctx, earlierDB, earlierScratch, earlier, at.Add(time.Hour)); err != nil || result != (RestoreSummary{}) {
+				t.Fatalf("repeating witness restore changed its correction: %+v, %v", result, err)
+			}
+			if _, after, err := nativeFirst.Snapshot(ctx); err != nil || after != before {
+				t.Fatalf("reapplying the witness emitted events from %d to %d: %v", before, after, err)
+			}
+		})
+	}
 	if replay, err := destEngine.SendComposition(ctx, key, chat.ID, composition, nil); err != nil || !replay.Replayed || replay.Message.ID != pending.ID {
 		t.Fatalf("original send receipt lost its identity: %+v %v", replay, err)
 	}

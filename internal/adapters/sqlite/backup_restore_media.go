@@ -47,6 +47,9 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 			return nil, fmt.Errorf("restore legacy image claims: %w", err)
 		}
 	}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_active_legacy_image_claims")); err != nil {
+		return nil, fmt.Errorf("restore active legacy image claims: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata"),
 		sql.Named("media_files", jsonText(files)), sql.Named("now_ms", now.UnixMilli()),
 		sql.Named("source_engine", string(manifest.SourceEngine))); err != nil {

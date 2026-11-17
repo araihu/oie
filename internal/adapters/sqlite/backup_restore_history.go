@@ -16,7 +16,11 @@ type restoreFact struct {
 }
 
 func backupCorrectionFacts(ctx context.Context, tx *sql.Tx) ([]restoreFact, error) {
-	rows, err := tx.QueryContext(ctx, restoreScript("facts"))
+	return readRestoreCorrectionFacts(ctx, tx, "facts")
+}
+
+func readRestoreCorrectionFacts(ctx context.Context, tx *sql.Tx, script string) ([]restoreFact, error) {
+	rows, err := tx.QueryContext(ctx, restoreScript(script))
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +44,11 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 	if _, err := tx.ExecContext(ctx, restoreScript("redacted_quotes"), cutoffTime); err != nil {
 		return err
 	}
-	for _, fact := range facts {
+	echoFacts, err := readRestoreCorrectionFacts(ctx, tx, "suppressed_echo_correction_facts")
+	if err != nil {
+		return err
+	}
+	for _, fact := range append(facts, echoFacts...) {
 		row, err := q.GetMessage(ctx, fact.message)
 		if err != nil {
 			return err

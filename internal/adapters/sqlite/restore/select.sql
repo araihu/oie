@@ -204,11 +204,46 @@ DELETE FROM restore_suppressed_echoes WHERE EXISTS (
 );
 DELETE FROM restore_messages WHERE id IN (SELECT source_id FROM restore_suppressed_echoes);
 
+-- A separately retained witness can carry verified corrections after the
+-- native send is already local. Keep the child sources of an exact root.
+CREATE TEMP TABLE restore_suppressed_echo_corrections AS
+SELECT e.source_id,e.retained_id,f.scope,f.author,f.remote_id,f.target_id,f.source_hash,
+       native.revision_id AS source_revision_id
+FROM restore_suppressed_echoes e
+JOIN backup.messages echo ON echo.id=e.source_id
+JOIN backup.message_correction_facts f ON f.message_id=e.source_id AND f.target_id=''
+JOIN backup.message_revisions archived ON archived.id=f.source_revision_id AND archived.entity_id=e.source_id
+JOIN messages native ON native.id=e.retained_id
+JOIN message_revisions retained ON retained.id=native.revision_id AND retained.entity_id=native.id
+WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
+  AND json_type(native.payload,'$.Attachments[0]') IS NULL
+  AND f.source_hash=COALESCE(NULLIF(json_extract(echo.payload,'$.WireBodySHA256'),''),
+                            oie_source_hash(json_extract(echo.payload,'$.OriginalText')))
+  AND f.source_hash=COALESCE(NULLIF(json_extract(archived.payload,'$.WireBodySHA256'),''),
+                            oie_source_hash(json_extract(archived.payload,'$.OriginalText')))
+  AND f.source_hash=COALESCE(NULLIF(json_extract(native.payload,'$.WireBodySHA256'),''),
+                            oie_source_hash(json_extract(native.payload,'$.OriginalText')))
+  AND f.source_hash=COALESCE(NULLIF(json_extract(retained.payload,'$.WireBodySHA256'),''),
+                            oie_source_hash(json_extract(retained.payload,'$.OriginalText')))
+  AND NOT EXISTS (
+    SELECT 1 FROM message_correction_facts existing
+    JOIN messages owner ON owner.id=existing.message_id
+      AND owner.account_id=native.account_id AND owner.conversation_id=native.conversation_id
+    LEFT JOIN message_canonical_aliases alias ON alias.alias_id=owner.id
+    WHERE existing.scope=f.scope AND existing.author=f.author AND existing.remote_id=f.remote_id
+      AND COALESCE(alias.canonical_id,owner.id)<>e.retained_id
+  );
+
 DELETE FROM restore_messages
 WHERE is_new=1 AND EXISTS (
   SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=restore_messages.id
   AND NOT EXISTS(SELECT 1 FROM restore_messages root WHERE root.id=a.canonical_id)
   AND NOT EXISTS(SELECT 1 FROM messages root WHERE root.id=a.canonical_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM restore_suppressed_echo_corrections e
+    JOIN backup.message_correction_facts f ON f.message_id=a.alias_id AND f.scope=e.scope AND f.author=e.author
+    WHERE e.source_id=a.canonical_id AND f.target_id<>''
+  )
 );
 
 CREATE TEMP VIEW restore_own_echo_aliases AS
@@ -220,6 +255,49 @@ JOIN messages d ON d.id=a.canonical_id AND d.id=d.provider_id AND d.is_own=1
   AND d.account_id=e.account_id AND d.conversation_id=e.conversation_id
 WHERE json_extract(e.payload,'$.OwnOriginID')=d.id;
 
+-- A backup of a merged profile can carry the witness and a native copy of
+-- its references. Preserve an existing destination owner of the scoped ID.
+CREATE TEMP TABLE restore_conflicting_relayed_echo_refs (
+  message_id TEXT NOT NULL, scope TEXT NOT NULL, remote_id TEXT NOT NULL, author TEXT NOT NULL,
+  PRIMARY KEY(message_id,scope,remote_id,author)
+) WITHOUT ROWID;
+INSERT INTO restore_conflicting_relayed_echo_refs
+WITH conflicts AS (
+  SELECT pair.echo_id,pair.original_id,r.scope,r.remote_id,r.author
+  FROM restore_own_echo_aliases pair
+  JOIN backup.message_canonical_aliases edge ON edge.alias_id=pair.echo_id AND edge.canonical_id=pair.original_id
+  JOIN restore_messages selected ON selected.id=pair.echo_id
+  JOIN backup.messages echo ON echo.id=pair.echo_id
+  JOIN backup.message_references r ON r.message_id=pair.echo_id
+  WHERE EXISTS (
+    SELECT 1 FROM message_references local
+    JOIN messages owner ON owner.id=local.message_id AND owner.account_id=echo.account_id
+      AND owner.conversation_id=echo.conversation_id
+    LEFT JOIN restore_own_echo_aliases own ON own.echo_id=owner.id
+    LEFT JOIN message_canonical_aliases linked ON linked.alias_id=owner.id
+    WHERE local.scope=r.scope AND local.remote_id=r.remote_id
+      AND COALESCE(own.original_id,linked.canonical_id,owner.id)<>pair.original_id
+  )
+)
+SELECT echo_id,scope,remote_id,author FROM conflicts
+UNION
+SELECT original_id,scope,remote_id,author FROM conflicts;
+
+-- The primary archive key identifies the packet carrying the rejected fact.
+-- Leave any local owner in place and keep other source archive keys eligible.
+CREATE TEMP TABLE restore_conflicting_relayed_echo_aliases (
+  account_id TEXT NOT NULL, scope TEXT NOT NULL, archive_id TEXT NOT NULL,
+  PRIMARY KEY(account_id,scope,archive_id)
+) WITHOUT ROWID;
+INSERT INTO restore_conflicting_relayed_echo_aliases
+SELECT DISTINCT a.account_id,a.scope,a.archive_id
+FROM restore_own_echo_aliases pair
+JOIN backup.message_canonical_aliases edge ON edge.alias_id=pair.echo_id AND edge.canonical_id=pair.original_id
+JOIN backup.messages echo ON echo.id=pair.echo_id
+JOIN backup.archive_aliases a ON a.message_id IN (pair.echo_id,pair.original_id) AND a.account_id=echo.account_id
+  AND a.scope=json_extract(echo.payload,'$.ArchiveScope') AND a.archive_id=json_extract(echo.payload,'$.ArchiveID')
+WHERE EXISTS(SELECT 1 FROM restore_conflicting_relayed_echo_refs r WHERE r.message_id=pair.echo_id);
+
 -- Supplemental protocol facts can change the display and shared-content index
 -- without making a message revision. Compare the same keys as the insertions.
 CREATE TEMP TABLE restore_message_metadata_changes (id TEXT PRIMARY KEY) WITHOUT ROWID;
@@ -229,6 +307,10 @@ JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
 WHERE NOT EXISTS (
   SELECT 1 FROM message_references d WHERE d.message_id=b.message_id AND d.scope=b.scope
     AND d.remote_id=b.remote_id AND d.author=b.author AND d.source_hash=b.source_hash
+)
+AND NOT EXISTS (
+  SELECT 1 FROM restore_conflicting_relayed_echo_refs d WHERE d.message_id=b.message_id AND d.scope=b.scope
+    AND d.remote_id=b.remote_id AND d.author=b.author
 )
 UNION
 SELECT b.message_id FROM backup.message_replies b

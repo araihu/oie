@@ -74,9 +74,15 @@ INSERT INTO message_stars SELECT s.* FROM backup.message_stars s JOIN restore_me
 WHERE TRUE ON CONFLICT(message_id) DO NOTHING;
 
 INSERT INTO archive_aliases SELECT a.* FROM backup.archive_aliases a JOIN restore_messages x ON x.id=a.message_id
-WHERE TRUE ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM restore_conflicting_relayed_echo_aliases d
+  WHERE d.account_id=a.account_id AND d.scope=a.scope AND d.archive_id=a.archive_id
+) ON CONFLICT DO NOTHING;
 INSERT INTO message_references SELECT r.* FROM backup.message_references r JOIN restore_messages x ON x.id=r.message_id
-WHERE TRUE ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM restore_conflicting_relayed_echo_refs d
+  WHERE d.message_id=r.message_id AND d.scope=r.scope AND d.remote_id=r.remote_id AND d.author=r.author
+) ON CONFLICT DO NOTHING;
 INSERT INTO message_replies SELECT r.* FROM backup.message_replies r JOIN restore_messages x ON x.id=r.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_sender_identities SELECT r.* FROM backup.message_sender_identities r JOIN restore_messages x ON x.id=r.message_id
