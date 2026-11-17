@@ -112,6 +112,7 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 			}
 			id := ` id="provider-stanza-id"`
 			var replacementID domain.ID
+			var legacyMessage domain.Message
 			ambiguousProvider := tc.oldObservation == "ambiguous" && tc.alternateUUID
 			if tc.alternateUUID {
 				if ambiguousProvider {
@@ -185,6 +186,13 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 					if err := receiver.Receive(ctx, incoming); err != nil {
 						t.Fatal(err)
 					}
+					if ambiguousProvider {
+						messages, err := witness.Messages(ctx, chat.ID, "", 10)
+						if err != nil || len(messages) != 1 || messages[0].OwnOriginID != replacementID {
+							t.Fatalf("fixture did not retain the guessed provider: %+v, %v", messages, err)
+						}
+						legacyMessage = messages[0]
+					}
 				}
 				if err := witness.Close(); err != nil {
 					t.Fatal(err)
@@ -229,6 +237,12 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 			history, err := store.Messages(ctx, chat.ID, "", 10)
 			if err != nil || len(history) != wantRows {
 				t.Fatalf("expected %d logical messages, got %+v, %v", wantRows, history, err)
+			}
+			if ambiguousProvider {
+				kept, err := store.Message(ctx, legacyMessage.ID)
+				if err != nil || kept.RevisionID != legacyMessage.RevisionID || kept.OriginalText != body || kept.OwnOriginID != "" {
+					t.Fatalf("the legacy observation lost its revision or kept the guessed origin: %+v, %v", kept, err)
+				}
 			}
 			if replayed, err := engine.SendMessage(ctx, key, chat.ID, body); err != nil || !replayed.Replayed || replayed.Message.ID != origin {
 				t.Fatalf("the original acceptance receipt no longer replays: %+v, %v", replayed, err)
