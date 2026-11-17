@@ -515,6 +515,12 @@ type RecoveredSendRevision struct {
 	CreatedAt string
 }
 
+type RestoredOwnEcho struct {
+	AccountID      string
+	ConversationID string
+	MessageID      string
+}
+
 type RetainedMessageRetraction struct {
 	SourceID    string
 	RetractedAt string

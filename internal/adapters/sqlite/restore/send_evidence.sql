@@ -1,3 +1,15 @@
+-- Keep evidence under the authenticated scope even if the corresponding
+-- original send is absent or the echo was outside destination retention.
+INSERT INTO restored_own_echoes
+SELECT b.account_id,b.conversation_id,b.provider_id FROM backup.messages b
+JOIN restore_chats x ON x.id=b.conversation_id
+JOIN conversations c ON c.id=x.id AND c.account_id=b.account_id
+WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
+  AND b.provider_id GLOB '????????-????-7???-[89ab]???-????????????'
+  AND length(replace(b.provider_id,'-',''))=32
+  AND replace(b.provider_id,'-','') NOT GLOB '*[^0-9a-f]*'
+ON CONFLICT DO NOTHING;
+
 -- The send state is evidence even if its history has expired at the destination.
 CREATE TEMP TABLE restore_send_evidence (id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT, payload TEXT) WITHOUT ROWID;
 INSERT INTO restore_send_evidence
@@ -40,6 +52,14 @@ JOIN message_retractions r ON r.account_id=m.account_id AND r.address=c.address 
 WHERE m.is_own=1 AND m.state='queued' AND json_extract(c.payload,'$.Kind')='direct'
 ON CONFLICT(id) DO NOTHING;
 
+-- Previously restored proof may survive after the echo's history expired.
+INSERT INTO restore_send_evidence
+SELECT m.id,'unknown',NULL,NULL FROM messages m
+JOIN restore_chats x ON x.id=m.conversation_id
+JOIN restored_own_echoes e ON e.account_id=m.account_id AND e.conversation_id=m.conversation_id AND e.message_id=m.id
+WHERE m.is_own=1 AND m.state='queued'
+ON CONFLICT(id) DO NOTHING;
+
 -- Expiry implies that the snapshot no longer had an executable send.
 INSERT INTO restore_send_evidence
 SELECT e.id,'unknown',NULL,NULL FROM backup.expired_message_ids e JOIN messages m ON m.id=e.id
@@ -57,4 +77,8 @@ ON CONFLICT(message_id) DO NOTHING;
 
 DELETE FROM recovered_sends
 WHERE EXISTS(SELECT 1 FROM discarded_recovered_sends d WHERE d.message_id=recovered_sends.message_id)
-   OR EXISTS(SELECT 1 FROM expired_message_ids d WHERE d.id=recovered_sends.message_id);
+   OR EXISTS(SELECT 1 FROM expired_message_ids d WHERE d.id=recovered_sends.message_id)
+   OR EXISTS(
+       SELECT 1 FROM restored_own_echoes e JOIN conversations c ON c.id=e.conversation_id AND c.account_id=e.account_id
+       WHERE c.id=recovered_sends.conversation_id AND e.message_id=recovered_sends.message_id
+   );

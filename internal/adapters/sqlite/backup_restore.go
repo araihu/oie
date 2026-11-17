@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 41
+	newestRestoreSchema = 42
 )
 
 type RestoreSummary struct {
@@ -125,8 +125,8 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if hasRecoveredRows && !recoveredSchemaValid {
 		return result, errors.New("backup has an invalid recovered sends schema")
 	}
-	var hasDeletedAccounts, hasRecoveredHistory, extendedSchemaValid bool
-	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &extendedSchemaValid); err != nil {
+	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, extendedSchemaValid bool
+	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes, &extendedSchemaValid); err != nil {
 		return result, err
 	}
 	if !extendedSchemaValid {
@@ -179,6 +179,11 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	}
 	if err := mergeRestoreRevisions(ctx, tx, q, now); err != nil {
 		return result, fmt.Errorf("merge backup revisions: %w", err)
+	}
+	if hasOwnEchoes {
+		if _, err := tx.ExecContext(ctx, restoreScript("own_echoes")); err != nil {
+			return result, err
+		}
 	}
 	if err := reconcileRestoredSendEvidence(ctx, tx, q, now); err != nil {
 		return result, fmt.Errorf("reconcile backup send evidence: %w", err)

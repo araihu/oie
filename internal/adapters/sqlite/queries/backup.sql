@@ -51,6 +51,8 @@ SELECT CAST(EXISTS(SELECT 1 FROM messages m WHERE m.id=sqlc.arg(message_id)
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=sqlc.arg(message_id)
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
 OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=sqlc.arg(message_id))
+OR EXISTS(SELECT 1 FROM restored_own_echoes e WHERE e.account_id=sqlc.arg(account_id)
+   AND e.conversation_id=sqlc.arg(conversation_id) AND e.message_id=sqlc.arg(message_id))
 OR EXISTS(
  SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
  JOIN message_retractions r ON r.account_id=c.account_id AND r.address=c.address AND r.kind='direct'

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -62,10 +63,16 @@ func updateRestoredImageDownloads(ctx context.Context, tx *sql.Tx, now time.Time
 	defer func() { _ = rows.Close() }()
 	var downloads []domain.MessagePreview
 	for rows.Next() {
-		var download domain.MessagePreview
-		if err := rows.Scan(&download.ID, &download.FileHash, &download.FileMimeType, &download.FileSize, &download.VerifiedAlgorithm); err != nil {
+		var id domain.ID
+		var payload, thumbnail, favicon string
+		if err := rows.Scan(&id, &payload, &thumbnail, &favicon); err != nil {
 			return err
 		}
+		var download domain.MessagePreview
+		if err := json.Unmarshal([]byte(payload), &download); err != nil {
+			return err
+		}
+		download.ID, download.ImageHash, download.FaviconHash = id, thumbnail, favicon
 		downloads = append(downloads, download)
 	}
 	if err := rows.Err(); err != nil {
@@ -84,6 +91,12 @@ func updateRestoredImageDownloads(ctx context.Context, tx *sql.Tx, now time.Time
 		parent := preview.RevisionID
 		preview.RevisionID = domain.ID(revision.String())
 		preview.UpdatedAt = now
+		if preview.Kind == "link" {
+			preview.Kind, preview.State = "image", "ready"
+			preview.Title, preview.Description, preview.SiteName = download.Title, download.Description, download.SiteName
+			preview.ImageHash, preview.FaviconHash = download.ImageHash, download.FaviconHash
+			preview.RefreshRequested = false
+		}
 		preview.DownloadState = "ready"
 		preview.LastErrorCode = ""
 		preview.FileHash, preview.FileMimeType, preview.FileSize = download.FileHash, download.FileMimeType, download.FileSize

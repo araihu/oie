@@ -136,9 +136,14 @@ func TestBackupRestoreHonorsDestinationDownloadRetention(t *testing.T) {
 
 func seedBackupDownloadedImage(t *testing.T, store *Store, chat domain.Conversation, now time.Time) (domain.MessagePreview, domain.ID) {
 	t.Helper()
-	ctx := t.Context()
 	const source = "https://example.invalid/photo.png"
 	message := replySeed(t, store, chat, source, now, nil, nil)
+	return seedBackupDownloadedImageForMessage(t, store, message, source, now)
+}
+
+func seedBackupDownloadedImageForMessage(t *testing.T, store *Store, message domain.Message, url string, now time.Time) (domain.MessagePreview, domain.ID) {
+	t.Helper()
+	ctx := t.Context()
 	var imageBytes bytes.Buffer
 	if err := png.Encode(&imageBytes, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
 		t.Fatal(err)
@@ -151,8 +156,8 @@ func seedBackupDownloadedImage(t *testing.T, store *Store, chat domain.Conversat
 		t.Fatal(err)
 	}
 	p, err := store.EnsurePreview(ctx, domain.MessagePreview{
-		ID: migrationID(), RevisionID: migrationID(), AccountID: chat.AccountID, ConversationID: chat.ID,
-		MessageID: message.ID, URL: source, Kind: "image", State: "ready", DownloadState: "ready",
+		ID: migrationID(), RevisionID: migrationID(), AccountID: message.AccountID, ConversationID: message.ConversationID,
+		MessageID: message.ID, URL: url, Kind: "image", State: "ready", DownloadState: "ready",
 		FileHash: file.Hash, FileMimeType: file.MimeType, FileSize: file.Size, UpdatedAt: now,
 	})
 	if err != nil {

@@ -1,7 +1,26 @@
+-- The original key remains reserved even when the corresponding pending
+-- snapshot is obsolete due to stronger evidence at the destination.
+INSERT INTO operations
+SELECT o.id,o.fingerprint,o.resource_id,'null',o.created_at,o.kind
+FROM backup.operations o JOIN restore_pending_candidates p ON p.message_id=o.resource_id
+JOIN conversations c ON c.id=p.conversation_id
+WHERE o.kind IN ('send_message','forward_message','update_pending_message','send_scheduled_message_now')
+  AND (
+      EXISTS(SELECT 1 FROM restored_own_echoes e
+             WHERE e.account_id=c.account_id AND e.conversation_id=c.id AND e.message_id=p.message_id)
+      OR EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id=p.message_id)
+      OR EXISTS(SELECT 1 FROM discarded_recovered_sends e WHERE e.message_id=p.message_id)
+  )
+ON CONFLICT(id) DO NOTHING;
+
 DELETE FROM restore_pending_candidates
 WHERE EXISTS(SELECT 1 FROM messages m WHERE m.id=restore_pending_candidates.message_id)
   OR EXISTS(SELECT 1 FROM expired_message_ids m WHERE m.id=restore_pending_candidates.message_id)
   OR EXISTS(SELECT 1 FROM discarded_recovered_sends m WHERE m.message_id=restore_pending_candidates.message_id)
+  OR EXISTS(
+      SELECT 1 FROM restored_own_echoes e JOIN conversations c ON c.id=e.conversation_id AND c.account_id=e.account_id
+      WHERE c.id=restore_pending_candidates.conversation_id AND e.message_id=restore_pending_candidates.message_id
+  )
   OR EXISTS(
       SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
       JOIN message_retractions r ON r.account_id=c.account_id AND r.kind='direct' AND r.address=c.address

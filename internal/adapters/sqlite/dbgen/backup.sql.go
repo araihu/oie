@@ -250,6 +250,8 @@ SELECT CAST(EXISTS(SELECT 1 FROM messages m WHERE m.id=?1
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=?1
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
 OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1)
+OR EXISTS(SELECT 1 FROM restored_own_echoes e WHERE e.account_id=?2
+   AND e.conversation_id=?3 AND e.message_id=?1)
 OR EXISTS(
  SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
  JOIN message_retractions r ON r.account_id=c.account_id AND r.address=c.address AND r.kind='direct'

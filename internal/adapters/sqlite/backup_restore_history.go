@@ -36,6 +36,9 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 	if _, err := tx.ExecContext(ctx, restoreScript("exclusions")); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, restoreScript("redacted_quotes")); err != nil {
+		return err
+	}
 	for _, fact := range facts {
 		row, err := q.GetMessage(ctx, fact.message)
 		if err != nil {
@@ -59,18 +62,29 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id string
-		var added, historyChanged bool
-		if err := rows.Scan(&id, &added, &historyChanged); err != nil {
+		var added, historyChanged, promoted, redacted bool
+		if err := rows.Scan(&id, &added, &historyChanged, &promoted, &redacted); err != nil {
 			return err
 		}
 		scrubbed, err := scrubRestoredQuotes(ctx, tx, q, id)
 		if err != nil {
 			return err
 		}
-		if err := refreshRestoredConversation(ctx, q, id, added, now); err != nil {
+		if redacted || scrubbed {
+			if err := q.ScrubConversationEventPreviews(ctx, id); err != nil {
+				return err
+			}
+			if err := q.ScrubConversationRevisionPreviews(ctx, id); err != nil {
+				return err
+			}
+			if err := q.ScrubConversationReceiptPreviews(ctx, id); err != nil {
+				return err
+			}
+		}
+		if err := refreshRestoredConversation(ctx, q, id, added, promoted, now); err != nil {
 			return err
 		}
-		if !added && (historyChanged || scrubbed) {
+		if !added && (historyChanged || scrubbed || redacted) {
 			if _, err := change(ctx, q, "conversation.history_pruned", domain.HistoryPruned{
 				ConversationID: domain.ID(id), MessageIDs: []domain.ID{},
 			}, now); err != nil {
@@ -141,7 +155,7 @@ func scrubRestoredQuotes(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, id s
 	return scrubInboundQuotes(ctx, q, id)
 }
 
-func refreshRestoredConversation(ctx context.Context, q *dbgen.Queries, id string, added bool, now time.Time) error {
+func refreshRestoredConversation(ctx context.Context, q *dbgen.Queries, id string, added, promoted bool, now time.Time) error {
 	if err := refreshConversationSummary(ctx, q, domain.ID(id), now); err != nil {
 		return err
 	}
@@ -159,7 +173,7 @@ func refreshRestoredConversation(ctx context.Context, q *dbgen.Queries, id strin
 	}
 	readChanged := c.UnreadCount != int(read.UnreadCount) || c.UnreadMention != (read.UnreadMention != 0)
 	repairCursor := c.ActivitySequence <= 0
-	if !added && !repairCursor && !readChanged {
+	if !added && !promoted && !repairCursor && !readChanged {
 		return nil
 	}
 	c.UnreadCount, c.UnreadMention = int(read.UnreadCount), read.UnreadMention != 0

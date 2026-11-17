@@ -33,6 +33,9 @@ WITH eligible AS (
     JOIN messages local ON local.id=x.id
     LEFT JOIN message_content_heads local_head ON local_head.canonical_id=x.id
     WHERE COALESCE(source_head.revision_id,source.revision_id)=COALESCE(local_head.revision_id,local.revision_id)
+), resolved_links AS MATERIALIZED (
+    SELECT DISTINCT entity_id FROM preview_revisions
+    WHERE json_extract(payload,'$.Kind')='link' AND json_extract(payload,'$.State')='ready'
 )
 SELECT f.device_id, local.id AS source_id, f.source_revision, f.kind, f.hash, f.mime_type,
        f.size, f.verified_algorithm, f.downloaded_at_ms
@@ -48,13 +51,17 @@ FROM eligible f
 JOIN backup.message_previews source ON source.id=f.source_id
 JOIN matching_messages m ON m.id=source.message_id
 LEFT JOIN message_previews local ON local.message_id=source.message_id AND local.url=source.url
-WHERE f.kind='image' AND source.download_state='ready' AND json_extract(source.payload,'$.FileHash')=f.hash
+LEFT JOIN resolved_links resolved ON resolved.entity_id=local.id
+WHERE f.kind='image' AND source.download_state='ready' AND json_extract(source.payload,'$.Kind')='image'
+  AND json_extract(source.payload,'$.FileHash')=f.hash
   AND (local.id IS NULL OR (
       json_extract(local.payload,'$.Kind')='image'
-      AND (
-          local.download_state='ready' AND json_extract(local.payload,'$.FileHash')=f.hash
-          OR local.download_state IN ('not_downloaded','failed') AND COALESCE(json_extract(local.payload,'$.FileHash'),'')=''
-      )
+      AND local.download_state='ready' AND json_extract(local.payload,'$.FileHash')=f.hash
+  ) OR (
+      local.download_state IN ('not_downloaded','failed') AND COALESCE(json_extract(local.payload,'$.FileHash'),'')=''
+      AND (json_extract(local.payload,'$.Kind')='image' OR (
+          json_extract(local.payload,'$.Kind')='link' AND local.state IN ('queued','unavailable') AND resolved.entity_id IS NULL
+      ))
   ));
 
 -- Preview rows are a cache. If referenced files are missing, let the engine

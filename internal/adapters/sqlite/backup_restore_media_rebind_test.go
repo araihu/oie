@@ -50,6 +50,65 @@ func TestBackupRestoreRebindsDownloadedImageAfterOpeningMessage(t *testing.T) {
 	}
 }
 
+func TestBackupRestoreRebindsDownloadedImageFromExtensionlessURL(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	const url = "https://example.invalid/photo"
+	message := replySeed(t, source, chat, url, now, nil, nil)
+	downloaded, _ := seedBackupDownloadedImageForMessage(t, source, message, url, now)
+	noMedia, noMediaDB, noMediaScratch := backupRestoreFixture(t, source, false)
+	withMedia, withMediaDB, withMediaScratch := backupRestoreFixture(t, source, true)
+
+	for _, previouslyResolved := range []bool{false, true} {
+		name := "unresolved link"
+		if previouslyResolved {
+			name = "resolved link with pending refresh"
+		}
+		t.Run(name, func(t *testing.T) {
+			destination, err := Open(ctx, t.TempDir(), migrationID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = destination.Close() })
+			if _, err := destination.mergeBackup(ctx, noMediaDB, noMediaScratch, noMedia, now); err != nil {
+				t.Fatal(err)
+			}
+			previews, err := testRestoreEngine(t, destination).ConversationPreviews(ctx, chat.ID, []domain.ID{message.ID})
+			if err != nil || len(previews) != 1 || previews[0].Kind != "link" || previews[0].State != "queued" {
+				t.Fatalf("expected an unresolved local link: %+v %v", previews, err)
+			}
+			local := previews[0]
+			if previouslyResolved {
+				for _, state := range []string{"ready", "queued"} {
+					parent := local.RevisionID
+					local.RevisionID, local.State = migrationID(), state
+					local.RefreshRequested = state == "queued"
+					if err := destination.SavePreview(ctx, local, parent); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			result, err := destination.mergeBackup(ctx, withMediaDB, withMediaScratch, withMedia, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			current, err := destination.Preview(ctx, local.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if previouslyResolved {
+				if result.MediaFiles != 0 || current.RevisionID != local.RevisionID || current.Kind != "link" {
+					t.Fatalf("backup replaced a locally resolved link: %+v %+v", result, current)
+				}
+			} else if result.MediaFiles != 1 || current.Kind != "image" || current.State != "ready" ||
+				current.DownloadState != "ready" || current.FileHash != downloaded.FileHash {
+				t.Fatalf("original image did not rebind to the unresolved preview: %+v %+v", result, current)
+			}
+		})
+	}
+}
+
 func TestBackupRestoreRebindsFileOnlyForMatchingMessageRevision(t *testing.T) {
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()

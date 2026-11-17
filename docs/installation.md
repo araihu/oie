@@ -682,8 +682,9 @@ Quit Oiê or stop the hosted engine before restoring. The restore command
 verifies the archive, keeps the destination's identity and applies the changes
 in one transaction. Existing removals, retractions and retention rules remain
 in force. The restore also keeps removals made through a device's download
-cleanup. If the same XMPP address has separate account or conversation
-identities, Oiê reports the conflict and leaves the profile data intact.
+cleanup. If the archive and destination have different identities for
+the same account, conversation, or provider message, Oiê reports an
+identity conflict and rolls back the merge.
 
 ```sh
 bin/oie backup restore --data-dir "/path/to/profile" "$HOME/oie-backup.zip"

@@ -7,7 +7,10 @@ WHERE NOT EXISTS (SELECT 1 FROM deleted_account_ids d WHERE d.id=a.id)
   WHERE o.resource_id=a.id AND o.kind='register_account' AND o.result='null'
 );
 
-CREATE TEMP TABLE restore_chats (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL, history_changed INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+CREATE TEMP TABLE restore_chats (
+  id TEXT PRIMARY KEY, is_new INTEGER NOT NULL, history_changed INTEGER NOT NULL DEFAULT 0,
+  promote_room INTEGER NOT NULL DEFAULT 0, quotes_redacted INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
 INSERT INTO restore_chats(id,is_new)
 SELECT c.id, NOT EXISTS(SELECT 1 FROM conversations d WHERE d.id=c.id)
 FROM backup.conversations c JOIN restore_accounts a ON a.id=c.account_id;
@@ -38,6 +41,38 @@ WHERE is_new=0 AND EXISTS (
     )
 );
 
+-- A room revision can promote its original destination placeholder when
+-- the destination has no direct history or send intent in this scope.
+UPDATE restore_chats SET promote_room=1, history_changed=1
+WHERE is_new=0 AND EXISTS (
+  SELECT 1 FROM backup.conversations b
+  JOIN conversations d ON d.id=b.id AND d.account_id=b.account_id AND d.address=b.address
+  JOIN conversation_revisions original ON original.id=d.revision_id AND original.entity_id=d.id
+  WHERE b.id=restore_chats.id AND b.revision_id<>d.revision_id
+    AND json_extract(d.payload,'$.Kind')='direct' AND json_extract(b.payload,'$.Kind')='room'
+    AND json_extract(original.payload,'$.Kind')='direct'
+    AND COALESCE(json_extract(d.payload,'$.Request'),'')=''
+    AND json_extract(d.payload,'$.DirectHistoryCheck') IS NULL
+    AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=d.id)
+    AND NOT EXISTS(SELECT 1 FROM staged_attachments f WHERE f.conversation_id=d.id)
+    AND NOT EXISTS(SELECT 1 FROM recovered_sends s WHERE s.conversation_id=d.id)
+    AND NOT EXISTS(SELECT 1 FROM accepted_direct_history h WHERE h.conversation_id=d.id)
+    AND NOT EXISTS(SELECT 1 FROM expired_message_references e WHERE e.conversation_id=d.id)
+    AND EXISTS (
+      WITH RECURSIVE ancestors(id) AS (
+        SELECT root.id FROM backup.conversation_revisions root
+        WHERE root.id=b.revision_id AND root.entity_id=b.id AND json_extract(root.payload,'$.Kind')='room'
+        UNION
+        SELECT parent.value FROM ancestors a
+        JOIN backup.conversation_revisions r ON r.id=a.id AND r.entity_id=b.id
+        JOIN json_each(r.parents) parent ON parent.type='text'
+      )
+      SELECT 1 FROM ancestors a
+      JOIN backup.conversation_revisions known ON known.id=a.id AND known.entity_id=b.id
+      WHERE known.id=d.revision_id AND json_extract(known.payload,'$.Kind')='direct'
+    )
+);
+
 CREATE TEMP TABLE restore_messages (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
 INSERT INTO restore_messages
 SELECT m.id, d.id IS NULL FROM backup.messages m
@@ -46,7 +81,7 @@ JOIN backup.conversations c ON c.id=chat.id AND c.account_id=m.account_id
 LEFT JOIN messages d ON d.id=m.id
 LEFT JOIN backup.outbox o ON o.message_id=m.id
 LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
-LEFT JOIN effective_retention r ON r.conversation_id=m.conversation_id
+LEFT JOIN conversation_retention r ON r.conversation_id=m.conversation_id
 CROSS JOIN global_retention g
 WHERE (d.id IS NOT NULL OR (
   -- Apply the destination's policy before inserting any new history. Aliases

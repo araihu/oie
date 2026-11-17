@@ -6,7 +6,7 @@ UNION ALL
     SELECT 1 FROM backup.conversations b JOIN restore_chats x ON x.id=b.id
     JOIN conversations c ON c.id=b.id OR (c.account_id=b.account_id AND c.address=b.address)
     WHERE c.id<>b.id OR c.account_id<>b.account_id OR c.address<>b.address OR
-        json_extract(c.payload,'$.Kind') IS NOT json_extract(b.payload,'$.Kind')
+        (x.promote_room=0 AND json_extract(c.payload,'$.Kind') IS NOT json_extract(b.payload,'$.Kind'))
 UNION ALL
     SELECT 1 FROM backup.messages b JOIN restore_messages x ON x.id=b.id
     JOIN messages m ON m.id=b.id OR (
@@ -14,6 +14,10 @@ UNION ALL
        AND m.provider_id=b.provider_id AND m.is_own=b.is_own AND b.provider_id<>''
     )
     WHERE m.id<>b.id OR m.account_id<>b.account_id OR m.conversation_id<>b.conversation_id
+UNION ALL
+    SELECT 1 FROM backup.archive_aliases b JOIN restore_messages x ON x.id=b.message_id
+    JOIN archive_aliases d ON d.account_id=b.account_id AND d.scope=b.scope AND d.archive_id=b.archive_id
+    WHERE d.message_id<>b.message_id
 UNION ALL
     SELECT 1 FROM backup.revisions b JOIN revisions d ON d.id=b.id WHERE d.entity_id<>b.entity_id
 UNION ALL
