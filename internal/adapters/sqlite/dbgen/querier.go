@@ -147,7 +147,6 @@ type Querier interface {
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
-	IsCurrentDisplayedHead(ctx context.Context, arg IsCurrentDisplayedHeadParams) (bool, error)
 	IsDiscardedReplyReference(ctx context.Context, arg IsDiscardedReplyReferenceParams) (bool, error)
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
@@ -240,6 +239,7 @@ type Querier interface {
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
+	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveDownloadGarbage(ctx context.Context, arg RemoveDownloadGarbageParams) error

@@ -6,10 +6,11 @@ import (
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
-	mx "mellium.im/xmpp"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
+
+const displayedMarkerNamespace = "urn:xmpp:chat-markers:0"
 
 type displayedMarkerMetadata struct {
 	Markable  []wireID `xml:"urn:xmpp:chat-markers:0 markable"`
@@ -35,9 +36,22 @@ type displayedStanza struct {
 	NoStore struct{} `xml:"urn:xmpp:hints no-store"`
 }
 
+func (m *Manager) DisplayedMarkerTransport(account domain.ID) string {
+	e := m.typingEntry(account)
+	if e == nil {
+		return ""
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.session == nil || e.raw == nil || e.state.State != "connected" || e.replaying {
+		return ""
+	}
+	return e.displayedTransport
+}
+
 func (m *Manager) SendDisplayedMarker(ctx context.Context, c domain.Conversation, marker domain.DisplayedMarker) {
 	host, ok := m.host.(application.DisplayedMarkerHost)
-	if !ok || !usableID(marker.RemoteID) {
+	if !ok || !usableID(marker.RemoteID) || marker.Transport == "" {
 		return
 	}
 	to, err := jid.Parse(c.Address)
@@ -54,27 +68,32 @@ func (m *Manager) SendDisplayedMarker(ctx context.Context, c domain.Conversation
 	defer e.sendMu.Unlock()
 	e.mu.RLock()
 	session, raw := e.session, e.raw
-	connected := session != nil && raw != nil && e.state.State == "connected"
+	connected := session != nil && raw != nil && e.state.State == "connected" && !e.replaying && e.displayedTransport == marker.Transport
 	kind, allowed := e.displayedDestination(c)
 	e.mu.RUnlock()
 	if !connected || !allowed || ctx.Err() != nil {
 		return
 	}
 
-	if current, err := host.IsCurrentDisplayedMarker(ctx, marker); err != nil || !current {
+	if current, err := host.ClaimDisplayedMarker(ctx, marker); err != nil || !current {
 		return
 	}
 
+	// Roster pushes and room changes can arrive while the database commits
+	// the claim. Check the destination and connection again at the wire.
+	e.mu.RLock()
+	_, allowed = e.displayedDestination(c)
+	current := e.session == session && e.raw == raw && e.displayedTransport == marker.Transport
+	e.mu.RUnlock()
+	if !current || !allowed || ctx.Err() != nil {
+		return
+	}
 	payload := displayedStanza{Message: stanza.Message{To: to, Type: kind}}
 	payload.Displayed.ID = marker.RemoteID
 	err = session.Encode(ctx, payload)
-	status := session.StreamManagement()
-	e.mu.Lock()
-	if e.session == session {
-		e.trackEphemeralStanza(status, err)
-	}
-	e.mu.Unlock()
-	if err != nil && !definitivelyUnsent(status.Enabled, err) {
+	// The submitted stanza uses normal XEP-0198 resumption. Abandoning that
+	// stream after a marker would also discard unrelated unacknowledged sends.
+	if err != nil && !definitivelyUnsent(session.StreamManagement().Enabled, err) {
 		_ = raw.Close()
 	}
 }
@@ -96,14 +115,5 @@ func (e *entry) displayedDestination(c domain.Conversation) (stanza.MessageType,
 		return stanza.GroupChatMessage, stable
 	default:
 		return "", false
-	}
-}
-
-// The caller holds e.mu. An unacknowledged ephemeral stanza must not be
-// resent by stream resumption after its originating connection drops.
-func (e *entry) trackEphemeralStanza(status mx.StreamManagementStatus, err error) {
-	if status.Enabled && status.Unacknowledged != 0 && !definitivelyUnsent(true, err) {
-		last := status.Acknowledged + uint32(status.Unacknowledged)
-		e.pendingEphemeral = &last
 	}
 }

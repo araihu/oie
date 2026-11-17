@@ -5,7 +5,7 @@ import "time"
 // DisplayedMarker carries protocol-verified evidence for a newly read position.
 type DisplayedMarker struct {
 	ConversationID, AccountID, MessageID ID
-	PolicyRevision, RemoteID             string
+	PolicyEpoch, RemoteID, Transport     string
 }
 
 // ReadState is independent of message content and conversation activity.
@@ -22,7 +22,7 @@ type GlobalReadReceipts struct {
 }
 
 type ConversationReadReceipts struct {
-	Revision                        string
+	Revision, PolicyEpoch           string
 	Override                        *bool
 	EffectiveEnabled, GlobalEnabled bool
 }

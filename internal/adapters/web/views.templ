@@ -233,6 +233,9 @@ if !v.CompactSource {
 if !v.Preview {
 @forwardDialog(v)
 @retractMessageDialog(v)
+if v.ReadReceiptsSupported {
+@inboxReadReceiptsDialog(v)
+}
 }
 
 
@@ -410,6 +413,9 @@ templ conversationRow(v view, c engineapi.Conversation) {
 	{{ roomLabel, roomIndicator := v.roomStatusPresentation(c.RoomStatus) }}
 	{{ border := v.AccountAvatarBorders[c.AccountId] }}
 	<li data-conversation-row={c.Id} data-version={v.conversationRowVersion(c)}
+		if v.canSetReadReceipts(&c) {
+			class="oie-chat-receipts-row"
+		}
 		if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
 			data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
 		}
@@ -447,6 +453,9 @@ if len(v.Accounts)>1 {
 <small class="oie-row-account">{v.accountLabel(c.AccountId)}</small>
 }
 			</div>
+		}
+	if v.canSetReadReceipts(&c) {
+			@inboxReadReceiptsButton(v,c)
 		}
 	</li>
 }

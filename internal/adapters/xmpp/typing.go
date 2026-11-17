@@ -147,7 +147,12 @@ func (m *Manager) SetTyping(ctx context.Context, conversation domain.Conversatio
 	status := session.StreamManagement()
 	e.mu.Lock()
 	if e.session == session {
-		e.trackEphemeralStanza(status, err)
+		// Stream management replays exact stanza counts, including chat states.
+		// If their acknowledgement is uncertain, reconnect with a fresh stream.
+		if status.Enabled && status.Unacknowledged != 0 && !definitivelyUnsent(true, err) {
+			last := status.Acknowledged + uint32(status.Unacknowledged)
+			e.pendingTyping = &last
+		}
 		if peer, ok := e.typingPeers[conversation.Address]; ok && err == nil {
 			peer.sent, peer.updatedAt, peer.lastSeen = active, now, now
 			e.typingPeers[conversation.Address] = peer
@@ -171,7 +176,7 @@ func (peer typingPeer) needsTyping(active bool, now time.Time) bool {
 	return elapsed >= 500*time.Millisecond && (!peer.sent || elapsed >= typingLifetime)
 }
 
-func ephemeralAwaitingAck(last *uint32, ack uint32) bool {
+func typingAwaitingAck(last *uint32, ack uint32) bool {
 	// The replay queue is bounded well below half the counter's range.
 	return last != nil && int32(ack-*last) < 0
 }

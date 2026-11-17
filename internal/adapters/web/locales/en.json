@@ -409,6 +409,8 @@
   "CapabilityReadReceipts": "Read receipts",
   "ReadReceiptsGlobal": "Global default",
   "ReadReceiptsConversation": "In this conversation",
+  "ReadReceiptsFor": "Read receipts for {conversation}",
+  "ReadReceiptsLoading": "Loading read receipt settings…",
   "ReadReceiptsOn": "Send",
   "ReadReceiptsOff": "Do not send",
   "ReadReceiptsInherit": "Use the default ({setting})",

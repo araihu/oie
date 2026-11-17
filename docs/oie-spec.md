@@ -810,8 +810,9 @@ Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, no
 Read-receipt sending defaults on where supported. Set the default for the
 selected engine in Settings → Engine → Read receipts. Each saved direct
 conversation and room can inherit that default, explicitly enable receipts or
-explicitly disable them using Conversation details → Read receipts. Clients of
-the same engine share the policy. Local read tracking and synchronization of
+explicitly disable them using Read receipts in the inbox or in Conversation
+details. The inbox action is available before opening the conversation. Clients
+of the same engine share the policy. Local read tracking and synchronization of
 read positions are independent of receipt sending.
 
 Support incoming/outgoing typing indicators where supported. Sending defaults on with a synced per-account toggle. Typing events are ephemeral, expiring state, not retained message history or outbox items to replay.

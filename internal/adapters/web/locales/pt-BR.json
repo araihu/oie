@@ -409,6 +409,8 @@
   "CapabilityReadReceipts": "Confirmações de leitura",
   "ReadReceiptsGlobal": "Padrão global",
   "ReadReceiptsConversation": "Nesta conversa",
+  "ReadReceiptsFor": "Confirmações de leitura em {conversation}",
+  "ReadReceiptsLoading": "Carregando confirmações de leitura…",
   "ReadReceiptsOn": "Enviar",
   "ReadReceiptsOff": "Não enviar",
   "ReadReceiptsInherit": "Usar o padrão ({setting})",

@@ -126,6 +126,11 @@ func TestReadReceiptPolicyMigratesPreviewOptOut(t *testing.T) {
 	if err != nil || !policy.GlobalEnabled || policy.EffectiveEnabled || policy.Override == nil || *policy.Override {
 		t.Fatal(policy, err)
 	}
+	migrateFixtureToVersion(t, upgraded, 37)
+	var oldSetting int
+	if err = upgraded.db.QueryRowContext(ctx, "SELECT send_read_receipts FROM account_communication_preferences WHERE account_id=?", chat.AccountID).Scan(&oldSetting); err != nil || oldSetting != 0 {
+		t.Fatal("rollback lost the preview opt-out", oldSetting, err)
+	}
 }
 
 func TestRoomModerationPreviewMigratesIntoSharedCatalog(t *testing.T) {

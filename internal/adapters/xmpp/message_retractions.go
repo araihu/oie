@@ -294,7 +294,7 @@ func (m *Manager) confirmRetraction(ctx context.Context, e *entry, session *mx.S
 	}
 	// Stream management proves submission to the account server. It cannot
 	// confirm that the recipient has processed the retraction.
-	if ephemeralAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
+	if typingAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
 		// A failed request may coincide with a final acknowledgement already
 		// being read by the stream. The bounded wait checks both possibilities.
 		_ = session.RequestStreamManagementAck(ctx)
@@ -310,7 +310,7 @@ func awaitRetraction(ctx context.Context, session *mx.Session, attempt *retracti
 		poll = ticker.C
 	}
 	for {
-		if attempt.last != nil && !ephemeralAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
+		if attempt.last != nil && !typingAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
 			// The read loop processes earlier errors before the acknowledgement.
 			attempt.complete(nil)
 			return attempt.err

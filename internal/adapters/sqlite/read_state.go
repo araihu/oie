@@ -129,7 +129,7 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 			return application.ReadResult{}, err
 		}
 	}
-	marker, err := reserveDisplayedMarker(ctx, q, c, in.RevisionID, len(ids))
+	marker, err := prepareDisplayedMarker(ctx, q, c, in.RevisionID, len(ids), in.DisplayedTransport)
 	if err != nil {
 		return application.ReadResult{}, err
 	}

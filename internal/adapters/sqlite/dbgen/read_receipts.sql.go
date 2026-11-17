@@ -30,12 +30,13 @@ func (q *Queries) AdvanceDisplayedHead(ctx context.Context, arg AdvanceDisplayed
 }
 
 const getConversationReadReceipts = `-- name: GetConversationReadReceipts :one
-SELECT revision, override_enabled, global_enabled, effective_enabled
+SELECT revision, policy_epoch, override_enabled, global_enabled, effective_enabled
 FROM conversation_read_receipt_policy WHERE conversation_id=?
 `
 
 type GetConversationReadReceiptsRow struct {
 	Revision         string
+	PolicyEpoch      string
 	OverrideEnabled  *int64
 	GlobalEnabled    int64
 	EffectiveEnabled int64
@@ -46,6 +47,7 @@ func (q *Queries) GetConversationReadReceipts(ctx context.Context, conversationI
 	var i GetConversationReadReceiptsRow
 	err := row.Scan(
 		&i.Revision,
+		&i.PolicyEpoch,
 		&i.OverrideEnabled,
 		&i.GlobalEnabled,
 		&i.EffectiveEnabled,
@@ -69,41 +71,32 @@ func (q *Queries) GetGlobalReadReceipts(ctx context.Context) (GetGlobalReadRecei
 	return i, err
 }
 
-const isCurrentDisplayedHead = `-- name: IsCurrentDisplayedHead :one
-SELECT EXISTS(SELECT 1 FROM conversation_displayed_heads h JOIN messages m ON m.id=h.message_id
-JOIN conversation_read_receipt_policy p ON p.conversation_id=h.conversation_id
-WHERE h.conversation_id=?1 AND h.message_id=?2 AND m.is_own=0
-AND p.effective_enabled=1 AND p.revision=?3
-AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
-AND NOT EXISTS(SELECT 1 FROM retained_message_retractions r WHERE r.source_id=m.id)
-AND NOT EXISTS(SELECT 1 FROM shared_catalog_moderated_sources r WHERE r.message_id=m.id))
-`
-
-type IsCurrentDisplayedHeadParams struct {
-	ConversationID string
-	MessageID      string
-	PolicyRevision string
-}
-
-func (q *Queries) IsCurrentDisplayedHead(ctx context.Context, arg IsCurrentDisplayedHeadParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isCurrentDisplayedHead, arg.ConversationID, arg.MessageID, arg.PolicyRevision)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const latestDisplayedTarget = `-- name: LatestDisplayedTarget :one
 SELECT m.id, COALESCE(m.timeline_at_ms,m.created_at_ms) AS position_ms,
        CAST(json_extract(m.payload,'$.ReadReceiptID') AS TEXT) AS remote_id
 FROM messages m JOIN message_reads observed ON observed.message_id=m.id
-WHERE observed.revision_id=?1
+JOIN conversation_read_revisions observation ON observation.id=observed.revision_id
+LEFT JOIN conversation_displayed_heads sent ON sent.conversation_id=m.conversation_id
+WHERE observation.displayed_policy_epoch=?1
+AND (sent.message_id IS NULL OR (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)>(sent.position_ms,sent.message_id))
 AND m.conversation_id=?2
+AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(
+ (SELECT h.position_ms FROM conversation_displayed_heads h WHERE h.conversation_id=?2), -9223372036854775808)
+AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(
+ (SELECT COALESCE(x.timeline_at_ms,x.created_at_ms) FROM messages x WHERE x.id=CAST(?3 AS TEXT)), 9223372036854775807)
 AND m.is_own=0 AND COALESCE(json_extract(m.payload,'$.Historical'),0)=0
 AND json_extract(m.payload,'$.ReadReceiptID')<>''
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>'')
-AND NOT EXISTS(SELECT 1 FROM retained_message_retractions r WHERE r.source_id=m.id)
-AND NOT EXISTS(SELECT 1 FROM shared_catalog_moderated_sources r WHERE r.message_id=m.id)
+AND NOT EXISTS(
+ SELECT 1 FROM retained_message_retractions r
+ WHERE r.source_id IN (SELECT m.id UNION ALL SELECT a.alias_id FROM message_canonical_aliases a WHERE a.canonical_id=m.id)
+)
+AND NOT EXISTS(
+ SELECT 1 FROM message_references ref JOIN room_message_moderation moderation
+ ON moderation.account_id=m.account_id AND ref.scope='room:'||moderation.room_address AND ref.remote_id=moderation.stanza_id
+ WHERE ref.message_id IN (SELECT m.id UNION ALL SELECT a.alias_id FROM message_canonical_aliases a WHERE a.canonical_id=m.id)
+)
 AND (CAST(?3 AS TEXT)='' OR
  (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id)<
  (SELECT COALESCE(x.timeline_at_ms,x.created_at_ms),x.id FROM messages x WHERE x.id=CAST(?3 AS TEXT)))
@@ -111,7 +104,7 @@ ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT 1
 `
 
 type LatestDisplayedTargetParams struct {
-	ReadRevisionID string
+	PolicyEpoch    *string
 	ConversationID string
 	FirstUnreadID  string
 }
@@ -124,7 +117,7 @@ type LatestDisplayedTargetRow struct {
 
 // XEP-0333 signals a position, so an eligible target must precede any unread message.
 func (q *Queries) LatestDisplayedTarget(ctx context.Context, arg LatestDisplayedTargetParams) (LatestDisplayedTargetRow, error) {
-	row := q.db.QueryRowContext(ctx, latestDisplayedTarget, arg.ReadRevisionID, arg.ConversationID, arg.FirstUnreadID)
+	row := q.db.QueryRowContext(ctx, latestDisplayedTarget, arg.PolicyEpoch, arg.ConversationID, arg.FirstUnreadID)
 	var i LatestDisplayedTargetRow
 	err := row.Scan(&i.ID, &i.PositionMs, &i.RemoteID)
 	return i, err
@@ -151,5 +144,19 @@ UPDATE engine_read_receipt_settings SET enabled=?, revision=revision+1 WHERE sin
 
 func (q *Queries) PutGlobalReadReceipts(ctx context.Context, enabled int64) error {
 	_, err := q.db.ExecContext(ctx, putGlobalReadReceipts, enabled)
+	return err
+}
+
+const recordDisplayedPolicyEpoch = `-- name: RecordDisplayedPolicyEpoch :exec
+UPDATE conversation_read_revisions SET displayed_policy_epoch=?1 WHERE id=?2
+`
+
+type RecordDisplayedPolicyEpochParams struct {
+	Epoch          *string
+	ReadRevisionID string
+}
+
+func (q *Queries) RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error {
+	_, err := q.db.ExecContext(ctx, recordDisplayedPolicyEpoch, arg.Epoch, arg.ReadRevisionID)
 	return err
 }

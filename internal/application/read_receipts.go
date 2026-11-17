@@ -8,34 +8,45 @@ import (
 )
 
 type DisplayedMarkerProtocol interface {
+	DisplayedMarkerTransport(domain.ID) string
 	SendDisplayedMarker(context.Context, domain.Conversation, domain.DisplayedMarker)
 }
 
 type DisplayedMarkerHost interface {
-	IsCurrentDisplayedMarker(context.Context, domain.DisplayedMarker) (bool, error)
+	ClaimDisplayedMarker(context.Context, domain.DisplayedMarker) (bool, error)
 }
 
 type displayedMarkerRepository interface {
-	IsCurrentDisplayedHead(context.Context, domain.DisplayedMarker) (bool, error)
+	ClaimDisplayedMarker(context.Context, domain.DisplayedMarker) (bool, error)
+}
+
+func (e *Engine) displayedMarkerTransport(account domain.ID) string {
+	protocol, ok := e.protocols.(DisplayedMarkerProtocol)
+	if !ok {
+		return ""
+	}
+	return protocol.DisplayedMarkerTransport(account)
 }
 
 func (e *Engine) queueDisplayedMarker(marker *domain.DisplayedMarker) {
-	if _, ok := e.protocols.(DisplayedMarkerProtocol); !ok || marker == nil {
+	if marker == nil {
 		return
 	}
-	// Markers are best-effort and have no replay after restart or disconnect.
+	e.displayedMu.Lock()
+	e.displayedPending = append(e.displayedPending, *marker)
+	e.displayedMu.Unlock()
 	select {
-	case e.displayedWork <- *marker:
+	case e.displayedWork <- struct{}{}:
 	default:
 	}
 }
 
-func (e *Engine) IsCurrentDisplayedMarker(ctx context.Context, marker domain.DisplayedMarker) (bool, error) {
+func (e *Engine) ClaimDisplayedMarker(ctx context.Context, marker domain.DisplayedMarker) (bool, error) {
 	repo, ok := e.repo.(displayedMarkerRepository)
 	if !ok {
 		return false, ErrProtocolUnavailable
 	}
-	return repo.IsCurrentDisplayedHead(ctx, marker)
+	return repo.ClaimDisplayedMarker(ctx, marker)
 }
 
 func (e *Engine) runDisplayedMarkers(ctx context.Context, protocol DisplayedMarkerProtocol) error {
@@ -43,12 +54,21 @@ func (e *Engine) runDisplayedMarkers(ctx context.Context, protocol DisplayedMark
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case marker := <-e.displayedWork:
-			c, err := e.Conversation(ctx, marker.ConversationID)
-			if err != nil || c.AccountID != marker.AccountID || c.Request != "" || c.RemovedFromChats {
-				continue
+		case <-e.displayedWork:
+			e.displayedMu.Lock()
+			pending := e.displayedPending
+			e.displayedPending = nil
+			e.displayedMu.Unlock()
+			for _, marker := range pending {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				c, err := e.Conversation(ctx, marker.ConversationID)
+				if err != nil || c.AccountID != marker.AccountID || c.Request != "" || c.RemovedFromChats {
+					continue
+				}
+				protocol.SendDisplayedMarker(ctx, c, marker)
 			}
-			protocol.SendDisplayedMarker(ctx, c, marker)
 		}
 	}
 	return ctx.Err()

@@ -1,7 +1,9 @@
 package sqlite
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,17 +11,32 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+type receiptProtocol struct {
+	outboundProtocol
+	transport string
+}
+
+func (p *receiptProtocol) DisplayedMarkerTransport(domain.ID) string { return p.transport }
+
+func (*receiptProtocol) SendDisplayedMarker(context.Context, domain.Conversation, domain.DisplayedMarker) {
+}
+
 func TestDisplayedMarkersRespectUnreadGapsAndCascadingPolicy(t *testing.T) {
 	_, e, chat := outboxFixture(t)
-	e.SetProtocols(&outboundProtocol{})
+	protocol := &receiptProtocol{transport: "first"}
+	e.SetProtocols(protocol)
 	ctx := t.Context()
 	at := time.Now().UTC()
 	receive := func(wire string, own, historical bool) domain.ID {
 		t.Helper()
 		at = at.Add(time.Second)
+		markerID := wire
+		if strings.HasPrefix(wire, "unrequested ") {
+			markerID = ""
+		}
 		if err := e.Receive(ctx, application.Incoming{
 			AccountID: chat.AccountID, Address: chat.Address, OriginalText: wire, ProviderID: wire,
-			ReadReceiptID: wire, CreatedAt: at, IsOwn: own, Historical: historical,
+			ReadReceiptID: markerID, CreatedAt: at, IsOwn: own, Historical: historical,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -48,8 +65,15 @@ func TestDisplayedMarkersRespectUnreadGapsAndCascadingPolicy(t *testing.T) {
 		t.Fatal("marker crossed an unread message", got)
 	}
 	key := migrationID()
-	if got := mark(key, first); got.DisplayedMarker == nil || got.DisplayedMarker.RemoteID != "first" || got.State.UnreadCount != 0 {
-		t.Fatal("expected a marker for first", got)
+	frontier := mark(key, first)
+	if frontier.DisplayedMarker == nil || frontier.DisplayedMarker.RemoteID != "later" || frontier.State.UnreadCount != 0 {
+		t.Fatal("closing the gap did not confirm the already read frontier", frontier)
+	}
+	if claimed, err := e.ClaimDisplayedMarker(ctx, *frontier.DisplayedMarker); err != nil || !claimed {
+		t.Fatal("eligible frontier was not claimed", claimed, err)
+	}
+	if claimed, err := e.ClaimDisplayedMarker(ctx, *frontier.DisplayedMarker); err != nil || claimed {
+		t.Fatal("frontier was claimed twice", claimed, err)
 	}
 	if got := mark(key, first); !got.Replayed || got.DisplayedMarker != nil {
 		t.Fatal("operation replay attempted a marker", got)
@@ -81,20 +105,64 @@ func TestDisplayedMarkersRespectUnreadGapsAndCascadingPolicy(t *testing.T) {
 	older, newest := receive("older", false, false), receive("newest", false, false)
 	got := mark(migrationID(), older, newest)
 	if got.DisplayedMarker == nil || got.DisplayedMarker.RemoteID != "newest" ||
-		got.DisplayedMarker.PolicyRevision != policy.Revision {
+		got.DisplayedMarker.PolicyEpoch != policy.PolicyEpoch {
 		t.Fatal("expected coalesced marker at newest message", got)
 	}
-	if current, err := e.IsCurrentDisplayedMarker(ctx, *got.DisplayedMarker); err != nil || !current {
-		t.Fatal("expected eligible queued marker", current, err)
+	global.Enabled = true
+	if _, err = e.SetGlobalReadReceipts(ctx, global); err != nil {
+		t.Fatal(err)
+	}
+	if claimed, err := e.ClaimDisplayedMarker(ctx, *got.DisplayedMarker); err != nil || !claimed {
+		t.Fatal("global change superseded an explicit override", claimed, err)
+	}
+	policy, err = e.ConversationReadReceipts(ctx, chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at = at.Add(5 * time.Second)
+	lateFrontier := mark(migrationID(), receive("next", false, false)).DisplayedMarker
+	if lateFrontier == nil {
+		t.Fatal("expected a pending frontier")
+	}
+	at = at.Add(-3 * time.Second)
+	late := receive("delivered out of order", false, false)
+	if claimed, err := e.ClaimDisplayedMarker(ctx, *lateFrontier); err != nil || claimed {
+		t.Fatal("claim crossed a newly arrived unread message", claimed, err)
+	}
+	afterLate := mark(migrationID(), late).DisplayedMarker
+	if afterLate == nil || afterLate.RemoteID != lateFrontier.RemoteID {
+		t.Fatal("closing the late gap lost the pending frontier", afterLate)
 	}
 	inherited, err := e.SetConversationReadReceipts(ctx, chat.ID, policy.Revision, nil)
-	if err != nil || inherited.Override != nil || inherited.EffectiveEnabled {
+	if err != nil || inherited.Override != nil || !inherited.EffectiveEnabled {
 		t.Fatal(inherited, err)
 	}
-	if current, err := e.IsCurrentDisplayedMarker(ctx, *got.DisplayedMarker); err != nil || current {
-		t.Fatal("stale marker survived a policy change", current, err)
+	if claimed, err := e.ClaimDisplayedMarker(ctx, *afterLate); err != nil || claimed {
+		t.Fatal("stale marker survived a policy change", claimed, err)
 	}
 	if _, err := e.SetConversationReadReceipts(ctx, chat.ID, policy.Revision, new(false)); !errors.Is(err, application.ErrStateConflict) {
 		t.Fatal("stale conversation setting was accepted", err)
+	}
+	at = at.Add(10 * time.Second)
+	unrequested := receive("unrequested after policy change", false, false)
+	if got := mark(migrationID(), unrequested); got.DisplayedMarker != nil {
+		t.Fatal("a new read resurrected a candidate from another policy", got)
+	}
+
+	protocol.transport = ""
+	if got := mark(migrationID(), receive("read while disconnected", false, false)); got.DisplayedMarker != nil {
+		t.Fatal("read while disconnected prepared a marker", got)
+	}
+	protocol.transport = "second"
+	if got := mark(migrationID(), receive("unrequested after reconnect", false, false)); got.DisplayedMarker != nil {
+		t.Fatal("reconnect resurrected a disconnected read", got)
+	}
+	beforeReconnect := mark(migrationID(), receive("read before reconnect", false, false)).DisplayedMarker
+	if beforeReconnect == nil || beforeReconnect.Transport != "second" {
+		t.Fatal("expected a candidate bound to the live transport", beforeReconnect)
+	}
+	protocol.transport = "third"
+	if got := mark(migrationID(), receive("unrequested in a replacement transport", false, false)); got.DisplayedMarker != nil {
+		t.Fatal("a new read in a replacement transport resurrected an old candidate", got)
 	}
 }

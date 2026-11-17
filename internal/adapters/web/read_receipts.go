@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	selectfield "github.com/araihu/goshtoso/components/select"
@@ -13,11 +14,20 @@ import (
 
 const readReceiptsPath = "/ui/settings/read-receipts"
 
+func supportsReadReceipts(version engineapi.EngineApiVersion) bool {
+	majorText, rest, _ := strings.Cut(string(version), ".")
+	minorText, patchText, _ := strings.Cut(rest, ".")
+	major, majorErr := strconv.Atoi(majorText)
+	minor, minorErr := strconv.Atoi(minorText)
+	_, patchErr := strconv.Atoi(patchText)
+	return majorErr == nil && minorErr == nil && patchErr == nil && (major > 0 || major == 0 && minor >= 39)
+}
+
 type readReceiptsView struct {
-	Revision, Notice string
-	Override         *bool
-	GlobalEnabled    bool
-	Loading, Saved   bool
+	Revision, Notice, Title string
+	Override                *bool
+	GlobalEnabled           bool
+	Loading, Saved, Inbox   bool
 }
 
 func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +41,8 @@ func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
 	v.CSRF = csrfToken(w, r)
 	ctx := r.Context()
 	id := r.URL.Query().Get("chat")
-	if id != "" && !validOperationKey(id) {
+	inbox := r.URL.Query().Get("inbox") == "1"
+	if id != "" && !validOperationKey(id) || inbox && id == "" {
 		http.NotFound(w, r)
 		return
 	}
@@ -43,6 +54,8 @@ func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil || engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true" {
 		status, notice = http.StatusServiceUnavailable, v.Text.ReadReceiptsUnavailable
+	} else if !supportsReadReceipts(engine.JSON200.ApiVersion) {
+		status, notice = http.StatusNotFound, v.Text.ReadReceiptsUnavailable
 	} else {
 		v.EngineID = engine.JSON200.Id
 		if r.Method == http.MethodPost {
@@ -76,7 +89,12 @@ func (s *Server) readReceipts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	policy.Notice, policy.Saved = notice, saved
+	policy.Notice, policy.Saved, policy.Inbox = notice, saved, inbox
+	if inbox && policy.Revision != "" {
+		if chat, err := s.client.GetConversationWithResponse(ctx, id); err == nil && chat.JSON200 != nil {
+			policy.Title = chat.JSON200.Title
+		}
+	}
 	if saved && r.Header.Get("HX-Request") != "true" {
 		q := url.Values{"lang": {v.Locale}, "theme": {v.Theme}}
 		if id == "" {
@@ -160,10 +178,13 @@ func (s *Server) saveReadReceipts(ctx context.Context, id string, form url.Value
 	return readReceiptsView{Revision: out.JSON200.Revision, GlobalEnabled: out.JSON200.GlobalEnabled, Override: out.JSON200.Override}, http.StatusOK
 }
 
-func (v view) readReceiptsHref(id string) string {
+func (v view) readReceiptsHref(id string, inbox bool) string {
 	q := url.Values{"lang": {v.Locale}}
 	if id != "" {
 		q.Set("chat", id)
+	}
+	if inbox {
+		q.Set("inbox", "1")
 	}
 	return readReceiptsPath + "?" + q.Encode()
 }
@@ -188,4 +209,12 @@ func readReceiptOptions(v view, id string, data readReceiptsView) []selectfield.
 		selectfield.Option{Value: "on", Label: v.Text.ReadReceiptsOn, Selected: explicit && selected},
 		selectfield.Option{Value: "off", Label: v.Text.ReadReceiptsOff, Selected: explicit && !selected},
 	)
+}
+
+func (v view) canSetReadReceipts(c *engineapi.Conversation) bool {
+	return v.ReadReceiptsSupported && !v.Preview && c != nil && c.Request == nil && !removedConversation(c)
+}
+
+func (v view) inboxReadReceiptsLabel(c engineapi.Conversation) string {
+	return strings.ReplaceAll(v.Text.ReadReceiptsFor, "{conversation}", c.Title)
 }

@@ -88,8 +88,10 @@ type entry struct {
 	presenceShow         string
 	presenceWake         chan struct{}
 	typingPeers          map[string]typingPeer
-	pendingEphemeral     *uint32
+	pendingTyping        *uint32
 	readReceiptAudience  map[string]bool
+	rosterPushGeneration uint64
+	displayedTransport   string
 	contactsGate         chan struct{}
 	contactRequests      map[string]struct{}
 	contactSubscriptions map[string]bool
@@ -437,6 +439,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.replaying = session.StreamManagement().Resumed
 			e.archiveSessionCtx = historyCtx
 			e.raw = raw
+			e.displayedTransport = randomQueryID()
 			previous := e.suspended
 			if previous == nil {
 				e.correctionSession = randomQueryID()
@@ -544,14 +547,14 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.raw = nil
 			e.presenceWake = nil
 			status := session.StreamManagement()
-			hasPendingEphemeral := ephemeralAwaitingAck(e.pendingEphemeral, status.Acknowledged)
-			e.pendingEphemeral = nil
+			hasPendingTyping := typingAwaitingAck(e.pendingTyping, status.Acknowledged)
+			e.pendingTyping = nil
 			for address, peer := range e.typingPeers {
 				peer.until = time.Time{}
 				peer.sent = false
 				e.typingPeers[address] = peer
 			}
-			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingEphemeral
+			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingTyping
 			if resumable {
 				e.suspended = session
 			} else {
@@ -565,7 +568,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if !resumable {
 				m.resetRoomSessions(ctx, e, session)
 			}
-			if !served || hasPendingEphemeral {
+			if !served || hasPendingTyping {
 				management = new(mx.StreamManagement)
 			}
 		}
@@ -1010,7 +1013,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
 		}
 		if msg.Type == stanza.GroupChatMessage {
-			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, msg.correctionMetadata)
+			return m.receiveRoomMessage(ctx, e, msg.Message, msg.replyMetadata, msg.Body, msg.Delay.Stamp, msg.Delay.From, msg.fileSharingMetadata, len(msg.Displayed) != 0, msg.correctionMetadata)
 		}
 		if msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
 			return nil

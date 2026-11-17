@@ -105,6 +105,18 @@ html.dark .oie-brand-logo-dark{display:block}
 }
 .oie-chat-link[aria-current=true]{background:var(--oie-accent-soft)}
 .oie-chat-link:focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:-2px}
+.oie-chat-receipts-row{position:relative}
+.oie-chat-receipts-row .oie-chat-link{padding-inline-end:48px}
+.oie-chat-receipts-button{position:absolute;inset-inline-end:5px;inset-block-start:50%;transform:translateY(-50%)}
+@media(hover:hover){
+ .oie-chat-receipts-row:not(:hover):not(:focus-within) .oie-chat-receipts-button{opacity:0}
+}
+@media(pointer:coarse){
+ .oie-chat-receipts-row .oie-chat-link{padding-inline-end:54px}
+ .oie-chat-receipts-button{min-block-size:44px;min-inline-size:44px}
+}
+.oie-receipts-conversation-title{margin:0 0 .75rem;font-weight:600;overflow-wrap:anywhere}
+
 .oie-chat-avatar{flex-shrink:0}
 .oie-row-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .oie-row-top,.oie-row-bottom{display:flex;align-items:center;gap:8px;min-width:0}

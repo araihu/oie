@@ -20,6 +20,7 @@ type ConversationPreferencesMutation struct {
 	ConversationID, AccountID, ExpectedRevisionID, RevisionID domain.ID
 	Archived, Favorite, Read                                  *bool
 	ReadRevisionID                                            domain.ID
+	DisplayedTransport                                        string
 	AcceptRequest                                             bool
 }
 
@@ -57,11 +58,13 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 		return ConversationResult{}, err
 	}
 	var readRevision domain.ID
+	var displayedTransport string
 	if in.Read != nil && *in.Read {
 		readRevision, err = e.newID()
 		if err != nil {
 			return ConversationResult{}, err
 		}
+		displayedTransport = e.displayedMarkerTransport(in.AccountID)
 	}
 	const kind = "update_conversation_preferences"
 	requestFingerprint := fingerprint(kind, struct {
@@ -81,7 +84,7 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 	result, err := repo.UpdateConversationPreferences(ctx, ConversationPreferencesMutation{
 		Operation:      Operation{ID: key, ResourceID: conversationID, Kind: kind, CreatedAt: e.now().UTC()},
 		Fingerprint:    requestFingerprint,
-		ConversationID: conversationID, AccountID: in.AccountID, ExpectedRevisionID: in.ExpectedRevisionID, RevisionID: revision, Archived: archived, Favorite: favorite, AcceptRequest: in.AcceptRequest, Read: read, ReadRevisionID: readRevision,
+		ConversationID: conversationID, AccountID: in.AccountID, ExpectedRevisionID: in.ExpectedRevisionID, RevisionID: revision, Archived: archived, Favorite: favorite, AcceptRequest: in.AcceptRequest, Read: read, ReadRevisionID: readRevision, DisplayedTransport: displayedTransport,
 	})
 	if err == nil && (in.AcceptRequest || read != nil) && !result.Replayed {
 		e.notifyEvents()

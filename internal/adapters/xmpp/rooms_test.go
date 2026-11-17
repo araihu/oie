@@ -171,7 +171,7 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	}
 	// Another occupant cannot nominate an own-message UUID even if it copies origin-id.
 	from, _ := jid.Parse(slot.conversation.Address + "/Other")
-	err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", "", fileSharingMetadata{})
+	err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", "", fileSharingMetadata{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	// A retained room is not membership: groupchat before self confirmation is ignored.
 	slot.snapshot.State = "not_joined"
 	before := len(host.received)
-	_ = m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "ignored", "", "", fileSharingMetadata{})
+	_ = m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "ignored", "", "", fileSharingMetadata{}, false)
 	if len(host.received) != before {
 		t.Fatal("unjoined room accepted live traffic")
 	}
@@ -298,7 +298,7 @@ func TestRoomLeaveCanRetryAfterResume(t *testing.T) {
 				t.Fatalf("durable leave worker cannot discover the retained room: %+v, %v", observation, err)
 			}
 			from := jid.MustParse(slot.conversation.Address + "/Other")
-			if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "queued while leaving", "", "", fileSharingMetadata{}); err != nil || len(host.received) != 0 {
+			if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{}, "queued while leaving", "", "", fileSharingMetadata{}, false); err != nil || len(host.received) != 0 {
 				t.Fatalf("leave pending room accepted a message: %v, %v", host.received, err)
 			}
 

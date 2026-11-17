@@ -45,6 +45,7 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 		return true
 	}
 	v.EngineID, v.EventCursor, v.Role = source.Engine.Id, source.Engine.EventCursor, source.Engine.Role
+	v.ReadReceiptsSupported = supportsReadReceipts(source.Engine.ApiVersion)
 	v.CanResetData = source.Engine.CanResetData != nil && *source.Engine.CanResetData
 	v.Selected = &owner
 	v.applyConversationDetails(source.Details)

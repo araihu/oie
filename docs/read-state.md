@@ -33,22 +33,24 @@ Verification includes concurrent receive/read batches, partial visibility, offsc
 Settings → Engine → **Read receipts** sets the default for all conversations
 on that engine, initially **Send**. Open **Read receipts** in a direct
 conversation or room's details to set **Use the default**, **Send**, or
-**Do not send**. Clients on the same engine share these settings. The policy
-is independent of the local unread counter and unread reminder.
+**Do not send**. The inbox also offers this action for each conversation,
+without opening the timeline. Clients on the same engine share these settings.
+The policy is independent of the local unread counter and unread reminder.
 
 Oiê emits [XEP-0333 displayed markers](https://xmpp.org/extensions/xep-0333.html)
 after automatic or explicit **Mark as read**. A direct message must request a
 marker, and its sender must be allowed to see the account's presence. A joined
-room must advertise XEP-0359 and assign a verifiable stanza ID. Markers use
-the original direct message ID or the ID assigned by the room. Own messages,
-recovered history and incoming markers do not request a response.
+room must advertise XEP-0359, assign a verifiable stanza ID, and provide
+enough verified occupant identity to exclude the account's own messages across
+resources. Markers use the original direct message ID or the ID assigned by
+the room. Own messages, recovered history and incoming markers do not request a response.
 
-The engine stores the position in the same transaction as the newly observed
-reads. It considers the newest eligible message read in that transaction before
-the first remaining unread message. A second tab or retried HTTP request cannot
-emit another marker for the same position. Dispatch is best effort while
-connected, and missed markers expire. The adapter checks the current marker
-position and the conversation's effective policy immediately before writing.
+The engine associates observed reads with the active transport and effective
+policy. A later read can close a gap and advance to an earlier observation
+from that transport and policy. Immediately before attempting a send, the engine checks for
+earlier unread messages and records the attempted position. Repeated reads
+cannot claim it twice. Queued work is tied to the connected transport. XMPP
+stream resumption preserves stanzas already submitted on that stream.
 
 ## Verification on 2026-11-08
 

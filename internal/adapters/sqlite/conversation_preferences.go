@@ -91,7 +91,7 @@ func markConversationRead(ctx context.Context, q *dbgen.Queries, next *domain.Co
 	if err != nil {
 		return false, nil, err
 	}
-	marker, err := reserveDisplayedMarker(ctx, q, *next, in.ReadRevisionID, len(ids))
+	marker, err := prepareDisplayedMarker(ctx, q, *next, in.ReadRevisionID, len(ids), in.DisplayedTransport)
 	return true, marker, err
 }
 

@@ -23,10 +23,11 @@ type AccountArchiveRetention struct {
 }
 
 type AccountCommunicationPreference struct {
-	AccountID  string
-	RevisionID string
-	Presence   string
-	SendTyping int64
+	AccountID        string
+	RevisionID       string
+	Presence         string
+	SendTyping       int64
+	SendReadReceipts int64
 }
 
 type ArchiveAlias struct {
@@ -114,6 +115,7 @@ type ConversationDisplayedHead struct {
 type ConversationReadReceiptPolicy struct {
 	ConversationID   string
 	Revision         string
+	PolicyEpoch      string
 	OverrideEnabled  *int64
 	GlobalEnabled    int64
 	EffectiveEnabled int64
@@ -126,12 +128,13 @@ type ConversationReadReceiptSetting struct {
 }
 
 type ConversationReadRevision struct {
-	ID             string
-	ConversationID string
-	Parents        string
-	Payload        string
-	MessageIds     string
-	CreatedAt      string
+	ID                   string
+	ConversationID       string
+	Parents              string
+	Payload              string
+	MessageIds           string
+	CreatedAt            string
+	DisplayedPolicyEpoch *string
 }
 
 type ConversationReadState struct {

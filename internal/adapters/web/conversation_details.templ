@@ -52,7 +52,7 @@ case "read-receipts":
 <section class="oie-info-retention" aria-labelledby="conversation-read-receipts-title">
   @infoBack(v)
   <h2 id="conversation-read-receipts-title" tabindex="-1" data-info-heading>{v.Text.CapabilityReadReceipts}</h2>
-  if !v.Preview && v.requestKind()=="" {
+  if v.canSetReadReceipts(v.Selected) {
     @readReceiptsRegion(v,v.Selected.Id,readReceiptsView{Loading:true})
   }
 </section>
@@ -78,7 +78,9 @@ if !v.Preview && v.requestKind()=="" {
 	InputAttrs:templ.Attributes{"data-notification-mute":v.Selected.Id,"data-mute-engine":v.EngineID,"data-unsaved":v.Text.DevicePreferenceUnavailable},
 })
 @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
+if v.canSetReadReceipts(v.Selected) {
 @infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
+}
 }
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">

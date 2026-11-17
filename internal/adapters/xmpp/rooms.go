@@ -643,7 +643,7 @@ func (m *Manager) resetRoomSessions(ctx context.Context, e *entry, s *mx.Session
 	}
 }
 
-func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp, delayFrom string, files fileSharingMetadata, operations ...correctionMetadata) error {
+func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.Message, meta replyMetadata, body, stamp, delayFrom string, files fileSharingMetadata, hasDisplayedMarker bool, operations ...correctionMetadata) error {
 	body = attachmentBodyFallback(body, files)
 	if strings.TrimSpace(body) == "" || msg.From.Localpart() == "" || msg.From.Resourcepart() == "" {
 		return nil
@@ -655,7 +655,7 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 		e.mu.RUnlock()
 		return nil
 	}
-	nickname := slot.snapshot.Nickname
+	nickname, ownOccupantID := slot.snapshot.Nickname, slot.ownOccupantID
 	own := msg.From.Resourcepart() == nickname
 	var canonical domain.ID
 	if own && len(meta.Origins) == 1 && usableID(meta.Origins[0].ID) && meta.Origins[0].Text == "" && len(meta.Origins[0].Children) == 0 {
@@ -688,18 +688,27 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 		from, parseErr := jid.Parse(delayFrom)
 		historical = parseErr == nil && from.Resourcepart() == "" && from.Equal(msg.From.Bare())
 	}
+	senderAddress := liveRoomSenderAddress(e, msg.From, stamp, delayFrom)
+	senderVerified := senderAddress != ""
+	senderIsOwn := own || senderVerified && senderAddress == e.account.Address
 	var correction *domain.MessageCorrection
 	if len(operations) == 1 {
+		if occupantVerified && ownOccupantID != "" {
+			if sender := verifiedOccupantID(operations[0].Occupants); sender != "" {
+				senderVerified = true
+				senderIsOwn = senderIsOwn || sender == ownOccupantID
+			}
+		}
 		correction = decodeCorrectionMetadata(operations[0], msg, true, occupantVerified)
 	}
 	if own && canonical != "" {
 		observeOwnCorrectionSource(e, string(canonical), correction, address, body)
 	}
 	var readReceiptID string
-	if !own && stamp == "" && delayFrom == "" && stableReceipt {
+	if senderVerified && !senderIsOwn && !hasDisplayedMarker && stamp == "" && delayFrom == "" && stableReceipt {
 		readReceiptID = roomStanzaID(msg.From, meta.Stable)
 	}
-	err := m.host.Receive(ctx, application.Incoming{ReadReceiptID: readReceiptID, MediaThumbnails: decodeFileThumbnails(files), FileDigests: decodeFileDigests(files), AudioURLs: decodeAudioURLs(files), FileReferences: decodeFileReferences(files), AccountID: e.account.ID, Address: address, Kind: "room", OwnRoomNickname: nickname, SenderName: msg.From.Resourcepart(), SenderAddress: liveRoomSenderAddress(e, msg.From, stamp, delayFrom), ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
+	err := m.host.Receive(ctx, application.Incoming{ReadReceiptID: readReceiptID, MediaThumbnails: decodeFileThumbnails(files), FileDigests: decodeFileDigests(files), AudioURLs: decodeAudioURLs(files), FileReferences: decodeFileReferences(files), AccountID: e.account.ID, Address: address, Kind: "room", OwnRoomNickname: nickname, SenderName: msg.From.Resourcepart(), SenderAddress: senderAddress, ProviderID: provider, OriginalText: body, CreatedAt: created, Historical: historical, IsOwn: own, References: refs, Reply: reply, CanonicalID: canonical, Correction: correction})
 	if errors.Is(err, application.ErrInvalid) {
 		return nil
 	}

@@ -12,6 +12,7 @@ type ReadMutation struct {
 	Fingerprint                                        string
 	ConversationID, RevisionID, ConversationRevisionID domain.ID
 	MessageIDs                                         []domain.ID
+	DisplayedTransport                                 string
 	Latest                                             ReadLatest
 }
 
@@ -97,6 +98,11 @@ func (e *Engine) markRead(ctx context.Context, key domain.ID, kind string, inten
 	in.Fingerprint = fingerprint(kind, intent)
 	in.RevisionID = revision
 	in.ConversationRevisionID = conversationRevision
+	if _, supported := e.protocols.(DisplayedMarkerProtocol); supported {
+		if c, err := e.Conversation(ctx, in.ConversationID); err == nil {
+			in.DisplayedTransport = e.displayedMarkerTransport(c.AccountID)
+		}
+	}
 	result, err := r.MarkMessagesRead(ctx, in)
 	if err == nil && !result.Replayed {
 		e.queueDisplayedMarker(result.DisplayedMarker)

@@ -181,10 +181,9 @@ templ engineSettings(v view) {
 			<h2 id="engine-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
 			@retentionRegion(v,"",retentionView{Loading:true})
 		</section>
-		<section class="oie-settings-section oie-engine-retention" aria-labelledby="engine-read-receipts-title">
-			<h2 id="engine-read-receipts-title">@readReceiptsIcon()<span>{v.Text.CapabilityReadReceipts}</span></h2>
-			@readReceiptsRegion(v,"",readReceiptsView{Loading:true})
-		</section>
+		}
+	if v.ReadReceiptsSupported && !v.Preview {
+		@globalReadReceiptsSettings(v)
 	}
 	if v.HostedSignIn {
 		<div class="oie-engine-sign-out">
