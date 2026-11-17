@@ -963,6 +963,16 @@ Device preferences remain meaningful with a hosted engine. Browser/site-data rem
 
 **RECOMMENDED R09:** IndexedDB for device metadata/drafts/pending submissions and Cache Storage for versioned local UI assets/BFF-produced snapshots, with a service-worker offline shell and limited presentation coordinator. Do not add provider clients to solve offline presentation. **OPEN O13:** exact browser storage/rendering contract, coverage of protected conversations, quota defaults, and cache invalidation across locale/engine/device/deletion changes.
 
+**IMPLEMENTED (initial increment):** in the standalone web app on HTTPS or
+localhost, a browser can reopen recently viewed conversations in a read-only
+view when it loses access to Oiê. It saves up to 50 messages from a conversation's
+loaded latest page, up to 12 conversations and 1 MiB of text snapshots, with a
+seven-day maximum age. The cache belongs to that browser profile and follows the
+engine and owning account. Drafts and queued sends use their existing storage.
+Authenticated hosted sessions, configurable limits, keeping individual chats
+offline, offline search and media remain pending. See
+[offline history](offline-history.md).
+
 ### 11.5 Language and timestamps
 
 Internationalization is required from the start. Ship **English (`en`) and Brazilian Portuguese (`pt-BR`)**. Follow device/browser language unless explicitly overridden on that device; fall back to English when no supported language matches.

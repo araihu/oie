@@ -275,18 +275,36 @@ async function check() {
     );
 
     const reopened = await context.newPage();
+    const statusLoaded = () => reopened.waitForResponse(response =>
+      response.url().endsWith(pushPath) && response.request().method() === 'GET');
+    const startup = statusLoaded();
     await reopened.goto(hosted.url + entry);
     await reopened.getByRole('tab', {name: 'Este dispositivo', exact: true}).click();
+    assert.equal((await startup).status(), 200);
     const reopenedToggle = reopened.locator('[data-notification-background]');
-    assert(await reopenedToggle.isChecked());
     const banners = reopened.locator('[data-notification-banners]');
+    await reopened.bringToFront();
+    await banners.focus();
+    await reopened.locator('[data-notification-banners]:enabled:checked').waitFor();
+    assert(await reopenedToggle.isChecked());
     const failDisable = route => route.request().method() === 'DELETE'
       ? route.fulfill({status: 503}) : route.continue();
+    const failure = 'Não foi possível salvar as notificações com o app fechado. Tente novamente.';
     await reopened.route('**' + pushPath, failDisable);
+    const attemptedDisable = reopened.waitForResponse(response =>
+      response.url().endsWith(pushPath) && response.request().method() === 'DELETE');
     await banners.press('Space');
-    await reopened.getByText('Não foi possível salvar as notificações com o app fechado. Tente novamente.', {exact: true}).waitFor();
+    assert.equal((await attemptedDisable).status(), 503);
+    await reopened.getByText(failure, {exact: true}).waitFor();
     assert(await banners.isChecked());
     assert.equal((await getStatus()).enabled, true);
+
+    // A passive status refresh must not erase the result of a failed write.
+    const refreshed = statusLoaded();
+    await reopened.evaluate(() => window.dispatchEvent(new Event('focus')));
+    assert.equal((await refreshed).status(), 200);
+    await reopened.evaluate(key => navigator.locks.request(key, () => {}), pushPath);
+    assert.equal(await reopened.locator('#notification-status').textContent(), failure);
     await reopened.unroute('**' + pushPath, failDisable);
     const off = reopened.waitForResponse(response => response.url().endsWith(pushPath) && response.request().method() === 'DELETE');
     await reopened.evaluate(() => localStorage.removeItem('oie.notifications.background'));
@@ -303,7 +321,7 @@ async function check() {
       return !toggle.checked && toggle.getAttribute('aria-disabled') === 'false';
     });
     await reopenedToggle.press('Space');
-    await reopened.getByText('Não foi possível salvar as notificações com o app fechado. Tente novamente.', {exact: true}).waitFor();
+    await reopened.getByText(failure, {exact: true}).waitFor();
     assert.equal((await getStatus()).enabled, false);
     assert.equal(await reopenedToggle.isChecked(), false);
     assert(await reopenedToggle.evaluate(control => control === document.activeElement));

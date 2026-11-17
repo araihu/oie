@@ -115,6 +115,7 @@
           return;
         }
         cursor = reset.cursor;
+        emit('history-gap', cursor);
         reconnect(connection);
       } catch { reconnect(connection); }
     });

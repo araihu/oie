@@ -1,4 +1,9 @@
 {
+  "OfflineHistoryStatus": "Offline",
+  "OfflineHistoryTitle": "Recent conversations",
+  "OfflineHistoryEmpty": "No conversations are available offline.",
+  "OfflineHistoryMissing": "This conversation is unavailable offline.",
+  "OfflineHistoryMessageMissing": "This message is unavailable offline.",
   "RetractMessage": "Retract message",
   "MessageRetracted": "Message retracted",
   "RevealOriginal": "Reveal original",

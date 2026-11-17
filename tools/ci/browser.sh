@@ -51,6 +51,7 @@ consumer() (
   run test:states with_presentation_matrix npm --prefix tests/browser run test:states --
   run test:accounts with_presentation_matrix npm --prefix tests/browser run test:accounts --
   run_case live-chat
+  run offline-history env OIE_OFFLINE_HISTORY_ONLY=1 node tests/browser/live-chat.cjs
   run send-geometry env OIE_SEND_GEOMETRY_ONLY=1 node tests/browser/live-chat.cjs
   run_case account-status
   run_case avatars

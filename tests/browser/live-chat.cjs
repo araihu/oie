@@ -16,6 +16,8 @@ const engine=id(1),account=id(2),chat=id(3);
   const write=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   const problem=(code,type,currentMessage)=>write(code,{type:'urn:oie:problem:'+type,title:'Problem',code:type,status:code,currentMessage});
   let raw='';for await(const chunk of req)raw+=chunk;let input={};try{if(raw)input=JSON.parse(raw)}catch{return problem(400,'invalid_request')}
+  if(u.pathname==='/api/v1/engine/reset'&&state.resetEnabled){res.statusCode=204;return res.end()}
+  if(u.pathname==='/api/v1/engine'&&state.engineDenied){res.statusCode=401;res.setHeader('Content-Type','application/problem+json');return res.end('{')}
   if(u.pathname==='/api/v1/engine')return state.engineDown ? problem(503,'unavailable') :
    write(200,{id:engine,role:'hosted',apiVersion:'0.2.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return write(200,{items:[accountData]});
@@ -26,7 +28,7 @@ const engine=id(1),account=id(2),chat=id(3);
    return write(200,{accountId:account,state:state.connection,lastErrorCode:state.error||undefined,updatedAt:new Date().toISOString()});
   }
   if(u.pathname==='/api/v1/conversations')return write(200,{items:[conversation()]});
-  if(u.pathname==='/api/v1/conversations/'+chat)return write(200,conversation());
+  if(u.pathname==='/api/v1/conversations/'+chat)return state.chatRemoved ? problem(404,'not_found') : write(200,conversation());
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages'){
    if(req.method==='GET'){
     const cursor=state.messages.find(m=>m.id===u.searchParams.get('cursor')),newer=u.searchParams.get('direction')==='newer';
@@ -61,6 +63,9 @@ const engine=id(1),account=id(2),chat=id(3);
   for(let i=0;i<50;i++){try{if((await fetch(base)).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
   if(process.env.OIE_SEND_GEOMETRY_ONLY==='1'){
     await require('./send-geometry.cjs')({browser,base,chat,state,emit,until,id});return;
+  }
+  if(process.env.OIE_OFFLINE_HISTORY_ONLY==='1'){
+    await require('./offline-history.cjs')({browser,base,account,chat,state,until,id});return;
   }
   const checkOfflineConcurrency=()=>require('./offline-send-concurrency.cjs')({browser,base,chat,state,until,findings});
   if(process.env.OIE_OFFLINE_CONCURRENCY_ONLY==='1'){

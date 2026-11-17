@@ -206,8 +206,9 @@ async function run() {
     });
     for (const [width, lang] of [[1440, 'en'], [390, 'pt-BR']]) {
       engineAvailable = false;
-      const cold = await profile.newPage();
-      await cold.setViewportSize({width, height: 900});
+      // Each cold start uses an empty profile so an earlier recoverable chat
+      // cannot turn the next request into an offline history navigation.
+      const cold = await browser.newPage({viewport: {width, height: 900}});
       const address = base + '/?lang=' + lang + '&chat=' + chat;
       const response = await cold.goto(address);
       assert.equal(response.status(), 503);
@@ -549,7 +550,8 @@ async function run() {
     assert.equal(workerBanner.options.silent, true);
     assert.deepEqual(workerBanner.options.data, {engine, account, conversation: other, message: next.id});
     await until(async () => (await total('alerts')) === previousAlerts + 2, 'independent browser profiles');
-    const [worker] = mobile.serviceWorkers();
+    const worker = mobile.serviceWorkers().find(worker => new URL(worker.url()).pathname === '/ui/notification-worker.js');
+    assert(worker, 'the activated worker belongs to notification delivery');
     const target = '#message-timeline [data-message-id="' + next.id + '"]';
     await mobilePage.evaluate(() => { window.notificationClickPreservedPage = true; });
     assert.deepEqual(await clickWorkerBanner(worker, workerBanner.options.data), {closed: true, focused: true, destination: undefined});
@@ -662,7 +664,7 @@ async function run() {
     assert.equal(await tone.textContent(), 'Oiê');
     await toneProfile.close();
 
-    const nativeProfile = await browser.newContext();
+    const nativeProfile = await browser.newContext({serviceWorkers: 'block'});
     const nativePage = await nativeProfile.newPage();
     nativePage.on('pageerror', error => errors.push(error.message));
     await nativePage.addInitScript(() => {
@@ -720,12 +722,16 @@ async function run() {
       localStorage.setItem('oie.notifications.sound', '0');
       window.Notification = class { static permission = 'granted'; };
       window.banners = 0;
-      navigator.serviceWorker.register = () => new Promise(resolve => {
-        window.finishRegistration = () => resolve({
-          active: true,
-          showNotification: async () => { window.banners++; }
+      const register = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      navigator.serviceWorker.register = (script, options) => {
+        if (new URL(script, location.origin).pathname !== '/ui/notification-worker.js') return register(script, options);
+        return new Promise(resolve => {
+          window.finishRegistration = () => resolve({
+            active: true,
+            showNotification: async () => { window.banners++; }
+          });
         });
-      });
+      };
     });
     await dndPage.goto(base + '/?lang=en');
     await dndPage.waitForFunction(() => window.OieEvents.connected);

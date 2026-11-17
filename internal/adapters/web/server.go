@@ -178,6 +178,8 @@ type connectionView struct {
 }
 type view struct {
 	BrowserPush          bool
+	OfflineHistory       bool
+	OfflineEngineStatus  string
 	HostedSignIn         bool
 	RemoteSignInURL      string
 	AccountAvatarBorders map[string]string
@@ -274,6 +276,8 @@ type view struct {
 }
 
 type copy struct {
+	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing string
+
 	ConversationRemoved string
 
 	SignInLabel, SignInRejected, SignInUnavailable, SignOutLabel, SignOutTitle, SignOutDescription                                 string
@@ -941,7 +945,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if serveEmojiAsset(w, r) {
+	if s.serveOfflineHistory(w, r) || serveEmojiAsset(w, r) {
 		return
 	}
 	if s.serveBrand(w, r) {
@@ -1110,6 +1114,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.EngineMode = s.engineMode
 	v.HostedSignIn = s.createHostedKey != nil
 	v.BrowserPush = s.pushService != nil
+	v.OfflineHistory = s.offlineHistoryEnabled()
 	v.Diagnostics = s.diagnostics != nil
 	v.RemoteDiagnostics = v.Diagnostics && s.diagnostics.remote != nil
 	v.configureWorkspace(r)
@@ -1153,7 +1158,21 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		req.Header.Set("Accept-Language", v.Locale)
 		return nil
 	}
-	engine, err := s.client.GetEngineWithResponse(ctx, editor)
+	rawEngine, err := s.client.GetEngine(ctx, editor)
+	if err != nil {
+		v.OfflineEngineStatus = "unavailable"
+		v.Unavailable = true
+		return
+	}
+	switch rawEngine.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		v.OfflineEngineStatus = "denied"
+	default:
+		if transientEngineStatus(rawEngine.StatusCode) {
+			v.OfflineEngineStatus = "unavailable"
+		}
+	}
+	engine, err := engineapi.ParseGetEngineResponse(rawEngine)
 	if err != nil || engine.JSON200 == nil {
 		if err == nil {
 			v.RemoteSignInURL = s.remoteSignIn(ctx, engine.ApplicationproblemJSON401)
@@ -1162,13 +1181,13 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.EngineID = engine.JSON200.Id
+	v.EventCursor = engine.JSON200.EventCursor
 	if notificationEngine != "" && notificationEngine != v.EngineID {
 		v.NotFound = true
 		v.ChatOpen = true
 		return
 	}
 	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
-	v.EventCursor = engine.JSON200.EventCursor
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
 	v.Role = engine.JSON200.Role
 	if infoOnly && v.InfoView == "participants" {
@@ -1595,6 +1614,14 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
 	if v.CompactSource {
 		buf = encodeSourceFragment(w, r, buf)
+	}
+	if v.OfflineHistory && r.URL.Path == "/" {
+		if v.OfflineEngineStatus != "" {
+			w.Header().Set("X-Oie-Offline-History", v.OfflineEngineStatus)
+		} else if validOperationKey(v.EngineID) {
+			w.Header().Set("X-Oie-Offline-History", v.EngineID)
+			w.Header().Set("X-Oie-Offline-Cursor", v.EventCursor)
+		}
 	}
 	if v.NotFound {
 		w.WriteHeader(http.StatusNotFound)

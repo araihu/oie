@@ -49,7 +49,10 @@ async function messageRetractionFlow({base, api, until, send, alicePage, bobPage
     const before = await composer.boundingBox();
     await open();
     await dialog.getByRole('button', {name: 'Retract message', exact: true}).click();
-    await pending;
+    await Promise.race([pending, response.then(result => {
+      if (result instanceof Error) throw result;
+      throw new Error('Retraction reached the server before the test could pause the request');
+    })]);
     await dialog.getByText('Requesting retraction…', {exact: true}).waitFor();
     const frames = await alicePage.evaluate(async () => {
       const positions = [];
