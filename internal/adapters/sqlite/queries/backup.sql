@@ -97,3 +97,10 @@ WHERE message_id IN (SELECT message_id FROM recovered_sends WHERE conversation_i
 UPDATE recovered_send_operations SET result=oie_strip_expired_outbound_quote(result)
 WHERE message_id IN (SELECT message_id FROM recovered_sends WHERE conversation_id=sqlc.arg(owner_id))
   AND json_extract(result,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(sqlc.arg(expired_ids) AS TEXT)));
+
+-- name: RememberOwnOrigin :exec
+INSERT INTO restored_own_echoes (account_id,conversation_id,message_id)
+SELECT c.account_id,c.id,sqlc.arg(message_id) FROM conversations c
+WHERE c.account_id=sqlc.arg(account_id) AND c.address=sqlc.arg(address)
+  AND json_extract(c.payload,'$.Kind')=sqlc.arg(kind)
+ON CONFLICT DO NOTHING;

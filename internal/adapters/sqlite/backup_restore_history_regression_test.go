@@ -77,21 +77,30 @@ func TestBackupRestoreRejectsPromotionWithLocalDirectTraffic(t *testing.T) {
 }
 
 func TestBackupRestoreScrubsExpiredQuoteWithLateMetadata(t *testing.T) {
-	for _, divergent := range []bool{false, true} {
-		t.Run(fmt.Sprintf("divergent=%t", divergent), func(t *testing.T) {
+	const secret = "source copy containing a private quotation"
+	const quote = "> " + secret + "\n"
+	const answer = "retained answer"
+	for _, tc := range []struct {
+		name      string
+		localText string
+		wantText  string
+	}{
+		{name: "shared revision", wantText: answer},
+		{name: "new revision with the same body", localText: quote + answer, wantText: answer},
+		{name: "new revision with different content", localText: "a newer local revision", wantText: "a newer local revision"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			source, engine, chat := outboxFixture(t)
 			ctx := t.Context()
 			now := time.Now().UTC()
 			ref := domain.MessageReference{Scope: "sender:bob@localhost", Author: "bob@localhost", ID: "expired-archive-quote"}
-			const secret = "source copy containing a private quotation"
-			quote := "> " + secret + "\n"
-			reply := replySeed(t, source, chat, quote+"retained answer", now, nil, nil)
+			reply := replySeed(t, source, chat, quote+answer, now, nil, nil)
 			dest := copyRestoreFixture(t, source)
 			want := reply
-			want.OriginalText = "retained answer"
-			if divergent {
-				want = addBackupMessageRevision(t, dest, reply, "a newer local revision", now.Add(time.Second))
+			if tc.localText != "" {
+				want = addBackupMessageRevision(t, dest, reply, tc.localText, now.Add(time.Second))
 			}
+			want.OriginalText = tc.wantText
 			original := replySeed(t, source, chat, secret, now.AddDate(0, 0, -9), []domain.MessageReference{ref}, nil)
 			reply.ReplyReference = &domain.ReplyReference{Target: ref, Fallback: []domain.TextRange{{Start: 0, End: len(quote)}}}
 			if err := source.ReceiveMessage(ctx, chat, reply, migrationID()); err != nil {
@@ -104,7 +113,7 @@ func TestBackupRestoreScrubsExpiredQuoteWithLateMetadata(t *testing.T) {
 			if count, err := source.PurgeExpiredHistory(ctx, now, func() (domain.ID, error) { return migrationID(), nil }); err != nil || count != 1 {
 				t.Fatalf("purge fixture: %d, %v", count, err)
 			}
-			if got, err := source.Message(ctx, reply.ID); err != nil || got.OriginalText != "retained answer" || got.Reply == nil || !got.Reply.OriginalExpired {
+			if got, err := source.Message(ctx, reply.ID); err != nil || got.OriginalText != answer || got.Reply == nil || !got.Reply.OriginalExpired {
 				t.Fatalf("source quote was not scrubbed: %+v, %v", got, err)
 			}
 			manifest, archive, scratch := backupRestoreFixture(t, source, false)
@@ -118,7 +127,7 @@ func TestBackupRestoreScrubsExpiredQuoteWithLateMetadata(t *testing.T) {
 			if err != nil || got.RevisionID != want.RevisionID || got.OriginalText != want.OriginalText {
 				t.Fatalf("restore exposed the quote or replaced the destination revision: %+v, %v", got, err)
 			}
-			if !divergent && (got.Reply == nil || !got.Reply.OriginalExpired || got.Reply.BodyText != want.OriginalText) {
+			if tc.wantText == answer && (got.Reply == nil || !got.Reply.OriginalExpired || got.Reply.BodyText != answer) {
 				t.Fatalf("unexpected reply projection after redaction: %+v", got.Reply)
 			}
 			for _, table := range []string{"messages", "message_revisions", "conversation_revisions", "changes"} {
@@ -127,6 +136,87 @@ func TestBackupRestoreScrubsExpiredQuoteWithLateMetadata(t *testing.T) {
 					Scan(&copies); err != nil || copies != 0 {
 					t.Errorf("expired quote copies in %s: %d, %v", table, copies, err)
 				}
+			}
+		})
+	}
+}
+
+func TestBackupRestoreUsesDiscardedReferenceWithinDestinationRetention(t *testing.T) {
+	source, engine, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	ref := domain.MessageReference{Scope: "sender:bob@localhost", Author: "bob@localhost", ID: "discarded-archive-quote"}
+	const secret = "quotation from a message outside retention"
+	const quote = "> " + secret + "\n"
+	const answer = "retained answer"
+	reply := replySeed(t, source, chat, quote+answer, now, nil, nil)
+	restricted, wider, retained := copyRestoreFixture(t, source), copyRestoreFixture(t, source), copyRestoreFixture(t, source)
+	original := replySeed(t, retained, chat, secret, now.AddDate(0, 0, -9), []domain.MessageReference{ref}, nil)
+	olderManifest, olderArchive, olderScratch := backupRestoreFixture(t, retained, false)
+
+	reply.ReplyReference = &domain.ReplyReference{Target: ref, Fallback: []domain.TextRange{{Start: 0, End: len(quote)}}}
+	if err := source.ReceiveMessage(ctx, chat, reply, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	days := 7
+	if _, err := engine.SetConversationRetention(ctx, chat.ID, "0", &days); err != nil {
+		t.Fatal(err)
+	}
+	original.ReceivedAt = now
+	if err := source.ReceiveMessage(ctx, chat, original, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := source.Message(ctx, reply.ID); err != nil || got.OriginalText != answer || got.Reply == nil || !got.Reply.OriginalExpired {
+		t.Fatalf("source quote was not scrubbed after ingest discarded the target: %+v, %v", got, err)
+	}
+	if _, err := source.Message(ctx, original.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("archive ingest unexpectedly retained the original: %v", err)
+	}
+	manifest, archive, scratch := backupRestoreFixture(t, source, false)
+
+	for _, tc := range []struct {
+		name      string
+		store     *Store
+		days      int
+		wantScrub bool
+	}{
+		{name: "cutoff excludes original", store: restricted, days: 7, wantScrub: true},
+		{name: "cutoff allows original", store: wider, days: 14},
+		{name: "original already retained", store: retained, days: 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			destinationEngine := testRestoreEngine(t, tc.store)
+			policy, err := destinationEngine.SetConversationRetention(ctx, chat.ID, "0", &tc.days)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tc.store.mergeBackup(ctx, archive, scratch, manifest, now); err != nil {
+				t.Fatal(err)
+			}
+			got, err := tc.store.Message(ctx, reply.ID)
+			if err != nil || got.RevisionID != reply.RevisionID {
+				t.Fatalf("restore lost the reply revision: %+v, %v", got, err)
+			}
+			discarded, err := expiredReplyReference(ctx, tc.store.read, chat.ID, ref)
+			if err != nil || discarded != tc.wantScrub {
+				t.Fatalf("unexpected discarded reference at destination: %t, %v", discarded, err)
+			}
+			if tc.wantScrub {
+				if got.OriginalText != answer || got.Reply == nil || !got.Reply.OriginalExpired {
+					t.Fatalf("discarded target left a quoted body in the reply: %+v", got)
+				}
+				widenedDays := 14
+				if _, err := destinationEngine.SetConversationRetention(ctx, chat.ID, policy.Revision, &widenedDays); err != nil {
+					t.Fatal(err)
+				}
+			} else if got.OriginalText != quote+answer {
+				t.Fatalf("restore erased a quote permitted by the destination: %+v", got)
+			}
+			if _, err := tc.store.mergeBackup(ctx, olderArchive, olderScratch, olderManifest, now); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := tc.store.Message(ctx, original.ID); err != nil || got.OriginalText != secret {
+				t.Fatalf("discarded reference blocked recovery of the original: %+v, %v", got, err)
 			}
 		})
 	}

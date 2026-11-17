@@ -1,13 +1,39 @@
--- Keep evidence under the authenticated scope even if the corresponding
--- original send is absent or the echo was outside destination retention.
-INSERT INTO restored_own_echoes
-SELECT b.account_id,b.conversation_id,b.provider_id FROM backup.messages b
-JOIN restore_chats x ON x.id=b.conversation_id
-JOIN conversations c ON c.id=x.id AND c.account_id=b.account_id
-WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
-  AND b.provider_id GLOB '????????-????-7???-[89ab]???-????????????'
-  AND length(replace(b.provider_id,'-',''))=32
-  AND replace(b.provider_id,'-','') NOT GLOB '*[^0-9a-f]*'
+-- Use the same scoped proof for queue eligibility and operation-key reservation.
+-- The original wire ID may survive only as a direct sender reference after
+-- the witness's own retention has removed its local message row.
+WITH proofs(account_id,conversation_id,wire_id) AS (
+    SELECT b.account_id,b.conversation_id,b.provider_id FROM backup.messages b
+    JOIN restore_chats x ON x.id=b.conversation_id
+    JOIN conversations c ON c.id=x.id AND c.account_id=b.account_id
+    WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
+    UNION
+    SELECT d.account_id,d.conversation_id,d.provider_id FROM messages d
+    JOIN restore_chats x ON x.id=d.conversation_id
+    WHERE d.is_own=1 AND d.state='submitted' AND d.id<>d.provider_id
+    UNION
+    SELECT c.account_id,c.id,r.remote_id FROM message_retractions r
+    JOIN conversations c ON c.account_id=r.account_id AND c.address=r.address
+    JOIN restore_chats x ON x.id=c.id
+    JOIN accounts a ON a.id=c.account_id
+    WHERE r.kind='direct' AND json_extract(c.payload,'$.Kind')='direct'
+      AND r.scope='xmpp:correct:sender:'||a.address
+    UNION
+    SELECT c.account_id,c.id,e.remote_id FROM backup.expired_message_references e
+    JOIN restore_chats x ON x.id=e.conversation_id
+    JOIN conversations c ON c.id=x.id JOIN accounts a ON a.id=c.account_id
+    WHERE json_extract(c.payload,'$.Kind')='direct'
+      AND e.scope='sender:'||a.address AND e.author=a.address
+    UNION
+    SELECT c.account_id,c.id,e.remote_id FROM backup.discarded_message_references e
+    JOIN conversations c ON c.account_id=e.account_id AND c.address=e.address
+    JOIN restore_chats x ON x.id=c.id JOIN accounts a ON a.id=c.account_id
+    WHERE e.kind='direct' AND json_extract(c.payload,'$.Kind')='direct'
+      AND e.scope='sender:'||a.address AND e.author=a.address
+)
+INSERT INTO restored_own_echoes SELECT account_id,conversation_id,wire_id FROM proofs
+WHERE wire_id GLOB '????????-????-7???-[89ab]???-????????????'
+  AND length(replace(wire_id,'-',''))=32
+  AND replace(wire_id,'-','') NOT GLOB '*[^0-9a-f]*'
 ON CONFLICT DO NOTHING;
 
 -- The send state is evidence even if its history has expired at the destination.
@@ -40,16 +66,6 @@ WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id AND (
     OR EXISTS(SELECT 1 FROM recovered_sends p
               WHERE p.message_id=b.provider_id AND p.conversation_id=b.conversation_id)
 )
-ON CONFLICT(id) DO NOTHING;
-
-INSERT INTO restore_send_evidence
-SELECT m.id,'unknown',r.retracted_at,NULL FROM messages m
-JOIN restore_chats x ON x.id=m.conversation_id
-JOIN conversations c ON c.id=m.conversation_id
-JOIN accounts a ON a.id=c.account_id
-JOIN message_retractions r ON r.account_id=m.account_id AND r.address=c.address AND r.kind='direct'
-  AND r.scope='xmpp:correct:sender:'||a.address AND r.remote_id=m.id
-WHERE m.is_own=1 AND m.state='queued' AND json_extract(c.payload,'$.Kind')='direct'
 ON CONFLICT(id) DO NOTHING;
 
 -- Previously restored proof may survive after the echo's history expired.

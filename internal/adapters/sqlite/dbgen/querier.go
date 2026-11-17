@@ -252,6 +252,7 @@ type Querier interface {
 	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error)
+	RememberOwnOrigin(ctx context.Context, arg RememberOwnOriginParams) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveBackupRoomPasswords(ctx context.Context) error
 	RemoveDownloadGarbage(ctx context.Context, arg RemoveDownloadGarbageParams) error

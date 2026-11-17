@@ -273,6 +273,31 @@ func (q *Queries) RecoveredSendHasDestinationEvidence(ctx context.Context, arg R
 	return column_1, err
 }
 
+const rememberOwnOrigin = `-- name: RememberOwnOrigin :exec
+INSERT INTO restored_own_echoes (account_id,conversation_id,message_id)
+SELECT c.account_id,c.id,?1 FROM conversations c
+WHERE c.account_id=?2 AND c.address=?3
+  AND json_extract(c.payload,'$.Kind')=?4
+ON CONFLICT DO NOTHING
+`
+
+type RememberOwnOriginParams struct {
+	MessageID string
+	AccountID string
+	Address   string
+	Kind      string
+}
+
+func (q *Queries) RememberOwnOrigin(ctx context.Context, arg RememberOwnOriginParams) error {
+	_, err := q.db.ExecContext(ctx, rememberOwnOrigin,
+		arg.MessageID,
+		arg.AccountID,
+		arg.Address,
+		arg.Kind,
+	)
+	return err
+}
+
 const removeBackupRoomPasswords = `-- name: RemoveBackupRoomPasswords :exec
 DELETE FROM room_invitation_credentials
 `

@@ -75,6 +75,7 @@ type Message struct {
 	IsOwn                                     bool
 	SendState                                 string
 	ProviderID                                string
+	OwnOriginID                               ID     `json:"-"` // Verified original wire ID from an own echo.
 	ReadReceiptID                             string `json:",omitempty"`
 	ArchiveScope, ArchiveID                   string
 	Historical                                bool

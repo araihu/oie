@@ -4,7 +4,7 @@ WITH required(name) AS (
     ('message_star_revisions'), ('message_stars'), ('archive_aliases'), ('message_references'),
     ('message_replies'), ('message_sender_identities'), ('message_retractions'), ('room_message_moderation'),
     ('message_edit_commands'), ('message_correction_facts'), ('message_content_heads'), ('message_canonical_aliases'), ('expired_message_ids'),
-    ('expired_message_references'), ('staged_attachments'), ('avatars'), ('avatar_revisions'), ('contacts'),
+    ('expired_message_references'), ('discarded_message_references'), ('staged_attachments'), ('avatars'), ('avatar_revisions'), ('contacts'),
     ('contact_revisions'), ('account_communication_preferences'), ('conversation_read_revisions'),
     ('conversation_read_states'), ('message_reads'), ('message_previews'), ('preview_revisions'), ('media_files'),
     ('device_downloads'), ('download_devices'), ('shared_content'), ('shared_content_state')

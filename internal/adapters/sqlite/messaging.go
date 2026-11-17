@@ -467,6 +467,11 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	// Existing chats can retain own transmission evidence independently of
+	// the message, including when the retention cutoff discards its body.
+	if err := rememberOwnOrigin(ctx, q, c, m); err != nil {
+		return err
+	}
 	if !m.ReceivedAt.IsZero() {
 		days, err := retentionDays(ctx, q, c.AccountID, c.Address, c.Kind)
 		if err != nil {
@@ -549,6 +554,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			c.Request = domain.MessageRequest
 		}
 		c, err = insertConversation(ctx, q, c)
+		if err == nil {
+			err = rememberOwnOrigin(ctx, q, c, m)
+		}
 	}
 	if err != nil {
 		return err

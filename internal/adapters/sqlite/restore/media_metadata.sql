@@ -23,6 +23,11 @@ WITH eligible AS (
     JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
         AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
     WHERE (destination.device_id IS NULL OR (destination.generation=0 AND source.generation=0))
+      -- Settings claims legacy originals before clearing the real device.
+      -- Older archives lack the identity of the device that claimed them.
+      AND (f.device_id<>'legacy' OR NOT EXISTS (
+          SELECT 1 FROM download_devices d WHERE d.device_id NOT IN ('','legacy') AND d.generation>0
+      ))
       AND (COALESCE(destination.days,source.days)=0
            OR f.downloaded_at_ms>CAST(@now_ms AS INTEGER)-COALESCE(destination.days,source.days)*86400000)
 ), matching_messages AS (
@@ -64,23 +69,22 @@ WHERE f.kind='image' AND source.download_state='ready' AND json_extract(source.p
       ))
   ));
 
--- Preview rows are a cache. If referenced files are missing, let the engine
--- derive a fresh preview from the restored message, with a usable download
--- action. Queued or interrupted downloads belong to the original profile.
+-- A verified original can be used without its derived thumbnail or favicon.
+-- For other incomplete previews, let the engine derive a fresh cache entry.
 INSERT INTO message_previews
-SELECT p.* FROM backup.message_previews p JOIN restore_messages x ON x.id=p.message_id
-WHERE p.download_state NOT IN ('queued','downloading')
-AND (
-    COALESCE(json_extract(p.payload,'$.ImageHash'),'')=''
-    OR EXISTS (SELECT 1 FROM restore_media_files f WHERE f.name='media/images/'||json_extract(p.payload,'$.ImageHash'))
-)
-AND (
-    COALESCE(json_extract(p.payload,'$.FaviconHash'),'')=''
-    OR EXISTS (SELECT 1 FROM restore_media_files f WHERE f.name='media/images/'||json_extract(p.payload,'$.FaviconHash'))
-)
-AND (
-    p.download_state<>'ready' AND COALESCE(json_extract(p.payload,'$.FileHash'),'')=''
-    OR EXISTS (SELECT 1 FROM restore_downloads f WHERE f.kind='image' AND f.source_id=p.id)
+SELECT p.id,p.revision_id,p.account_id,p.conversation_id,p.message_id,p.url,p.state,p.download_state,p.updated_at,
+       CASE WHEN p.download_state='ready' THEN json_set(p.payload,
+           '$.ImageHash',COALESCE(thumbnail.hash,''),'$.FaviconHash',COALESCE(favicon.hash,'')) ELSE p.payload END
+FROM backup.message_previews p JOIN restore_messages x ON x.id=p.message_id
+LEFT JOIN restore_media_files thumbnail ON thumbnail.name='media/images/'||json_extract(p.payload,'$.ImageHash')
+LEFT JOIN restore_media_files favicon ON favicon.name='media/images/'||json_extract(p.payload,'$.FaviconHash')
+WHERE (p.download_state='ready' AND EXISTS (
+    SELECT 1 FROM restore_downloads f WHERE f.kind='image' AND f.source_id=p.id
+      AND f.hash=json_extract(p.payload,'$.FileHash')
+)) OR (
+    p.download_state NOT IN ('ready','queued','downloading') AND COALESCE(json_extract(p.payload,'$.FileHash'),'')=''
+    AND (thumbnail.hash IS NOT NULL OR COALESCE(json_extract(p.payload,'$.ImageHash'),'')='')
+    AND (favicon.hash IS NOT NULL OR COALESCE(json_extract(p.payload,'$.FaviconHash'),'')='')
 )
 ON CONFLICT DO NOTHING;
 INSERT INTO preview_revisions

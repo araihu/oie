@@ -33,10 +33,11 @@ func backupCorrectionFacts(ctx context.Context, tx *sql.Tx) ([]restoreFact, erro
 }
 
 func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, facts []restoreFact, now time.Time) error {
-	if _, err := tx.ExecContext(ctx, restoreScript("exclusions")); err != nil {
+	cutoffTime := sql.Named("now_ms", now.UnixMilli())
+	if _, err := tx.ExecContext(ctx, restoreScript("exclusions"), cutoffTime); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, restoreScript("redacted_quotes")); err != nil {
+	if _, err := tx.ExecContext(ctx, restoreScript("redacted_quotes"), cutoffTime); err != nil {
 		return err
 	}
 	for _, fact := range facts {

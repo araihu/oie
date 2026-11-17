@@ -1,14 +1,18 @@
 package sqlite
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/mediafiles"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
@@ -47,6 +51,61 @@ func TestBackupRestoreRebindsDownloadedImageAfterOpeningMessage(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(destination.dir, "media", "images", preview.FileHash)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBackupRestoreRestoresOriginalImageWithMissingDerivative(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	preview, device := seedBackupDownloadedImage(t, source, chat, now)
+	images := filepath.Join(source.dir, "media", "images")
+	derivative := func(size int) domain.MediaFile {
+		t.Helper()
+		var data bytes.Buffer
+		if err := png.Encode(&data, image.NewRGBA(image.Rect(0, 0, size, size))); err != nil {
+			t.Fatal(err)
+		}
+		file, err := mediafiles.New(images).Put(ctx, data.Bytes(), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := source.SaveMediaFile(ctx, file, now); err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	thumbnail, favicon := derivative(3), derivative(4)
+	parent := preview.RevisionID
+	preview.RevisionID, preview.ImageHash, preview.FaviconHash = migrationID(), thumbnail.Hash, favicon.Hash
+	if err := source.SavePreview(ctx, preview, parent); err != nil {
+		t.Fatal(err)
+	}
+	// Export tolerates a derivative cache file missing from a retained preview.
+	if err := os.Remove(filepath.Join(images, thumbnail.Hash)); err != nil {
+		t.Fatal(err)
+	}
+	manifest, archive, scratch := backupRestoreFixture(t, source, true)
+	destination, err := Open(ctx, t.TempDir(), migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = destination.Close() })
+	if result, err := destination.mergeBackup(ctx, archive, scratch, manifest, now); err != nil || result.MediaFiles != 2 {
+		t.Fatalf("valid original and favicon were not restored: %+v, %v", result, err)
+	}
+	got, err := destination.Preview(ctx, preview.ID)
+	if err != nil || got.Kind != "image" || got.State != "ready" || got.DownloadState != "ready" ||
+		got.ImageHash != "" || got.FaviconHash != favicon.Hash || got.FileHash != preview.FileHash {
+		t.Fatalf("restored preview did not reflect the available files: %+v, %v", got, err)
+	}
+	if policy, err := destination.DownloadPolicy(ctx, device); err != nil || policy.Count != 1 {
+		t.Fatalf("the restored original lost its device membership: %+v, %v", policy, err)
+	}
+	for _, hash := range []string{preview.FileHash, favicon.Hash} {
+		if _, err := os.Stat(filepath.Join(destination.dir, "media", "images", hash)); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

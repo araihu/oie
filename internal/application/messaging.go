@@ -643,6 +643,12 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 	if in.IsOwn {
 		m.Sender.ID = a.ID
 		m.SendState = "submitted"
+		if in.Correction == nil || in.Correction.TargetID == "" {
+			m.OwnOriginID, _ = domain.ParseID(string(in.CanonicalID))
+			if m.OwnOriginID == "" && in.Kind == "direct" {
+				m.OwnOriginID, _ = domain.ParseID(in.ProviderID)
+			}
+		}
 	}
 	if err = r.ReceiveMessage(ctx, c, m, ids[5]); err != nil {
 		return err

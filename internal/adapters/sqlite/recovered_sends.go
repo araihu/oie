@@ -180,3 +180,13 @@ func scrubRecoveredSendQuotes(ctx context.Context, q *dbgen.Queries, conversatio
 	}
 	return q.ScrubRecoveredSendReceipts(ctx, dbgen.ScrubRecoveredSendReceiptsParams{OwnerID: conversation, ExpiredIds: excluded})
 }
+
+func rememberOwnOrigin(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, m domain.Message) error {
+	if m.OwnOriginID == "" {
+		return nil
+	}
+	return q.RememberOwnOrigin(ctx, dbgen.RememberOwnOriginParams{
+		MessageID: string(m.OwnOriginID), AccountID: string(chat.AccountID),
+		Address: chat.Address, Kind: chat.Kind,
+	})
+}
