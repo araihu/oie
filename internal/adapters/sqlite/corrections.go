@@ -23,6 +23,14 @@ func init() {
 		text, _ := args[0].(string)
 		return bodyHash(text), nil
 	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_attachment_wire_matches", 4, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		var m domain.Message
+		m.OriginalText, _ = args[0].(string)
+		m.AttachmentWireText, _ = args[1].(string)
+		m.WireBodySHA256, _ = args[2].(string)
+		body, _ := args[3].(string)
+		return number(m.MatchesAttachmentWireBody(body)), nil
+	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_outbound_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		payload, _ := args[0].(string)
 		var m domain.Message

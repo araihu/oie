@@ -78,6 +78,34 @@ func (m Message) SourceBodyHash() string {
 	return hex.EncodeToString(sum[:])
 }
 
+// MatchesWireBody recognizes a retained message before or after quote removal.
+func (m Message) MatchesWireBody(body string) bool {
+	return m.OriginalText == body ||
+		(m.WireBodySHA256 != "" && (Message{OriginalText: body}).SourceBodyHash() == m.WireBodySHA256) ||
+		m.MatchesAttachmentWireBody(body)
+}
+
+// MatchesAttachmentWireBody verifies the caption and all uploaded URLs.
+func (m Message) MatchesAttachmentWireBody(body string) bool {
+	if m.AttachmentWireText == "" {
+		return false
+	}
+	if m.AttachmentWireText == body {
+		return true
+	}
+	if m.WireBodySHA256 == "" {
+		return false
+	}
+	// Attachment sending appends URLs to the caption. Quote removal changes
+	// the caption and keeps those exact URLs and the old caption's hash.
+	suffix, ok := strings.CutPrefix(m.AttachmentWireText, m.OriginalText)
+	if !ok || suffix == "" {
+		return false
+	}
+	caption, ok := strings.CutSuffix(body, suffix)
+	return ok && (Message{OriginalText: caption}).SourceBodyHash() == m.WireBodySHA256
+}
+
 func ReplyExcerpt(text string) string {
 	remaining := 512
 	for i := range text {

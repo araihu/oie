@@ -113,6 +113,7 @@ type Querier interface {
 	GetTimelineMessage(ctx context.Context, id string) (Message, error)
 	GetVisibleMessage(ctx context.Context, id string) (Message, error)
 	HasAcceptedDirectHistory(ctx context.Context, conversationID string) (bool, error)
+	HasArchivedAttachmentWireBody(ctx context.Context, arg HasArchivedAttachmentWireBodyParams) (bool, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
 	HasOwnTransmissionEvidence(ctx context.Context, arg HasOwnTransmissionEvidenceParams) (int64, error)
 	HasRecoveredSendReceipt(ctx context.Context, operationID string) (bool, error)

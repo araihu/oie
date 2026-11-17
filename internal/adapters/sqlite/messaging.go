@@ -572,6 +572,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if !m.IsOwn {
 		m.Sender.ID = c.PeerID
 	}
+	if err = matchArchivedAttachmentWireBody(ctx, q, c, &m); err != nil {
+		return err
+	}
 	if m.ProviderID != "" {
 		var existing dbgen.Message
 		existing, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
@@ -628,6 +631,23 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 	}
 	return tx.Commit()
+}
+
+func matchArchivedAttachmentWireBody(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, echo *domain.Message) error {
+	origin := string(echo.OwnOriginID)
+	if chat.Kind != "room" || !echo.Historical || echo.ArchiveID == "" || !echo.IsOwn || origin == "" || echo.ProviderID == origin {
+		return nil
+	}
+	// A retained local upload attempt can have a different URL from the same
+	// send on another copy of the data. Match its prior wire body under the
+	// ingress write lock while keeping the current message and revision intact.
+	matched, err := q.HasArchivedAttachmentWireBody(ctx, dbgen.HasArchivedAttachmentWireBodyParams{
+		MessageID: origin, AccountID: string(chat.AccountID), ConversationID: string(chat.ID), WireBody: echo.OriginalText,
+	})
+	if matched {
+		echo.ProviderID = origin
+	}
+	return err
 }
 
 func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, echo *domain.Message, revision domain.ID) error {

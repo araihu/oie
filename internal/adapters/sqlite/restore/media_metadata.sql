@@ -17,12 +17,16 @@ CREATE TEMP TABLE restore_eligible_downloads AS
 SELECT f.*, CASE
     WHEN proof.cleanup_revision_id IS NOT NULL THEN proof.cleanup_revision_id
     WHEN source.generation>0 AND source.has_membership_proofs=0 THEN ''
-END AS cleanup_revision_id,
+END AS cleanup_revision_id,@source_engine AS source_engine_id,
     bytes.name IS NOT NULL AS has_bytes, source.generation, source.cleanup_revision,
-    COALESCE(destination.generation,0)=0 AND source.generation>0
-        AND (source.has_membership_proofs=0 OR proof.cleanup_revision_id='') AS defer_legacy
+    (COALESCE(destination.generation,0)=0 AND source.generation>0
+         AND (source.has_membership_proofs=0 OR proof.cleanup_revision_id=''))
+    OR (f.device_id='legacy' AND f.kind='image' AND source.generation=0 AND known.cleared=0) AS defer_legacy
 FROM backup.device_downloads f
 JOIN restore_download_devices source ON source.device_id=f.device_id
+CROSS JOIN (SELECT EXISTS(
+    SELECT 1 FROM download_devices d WHERE d.device_id NOT IN ('','legacy') AND d.generation>0
+) AS cleared) known
 LEFT JOIN download_devices destination ON destination.device_id=f.device_id
 LEFT JOIN download_cleanup_revisions cleanup ON cleanup.device_id=f.device_id AND cleanup.generation=destination.generation
 LEFT JOIN restore_download_membership_proofs proof ON proof.device_id=f.device_id AND proof.source_id=f.source_id
@@ -35,6 +39,10 @@ LEFT JOIN legacy_download_restore_admissions admission ON admission.device_id=f.
     AND admission.hash=f.hash AND admission.size=f.size AND admission.downloaded_at_ms=f.downloaded_at_ms
     AND admission.generation=source.generation AND admission.generation=destination.generation
     AND admission.cleanup_revision=source.cleanup_revision AND admission.cleanup_revision=COALESCE(cleanup.revision_id,'')
+LEFT JOIN unclaimed_legacy_download_restore_admissions unclaimed ON f.device_id='legacy' AND f.kind='image' AND source.generation=0
+    AND unclaimed.source_engine_id=@source_engine AND unclaimed.source_id=f.source_id
+    AND unclaimed.source_revision=f.source_revision AND unclaimed.hash=f.hash AND unclaimed.size=f.size
+    AND unclaimed.downloaded_at_ms=f.downloaded_at_ms
 WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision)
        OR admission.device_id IS NOT NULL)
   AND (source.generation=0 OR (proof.cleanup_revision_id<>'' AND proof.cleanup_revision_id=source.cleanup_revision)
@@ -43,9 +51,7 @@ WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND c
   AND (has_bytes=1 OR defer_legacy=1)
   -- Settings claims legacy originals before clearing the real device.
   -- Older archives lack the identity of the device that claimed them.
-  AND (f.device_id<>'legacy' OR NOT EXISTS (
-      SELECT 1 FROM download_devices d WHERE d.device_id NOT IN ('','legacy') AND d.generation>0
-  ))
+  AND (f.device_id<>'legacy' OR known.cleared=0 OR unclaimed.source_engine_id IS NOT NULL)
   AND (COALESCE(destination.days,source.days)=0
        OR f.downloaded_at_ms>CAST(@now_ms AS INTEGER)-COALESCE(destination.days,source.days)*86400000);
 
@@ -62,7 +68,7 @@ WHERE COALESCE(source_head.revision_id,source.revision_id)=COALESCE(local_head.r
 -- Remember legacy media that an untouched device could import already.
 -- Only a later snapshot with the same source and membership can fill it.
 CREATE TEMP TABLE restore_pending_legacy_downloads AS
-SELECT f.device_id,@source_engine AS source_engine_id,f.source_id,f.source_revision,
+SELECT f.device_id,f.source_engine_id,f.source_id,f.source_revision,
        f.kind,f.hash,f.size,f.downloaded_at_ms,f.generation,f.cleanup_revision
 FROM restore_eligible_downloads f
 WHERE f.defer_legacy=1 AND f.has_bytes=0 AND length(f.hash)=64 AND f.hash NOT GLOB '*[^0-9a-f]*' AND f.size>=0
@@ -122,7 +128,6 @@ WHERE f.kind='image' AND f.has_bytes=1 AND source.download_state='ready' AND jso
       ))
   ));
 DROP VIEW restore_matching_media_messages;
-DROP TABLE restore_eligible_downloads;
 
 -- A verified original can be used without its derived thumbnail or favicon.
 -- For other incomplete previews, let the engine derive a fresh cache entry.

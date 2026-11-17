@@ -60,6 +60,19 @@ AND NOT EXISTS (SELECT 1 FROM hidden_scheduled_messages h WHERE h.message_id=m.i
 -- name: FindProviderMessage :one
 -- Match the partial identity index used for messages with provider IDs.
 SELECT * FROM messages WHERE account_id=? AND conversation_id=? AND provider_id=? AND is_own=? AND provider_id<>'';
+-- name: HasArchivedAttachmentWireBody :one
+SELECT EXISTS (
+    SELECT 1 FROM messages AS m JOIN message_revisions AS r ON r.entity_id=m.id
+    WHERE m.id=sqlc.arg(message_id) AND m.provider_id=m.id AND m.is_own=1
+      AND m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversation_id)
+      AND json_extract(r.payload,'$.IsOwn')=1 AND json_extract(r.payload,'$.ProviderID')=m.id
+      AND json_extract(r.payload,'$.AccountID')=m.account_id
+      AND json_extract(r.payload,'$.ConversationID')=m.conversation_id
+      AND json_extract(r.payload,'$.SendState') IN ('submitted','failed')
+      AND json_extract(r.payload,'$.Attachments[0]') IS NOT NULL
+      AND oie_attachment_wire_matches(json_extract(r.payload,'$.OriginalText'), json_extract(r.payload,'$.AttachmentWireText'),
+          json_extract(r.payload,'$.WireBodySHA256'), CAST(sqlc.arg(wire_body) AS TEXT))=1
+);
 -- name: ListMessages :many
 SELECT m.* FROM messages AS m WHERE m.conversation_id=sqlc.arg(page_conversation_id)
 AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=m.conversation_id AND json_extract(c.payload,'$.Request') IS NULL)

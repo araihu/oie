@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
@@ -61,6 +62,14 @@ func TestBackupRestoreKeepsScheduledPlacementAfterLateRejection(t *testing.T) {
 }
 
 func TestBackupRestoreKeepsSubmittedAttachmentWireBodyForArchiveEcho(t *testing.T) {
+	for _, state := range []string{"submitted", "failed"} {
+		t.Run(state, func(t *testing.T) {
+			testBackupRestoreKeepsAttachmentWireBodyForArchiveEcho(t, state)
+		})
+	}
+}
+
+func testBackupRestoreKeepsAttachmentWireBodyForArchiveEcho(t *testing.T, state string) {
 	source, _, placeholder := outboxFixture(t)
 	engine, room := promoteBackupRoomFixture(t, source, placeholder)
 	engine.SetProtocols(&restoreAttachmentProtocol{})
@@ -98,6 +107,13 @@ func TestBackupRestoreKeepsSubmittedAttachmentWireBodyForArchiveEcho(t *testing.
 	if _, err := source.TransitionMessage(ctx, pending.ID, "dispatching", "submitted", migrationID(), sentAt, sentAt); err != nil {
 		t.Fatal(err)
 	}
+	wantImportedWire := archivedWire
+	if state == "failed" {
+		if err := engine.Reject(ctx, application.Rejected{AccountID: room.AccountID, MessageID: string(pending.ID), FromServer: true}); err != nil {
+			t.Fatal(err)
+		}
+		wantImportedWire = ""
+	}
 	localAt := sentAt.Add(-time.Minute)
 	recordWire(withWire, localAt, localWire)
 	if _, err := withWire.TransitionMessage(ctx, pending.ID, "dispatching", "queued", migrationID(), localAt, localAt); err != nil {
@@ -109,29 +125,57 @@ func TestBackupRestoreKeepsSubmittedAttachmentWireBodyForArchiveEcho(t *testing.
 		store *Store
 		wire  string
 	}{
-		{store: destination, wire: archivedWire},
+		{store: destination, wire: wantImportedWire},
 		{store: withWire, wire: localWire},
 	} {
 		if _, err := tc.store.mergeBackup(ctx, archive, scratch, manifest, sentAt.Add(time.Minute)); err != nil {
 			t.Fatal(err)
 		}
 		prior, err := tc.store.Message(ctx, pending.ID)
-		if err != nil || prior.SendState != "submitted" || prior.AttachmentWireText != tc.wire {
-			t.Fatalf("restore lost the authenticated wire body: %+v, %v", prior, err)
+		if err != nil || prior.SendState != state || prior.AttachmentWireText != tc.wire {
+			t.Fatalf("restore changed the expected state or wire body: %+v, %v", prior, err)
 		}
-	}
-	receiver := testRestoreEngine(t, destination)
-	receiver.SetProtocols(&outboundProtocol{})
-	if err := receiver.Receive(ctx, application.Incoming{
-		AccountID: room.AccountID, Address: room.Address, Kind: "room", Historical: true, IsOwn: true,
-		SenderAddress: "alice@localhost", CreatedAt: sentAt, OriginalText: archivedWire,
-		CanonicalID: pending.ID, ProviderID: "room:authenticated-own-attachment",
-		ArchiveScope: room.Address, ArchiveID: "own-attachment",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	items, err := destination.Messages(ctx, room.ID, "", 100)
-	if err != nil || len(items) != 1 || items[0].ID != pending.ID {
-		t.Fatalf("own archive replay duplicated the restored submission: %+v, %v", items, err)
+		receiver := testRestoreEngine(t, tc.store)
+		receiver.SetProtocols(&outboundProtocol{})
+		echo := application.Incoming{
+			AccountID: room.AccountID, Address: room.Address, Kind: "room", Historical: true, IsOwn: true,
+			SenderAddress: "alice@localhost", CreatedAt: sentAt, OriginalText: archivedWire,
+			CanonicalID: pending.ID, ProviderID: "room:authenticated-own-attachment",
+			ArchiveScope: room.Address, ArchiveID: "own-attachment",
+		}
+		if err := receiver.Receive(ctx, echo); err != nil {
+			t.Fatal(err)
+		}
+		items, err := tc.store.Messages(ctx, room.ID, "", 100)
+		if err != nil || len(items) != 1 || items[0].ID != pending.ID {
+			t.Fatalf("own archive replay duplicated the restored send: %+v, %v", items, err)
+		}
+		if got := items[0]; got.RevisionID != prior.RevisionID || got.OriginalText != prior.OriginalText ||
+			got.AttachmentWireText != prior.AttachmentWireText || got.SendState != prior.SendState {
+			t.Fatalf("own archive replay changed the retained message: before %+v, after %+v", prior, got)
+		}
+		alias, err := tc.store.queries.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(room.AccountID), Scope: room.Address, ArchiveID: echo.ArchiveID})
+		if err != nil || alias != string(pending.ID) {
+			t.Fatalf("archive ID points to %q, want %q, error %v", alias, pending.ID, err)
+		}
+		for _, unverified := range []application.Incoming{
+			{ProviderID: "room:other-body", ArchiveID: "other-body", IsOwn: true, OriginalText: "another upload"},
+			{ProviderID: "room:other-author", ArchiveID: "other-author", OriginalText: archivedWire, SenderAddress: "charlie@localhost"},
+			{ProviderID: "room:other-room", ArchiveID: "other-room", IsOwn: true, OriginalText: archivedWire, Address: "another-room@localhost"},
+		} {
+			if unverified.Address == "" {
+				unverified.Address = echo.Address
+			}
+			unverified.AccountID, unverified.Kind = echo.AccountID, echo.Kind
+			unverified.CreatedAt, unverified.Historical = echo.CreatedAt, echo.Historical
+			unverified.CanonicalID, unverified.ArchiveScope = echo.CanonicalID, unverified.Address
+			if err := receiver.Receive(ctx, unverified); err != nil {
+				t.Fatalf("receive unmatched archive message %q: %v", unverified.ArchiveID, err)
+			}
+			alias, err := tc.store.queries.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(room.AccountID), Scope: unverified.ArchiveScope, ArchiveID: unverified.ArchiveID})
+			if err != nil || alias == string(pending.ID) {
+				t.Fatalf("unmatched archive message %q points to %q, error %v", unverified.ArchiveID, alias, err)
+			}
+		}
 	}
 }

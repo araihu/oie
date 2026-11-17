@@ -18,22 +18,26 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, hasLegacyAdmissions bool, now time.Time) ([]string, error) {
+type restoreDownloadSchema struct {
+	cleanup, lineage, legacy, admissions, unclaimedAdmissions bool
+}
+
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, schema restoreDownloadSchema, now time.Time) ([]string, error) {
 	files := manifest.Files
 	if _, err := tx.ExecContext(ctx, restoreScript("media_download_devices")); err != nil {
 		return nil, fmt.Errorf("read backup download devices: %w", err)
 	}
-	if hasDownloadCleanup {
+	if schema.cleanup {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_cleanup")); err != nil {
 			return nil, fmt.Errorf("read backup download cleanup revisions: %w", err)
 		}
 	}
-	if hasDownloadLineage {
+	if schema.lineage {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_lineage")); err != nil {
 			return nil, fmt.Errorf("read backup download membership and cleanup lineage: %w", err)
 		}
 	}
-	if hasLegacyDownloads {
+	if schema.legacy {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_legacy")); err != nil {
 			return nil, fmt.Errorf("read legacy download memberships: %w", err)
 		}
@@ -43,9 +47,14 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 		sql.Named("source_engine", string(manifest.SourceEngine))); err != nil {
 		return nil, fmt.Errorf("restore media metadata: %w", err)
 	}
-	if hasLegacyAdmissions {
+	if schema.admissions {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_admissions")); err != nil {
 			return nil, fmt.Errorf("restore pending legacy download admissions: %w", err)
+		}
+	}
+	if schema.unclaimedAdmissions {
+		if _, err := tx.ExecContext(ctx, restoreScript("media_download_unclaimed_admissions")); err != nil {
+			return nil, fmt.Errorf("restore pending unclaimed legacy downloads: %w", err)
 		}
 	}
 	if err := updateRestoredImageDownloads(ctx, tx, now); err != nil {

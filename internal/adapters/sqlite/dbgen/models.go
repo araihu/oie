@@ -699,3 +699,12 @@ type StagedAttachment struct {
 	Size           int64
 	Sha256         string
 }
+
+type UnclaimedLegacyDownloadRestoreAdmission struct {
+	SourceEngineID string
+	SourceID       string
+	SourceRevision string
+	Hash           string
+	Size           int64
+	DownloadedAtMs int64
+}

@@ -46,8 +46,26 @@ INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind
 SELECT device_id,source_id,source_revision,kind FROM restore_downloads WHERE cleanup_revision_id='';
 
 INSERT INTO legacy_download_restore_admissions
-SELECT * FROM restore_pending_legacy_downloads WHERE TRUE ON CONFLICT DO NOTHING;
+SELECT * FROM restore_pending_legacy_downloads WHERE generation>0 ON CONFLICT DO NOTHING;
 
+INSERT INTO unclaimed_legacy_download_restore_admissions
+SELECT source_engine_id,source_id,source_revision,hash,size,downloaded_at_ms FROM restore_pending_legacy_downloads
+WHERE device_id='legacy' AND kind='image' AND generation=0 ON CONFLICT DO NOTHING;
+
+-- After completion, the live membership owns the bytes. The admission cannot
+-- reopen the placeholder if Settings later claims the image for a real device.
+DELETE FROM unclaimed_legacy_download_restore_admissions AS a WHERE EXISTS (
+    SELECT 1 FROM restore_eligible_downloads f
+    JOIN backup.message_previews b ON b.id=f.source_id
+    JOIN message_previews p ON p.message_id=b.message_id AND p.url=b.url
+    JOIN device_downloads d ON d.device_id=f.device_id AND d.kind=f.kind AND d.source_id=p.id
+        AND d.source_revision=f.source_revision AND d.hash=f.hash AND d.size=f.size
+    WHERE f.device_id='legacy' AND f.kind='image' AND f.has_bytes=1
+      AND f.source_engine_id=a.source_engine_id AND f.source_id=a.source_id AND f.source_revision=a.source_revision
+      AND f.hash=a.hash AND f.size=a.size AND f.downloaded_at_ms=a.downloaded_at_ms
+);
+
+DROP TABLE restore_eligible_downloads;
 DROP TABLE restore_downloads;
 DROP TABLE restore_pending_legacy_downloads;
 DROP TABLE restore_download_devices;

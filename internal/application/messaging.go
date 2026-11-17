@@ -559,11 +559,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
-		matchesBody := existing.OriginalText == in.OriginalText || existing.AttachmentWireText != "" && existing.AttachmentWireText == in.OriginalText
-		if existing.WireBodySHA256 != "" {
-			matchesBody = matchesBody || existing.WireBodySHA256 == (domain.Message{OriginalText: in.OriginalText}).SourceBodyHash()
-		}
-		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && matchesBody {
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.MatchesWireBody(in.OriginalText) {
 			chat, err := r.Conversation(ctx, existing.ConversationID)
 			if err != nil {
 				return err

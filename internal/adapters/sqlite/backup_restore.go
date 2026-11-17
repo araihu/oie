@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 46
+	newestRestoreSchema = 47
 )
 
 type RestoreSummary struct {
@@ -125,9 +125,10 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if hasRecoveredRows && !recoveredSchemaValid {
 		return result, errors.New("backup has an invalid recovered sends schema")
 	}
-	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, hasLegacyAdmissions, extendedSchemaValid bool
+	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, extendedSchemaValid bool
+	var downloads restoreDownloadSchema
 	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes,
-		&hasDownloadCleanup, &hasDownloadLineage, &hasLegacyDownloads, &hasLegacyAdmissions, &extendedSchemaValid); err != nil {
+		&downloads.cleanup, &downloads.lineage, &downloads.legacy, &downloads.admissions, &downloads.unclaimedAdmissions, &extendedSchemaValid); err != nil {
 		return result, err
 	}
 	if !extendedSchemaValid {
@@ -218,7 +219,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, hasLegacyAdmissions, now)
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest, downloads, now)
 	if err != nil {
 		return result, err
 	}

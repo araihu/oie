@@ -198,6 +198,40 @@ func (q *Queries) GetVisibleMessage(ctx context.Context, id string) (Message, er
 	return i, err
 }
 
+const hasArchivedAttachmentWireBody = `-- name: HasArchivedAttachmentWireBody :one
+SELECT EXISTS (
+    SELECT 1 FROM messages AS m JOIN message_revisions AS r ON r.entity_id=m.id
+    WHERE m.id=?1 AND m.provider_id=m.id AND m.is_own=1
+      AND m.account_id=?2 AND m.conversation_id=?3
+      AND json_extract(r.payload,'$.IsOwn')=1 AND json_extract(r.payload,'$.ProviderID')=m.id
+      AND json_extract(r.payload,'$.AccountID')=m.account_id
+      AND json_extract(r.payload,'$.ConversationID')=m.conversation_id
+      AND json_extract(r.payload,'$.SendState') IN ('submitted','failed')
+      AND json_extract(r.payload,'$.Attachments[0]') IS NOT NULL
+      AND oie_attachment_wire_matches(json_extract(r.payload,'$.OriginalText'), json_extract(r.payload,'$.AttachmentWireText'),
+          json_extract(r.payload,'$.WireBodySHA256'), CAST(?4 AS TEXT))=1
+)
+`
+
+type HasArchivedAttachmentWireBodyParams struct {
+	MessageID      string
+	AccountID      string
+	ConversationID string
+	WireBody       string
+}
+
+func (q *Queries) HasArchivedAttachmentWireBody(ctx context.Context, arg HasArchivedAttachmentWireBodyParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasArchivedAttachmentWireBody,
+		arg.MessageID,
+		arg.AccountID,
+		arg.ConversationID,
+		arg.WireBody,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertConversation = `-- name: InsertConversation :exec
 INSERT INTO conversations(id,revision_id,account_id,address,peer_id,payload,activity_sequence) VALUES(?,?,?,?,?,?,?)
 `
