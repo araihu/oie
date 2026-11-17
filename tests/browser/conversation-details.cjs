@@ -78,6 +78,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert((await page.locator('#conversation-details-description').textContent()).includes('Topic <img'));
   const entry=page.locator('[data-info-entry="participants"]');
   assert.equal(await entry.evaluate(el=>el.previousElementSibling.dataset.infoEntry),'stars');
+  assert.equal(await entry.evaluate(el=>el.nextElementSibling.dataset.infoEntry),'retention');
   assert.equal(await page.locator('#conversation-details-identity [data-info-entry="participants"]').count(),0);
   assert.equal(state.rosterReads,0);
 

@@ -153,6 +153,7 @@ async function until(test, label) {
     await menu().click();
     await page.locator('#chat-manage-room').click();
     const destroy = page.locator('#room-destroy-form');
+    await page.locator('#room-destructive-actions-summary').click();
     await page.locator('#room-destroy-open').click();
     await destroy.waitFor();
     if (artifacts) {

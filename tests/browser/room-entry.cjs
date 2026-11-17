@@ -65,7 +65,7 @@ async function apiHandler(req, res) {
         return send(200, {state:'unavailable',actions:[],occupants:[],affiliations:[]});
       }
       return send(200, {state:'available', revision:managementRevision,
-        actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation','set_avatar','remove_avatar'],
+        actions:managementBlocked ? ['invite'] : ['rename','topic','invite','role','affiliation','set_avatar','remove_avatar','destroy'],
         occupants:[
           {id:'occupant:reader',nickname:'Leitora',role:'participant',affiliation:'member',avatarHash,roles:['none','visitor','moderator'],affiliations:['outcast']},
           {id:'occupant:visitor',nickname:'Visitante',role:'visitor',affiliation:'none',roles:[],affiliations:[]},
@@ -540,6 +540,21 @@ async function waitFor(predicate) {
     };
     const image = roomPanel.locator('.oie-room-management-avatar [data-avatar-ready=true]');
     await image.waitFor();
+    const destructiveActions = roomPanel.locator('#room-destructive-actions-summary');
+    const destroyToggle = roomPanel.locator('#room-destroy-open');
+    const destroyForm = roomPanel.locator('#room-destroy-form');
+    const beforeDestroy = managementCommands.length;
+    await destroyToggle.waitFor({state:'hidden'});
+    await destructiveActions.press('Enter');
+    await destroyToggle.click();
+    await destroyForm.waitFor({state:'visible'});
+    await destructiveActions.click();
+    await destroyToggle.waitFor({state:'hidden'});
+    await destructiveActions.click();
+    await destroyToggle.waitFor({state:'visible'});
+    assert.equal(await destroyForm.isVisible(),false,'reopening the subsection requires a fresh confirmation');
+    await destructiveActions.click();
+    assert.equal(managementCommands.length,beforeDestroy);
     await roomPanel.getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
     await roomPanel.locator('#room-avatar-removal').getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
     await image.waitFor({state:'hidden'});
@@ -608,6 +623,8 @@ async function waitFor(predicate) {
     await banToggle.hover();
     const banHelp = page.getByRole('tooltip').filter({hasText:'Banir por endereço'});
     await banHelp.getByText('Impeça alguém de entrar na sala pelo endereço, mesmo que nunca tenha participado.').waitFor();
+    await banSearch.hover();
+    await banHelp.waitFor({state:'hidden'});
     assert.equal(await banToggle.getAttribute('aria-controls'),'room-ban-by-address-form');
     const banAddress = roomPanel.getByRole('textbox',{name:'Endereço da pessoa',exact:true});
     assert.equal(await banAddress.isVisible(),false);
@@ -623,10 +640,16 @@ async function waitFor(predicate) {
     assert.deepEqual(await banSearch.boundingBox(),searchBeforeScroll);
     assert.deepEqual(await banTabs.boundingBox(),tabsBeforeScroll);
     const beforeBan = managementCommands.length;
+    await banToggle.hover();
+    await banHelp.waitFor({state:'visible'});
     await banToggle.click();
+    await banAddress.waitFor({state:'visible'});
+    await banHelp.waitFor({state:'hidden'});
+    await banToggle.waitFor({state:'hidden'});
     await banAddress.fill('ainda-fora@fixture');
     await page.keyboard.press('Escape');
     await banAddress.waitFor({state:'hidden'});
+    await banToggle.waitFor({state:'visible'});
     assert.equal(await banToggle.evaluate(el => document.activeElement === el),true);
     assert.equal(managementCommands.length,beforeBan);
     await banToggle.click();
@@ -635,6 +658,7 @@ async function waitFor(predicate) {
     const rowsBeforeBan = await roomPanel.locator('#room-participant-results').elementHandle();
     await roomPanel.getByRole('button',{name:'Banir da sala',exact:true}).click();
     await roomPanel.getByRole('button',{name:'ainda-fora@fixture',exact:true}).waitFor();
+    await banToggle.waitFor({state:'visible'});
     assert(await topicBeforeBan.evaluate(node => node.isConnected));
     assert(await rowsBeforeBan.evaluate(node => node.isConnected));
     assert.equal(await banAddress.isVisible(),false);

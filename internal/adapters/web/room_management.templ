@@ -98,7 +98,14 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 		<p class="oie-details-plain">{ v.managementTopic() }</p>
 	}
 	if slices.Contains(state.Actions, engineapi.Destroy) {
-		@roomDestroyControls(v, *state.Revision)
+		<details id="room-destructive-actions" class="oie-room-destructive-actions">
+			<summary id="room-destructive-actions-summary" class="oie-info-entry">
+				@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"})
+				<span>{ v.Text.DestructiveActions }</span>
+				@glyph(heroicons.Icon16SolidChevronRight)
+			</summary>
+			@roomDestroyControls(v, *state.Revision)
+		</details>
 	}
 }
 
@@ -197,7 +204,9 @@ templ roomManagementBans(v view, state engineapi.RoomManagement) {
 		@scrollregion.ScrollRegion(scrollregion.Config{Content: roomBanList(v, state, false), RootClass: "oie-room-bans-list"})
 		{{ id := "room-ban-by-address" }}
 		<footer class="oie-room-ban-footer">
-			@tooltip.Tooltip(id+"-tooltip", v.Text.RoomBanByAddress, tooltip.WithDescription(v.Text.RoomBanByAddressHelp), tooltip.WithTrigger(roomBanToggle(v, id)), tooltip.WithPortal(true))
+			<div class="oie-room-ban-trigger">
+				@tooltip.Tooltip(id+"-tooltip", v.Text.RoomBanByAddress, tooltip.WithDescription(v.Text.RoomBanByAddressHelp), tooltip.WithTrigger(roomBanToggle(v, id)), tooltip.WithPortal(true))
+			</div>
 			@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 		</footer>
 	</div>

@@ -379,6 +379,10 @@ window.OieRuntime.register('room-management', life => {
     const view = participantViews.get(panel.id);
     view?.controller.abort();
     const slot = view && panel.querySelector('[data-room-profile-slot]');
+    if (panel.querySelector('#room-destructive-actions')?.open) {
+      const disclosure = incoming.querySelector('#room-destructive-actions');
+      if (disclosure) disclosure.open = true;
+    }
     panel.replaceChildren(...incoming.childNodes);
     const search = panel.querySelector('[data-room-list-search]');
     if (search) {
@@ -423,12 +427,12 @@ window.OieRuntime.register('room-management', life => {
     return trigger;
   }
 
-  function cancelAction(form) {
+  function cancelAction(form, restoreFocus = true) {
     if (isPending(form)) return;
     const trigger = setActionOpen(form, false);
     clearInputs(form);
     remember(form);
-    trigger?.focus({preventScroll:true});
+    if (restoreFocus) trigger?.focus({preventScroll:true});
   }
 
   function clearInputs(form) {
@@ -455,6 +459,13 @@ window.OieRuntime.register('room-management', life => {
     clearTimeout(avatarRefresh);
     avatarRefresh = life.timeout(() => { if (active) void load(false, true); }, 250);
   });
+
+  life.on(content, 'toggle', event => {
+    const disclosure = event.target;
+    if (disclosure.id !== 'room-destructive-actions' || disclosure.open) return;
+    const form = disclosure.querySelector('#room-destroy-form:not([hidden])');
+    if (form) cancelAction(form, false);
+  }, true);
 
   life.on(document, 'click', event => {
     const row = event.target.closest('[data-room-participant-open]');
@@ -583,10 +594,12 @@ window.OieRuntime.register('room-management', life => {
     pending.delete(form);
     const action = form.elements.managementAction.value;
     if (action === 'destroy') {
-      setActionOpen(form, false);
+      const focused = form.contains(document.activeElement);
+      const trigger = setActionOpen(form, false);
       if (result.ok) {
         window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-management'}}));
       } else {
+        if (focused) trigger?.focus({preventScroll:true});
         if (result.message) window.dispatchEvent(new CustomEvent('notify', {
           detail: {kind:'toast', tone:'danger', message:result.message}
         }));

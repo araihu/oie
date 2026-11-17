@@ -67,6 +67,7 @@ default:
 @infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
 if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
 @infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
+@infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
 <template data-info-participants-loading>
 	@infoParticipantsSkeleton(v)
 </template>
@@ -77,7 +78,9 @@ if !v.Preview && v.requestKind()=="" {
 	ID:"notification-mute",Label:v.Text.NotificationMute,Disabled:true,RootClass:"oie-device-toggle",
 	InputAttrs:templ.Attributes{"data-notification-mute":v.Selected.Id,"data-mute-engine":v.EngineID,"data-unsaved":v.Text.DevicePreferenceUnavailable},
 })
+if v.Selected.Kind!="room" {
 @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
+}
 if v.canSetReadReceipts(v.Selected) {
 @infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
 }
