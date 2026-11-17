@@ -1034,6 +1034,15 @@ Explicit resume still requires reconciliation of unknown outcomes and current ow
 
 **OPEN O15:** archive format, encryption, credential inclusion, running-engine backup mechanics, interruption recovery, and interaction with active sync/dispatch. Backup/import is not a replacement for app sync.
 
+**IMPLEMENTATION SCOPE:** the initial manual backup commands export a consistent
+snapshot of a stopped profile in a versioned ZIP with SHA-256 checks, with
+optional retained media. The archive excludes connection credentials, room
+passwords and hosted authentication state. Verification reads the archive in a
+temporary directory and gives counts for review. See
+[manual backup](installation.md#create-and-verify-a-manual-backup).
+Applying a backup to a destination profile, reconciling revisions and
+deletions at import, and reviewing or resuming recovered sends remain pending.
+
 ## 13. Reliability boundaries and operational state
 
 The UI must distinguish an unavailable engine, unavailable sync service, disconnected protocol account, partial history, failed media retrieval, and unknown send outcome; they are different states with different consequences.

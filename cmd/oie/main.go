@@ -26,8 +26,16 @@ func main() {
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	if len(os.Args) > 1 && os.Args[1] == "auth" {
-		err := runAuth(ctx, os.Args[2:], os.Stdout)
+	if len(os.Args) > 1 {
+		var err error
+		switch os.Args[1] {
+		case "auth":
+			err = runAuth(ctx, os.Args[2:], os.Stdout)
+		case "backup":
+			err = runBackup(ctx, os.Args[2:], os.Stdout, os.Stderr)
+		default:
+			return runServer(ctx)
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -36,6 +44,10 @@ func run() error {
 		}
 		return err
 	}
+	return runServer(ctx)
+}
+
+func runServer(ctx context.Context) error {
 	var hosted apphost.HostedConfig
 	flags := flag.NewFlagSet("oie", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)

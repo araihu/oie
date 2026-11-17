@@ -158,6 +158,7 @@ type Querier interface {
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)
 	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
+	ListBackupMedia(ctx context.Context) ([]ListBackupMediaRow, error)
 	ListCanonicalMessageReferences(ctx context.Context, canonicalID string) ([]ListCanonicalMessageReferencesRow, error)
 	ListCanonicalSenderIdentities(ctx context.Context, arg ListCanonicalSenderIdentitiesParams) ([]ListCanonicalSenderIdentitiesRow, error)
 	// Keep selection ahead of joins on the bounded browse path.
@@ -242,6 +243,7 @@ type Querier interface {
 	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
+	RemoveBackupRoomPasswords(ctx context.Context) error
 	RemoveDownloadGarbage(ctx context.Context, arg RemoveDownloadGarbageParams) error
 	RemoveLegacyDownloadDevice(ctx context.Context) error
 	RemoveMessageSearchException(ctx context.Context, messageID string) error
@@ -280,6 +282,7 @@ type Querier interface {
 	ShiftArchivedReactions(ctx context.Context, arg ShiftArchivedReactionsParams) error
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	StartMessageSearchIndex(ctx context.Context, arg StartMessageSearchIndexParams) error
+	SummarizeBackup(ctx context.Context) (SummarizeBackupRow, error)
 	UpdateAccountLabel(ctx context.Context, arg UpdateAccountLabelParams) error
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error

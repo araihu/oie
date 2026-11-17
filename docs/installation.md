@@ -656,6 +656,27 @@ database, and the media files stay in the profile. Backups are retained across
 updates and are deleted when you use **Delete all data** under **Settings →
 General → Destructive actions**.
 
+### Create and verify a manual backup
+
+From a checkout that includes the backup commands, build the engine binary with
+`make build`. Quit Oiê or stop the hosted engine before exporting that profile.
+The export acquires the same profile lock as the engine and reads the database
+without migrating it.
+
+```sh
+bin/oie backup create --data-dir "/path/to/profile" --output "$HOME/oie-backup.zip"
+bin/oie backup verify "$HOME/oie-backup.zip"
+```
+
+Add `--include-media` to copy available managed media and staged attachments.
+The ZIP contains account details, messages, and pending compositions. Keep it
+in a private location. Connection credentials, hosted credentials and room
+passwords are omitted. The command creates a private file and refuses to
+overwrite an existing backup. Verification checks the SQLite file and the
+SHA-256 of each entry and reports the account, conversation, message, pending
+send and media counts. Merge restoration is tracked in
+[the specification](oie-spec.md#12-backup-and-merge-restore).
+
 If the desktop window does not open after an update, start Oiê from a
 terminal to see the error. For the default macOS app, run
 `~/Applications/Oie.app/Contents/MacOS/oie-desktop`. On Linux, run
