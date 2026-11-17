@@ -5,6 +5,7 @@ go 1.27.3
 tool (
 	github.com/a-h/templ/cmd/templ
 	github.com/air-verse/air
+	github.com/araihu/muamba/cmd/muamba
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 	github.com/oasdiff/oasdiff
 	github.com/sqlc-dev/sqlc/cmd/sqlc
@@ -41,6 +42,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/araihu/muamba v0.0.6 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/atterpac/refresh v1.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -102,6 +104,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/gofrs/flock v0.13.1 // indirect
 	github.com/gohugoio/hashstructure v0.6.0 // indirect
 	github.com/gohugoio/hugo v0.164.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect

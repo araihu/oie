@@ -3,12 +3,13 @@ package web
 import (
 	"bytes"
 	"embed"
-	"github.com/araihu/oie/internal/adapters/cachehttp"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/araihu/oie/internal/adapters/cachehttp"
 )
 
 // The display layer, worker, fonts and image decoders are served locally.
@@ -50,6 +51,8 @@ func (s *Server) servePDFJS(w http.ResponseWriter, r *http.Request) bool {
 		kind = "image/svg+xml"
 	case ".png":
 		kind = "image/png"
+	case ".ttf":
+		kind = "font/ttf"
 	}
 	if strings.Contains(path.Base(name), "LICENSE") {
 		kind = "text/plain; charset=utf-8"

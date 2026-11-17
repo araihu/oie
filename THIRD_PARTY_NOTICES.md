@@ -31,10 +31,9 @@ SOFTWARE.
 ## PDF.js browser assets
 
 The document viewer uses the display API and worker from Mozilla PDF.js
-6.5.438, distributed as `pdfjs-dist` under Apache License 2.0. The pinned
-package source, integrity and individual file checksums are recorded in
-`internal/adapters/web/pdfjs/manifest.json`. Its license is included beside the
-assets and is available at `/ui/pdfjs/LICENSE`.
+6.5.438, distributed as `pdfjs-dist` under Apache License 2.0. Muamba records the
+pinned archive and individual file checksums in `.muamba.lock.yaml`. The license
+ships beside the assets and is available at `/ui/pdfjs/LICENSE`.
 
 The PDF.js worker includes the MIT-licensed Brotli JavaScript decoder.
 The release packages and OCI image include the decoder's MIT notice.
@@ -42,11 +41,16 @@ The release packages and OCI image include the decoder's MIT notice.
 The distribution also includes Adobe character maps, PDFium/Foxit font data,
 image decoders and an ICC profile. Their notices are included in the respective
 `cmaps`, `standard_fonts`, `wasm` and `iccs` directories. They use BSD, MIT and
-CC0 terms. Liberation fonts and the PDF JavaScript scripting sandbox are not
-included. Missing standard sans-serif font data uses the browser's system fonts.
+CC0 terms. The four unmodified Liberation Sans 1.07.4 faces from this PDF.js
+distribution provide a local fallback when system fonts are unavailable. The
+fonts are licensed under GPL-2.0 with the Liberation font exception, included
+at `/ui/pdfjs/standard_fonts/LICENSE_LIBERATION`. The release source archive
+includes the upstream Liberation Fonts sources from the Debian archive.
+The PDF JavaScript scripting sandbox is excluded.
 
-Run `python3 tools/vendor-pdfjs.py` to verify the assets without network access.
-Use `python3 tools/vendor-pdfjs.py --update` to restore the exact pinned package.
+Run `make check-vendored-assets` to verify the committed files once the Go tool
+dependencies are available. Restore the pinned files with
+`go tool -modfile=tools/go.mod muamba sync --strict pdfjs`.
 The tool verifies its SHA-512 package integrity before writing selected assets.
 
 ## lru-cache browser runtime

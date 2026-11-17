@@ -63,13 +63,17 @@ test-race:
 check-generated:
 	sh scripts/check-generated.sh $(VACUUM)
 
-check: lint lint-go check-generated check-api-compatibility check-ci-tools test-packaging
+check: lint lint-go check-generated check-api-compatibility check-ci-tools check-vendored-assets test-packaging
 	@test -z "$$(gofmt -l cmd internal api/spec.go tests tools/cmd cli/cmd/oiectl/oiectl.go)" || { echo 'Go formatting drift'; exit 1; }
 	GOWORK=off $(GO) vet ./...
 	GOWORK=off $(GO) -C cli vet ./...
 	GOWORK=off $(GO) -C tools vet ./cmd/...
 	$(MAKE) test
 	$(COMPOSE) config --quiet
+
+.PHONY: check-vendored-assets
+check-vendored-assets:
+	$(CODEGEN) muamba verify --strict > /dev/null
 
 .PHONY: check-ci-tools
 check-ci-tools:

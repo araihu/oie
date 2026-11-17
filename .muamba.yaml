@@ -1,0 +1,29 @@
+schema: 1
+resources:
+  pdfjs:
+    version: "6.5.438"
+    directories:
+      display:
+        url: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-${version}.tgz
+        archive: tar.gz
+        path: internal/adapters/web/pdfjs
+        strip_components: 1
+        include:
+          - LICENSE
+          - build/pdf.mjs
+          - build/pdf.renderer.mjs
+          - build/pdf.worker.mjs
+          - cmaps/**
+          - iccs/**
+          - standard_fonts/Foxit*.pfb
+          - standard_fonts/LiberationSans-*.ttf
+          - standard_fonts/LICENSE_FOXIT
+          - standard_fonts/LICENSE_LIBERATION
+          - wasm/**
+          - web/images/**
+          - web/pdf_viewer.css
+        exclude:
+          - wasm/*[Qq][Uu][Ii][Cc][Kk][Jj][Ss]*
+        max_size: 16MiB
+        max_files: 1024
+        max_unpacked_size: 64MiB

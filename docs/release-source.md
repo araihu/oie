@@ -47,7 +47,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C oie build -mod=vendor -tags server \
   the `oapi-cli-gen` generator. These also supply generation inputs such as
   Wails TypeScript, Goshtoso's asset recipe and the modernc Go translations.
 - `browser-sources/` contains the pinned upstream JavaScript, WebAssembly
-  decoder, icon and artwork sources. It includes the Mermaid and PDF.js
+  decoder, font, icon and artwork sources. It includes the Mermaid and PDF.js
   distributions with source maps. `release-tooling/packaging/browser-source.json`
   records the downloaded and packaged archive digests and the input manifests
   or assets they cover. Selected upstream tarballs are repacked as inner

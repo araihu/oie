@@ -154,7 +154,7 @@ window.OieRuntime.register('documents', life => {
  }
  const cachedPreview=window.OieCache.decorate({
   namespace:'document-preview-pdfjs6.5.438-margo1-v2',
-  key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format,record.output],
+  key:record=>[record.engine,record.account,record.conversation,record.message,record.id,record.revision,record.messageRevision,record.original,record.format==='pdf'?'pdf-liberation1.07.4':record.format,record.output],
   load:producePreview,
   ttl:(value,record)=>record.format==='markdown'&&value.kind==='text'?30000:30*60*1000,
   size:value=>value.kind==='image'?value.blob.size:(value.text??value.html).length*2,

@@ -1,0 +1,1152 @@
+schema: 1
+directories:
+  - id: pdfjs/display
+    url: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz
+    path: internal/adapters/web/pdfjs
+    size: 9144013
+    integrity: sha384-+bMEzyxIjavC1rveDPiR0CnHXIzTnxj19WlvvaOi1jI3mod7kd7RZS990BTki5XO
+    files:
+      - source: LICENSE
+        path: internal/adapters/web/pdfjs/LICENSE
+        size: 10174
+        integrity: sha384-dIfJx5IERVwWkDwmUITjq6FFmOOiUluv24tT2o6vrjEpXyjYGE/BIj5rw25rSNr0
+      - source: build/pdf.mjs
+        path: internal/adapters/web/pdfjs/build/pdf.mjs
+        size: 891540
+        integrity: sha384-cLPCXtITpp1EV8vFh0LXPwnEB5yaNNUCTyqbfmFp+zGYcNeNN6jY898zcfSduI76
+      - source: build/pdf.renderer.mjs
+        path: internal/adapters/web/pdfjs/build/pdf.renderer.mjs
+        size: 245736
+        integrity: sha384-RDIAx6402N27yVc/f64mFhZGm8/8PWP9O6RHlOdCFnQOzIJaDHmBdePWKp0oo4Ih
+      - source: build/pdf.worker.mjs
+        path: internal/adapters/web/pdfjs/build/pdf.worker.mjs
+        size: 2248830
+        integrity: sha384-0HpNwYwkT8J5IRoNyHNDYF7TZa5nYCKLC3P5ar/8RtjGFGNaivQPrCNU3PZsqN0y
+      - source: cmaps/78-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78-EUC-H.bcmap
+        size: 2404
+        integrity: sha384-8B6vD8ASBkrE04TBihkzPoSYkGcFVNMpC4RoZ1qavGI0IFXU+XcWakJ0N1XWQLWv
+      - source: cmaps/78-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78-EUC-V.bcmap
+        size: 173
+        integrity: sha384-rxU7UYCGw7/R7lqb2p5xiKR0UmQlhNlRqOc+VnxGZEsXXF7Zt5+xB4DqbhGck5Id
+      - source: cmaps/78-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78-H.bcmap
+        size: 2379
+        integrity: sha384-M3bQU0krRT5gIjmwyxHEM2lyI0O/t+GTRSqcZMcS/lZxhPParHHYgEpczfIMSBYH
+      - source: cmaps/78-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78-RKSJ-H.bcmap
+        size: 2398
+        integrity: sha384-2SA/uE0gZO4HcuN9jtydZpCYgJtLw2Hq2OnyPUQo3zGoHfpa/1Jz5eXfLMYocDiu
+      - source: cmaps/78-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78-RKSJ-V.bcmap
+        size: 173
+        integrity: sha384-1LcCp8oJK0iFL/+Ha5gzvpWsdsykFK+w96mWKpLWgz08uYnQGCOsIDpQVi13+OnS
+      - source: cmaps/78-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78-V.bcmap
+        size: 169
+        integrity: sha384-P0VyOgY4Ffsoj1tye80VIZqAj996SVigJGD3/9m74FTfAolFuhK1hgxK6H+lKkKN
+      - source: cmaps/78ms-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78ms-RKSJ-H.bcmap
+        size: 2651
+        integrity: sha384-3DjRISiyRrEDW060N3N3srouRgpwmCbDniXKs0L7eW3J2m8w1dJkq8D15TzQET0Q
+      - source: cmaps/78ms-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/78ms-RKSJ-V.bcmap
+        size: 290
+        integrity: sha384-aKIdS+//HisDO3GTtOZrwM2GRcQK7nkneNyQNaQx9jK6NuDO3gAb2jA9Nq76OErb
+      - source: cmaps/83pv-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/83pv-RKSJ-H.bcmap
+        size: 905
+        integrity: sha384-D3GKP+GEUxEqeWXwkUgywR0D1QgCpVN/h9pQnK1vJJNXEooQbQWeBkjYUUrsorlL
+      - source: cmaps/90ms-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/90ms-RKSJ-H.bcmap
+        size: 721
+        integrity: sha384-PjtOTO3WUQy74FR7SHefX6xmAgmdJACrZBs/iTJlX2B9fyv3gFTKR6APCQel+i1d
+      - source: cmaps/90ms-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/90ms-RKSJ-V.bcmap
+        size: 290
+        integrity: sha384-llMp9Lfjog3JkuQXMdQUCW1IO7CQlbnjpDqOdfC6sXhMnDCbnXG23/GvC/nGiPAE
+      - source: cmaps/90msp-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/90msp-RKSJ-H.bcmap
+        size: 715
+        integrity: sha384-c4YhMwPTWr6U51a02eIutBXrNNycwwMpSnYzsxj1pEUGRRZMvzSdpWveM8Fz5Ywe
+      - source: cmaps/90msp-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/90msp-RKSJ-V.bcmap
+        size: 291
+        integrity: sha384-8AvrB/sX3MYVRDB16x85V2BNGJMJgmD0IVLLjLrHhzVsMTHbdzlV1txBt1hgN/L8
+      - source: cmaps/90pv-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/90pv-RKSJ-H.bcmap
+        size: 982
+        integrity: sha384-SU/suP3vsDFBG5+pemn6lRxj5f0Wsx1AGP0vCaehwK7e98M0A1OC6lPAnrmK7kBG
+      - source: cmaps/90pv-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/90pv-RKSJ-V.bcmap
+        size: 260
+        integrity: sha384-6TvU5o54TstkIwQyayTdXLMMdtU098FZSgoNJMCd1C2nEq4pLsLoHlQ2trQEOqM+
+      - source: cmaps/Add-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Add-H.bcmap
+        size: 2419
+        integrity: sha384-6bwkfNX12glSIpifymnQSFXGC+gz/RDOUsy5Zt+qocJgym1kCJhwB59RUgfPYDtT
+      - source: cmaps/Add-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Add-RKSJ-H.bcmap
+        size: 2413
+        integrity: sha384-K2jXqB/PB/ZxBPcXB2goz1TILBl2ql6oHqlEhutpI1XaJjxrokrFkNEtLMXfFBTm
+      - source: cmaps/Add-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Add-RKSJ-V.bcmap
+        size: 287
+        integrity: sha384-y+tRS0ctCt0Y0NGRX1z0iQY2VUbM7vy7XKu5it413mRIAA56o2qaV5OuOTJZVK5c
+      - source: cmaps/Add-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Add-V.bcmap
+        size: 282
+        integrity: sha384-6Q4zibzS4sa383EG7EZN1JpN9rRxajcOQtlNRzEsgn3NiDwAk9HAL2uuBLtrfmmH
+      - source: cmaps/Adobe-CNS1-0.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-0.bcmap
+        size: 317
+        integrity: sha384-xxfpE8AkFruin6qpih7cweqA104gW/9e6d6vVZpNHP93LEzMAMhHsCHSAUCAqAu/
+      - source: cmaps/Adobe-CNS1-1.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-1.bcmap
+        size: 371
+        integrity: sha384-s2ll5MC07mTNR1t8LBmDG3bYVpuynWW5NQLDq5rOcBcmW0Kj3RTFwr62Z5H1m/pD
+      - source: cmaps/Adobe-CNS1-2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-2.bcmap
+        size: 376
+        integrity: sha384-+4h8sHCryN+ReTr8Os+L+uTOxyYkZbpFRRbXfAhkxZI25OmPthEXXyq8K2Zanqnr
+      - source: cmaps/Adobe-CNS1-3.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-3.bcmap
+        size: 401
+        integrity: sha384-yQEx1OFne5UJYhA8IdMAr+qy2b1ynxhseG6K9rc6Jazf2OJHt2uW4SgCe5RjCgAO
+      - source: cmaps/Adobe-CNS1-4.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-4.bcmap
+        size: 405
+        integrity: sha384-mwEwYfoB6Noa88hx24xARbeJGsv08147T5KfGpkyTP6L9gptiDk7D9JRlT68dupE
+      - source: cmaps/Adobe-CNS1-5.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-5.bcmap
+        size: 406
+        integrity: sha384-HZ6gUxxxoldVB6i+7+8hW7FQcpci8hpabavZrh/uTHWgWoosxSWUt8MggCkv1igt
+      - source: cmaps/Adobe-CNS1-6.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-6.bcmap
+        size: 406
+        integrity: sha384-JPMDiJidCKKf8tTXTMsEa5YerxgAGHz2hqT5IPaoXmIngj9/j02hb8TogGPr0a6f
+      - source: cmaps/Adobe-CNS1-UCS2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-CNS1-UCS2.bcmap
+        size: 41193
+        integrity: sha384-3m+/r3MIe9HvJU8VEW2g1m32EXJeZ1CgJYhh3GUeKtL9OuHaBzFFgF/iLaq3pKNB
+      - source: cmaps/Adobe-GB1-0.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-0.bcmap
+        size: 217
+        integrity: sha384-8i/f5q2ZZEQCocpvrq8QqgXPqskgqDG8zX1pS2oXfA2Z5eKyrv+Lw+LXmFONke5x
+      - source: cmaps/Adobe-GB1-1.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-1.bcmap
+        size: 250
+        integrity: sha384-1LeOuFkpT/WOIPSpgXZigGnP1S6naJIeMqEO63WPZcdHo5Ntm4w2S5KSfJ7g1sGP
+      - source: cmaps/Adobe-GB1-2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-2.bcmap
+        size: 465
+        integrity: sha384-GuF2/g0GS0Nm0cAPpx9RqiFasJo3YbFRctZpSgr4/C815na9kQZF6u7M0LPSUkW6
+      - source: cmaps/Adobe-GB1-3.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-3.bcmap
+        size: 470
+        integrity: sha384-tTENQIe2VYWVHc0dAOAoK1ASwzsBcihCrDEVRY4a2Sp55sAVGRaIFMtAvcLKogtr
+      - source: cmaps/Adobe-GB1-4.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-4.bcmap
+        size: 601
+        integrity: sha384-+AnxKWZHVuKBi2v494bOc5TZOtn/vEOvNuZp3/JWIZJ7Ja8zbqA7Fb4odcKF+QZM
+      - source: cmaps/Adobe-GB1-5.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-5.bcmap
+        size: 625
+        integrity: sha384-MO/WiKCBYlEGiPE2Wclq1+WKcG4jymU89z0qlavPuMyGSWWH7F0g8lT9DAKq75wH
+      - source: cmaps/Adobe-GB1-UCS2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap
+        size: 33974
+        integrity: sha384-uvmIdRV3d02CQx2dFRd+8xfoe/YM8os1M2mRgKFHfvPjS17xRIem3b2gBSmwjeXt
+      - source: cmaps/Adobe-Japan1-0.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-0.bcmap
+        size: 225
+        integrity: sha384-U21Nm0B+8E7cIHpq0rDskzxBpYluGhytD9bcS4lQT3zJS+s7oNB08q0p4Ja01Xen
+      - source: cmaps/Adobe-Japan1-1.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-1.bcmap
+        size: 226
+        integrity: sha384-DwsnJ7Sz2wfX30+wCxF1FRGy4ywsoWpZTioycURibIzyKXgX3CrYhhhzmdbw2xwm
+      - source: cmaps/Adobe-Japan1-2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-2.bcmap
+        size: 233
+        integrity: sha384-rt0ND1rS/5CPYSlXM68eHiBOo4HV+HdEBt9ULqsGzsX2Y8dxGNDKdY27gIRgRtXk
+      - source: cmaps/Adobe-Japan1-3.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-3.bcmap
+        size: 242
+        integrity: sha384-N+YRuyNNWC64V1tj+k4UTZlG5cJK89Z6u9Y1CO0pcrWBcwiAN6dl4zXdM2L76WOz
+      - source: cmaps/Adobe-Japan1-4.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-4.bcmap
+        size: 337
+        integrity: sha384-H2NXj3SYMwVUIQet7XbBNhBofcINQowKlS9g1BGbeH5+9ocR/hJBG3vWQrKg0fez
+      - source: cmaps/Adobe-Japan1-5.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-5.bcmap
+        size: 430
+        integrity: sha384-WHXMjP5U/85P1YHPEwZqcHTAavoNcNUOpuDJUqJGdW5gDEMx3aTgJ/oScmGNHSFB
+      - source: cmaps/Adobe-Japan1-6.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-6.bcmap
+        size: 485
+        integrity: sha384-4SR9rLXxgKjUWEX6PoWmgpX8UhsrVuW67v4lWdSpigFkkodQkzDvEtVulOnRHDSm
+      - source: cmaps/Adobe-Japan1-UCS2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Japan1-UCS2.bcmap
+        size: 40951
+        integrity: sha384-wS+irksdKerRFJHmjNjXHSkLRlZoW5NfB4vkB8Dit5Q6jVhxN0aE2oiRCWXcPTN2
+      - source: cmaps/Adobe-Korea1-0.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Korea1-0.bcmap
+        size: 241
+        integrity: sha384-cC0VD+8w6OFd203zWU5XGQ8jYBH4oNtX6DZgQMJvHhu2d4R9vZ8F+4aZF1kKMCyE
+      - source: cmaps/Adobe-Korea1-1.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Korea1-1.bcmap
+        size: 386
+        integrity: sha384-YDlQ/iYyeXvDpxVdX84FsA6SPiKMSyQfJAUi3aEswMcD1Ax00AdX5UuhDpB8wBUn
+      - source: cmaps/Adobe-Korea1-2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Korea1-2.bcmap
+        size: 391
+        integrity: sha384-fWGI6XAIEKD2Gut0vAsXxDozZcxK/TMFbFachdn2Wh4RiOkV+4S/sjOP89TyR4N0
+      - source: cmaps/Adobe-Korea1-UCS2.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Adobe-Korea1-UCS2.bcmap
+        size: 23293
+        integrity: sha384-r8n3zEEO/QlILeNq+WIbMKJsrbbHCxy41rmTsjwJjkv8bsZt0upG1vM0SV4x1MRd
+      - source: cmaps/B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/B5-H.bcmap
+        size: 1086
+        integrity: sha384-ujW3iHwnkfjuFquZzCECJvhmtp/kHS3HH7kNv9b6pMdymi5AFSOc6gefwxwsGEg4
+      - source: cmaps/B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/B5-V.bcmap
+        size: 142
+        integrity: sha384-NYmfvVSWLZZUwT9M7B3vycqNylfxwHIqf7qb18t5RGHbk6G11/jk0vABh80ibxl/
+      - source: cmaps/B5pc-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/B5pc-H.bcmap
+        size: 1099
+        integrity: sha384-Z8Szc3QTJ+GUE1OBKBIAIuf77HtjdLMyteWwJZrDhAj69o3lHdc0Ogw98QcNciSh
+      - source: cmaps/B5pc-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/B5pc-V.bcmap
+        size: 144
+        integrity: sha384-Rz7VegfbOGns51uzh+mVm1db2JmD/o3wQjzG2pQvK1koKH5dJLskKgasPiPC4X0J
+      - source: cmaps/CNS-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/CNS-EUC-H.bcmap
+        size: 1780
+        integrity: sha384-w4KgKL1wmevzXSMLByamX+Mp0pGjJiYDoSuXhoN0HSN+P0cP7uy3TmFOCYf7GHeI
+      - source: cmaps/CNS-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/CNS-EUC-V.bcmap
+        size: 1920
+        integrity: sha384-CPhfsEGmmYa+1oPRdYRW1QCgM0W7eN0PqPnLAZQPL8mijxP/LW9O+QYmUucYDOAq
+      - source: cmaps/CNS1-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/CNS1-H.bcmap
+        size: 706
+        integrity: sha384-nstHNZyico6s+zEL01IHNwvvwXfPWWsSYs2vZqX3vaXzsX2YGt8xjlenaO5Qg400
+      - source: cmaps/CNS1-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/CNS1-V.bcmap
+        size: 143
+        integrity: sha384-7UeazIQpayNsyDicD3GBXZ92pgQ+ohnLfkFGf1rzUuSfMBiYFvtUQ6IwczC1Q1Cx
+      - source: cmaps/CNS2-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/CNS2-H.bcmap
+        size: 504
+        integrity: sha384-8+E63gog+bkwikrlUdoDFB/jdrzBNeF6CH3jspdyVaGtaibZoiP5VmQxMdjfh3LT
+      - source: cmaps/CNS2-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/CNS2-V.bcmap
+        size: 93
+        integrity: sha384-TVVDa5hUCr9pJu5IvTDA55wvu0CT8Qru0t8HwBG84EdhPkxrrhaTP2ILxTfk8mV4
+      - source: cmaps/ETHK-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/ETHK-B5-H.bcmap
+        size: 4426
+        integrity: sha384-oq5RCa2j83hntvOTPwKIO/C2ILrFwjHfOkfJJUr1yWooX7EeVCj8dUlPrSAWRD5u
+      - source: cmaps/ETHK-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/ETHK-B5-V.bcmap
+        size: 158
+        integrity: sha384-Ul/jOXe2mKXkM9vgAlVbT7hx8fqRIZgQ13pfe1ryZ0k1bUvzPKdc+SRz+bpfPJkG
+      - source: cmaps/ETen-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/ETen-B5-H.bcmap
+        size: 1125
+        integrity: sha384-0I8o/FGl5r8lqNbFuAW5TKI8zK6tX9qDIM0uhEObi2+nWwv11LraWIMgnkuEol/P
+      - source: cmaps/ETen-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/ETen-B5-V.bcmap
+        size: 158
+        integrity: sha384-nAmmuv3wJ83SmTgWEkhlKbvsqqocCMI/OoEhMLXlxJNrvaQtPVnvkcnFQb59g8iQ
+      - source: cmaps/ETenms-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/ETenms-B5-H.bcmap
+        size: 101
+        integrity: sha384-8TQoCwX6lHpAFM/4j+qlAA8bYIKCGkuViKR/pLzRGjePhAQ45h69w9YMQHHr4YPh
+      - source: cmaps/ETenms-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/ETenms-B5-V.bcmap
+        size: 172
+        integrity: sha384-oEQfAmKz9LGSWIQu6hgld55MAYbRy5EUIJQBoBtvAyJWpq4bim6e1MQOE4QQqEep
+      - source: cmaps/EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/EUC-H.bcmap
+        size: 578
+        integrity: sha384-jmkcqE+wwKRL9DGgdEyGQl1sErFES5xCD2dymo4mZntOaR7X5RQvcb7ddAh7MGY8
+      - source: cmaps/EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/EUC-V.bcmap
+        size: 170
+        integrity: sha384-3fyoDJkZ5quOua5yjH9pX/gMnPs3Mk01eG4ktpueBjupM6Sv6srpVBMQyNuUO0/A
+      - source: cmaps/Ext-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Ext-H.bcmap
+        size: 2536
+        integrity: sha384-2+G5uSgr+kAoBbo4FadCWTIIkv9NJaO9QyZwEObRL8Yi2XBbNCBvYJpaToPiluFD
+      - source: cmaps/Ext-RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Ext-RKSJ-H.bcmap
+        size: 2542
+        integrity: sha384-Q2gjI+pkrcSseH7mstiTjxBCm7ZnyJR5QJhsxkbTgT23/pHtJv0jRjfSEMBMfWQC
+      - source: cmaps/Ext-RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Ext-RKSJ-V.bcmap
+        size: 218
+        integrity: sha384-Xns5m3HMzddZLf7eqQqtvVGklGdlrfR+nkNW4aFaTyuVvriX6KI+YAd5EgNPrhYf
+      - source: cmaps/Ext-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Ext-V.bcmap
+        size: 215
+        integrity: sha384-VHYIfjknsbVTAkJbefUzTnpElVngd0hArdlM5oX3BQ7Pkwrx7gsLaPeMtuunI7jK
+      - source: cmaps/GB-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GB-EUC-H.bcmap
+        size: 549
+        integrity: sha384-qMXvbOJsMUDPr+k/WqIJI7yyrzxGTj3jo39low9ExMLCQi/7NecVhXceWPB3Vf5C
+      - source: cmaps/GB-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GB-EUC-V.bcmap
+        size: 179
+        integrity: sha384-06AHNjPFmBM5fxzMwWi6cv1LrxvpU3H85mLsrOXX5zc7DuATQjkS0HElaEY1WTja
+      - source: cmaps/GB-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GB-H.bcmap
+        size: 528
+        integrity: sha384-nTllRLObXZy8+kTZvqRN2P8QdjIoKnClkkIMfjqFz8zMjmqpm5defc7y78/e2jpm
+      - source: cmaps/GB-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GB-V.bcmap
+        size: 175
+        integrity: sha384-bk/R6DBENNCPPfgNOQ6acm6KZoK/tgXgBE3bdd+gX48BBCn9e/npo4U5vlCuowdL
+      - source: cmaps/GBK-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBK-EUC-H.bcmap
+        size: 14692
+        integrity: sha384-7gX3Is10m+IqbecaqAahl6idOKCBAioUSnJhveaQ5VyTSE9io7JEsriRrij5nwpb
+      - source: cmaps/GBK-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBK-EUC-V.bcmap
+        size: 180
+        integrity: sha384-91G450RiLpBAb21UeUj1j5Q1NDo1lhkWBLdePk5dNGsU4hhDYJBHM85mC7yyER59
+      - source: cmaps/GBK2K-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBK2K-H.bcmap
+        size: 19662
+        integrity: sha384-8oPLeXgv0PJB08gFj+9bKQxkEz+EwqMhXxa2J6n/pgUL601wiF3CGS+CHavijlqY
+      - source: cmaps/GBK2K-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBK2K-V.bcmap
+        size: 219
+        integrity: sha384-4XCBYFvzj1KnOtF1homoQYZtVVhHrqN+2cELorhWf6h75tWeJQJDLf3H1eXPvOMJ
+      - source: cmaps/GBKp-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBKp-EUC-H.bcmap
+        size: 14686
+        integrity: sha384-WWuHmpRzpd9j3tkwLDZAsBY724p2rvG0CH0ux8p5CN5vrgQ0yqSKqD4DiAVLudzP
+      - source: cmaps/GBKp-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBKp-EUC-V.bcmap
+        size: 181
+        integrity: sha384-XW8bvo0v5HdwpcJjOYDcXsBzuSsuiuyRu3vsnvp2jLugASrn4ol1Q5csvXafd76L
+      - source: cmaps/GBT-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBT-EUC-H.bcmap
+        size: 7290
+        integrity: sha384-hkfJMYWX4IaLDCDybqf0CN7j6X7ogJyFASF4K6J5YB1J5do/WJFYas9TERa4GjBg
+      - source: cmaps/GBT-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBT-EUC-V.bcmap
+        size: 180
+        integrity: sha384-P8qwNaV7WF/eQuwXif3nmBXhPNvVgOD5hFDlIrcrVbtXjOaDa/4/Mpg839fB+xLP
+      - source: cmaps/GBT-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBT-H.bcmap
+        size: 7269
+        integrity: sha384-rlfHNqYZrMzWfGZE2azYKfGFoE8LQN22/bqngUT8NbPIoN1EmIfwtQj0/Bm8pa+r
+      - source: cmaps/GBT-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBT-V.bcmap
+        size: 176
+        integrity: sha384-RD0prNkqT9CPWoMCc+0NgaWk3x0lfRLz+xyME2bPLUXHUfViPH7OxRJ0+MHb+ZNr
+      - source: cmaps/GBTpc-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBTpc-EUC-H.bcmap
+        size: 7298
+        integrity: sha384-zHEw6Q0LuVRTMx1EIl3d+FQDFsPzzk1XSzx7EeQyPhtPRnN0slZhNhfgGXpGkjh0
+      - source: cmaps/GBTpc-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBTpc-EUC-V.bcmap
+        size: 182
+        integrity: sha384-DighYhKZ28A3I8nLvEW2fHqxjwYcaBwZcHeMbDyqUyHARqtSK9a7jat5GaDsx5VN
+      - source: cmaps/GBpc-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBpc-EUC-H.bcmap
+        size: 557
+        integrity: sha384-BBgUxa1B3GRglfXp/kz3XeCCqVdqeE9yfK3hOfmZV9xFTZt8a983F7fjs7rgo8Ob
+      - source: cmaps/GBpc-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/GBpc-EUC-V.bcmap
+        size: 181
+        integrity: sha384-OOtZq/IEByCkeURoC8YO+YXhQorzI1nOuk6AZ3+jdmIa5XWv9LWqDRiQZS0Wtpx/
+      - source: cmaps/H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/H.bcmap
+        size: 553
+        integrity: sha384-2z29ZXhVauHcWmvCGiOHG5wfYFxmRWe+Fs92dd60ryggqIz4RNYHDeRsGfp5EoIn
+      - source: cmaps/HKdla-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKdla-B5-H.bcmap
+        size: 2654
+        integrity: sha384-4DFCjab3aXH28vF6MSv4vFzKU1KTQLeowjxL7aTZkossWGeme0FrXMho9tRWgnhk
+      - source: cmaps/HKdla-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKdla-B5-V.bcmap
+        size: 148
+        integrity: sha384-6E/oi9Rni+QjFMc9vUAhnbbMlusGpqgWZLeu5kLGg7kPISVowi55PUn3p06XJBNm
+      - source: cmaps/HKdlb-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKdlb-B5-H.bcmap
+        size: 2414
+        integrity: sha384-U7xF7olms9SkYUD1MV8lXwFEImf3tbz/ZpFgSi9566tBYscj9Yv0ITuuEv82OeXs
+      - source: cmaps/HKdlb-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKdlb-B5-V.bcmap
+        size: 148
+        integrity: sha384-3FPYjQfzMa0+JXgjs0B0yAqrr5cCGbnhdDBc13dZeVamAegS3cQT27hnxTHp7wat
+      - source: cmaps/HKgccs-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKgccs-B5-H.bcmap
+        size: 2292
+        integrity: sha384-AGRVXiMC0TaT2Pfk07dZjDnsyZ46rpXowy/NZiJDEW772UfqqdCTPfQoBXstr8We
+      - source: cmaps/HKgccs-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKgccs-B5-V.bcmap
+        size: 149
+        integrity: sha384-sKj7GwA11AR2fzOwAYKCE0bxbCeUvV/wBKr9ppSotxytYZ1qgov0K64SVjt6yqh3
+      - source: cmaps/HKm314-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKm314-B5-H.bcmap
+        size: 1772
+        integrity: sha384-hbAztH0BjRDlmmWxheoZfdepoHYiUZTmnKEbpNu0uXxaiWen9ob5Sndi36sqXUsm
+      - source: cmaps/HKm314-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKm314-B5-V.bcmap
+        size: 149
+        integrity: sha384-uwnypWbj//ibGb09x2goaL1nE9gRDu0aOUsz2IjbXW3GY6TrTt2w1IUghk0XR6P3
+      - source: cmaps/HKm471-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKm471-B5-H.bcmap
+        size: 2171
+        integrity: sha384-UOt9v5SJLwgv+TM70jvDGJ/0EiBItDqzt0YPZ37QSkuA63ETHtGQAg15HilDUSaZ
+      - source: cmaps/HKm471-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKm471-B5-V.bcmap
+        size: 149
+        integrity: sha384-3nAoSE/x1JiyRQD/fXeC6pnSDNGh09dZRRSQElXztVpy4dAULDKukKEEcmJeOlrQ
+      - source: cmaps/HKscs-B5-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKscs-B5-H.bcmap
+        size: 4437
+        integrity: sha384-irZXcokm44IWPYY01gyJeEk9zOloUkPcbzp81HWaRhhkLpzbJmWhNRRm9rdrW8C5
+      - source: cmaps/HKscs-B5-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/HKscs-B5-V.bcmap
+        size: 159
+        integrity: sha384-rp6ChLFBjhNiyNCMzhEg1TxT9YX6qMlujSLsotYqzEdN2SETEVWjQn2i49hBMlKI
+      - source: cmaps/Hankaku.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Hankaku.bcmap
+        size: 132
+        integrity: sha384-jW+Udt+F3TtPrVtKNRGHBCCq0sPrZZZscYCK6joOdXBEBHUJ8zTjB/bptucpxOtj
+      - source: cmaps/Hiragana.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Hiragana.bcmap
+        size: 124
+        integrity: sha384-7UpkYbTYizupOpADUNf2ykUIlZXqxkA7mJESWHUus6koTpHhcFYSdLlfuQvwvsUV
+      - source: cmaps/KSC-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSC-EUC-H.bcmap
+        size: 1848
+        integrity: sha384-2jFjHKcm3t+2zrXfdeAYFGbnwbsctRGfAGCefT7gXcnQsIi4/wYdlS7fHM0pjuCT
+      - source: cmaps/KSC-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSC-EUC-V.bcmap
+        size: 164
+        integrity: sha384-+CPny7Le/dZ8Vju2eYcXn5TT9vJE7w+M9GS646DomgvjUn1O2cD6XNiI3L98q+CU
+      - source: cmaps/KSC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSC-H.bcmap
+        size: 1831
+        integrity: sha384-MS/G+jdp9hV0UkdoW8oMcinfwxx0cY+avCwAtGEfIaSj13s8HcK5UxSABFKlepUV
+      - source: cmaps/KSC-Johab-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSC-Johab-H.bcmap
+        size: 16791
+        integrity: sha384-9d8R2AutwS4ohq5NExzFCyM2a7JQmg6w32v7ZQEda4cBW95KF5BDIN8qz+Ure6Vt
+      - source: cmaps/KSC-Johab-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSC-Johab-V.bcmap
+        size: 166
+        integrity: sha384-o4WHEntb0cvfqfWWo9jZEEMQMyDmL1JS68vp/LwP+3M94x1aMjhmkhQIUK6LzKNd
+      - source: cmaps/KSC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSC-V.bcmap
+        size: 160
+        integrity: sha384-l3j5borauK8zQe7w8PYyRiKqm2ZQzIpjBYQpmVFeeaxwWtYEADjRcEWEY9biGyLc
+      - source: cmaps/KSCms-UHC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSCms-UHC-H.bcmap
+        size: 2787
+        integrity: sha384-+ZA53I3YyE1k6ljm7qFT/Mtq5Ljhq1PceE+ccbMu0KHEx6QyTCqqTXo3GO0KNTSl
+      - source: cmaps/KSCms-UHC-HW-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSCms-UHC-HW-H.bcmap
+        size: 2789
+        integrity: sha384-d5/tsF1WhNnIqVhMIO9a85yZpfnMVjVT41vxoMlF4CSIlN/AqaAO8Ch4kG3kQDNm
+      - source: cmaps/KSCms-UHC-HW-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSCms-UHC-HW-V.bcmap
+        size: 169
+        integrity: sha384-OJHx4XuAYtAKfPLMVteFf4oYzUC0zOehLk4iPduYy7mGe3tFiPmm1P59r2GplbvH
+      - source: cmaps/KSCms-UHC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSCms-UHC-V.bcmap
+        size: 166
+        integrity: sha384-bKrkCgyan5WlqxOWMPB6/86KgeQD3kJc36yrhiTYWjsoIBhQWdipVkXgX+4eXiAs
+      - source: cmaps/KSCpc-EUC-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSCpc-EUC-H.bcmap
+        size: 2024
+        integrity: sha384-CjCeGhCAxw6LAYN2cyb9zM53bqpkCs9TeB9toCMk1aIAbP1sMJKUTkAExgqfiWld
+      - source: cmaps/KSCpc-EUC-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/KSCpc-EUC-V.bcmap
+        size: 166
+        integrity: sha384-tX9NFhUx3PYmzwQiZE6Na9tGiMlrScVrwRHTGu3LkSL3N26LIMl4r0Qv6OlvWIHY
+      - source: cmaps/Katakana.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Katakana.bcmap
+        size: 100
+        integrity: sha384-xbEyxLYADvzR3F2fNwOpAvklb8jw/v91LxtDMpXgBq2hkkmzarBL3oKlZsdbK0/6
+      - source: cmaps/LICENSE
+        path: internal/adapters/web/pdfjs/cmaps/LICENSE
+        size: 2080
+        integrity: sha384-5X0kvqYeJUD/hl3YOvvLWjiJhr1rAnPC8EOq2MpPbnGujOZgZTD3XZgnYEFu81z3
+      - source: cmaps/NWP-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/NWP-H.bcmap
+        size: 2765
+        integrity: sha384-VxCi+Za5w1XiUU5EbU5/i6BD7MW7flKI3JbtbkJ2JBnGY4m3tSglM/hRWR+SG/kz
+      - source: cmaps/NWP-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/NWP-V.bcmap
+        size: 252
+        integrity: sha384-awkSvoFHeSxy+EqdvxfeJtr96NaSsXWViq5KPER2IohSlbUdHorCaiTX6sRH4LBl
+      - source: cmaps/RKSJ-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/RKSJ-H.bcmap
+        size: 534
+        integrity: sha384-KBniGp3RbHcQtuAbEmRTQbKuTgUqsQnu4HqRcetn1N+zrio1Jq4fk6jRjTLhTZOx
+      - source: cmaps/RKSJ-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/RKSJ-V.bcmap
+        size: 170
+        integrity: sha384-0cSBlFNIL82P0K7IeH4Z8tBpcKTl8AlQFXx8fwos7Y7OuvKKPiJIcEne14gHlUKX
+      - source: cmaps/Roman.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/Roman.bcmap
+        size: 96
+        integrity: sha384-LYyb7QZC3UkMBge1KoYwte2THSTzpke8GGj8mLiSOYWR60G3gc/+ZUJW6pKeY5Y9
+      - source: cmaps/UniCNS-UCS2-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UCS2-H.bcmap
+        size: 48280
+        integrity: sha384-eQ4ss4a0f0SgKIywq851x7lj0G9Y5YCfxjEneGn+CGaRTAjh0vbVx44A9lYDsCEM
+      - source: cmaps/UniCNS-UCS2-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UCS2-V.bcmap
+        size: 156
+        integrity: sha384-w+MdlCEfGbfYG2NpuIizPuj08796yhd2DSVhVEyL7MboWirpT1cVtWKHopGTvuvS
+      - source: cmaps/UniCNS-UTF16-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UTF16-H.bcmap
+        size: 50419
+        integrity: sha384-0PVjQr1OHNr1NYdbueRyw5v2cxGOu3RYzWg7+0fEYspgQokH+SYCdXUxf1OZEGvM
+      - source: cmaps/UniCNS-UTF16-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UTF16-V.bcmap
+        size: 156
+        integrity: sha384-ykcZUfvLGdWy16QL42vBYC3vcMJxspueIwEO/lrux23jzaxyJa5eTwyApJAeAmD9
+      - source: cmaps/UniCNS-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UTF32-H.bcmap
+        size: 52679
+        integrity: sha384-YQSQ2nctkf9YKn6JodJVYjJOFw3+6zXTb6hgPCQLnhPo+FPn7zjCRiUboSepRZ+8
+      - source: cmaps/UniCNS-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UTF32-V.bcmap
+        size: 160
+        integrity: sha384-cwQa5n2/rCE7gmyF8MWdD4QE9pTcxy2Ge/aPYlIGpZ7k2dVgu+dv8elJUzktsQoK
+      - source: cmaps/UniCNS-UTF8-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UTF8-H.bcmap
+        size: 53629
+        integrity: sha384-zXXYr/GS8PdKwXAq+6eHYqxUrZMLzZQTNCeMK6SXTT7/3rnrUOpPVO3oTELb6g01
+      - source: cmaps/UniCNS-UTF8-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniCNS-UTF8-V.bcmap
+        size: 157
+        integrity: sha384-z00x5n0gCWK5SXFL3/GXzzS/UUC+/UsH/cn8fVDSxX9Pss0+ftvBv1yA7RdfQI/S
+      - source: cmaps/UniGB-UCS2-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UCS2-H.bcmap
+        size: 43366
+        integrity: sha384-Jncx+oPLDTsMgJLuMUwsVMxvH7ey73pgCwh6KVWs04J+xeY/XSuHPIhuIUVRy4RE
+      - source: cmaps/UniGB-UCS2-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UCS2-V.bcmap
+        size: 193
+        integrity: sha384-vC72sa/HdCDUJ4qRUzCKlYqgtgimDfGnL1GMiESftPz96eEv4J+8O0+EQaLwLIER
+      - source: cmaps/UniGB-UTF16-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UTF16-H.bcmap
+        size: 44086
+        integrity: sha384-8M1AMiQGtYSzenqVCs6v+HEumANIJEn/IjyT14AA7ih4g5qh1j7VF6eSrUO7AbwH
+      - source: cmaps/UniGB-UTF16-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UTF16-V.bcmap
+        size: 178
+        integrity: sha384-LJaBOgk4basvJLKv4R6Barp9zy+kuMA/nFkm4Nel7E2KEmDM2TX8uBDNcaKyKcYR
+      - source: cmaps/UniGB-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UTF32-H.bcmap
+        size: 45738
+        integrity: sha384-OdZsHL/VFBw658s9OPxdmWj9tuAREzz4B1dmGA8YHnvXYYa50bC+mxklxq+HZBcV
+      - source: cmaps/UniGB-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UTF32-V.bcmap
+        size: 182
+        integrity: sha384-ZGL0/xlz551/PmQ6MjQeOOL/G0b/zYALZrMEK3vpEctyCSGxEYzSzMOmm3GeCUIB
+      - source: cmaps/UniGB-UTF8-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UTF8-H.bcmap
+        size: 46837
+        integrity: sha384-Sgyv57o+S3ToNawz1A+qUIdIbrl0yGwiJmvzhVJGcTIWB70mzD34+4D/qJ29FrQ3
+      - source: cmaps/UniGB-UTF8-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniGB-UTF8-V.bcmap
+        size: 181
+        integrity: sha384-C/lPY4zS8+UGOlVbm4S5hsQlCp/OILBOD5fJ0vaQ5E0MmXMMmpnEI6ONtB1xiruy
+      - source: cmaps/UniJIS-UCS2-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UCS2-H.bcmap
+        size: 25439
+        integrity: sha384-Fw1zGgORjx4yVeQatjWWpQ0Ud0xeLkJ0AkByIvr3UqN29ruvy5rcxjEaImLDmyh/
+      - source: cmaps/UniJIS-UCS2-HW-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UCS2-HW-H.bcmap
+        size: 119
+        integrity: sha384-yennmJD7F1jLwpOETm61qPPKQrOV464NfWiwUpZdpNt/tjFjc+r/Em1LDu55ZIke
+      - source: cmaps/UniJIS-UCS2-HW-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UCS2-HW-V.bcmap
+        size: 680
+        integrity: sha384-lGlS1DJWaEk/s0snduM40zvtH9WA4L4yn2/kfgg1IdEKq+heAzAGnV/Jn0itjrP8
+      - source: cmaps/UniJIS-UCS2-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UCS2-V.bcmap
+        size: 664
+        integrity: sha384-hoB6S+3o2Fs3rpa11DwGbUpFtorKgRmBTQO7phIN5Uc7JWep6NrP+G8GVtLMLIyP
+      - source: cmaps/UniJIS-UTF16-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UTF16-H.bcmap
+        size: 39443
+        integrity: sha384-ztT/ZbS8hKGexc6RxF1R8KGPg9WoIGpSLwUHKNU+AXlw8skHaIY+cgJl/t42e6HC
+      - source: cmaps/UniJIS-UTF16-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UTF16-V.bcmap
+        size: 643
+        integrity: sha384-1lfpv46njGzq5uivjb18zvj8cDIYzNi/j8KMVR/HLF3iOP4ZyXegzHvqIKx5kOe8
+      - source: cmaps/UniJIS-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UTF32-H.bcmap
+        size: 40539
+        integrity: sha384-PwB+EUuLwKvzM4E4kevzWtPUWYxTjwHwqFX5/+p7XZ2ODhj7bNylb385rw4x4CPM
+      - source: cmaps/UniJIS-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UTF32-V.bcmap
+        size: 677
+        integrity: sha384-BGEN+0n/o4NGn8IXsskTkUWLywfDcwg68vjNNvZXRI5me2mo9Hth/lTmaklo924O
+      - source: cmaps/UniJIS-UTF8-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UTF8-H.bcmap
+        size: 41695
+        integrity: sha384-2hkuXt2bQdvy9HuP0Nt/cjYr1cIGOCGfBLJc0HYFSTzqwKI+6Fv1nXpgcvgxrFjE
+      - source: cmaps/UniJIS-UTF8-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS-UTF8-V.bcmap
+        size: 678
+        integrity: sha384-Lp5Njg8EvbFb3N2eA9nI+ltMxtZaHz2QGVK9pfSkg2SS1tJoUNTUNvBIGR1jLWHu
+      - source: cmaps/UniJIS2004-UTF16-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS2004-UTF16-H.bcmap
+        size: 39534
+        integrity: sha384-pRbYs7KtV1GOGowissFi9D2Cm9Bm6Kh0orb4DD3dGd75eQHq3QxbclGf13Q39zzd
+      - source: cmaps/UniJIS2004-UTF16-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS2004-UTF16-V.bcmap
+        size: 647
+        integrity: sha384-Evba09q6h3mMykLsSTc9P0HVtRZ8YPJBRsN3xwTfgA+VLaqv5HlmpNo2uw24C70C
+      - source: cmaps/UniJIS2004-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS2004-UTF32-H.bcmap
+        size: 40630
+        integrity: sha384-gcjv/nXsA0d0l3K6vad5p//3RcIeqFiHq0zdxa/TAaCkqDGFDkkg2Fqlm1pimxJG
+      - source: cmaps/UniJIS2004-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS2004-UTF32-V.bcmap
+        size: 681
+        integrity: sha384-8KzWLQDOvw9twJMhNIXrDdma6kTvoM0/QHHnQ/HUHNKWLMs6tOupKfP/bsVcnHH/
+      - source: cmaps/UniJIS2004-UTF8-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS2004-UTF8-H.bcmap
+        size: 41779
+        integrity: sha384-wCYNhg06wMCEZHY3iTYn45YPRMH0Dd4A7jS9uwT++ty9CRL6jgQZiotFevjvyjI0
+      - source: cmaps/UniJIS2004-UTF8-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJIS2004-UTF8-V.bcmap
+        size: 682
+        integrity: sha384-3o5ZaZyG13+dUcOQJJrHNHmurkOYRV1TBJo9m8sSOA8L+zLYM7DfAs24tbJfP8Cy
+      - source: cmaps/UniJISPro-UCS2-HW-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISPro-UCS2-HW-V.bcmap
+        size: 705
+        integrity: sha384-hy0trTVSPth2Vev1Bs6v3hd5dUdst3zUdcEm1DfYX/jdL1+fBcOQZ6eLLGLSK51K
+      - source: cmaps/UniJISPro-UCS2-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISPro-UCS2-V.bcmap
+        size: 689
+        integrity: sha384-ECtDXpQTOu5mMIWvadk9g/3sruRTwd07rCY7vbQCfUY536EEf1XfIxw898L/sFIK
+      - source: cmaps/UniJISPro-UTF8-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISPro-UTF8-V.bcmap
+        size: 726
+        integrity: sha384-2NWWYtJJk/UtkQYIkJTS31UEf3/eeaEjHmluV6g7NDX0Q7rxHjcA+3QXYkLdnEEH
+      - source: cmaps/UniJISX0213-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISX0213-UTF32-H.bcmap
+        size: 40517
+        integrity: sha384-B9sJWIXGIYVdN300fqhqaBdzhpFiQnjkLcA4/3q9qTo0iSk9h5Eivuqqo6sauaXu
+      - source: cmaps/UniJISX0213-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISX0213-UTF32-V.bcmap
+        size: 684
+        integrity: sha384-HsweVuFQSb942ffesTp7wa9f0feQsz+koYXflM6SrymNBC/DDAedvosDGl1cnQS5
+      - source: cmaps/UniJISX02132004-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISX02132004-UTF32-H.bcmap
+        size: 40608
+        integrity: sha384-OZiyhIxSwLLCJ/QdcLFT+en4GLJhnfwU8Kh3iGEaVyjJQOTPA7KOlpvysRw1WsFy
+      - source: cmaps/UniJISX02132004-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniJISX02132004-UTF32-V.bcmap
+        size: 688
+        integrity: sha384-DEaWkTTBZZvDhFKXjHhm6UVOJX8gS44+5zPIbEkNCDk2vlJd9wN+EcyPciStmuYk
+      - source: cmaps/UniKS-UCS2-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UCS2-H.bcmap
+        size: 25783
+        integrity: sha384-7iBCXD/Ly38v4o21mJjohuYE5nf095K9EVdaUYBrYnqWtc7hPpQNpk6hna5Tzoso
+      - source: cmaps/UniKS-UCS2-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UCS2-V.bcmap
+        size: 178
+        integrity: sha384-7uH4hP5QJQu3oko5av5Bm5hV7GfknEq90KRqzKUsAVROY7shzfElcpJsDJwcTFNk
+      - source: cmaps/UniKS-UTF16-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UTF16-H.bcmap
+        size: 26327
+        integrity: sha384-8gtCkFNsu0qyaLRihQ5jtsVeKL7bz+ElDaf12YIvj9YpfX1Y1oDlx4P+3lm23oCP
+      - source: cmaps/UniKS-UTF16-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UTF16-V.bcmap
+        size: 164
+        integrity: sha384-4NAvC0ogl6ummYEYH9buaj+ry8w8mXMWwp9o1E/tXax9f3vhhqCul1qEkJQI7zlu
+      - source: cmaps/UniKS-UTF32-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UTF32-H.bcmap
+        size: 26451
+        integrity: sha384-cqnnt3Fo8SwehjRiGzNNs0KAHBulT/bQOKjj3Dvo2vboD1jbtJ2rZOCo4dk7tbv5
+      - source: cmaps/UniKS-UTF32-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UTF32-V.bcmap
+        size: 168
+        integrity: sha384-NT6s/0GoahIosLTXp5IEMdPeh++E+h9whZQA9QHVyx/Rl0NIv9hST94qNlP0epVe
+      - source: cmaps/UniKS-UTF8-H.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UTF8-H.bcmap
+        size: 27790
+        integrity: sha384-EySjPDrRnXAEsJh+87Rh+iFWlysf1qXNWwn4ZczbQ+xsGxXk1/wBN9KNijLBkC+0
+      - source: cmaps/UniKS-UTF8-V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/UniKS-UTF8-V.bcmap
+        size: 169
+        integrity: sha384-e+QYmkfdYvgYuVIsP/vx4EuPCvG+h22HD4eXbQTNQDXSw+i3Ig45SZ1292myvL64
+      - source: cmaps/V.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/V.bcmap
+        size: 166
+        integrity: sha384-FsbgYCUylaeQqHlmvz3et6RkJQKzEo1QNow4hUHzCXrxcJDnys/1s6Xbe35h6dlw
+      - source: cmaps/WP-Symbol.bcmap
+        path: internal/adapters/web/pdfjs/cmaps/WP-Symbol.bcmap
+        size: 179
+        integrity: sha384-xxb3ANBVDdxqKBJCY4OMTGuf/4/G+F3ECxnuALhv32QWgqThFkaQmoCOHwXTxjno
+      - source: iccs/CGATS001Compat-v2-micro.icc
+        path: internal/adapters/web/pdfjs/iccs/CGATS001Compat-v2-micro.icc
+        size: 8464
+        integrity: sha384-rnWCcQkjHbYX0H/BIYNCqU0Vb/afhH72yMrlQoRfofVpbXbeaNRYPU6myYJs4re7
+      - source: iccs/LICENSE
+        path: internal/adapters/web/pdfjs/iccs/LICENSE
+        size: 6553
+        integrity: sha384-hjc8KxiU8CCLTImEc5Qu47qTNlKMUd7XSJkYFXsSj5eMzqx8MfgIto7eVtf0S0VQ
+      - source: standard_fonts/FoxitDingbats.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitDingbats.pfb
+        size: 29513
+        integrity: sha384-J6D0tuQ7hS4r7c36w4Knq9lCvK5fVNcMVS42w1akJ6d50IRQpIiDUHAx9p5Qauy7
+      - source: standard_fonts/FoxitFixed.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitFixed.pfb
+        size: 17597
+        integrity: sha384-G+pbNzvaEqW9j5UWUdLjo+D48ORIOVf1HvsdEYtoeNQ0q1yk4FrRlUjY/Q6RmM/p
+      - source: standard_fonts/FoxitFixedBold.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitFixedBold.pfb
+        size: 18055
+        integrity: sha384-4/tnth9xUAxEYByFlQTurvox7hqAD46o8O4eI5JYnZjjystXeppy3lxk0IdoHI4+
+      - source: standard_fonts/FoxitFixedBoldItalic.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitFixedBoldItalic.pfb
+        size: 19151
+        integrity: sha384-ZcJjm20tGM1nvRa8TZqMhFWp34Aip6omaLitE4yxR+iARdaNTs37QISKnM7v9nl5
+      - source: standard_fonts/FoxitFixedItalic.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitFixedItalic.pfb
+        size: 18746
+        integrity: sha384-deS6b1EpY8X1tcrH0HsEJvbVmGoBPbHVTneyT2S3lBBUOjMt+6Dyvb752+6F5Z78
+      - source: standard_fonts/FoxitSerif.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitSerif.pfb
+        size: 19469
+        integrity: sha384-YTEXSjTC9vufA43meRBWaR6NQf4MfeQa6R4flRDqmCaUdX6BCIt+dCpU6Yt8l289
+      - source: standard_fonts/FoxitSerifBold.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitSerifBold.pfb
+        size: 19395
+        integrity: sha384-meAHQWDB3WCH/yUJJYdOy7OEEhtqiezV9hLWqbhoyhMe4HlFAki3L6Vt8dsZ5QqQ
+      - source: standard_fonts/FoxitSerifBoldItalic.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitSerifBoldItalic.pfb
+        size: 20733
+        integrity: sha384-kp+DLlatORDKvJCvG9IhLhxrJlJ1bQO7CB1rzb/TvZz7QcmZGe+Q1Hb83wnMtkTD
+      - source: standard_fonts/FoxitSerifItalic.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitSerifItalic.pfb
+        size: 21227
+        integrity: sha384-Lk8/p/Z/E9/+hQygIXI0znAyvgUFLjUgfCm5/L82Gpe2Ds8Oh2TfTcvWjAc47QU0
+      - source: standard_fonts/FoxitSymbol.pfb
+        path: internal/adapters/web/pdfjs/standard_fonts/FoxitSymbol.pfb
+        size: 16729
+        integrity: sha384-1x+uMu5vnYoPajnjcUnXfxbInC1i0XOCSLKWzG2C1EIR8nhRyq+pRm5sWWt9ooWL
+      - source: standard_fonts/LICENSE_FOXIT
+        path: internal/adapters/web/pdfjs/standard_fonts/LICENSE_FOXIT
+        size: 1553
+        integrity: sha384-1fHjQMkJb6qgIXOHMyAnwhQVamTqavpeezWjYeNQVnKu98ISGckhCXlLn9NE8TCS
+      - source: standard_fonts/LICENSE_LIBERATION
+        path: internal/adapters/web/pdfjs/standard_fonts/LICENSE_LIBERATION
+        size: 22154
+        integrity: sha384-/8FywW9nSd8oVEn12psdu3hXFVK2Xc46DfoQPmh9ozAgse5+arxrLbKYGgj4b/rj
+      - source: standard_fonts/LiberationSans-Bold.ttf
+        path: internal/adapters/web/pdfjs/standard_fonts/LiberationSans-Bold.ttf
+        size: 137052
+        integrity: sha384-w8/QMz3l1Xz5nCx5NPZBqeE0IWqmwbhgmcFxRZonV/prVmW+ukvR9EYm9U9VbWIK
+      - source: standard_fonts/LiberationSans-BoldItalic.ttf
+        path: internal/adapters/web/pdfjs/standard_fonts/LiberationSans-BoldItalic.ttf
+        size: 135124
+        integrity: sha384-qSHhJ4sqYPkb27gHdv84/OV2MG4MLV5YuG0/U/9UhYaAOFKcKI4+W+SqBJYQLQDc
+      - source: standard_fonts/LiberationSans-Italic.ttf
+        path: internal/adapters/web/pdfjs/standard_fonts/LiberationSans-Italic.ttf
+        size: 162036
+        integrity: sha384-OrFSN+or3P623tOOCiYSeqJndYCnPspnIgrP8yzTlKodcGSo+CyFOqep1ejZN0Qk
+      - source: standard_fonts/LiberationSans-Regular.ttf
+        path: internal/adapters/web/pdfjs/standard_fonts/LiberationSans-Regular.ttf
+        size: 139512
+        integrity: sha384-SD1vkNhYglih2fyROhymiRHqSpxDyrVyUJZrd0ysZzYzvgy7TwGlYGz847vWirSD
+      - source: wasm/LICENSE_JBIG2
+        path: internal/adapters/web/pdfjs/wasm/LICENSE_JBIG2
+        size: 12862
+        integrity: sha384-J5tAXLmU1hk37x/rtn1pjJEfdqVYh7EgG+B6lIK5aw6k+9WYGe9M8gm1j+ULicJC
+      - source: wasm/LICENSE_OPENJPEG
+        path: internal/adapters/web/pdfjs/wasm/LICENSE_OPENJPEG
+        size: 2112
+        integrity: sha384-oxhzb5CWCM0hI0cS6xwOd6lYWLt/ghPDdq/b0aLZYwAcFZS7sszX+L87CQAQTBFK
+      - source: wasm/LICENSE_PDFJS_JBIG2
+        path: internal/adapters/web/pdfjs/wasm/LICENSE_PDFJS_JBIG2
+        size: 555
+        integrity: sha384-Mz2Pk3oEiBmuE+rXRSf08894SohPzjC+6K1a3pKVHO1OFvs1CnIsLpeNTiSVsu5Q
+      - source: wasm/LICENSE_PDFJS_OPENJPEG
+        path: internal/adapters/web/pdfjs/wasm/LICENSE_PDFJS_OPENJPEG
+        size: 1285
+        integrity: sha384-64Sw3kBHe99nrBatvEw5apkno6CTKs9T/OEZUAN8eDURK04BY6+kJDCutpG/tYSl
+      - source: wasm/LICENSE_PDFJS_QCMS
+        path: internal/adapters/web/pdfjs/wasm/LICENSE_PDFJS_QCMS
+        size: 1036
+        integrity: sha384-uQh45cKqoJpEO6vP3DTQs0DByQbKsXCe0YrgADvGoZjXc/wt1wQFY3u5XK3xw609
+      - source: wasm/LICENSE_QCMS
+        path: internal/adapters/web/pdfjs/wasm/LICENSE_QCMS
+        size: 1121
+        integrity: sha384-WNQe2pnzo6raGqBJgBUy6D0wVVz9ukzMQCwnL9WC2oXgzxMRVg83qe97QNgmBDX8
+      - source: wasm/jbig2.wasm
+        path: internal/adapters/web/pdfjs/wasm/jbig2.wasm
+        size: 103671
+        integrity: sha384-iaCfit7ahDwR6i0sUBtQtjqoUs/cixFPu1hRkl4j14vBZ9WWoGkJhy0wQ9N9P5ED
+      - source: wasm/jbig2_nowasm_fallback.js
+        path: internal/adapters/web/pdfjs/wasm/jbig2_nowasm_fallback.js
+        size: 132439
+        integrity: sha384-eJV5Hnh2jPEV5ebJb9//cbFnagbJoip5RdB2Zf1hE3pIcYycKsQkOeO0RHw8YR/K
+      - source: wasm/openjpeg.wasm
+        path: internal/adapters/web/pdfjs/wasm/openjpeg.wasm
+        size: 220817
+        integrity: sha384-zUaz4HmvfKEHP9lus9TOMat1FFL0UcpbPw5V11mhoW2ma/L1IDw03o1QQqv7AkF2
+      - source: wasm/openjpeg_nowasm_fallback.js
+        path: internal/adapters/web/pdfjs/wasm/openjpeg_nowasm_fallback.js
+        size: 338458
+        integrity: sha384-Q7O56CGRDIf3jGvV3t6oe78CfpmLv1QU9zCgc1A6E0sZwVUmZIzZYUSmN3Dun6pW
+      - source: wasm/qcms_bg.wasm
+        path: internal/adapters/web/pdfjs/wasm/qcms_bg.wasm
+        size: 96589
+        integrity: sha384-crXlTk8667X5hvmJDxcg+vc2W/lXGdCsmhGFe3qJ0y9fW6iEm6GpGOa4EZ4oDKBP
+      - source: web/images/altText_add.svg
+        path: internal/adapters/web/pdfjs/web/images/altText_add.svg
+        size: 920
+        integrity: sha384-wkZGmOEi4m6CZKBuzkDYtzOXDAHDO8QHu3OoCmLK9bfF/iZQqYqvggDmUpyeaXBS
+      - source: web/images/altText_disclaimer.svg
+        path: internal/adapters/web/pdfjs/web/images/altText_disclaimer.svg
+        size: 3397
+        integrity: sha384-GbLF1ATAZaPo+0c4TJSZIoXQeg7HpM/1a3PjEQdD2XgYvIs3RBvvlYozZQAhkNtC
+      - source: web/images/altText_done.svg
+        path: internal/adapters/web/pdfjs/web/images/altText_done.svg
+        size: 1087
+        integrity: sha384-wq5FzhFEOXUwYq5p80hq7k4Msb5YG0habBG8cny8bICsNx4YI+EWwIRsTq5/HLcn
+      - source: web/images/altText_spinner.svg
+        path: internal/adapters/web/pdfjs/web/images/altText_spinner.svg
+        size: 2710
+        integrity: sha384-viNe/5BcwkIesUX68tvjGQlst8dOhkul0SDBSJmi+paHamh+nJaGDSDEu+yaAayQ
+      - source: web/images/altText_warning.svg
+        path: internal/adapters/web/pdfjs/web/images/altText_warning.svg
+        size: 1532
+        integrity: sha384-lR6S0UqQ0Mu0gHMngnsMg51gwap+dJ3LsNpDRjqZSi8v4U/LI0gcV83bDooM+Xel
+      - source: web/images/annotation-check.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-check.svg
+        size: 415
+        integrity: sha384-/iFvS3CpFWxkLTFCbfMHal2NPOZJP8vAbZf26zHPKdOWt9bleI5wZdf3F3F2OI3U
+      - source: web/images/annotation-comment.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-comment.svg
+        size: 883
+        integrity: sha384-1lPCeoXvzp0FnErvljqi+GNICKLArzmzCumJPZeHPhGaiG8D5OZ7dM5CYAnKMKZw
+      - source: web/images/annotation-help.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-help.svg
+        size: 2168
+        integrity: sha384-+BGTGsU31Rf1aTI6o1wjbfzjwYlRZKUL7eLDpGX6wx2tppTdWak3kBbriTXcFVVb
+      - source: web/images/annotation-insert.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-insert.svg
+        size: 408
+        integrity: sha384-HNlkp843w8L74a0pENUfGQw/iofwZl7Ho+Y8PUJUD1q2UnuYmOuds++Y3QPhwhOB
+      - source: web/images/annotation-key.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-key.svg
+        size: 1452
+        integrity: sha384-DtPN0gcpjzg5kbnhUQm6s6EpBAfSAz9b6PA+/vQwxCtD2C4arKi+xS3YJzkWEHBQ
+      - source: web/images/annotation-newparagraph.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-newparagraph.svg
+        size: 426
+        integrity: sha384-Hirlzku6uYc946I+CwvpVnaDPTWQj7MDwGO8bfxezsF2vPXIELovWlPrt5GxlivB
+      - source: web/images/annotation-noicon.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-noicon.svg
+        size: 158
+        integrity: sha384-QRETTFHKa6eCAg3jjqypkT2Iii2A8AUDyvWwnScZBCancGNzxGIfy85n1j7U/fXC
+      - source: web/images/annotation-note.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-note.svg
+        size: 1041
+        integrity: sha384-x01/B68k0n7eeHeJwp65dKymMrV5lvfnxEiW3wrEV+DmfXFSBVIZVmmOWjmYCMRg
+      - source: web/images/annotation-paperclip.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-paperclip.svg
+        size: 552
+        integrity: sha384-Ue63+GSDJcbrN6n8uszGqvFrLmugmL6VKO8Qde9L2EN3dzIQAhiJP4MnibcMCJAj
+      - source: web/images/annotation-paragraph.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-paragraph.svg
+        size: 1143
+        integrity: sha384-M4PWCfKOuEUL8n/Jg0Vy+3Nk5y/w33BHJOlx2WH6EmGe3j742Qa5FnXMLuy30uGY
+      - source: web/images/annotation-pushpin.svg
+        path: internal/adapters/web/pdfjs/web/images/annotation-pushpin.svg
+        size: 1375
+        integrity: sha384-huM/d0nXmVoxT1VSRcj7jqZHVWHuLkAHt7dmY+DXvOdfRdFFrqjSSp708FvQIoi0
+      - source: web/images/checkmark.svg
+        path: internal/adapters/web/pdfjs/web/images/checkmark.svg
+        size: 565
+        integrity: sha384-bjHLfY57p6QaCstce3fujqeb9z0U/g2oAUVE67KrSJFkb3H4AKtJOoYSwP52EiKa
+      - source: web/images/comment-actionsButton.svg
+        path: internal/adapters/web/pdfjs/web/images/comment-actionsButton.svg
+        size: 421
+        integrity: sha384-pJiNOF2uZXlKdCrSh2gxZ1D6mGhZNLPuoWMTPFKfAoWL5GgFSYVkIyuC6EDOq6bE
+      - source: web/images/comment-closeButton.svg
+        path: internal/adapters/web/pdfjs/web/images/comment-closeButton.svg
+        size: 1199
+        integrity: sha384-3n6nzhReJek4tndwo4hNT+Qn+XsSndS7EDew+7VSjLsgBKNzaC7HAGh9g870kWDk
+      - source: web/images/comment-editButton.svg
+        path: internal/adapters/web/pdfjs/web/images/comment-editButton.svg
+        size: 908
+        integrity: sha384-oJWp42ZFvWLnL9cheiXtxKMg0L7cBGmw1ppRD+DMr5INAidjIe/7ke4ksWoduBUS
+      - source: web/images/comment-popup-editButton.svg
+        path: internal/adapters/web/pdfjs/web/images/comment-popup-editButton.svg
+        size: 1635
+        integrity: sha384-LVVMiZgoxc/NMcK3r9LE1tVGqJIaTiEAWISv0AffePmwpBvrPg60a86yHELzdY5y
+      - source: web/images/cursor-editorFreeHighlight.svg
+        path: internal/adapters/web/pdfjs/web/images/cursor-editorFreeHighlight.svg
+        size: 2936
+        integrity: sha384-j7Xj8Ewe/NMzXY1MsV1PuzVqJq5UpAd3LAvxOHflGLYA12WQ0iSiDVSeku4wRZdm
+      - source: web/images/cursor-editorFreeText.svg
+        path: internal/adapters/web/pdfjs/web/images/cursor-editorFreeText.svg
+        size: 1452
+        integrity: sha384-AXLQrbCmhcq2kSQOKRXFcYv9od+YMxKCaL5lf2WaLyf7J33F/8TJFyAeHJg6iopR
+      - source: web/images/cursor-editorInk.svg
+        path: internal/adapters/web/pdfjs/web/images/cursor-editorInk.svg
+        size: 1323
+        integrity: sha384-FZFFBMpb+Fpz7Y29CxByzEe1tTYv6AhJeJVRilQ/XZzlv3wLYbf1s95kTEuOFl8h
+      - source: web/images/cursor-editorTextHighlight.svg
+        path: internal/adapters/web/pdfjs/web/images/cursor-editorTextHighlight.svg
+        size: 5402
+        integrity: sha384-1/xS3OCma05SePWo6+xdqw0tcOnbVv6H8wTf9Bs6SxKOFlFeLFknATZIZMkmG75k
+      - source: web/images/editor-toolbar-delete.svg
+        path: internal/adapters/web/pdfjs/web/images/editor-toolbar-delete.svg
+        size: 909
+        integrity: sha384-+ApkeZxCULwYb4YFfEb8mDTsWlCVMVOfGoIobKs+kR78EO4c6Ij8YhpL5CqpWq/E
+      - source: web/images/editor-toolbar-edit.svg
+        path: internal/adapters/web/pdfjs/web/images/editor-toolbar-edit.svg
+        size: 869
+        integrity: sha384-tILOvyqyxtyzdpEBpsDpyE6jDxCYNFXloWbTDtvrgHFSW+yfL19rXQkuBMNDM/lS
+      - source: web/images/findbarButton-next.svg
+        path: internal/adapters/web/pdfjs/web/images/findbarButton-next.svg
+        size: 578
+        integrity: sha384-Nma50uM1VLPnudWQ4Ztjo70z+L2umMhDSXDunmNi0G3C5M/qmHrHBSnwmqURMojS
+      - source: web/images/findbarButton-previous.svg
+        path: internal/adapters/web/pdfjs/web/images/findbarButton-previous.svg
+        size: 578
+        integrity: sha384-Er9gJVqQwMgFylYdcxATolu2xcXvpMDGNmyQw0th8QpmXNyH07/zMAS4MexBEXwA
+      - source: web/images/gv-editor-toolbar-close.svg
+        path: internal/adapters/web/pdfjs/web/images/gv-editor-toolbar-close.svg
+        size: 778
+        integrity: sha384-ADTnZ7l3Pu73DzQ5YdXqFVNkb3gcDqWZNF5tW/7YG4CTg3JVN0mdHE3EQN7rU/li
+      - source: web/images/gv-toolbarButton-download.svg
+        path: internal/adapters/web/pdfjs/web/images/gv-toolbarButton-download.svg
+        size: 782
+        integrity: sha384-g9d4TlnR91a2DvLizFY/LqCiRhv7CBoRGt9ihfqx+P2R8V7MNSPgrPqDlIEpAS4K
+      - source: web/images/loading-icon.gif
+        path: internal/adapters/web/pdfjs/web/images/loading-icon.gif
+        size: 2545
+        integrity: sha384-/YUeLQtog3eQcSk7YO7ot9nOBHYkK9+TrmnJiDgPbg5pjQS3Jjk5PEdwmAo5f25V
+      - source: web/images/loading.svg
+        path: internal/adapters/web/pdfjs/web/images/loading.svg
+        size: 1559
+        integrity: sha384-66hLowHXTmfEnT4BmVwnhkBUHRGrgh9WmGB4NoqhN4eyG3PXK5cbUY/6mtgDIOnc
+      - source: web/images/messageBar_closingButton.svg
+        path: internal/adapters/web/pdfjs/web/images/messageBar_closingButton.svg
+        size: 1092
+        integrity: sha384-3HKFqx69MYg8xKj0Z4aNoaNsiZi/9WnGcNiFOgCNGM7DdCVIqwHGxo0sw9tp8iIl
+      - source: web/images/messageBar_info.svg
+        path: internal/adapters/web/pdfjs/web/images/messageBar_info.svg
+        size: 1076
+        integrity: sha384-PctPUxF05sF07AboOghCM56TXLUurTWFoocbuOXjqL8fghp/apXF7TZdVRWIQgv7
+      - source: web/images/messageBar_warning.svg
+        path: internal/adapters/web/pdfjs/web/images/messageBar_warning.svg
+        size: 811
+        integrity: sha384-DM9SCmhuBHo0EurzKPCFfUVCe/AF+0XixVf9/F0DSlYjHOWHFVWxH6w+9h/nvJbA
+      - source: web/images/pages_closeButton.svg
+        path: internal/adapters/web/pdfjs/web/images/pages_closeButton.svg
+        size: 284
+        integrity: sha384-ziJWY+ZZ0gIWQpusSrq74gv45XIAscBkIN0EhAhe3bo0zWmngH+ic8vh6ZOmXH3N
+      - source: web/images/pages_selected.svg
+        path: internal/adapters/web/pdfjs/web/images/pages_selected.svg
+        size: 355
+        integrity: sha384-g5DhIe6jiImaP7uKXvVkCU6uelVFNBCnMiFoWVHINJ6a7NAct18swVPTP53kW13h
+      - source: web/images/pages_viewArrow.svg
+        path: internal/adapters/web/pdfjs/web/images/pages_viewArrow.svg
+        size: 705
+        integrity: sha384-4dIwmfqktAN/5K9ZjTjZXq2lx0eVd471Q7Rb1otAKBu872Zx5fsn52DchVQGf3Oo
+      - source: web/images/pages_viewButton.svg
+        path: internal/adapters/web/pdfjs/web/images/pages_viewButton.svg
+        size: 1406
+        integrity: sha384-IGP/eDXCIxAOhIS7Erw2qNFm2qUXc05RUqbJrrt8Ufs7vGkWYtajCQnp+eoIVkIa
+      - source: web/images/secondaryToolbarButton-documentProperties.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-documentProperties.svg
+        size: 417
+        integrity: sha384-z9kPgJ98z7vZmcrqZNw0boJZetOQVhTrVUIZj7hmGj3w1kEh+od1e/f0M6GZn7wv
+      - source: web/images/secondaryToolbarButton-firstPage.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-firstPage.svg
+        size: 260
+        integrity: sha384-idDRUpmspope9QmiaXf4iQ/uoAR4uscdaLfzLHXAVTc9NzSIMgEzT9vLpN6X5yQT
+      - source: web/images/secondaryToolbarButton-handTool.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-handTool.svg
+        size: 1344
+        integrity: sha384-fuwFLPMEiZ+PjSxECPf5Cn8lJJg5jBrfjltd6RDXHwcJH9wZZXGLgOXmorBK/iWp
+      - source: web/images/secondaryToolbarButton-lastPage.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-lastPage.svg
+        size: 257
+        integrity: sha384-kwwQ0f9kaYk2zpG2T0d0UmTA/D5rtIrVm4OXpb21Td+h6tSOMQHm88Pl1hn8Niuv
+      - source: web/images/secondaryToolbarButton-rotateCcw.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-rotateCcw.svg
+        size: 596
+        integrity: sha384-I4bLiBNEsb40PEn+PbWmBi7enbwVDzgm+TP0ccqJFSktExRJz2cYuYHR9thee9fo
+      - source: web/images/secondaryToolbarButton-rotateCw.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-rotateCw.svg
+        size: 576
+        integrity: sha384-koU55E3k8ISIMIz2WYIR1vZlBp7XdDRaq1QPArUH63ynqICWMWZrvllkfnE79Bcg
+      - source: web/images/secondaryToolbarButton-scrollHorizontal.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-scrollHorizontal.svg
+        size: 971
+        integrity: sha384-HkdrlH9YYSAFEmQo6ZhXYyEtAo04YT1QJHufybSWgEfo34xXKytqDFEVyaohYNWr
+      - source: web/images/secondaryToolbarButton-scrollPage.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-scrollPage.svg
+        size: 731
+        integrity: sha384-LPp2zjjmGNeVVPW/W3Nwmhya74YRt9cgMLNJ7exRUeyWrU0sP7SmXMopoI5OCXI/
+      - source: web/images/secondaryToolbarButton-scrollVertical.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-scrollVertical.svg
+        size: 969
+        integrity: sha384-4Lie4wdVXhVrXAHgnX1Sq+n5ztxmvQYkoXN9rppM2csfZT3W8QrO7cQb9riTDetp
+      - source: web/images/secondaryToolbarButton-scrollWrapped.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-scrollWrapped.svg
+        size: 1228
+        integrity: sha384-KLoGcObtgmSsemMAqAYXndZklsbJ/ZkizqmYFGzRdYWainJKdLGWE0H6FqUW6aU6
+      - source: web/images/secondaryToolbarButton-selectTool.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-selectTool.svg
+        size: 1085
+        integrity: sha384-qktpVj96vRa1R8RSoN/RBaMR9l03pNQEx6juAUEIuSw8+O1dI4sPmqutZq1OjRIL
+      - source: web/images/secondaryToolbarButton-spreadEven.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-spreadEven.svg
+        size: 775
+        integrity: sha384-D1AryWpiJoOiUXIufvAyZsMeSHTwDO9XQe9tHmGYCkSxk03oc3h+L4a91wJbhV3q
+      - source: web/images/secondaryToolbarButton-spreadNone.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-spreadNone.svg
+        size: 395
+        integrity: sha384-e8VshGLpaM7wfxTcg3ladfvldmz63ZyzOymeq83FI3IX6QVCeRN2WaE2XpxdCJOm
+      - source: web/images/secondaryToolbarButton-spreadOdd.svg
+        path: internal/adapters/web/pdfjs/web/images/secondaryToolbarButton-spreadOdd.svg
+        size: 711
+        integrity: sha384-HWbaK9Q6sIj19Nw0uPeTdRhAzj5eRP6W5dr0uzXlD9XSfGLyXRIKNiXD9sBhrWGz
+      - source: web/images/signature-properties-row-check.svg
+        path: internal/adapters/web/pdfjs/web/images/signature-properties-row-check.svg
+        size: 296
+        integrity: sha384-QndCGD6hSoiZH8K6TQJseaHsVm/9rqCMjj7GxOwg8Vldn1G1t3cffTgTd6r+MTu+
+      - source: web/images/toolbarButton-bookmark.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-bookmark.svg
+        size: 861
+        integrity: sha384-T9hTSaivHEnBZClwqwZAkoCmpFeL178t2ciaTVmzOkOerTgQDJdG566ufMR7NtDi
+      - source: web/images/toolbarButton-currentOutlineItem.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-currentOutlineItem.svg
+        size: 607
+        integrity: sha384-dVBc1eSc5fNVwRsT8psMrdPR9I9R/hrBIphlEelXvxSv87NIlKCQbIAhp1BEstEZ
+      - source: web/images/toolbarButton-download.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-download.svg
+        size: 1036
+        integrity: sha384-kSZmfmMdp4w+DCP1ERsW0HIKa4cGWb8ZF6e42dvsOdO9rC8Yu+3731net/xRof+s
+      - source: web/images/toolbarButton-editorFreeText.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-editorFreeText.svg
+        size: 498
+        integrity: sha384-wU4s1Wx4ZolNNnlaMTYkO3QXANDcwuX/s+Ae7Sc3h/r3UubkjhhREQjwP8oBMns7
+      - source: web/images/toolbarButton-editorHighlight.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-editorHighlight.svg
+        size: 910
+        integrity: sha384-AV3XsyjHG/WJNfSKn8I5Bs4lOc2mhyOM7xDpXPO+al8gJ6JfPmLuXfTMSQhW12XK
+      - source: web/images/toolbarButton-editorInk.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-editorInk.svg
+        size: 1189
+        integrity: sha384-potgcBO1WaQaGx6iVTAtZWgttiOV9gIf1RFYoNiWHVMjxcD1aZl4lfHCdIBEGC9c
+      - source: web/images/toolbarButton-editorSignature.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-editorSignature.svg
+        size: 1577
+        integrity: sha384-DxCGmjMK8at2teWyNbAW+fAkxr+D/7pw7v7dqbcimDcZVXna53uFzgnUABNFfCjQ
+      - source: web/images/toolbarButton-editorStamp.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-editorStamp.svg
+        size: 734
+        integrity: sha384-2tFGWlsaCApMTSjVnipSgEmB647zRb9438+lhnk2tIh3eoFJdkc9c1LTyIor5zoR
+      - source: web/images/toolbarButton-menuArrow.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-menuArrow.svg
+        size: 681
+        integrity: sha384-9Kwbs8FhivjQwZTMc+Bw06gWrOe3FGpXHsNRhblFaHrt7hStP3mxG41INBz1fmox
+      - source: web/images/toolbarButton-menuArrowNova.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-menuArrowNova.svg
+        size: 303
+        integrity: sha384-LMAGkaMDuXiW2ubxrKdN3JAdfRUExHG+iORd4CCmdyM2fbiAItoSeHz4fFvksG7Y
+      - source: web/images/toolbarButton-openFile.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-openFile.svg
+        size: 1400
+        integrity: sha384-ird46ZKar+X8ywINn47mr1V96Mzw/3izCuxHLoi79sdGLXELQQhrdl/pOSfHYLxl
+      - source: web/images/toolbarButton-pageDown.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-pageDown.svg
+        size: 701
+        integrity: sha384-tyPUiwg5GaQirRbWUEaqCrKXKr2xo34bSi4i2q4Abrvrhq7dUataohLE6UzdWOWZ
+      - source: web/images/toolbarButton-pageUp.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-pageUp.svg
+        size: 682
+        integrity: sha384-Mu25omtjsmKMuV2mG/M0SyeIOXBF/l8h9FhBMSF6Hshapoc2pzlF4qn/rjYFp42E
+      - source: web/images/toolbarButton-presentationMode.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-presentationMode.svg
+        size: 681
+        integrity: sha384-YLSNixKH0W1j+CrX/ukHSg3anHeN2/0qQRmgDKNEwafJJDl5spvpXHgA7ym9e5e0
+      - source: web/images/toolbarButton-print.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-print.svg
+        size: 927
+        integrity: sha384-4QHfIr6y+FKPywIqKcFcpiW3umCqAS/NSn7qWdPHJm3Q556E8+q/52jC5kYlEMfh
+      - source: web/images/toolbarButton-search.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-search.svg
+        size: 1234
+        integrity: sha384-HgZ3+dQmMfCOwycXe8Fw+658elcDWcVE3YQSX7qvr5s40++OOlHnA1lTwK9Q+Ay1
+      - source: web/images/toolbarButton-secondaryToolbarToggle.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-secondaryToolbarToggle.svg
+        size: 1080
+        integrity: sha384-iiuZqKKSPyh8ScLVxRvjH9ZmcMk/XnMJqWsN8OKlM+0j851gcrlS13ys5YLGBjYM
+      - source: web/images/toolbarButton-signaturePropertiesError.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-signaturePropertiesError.svg
+        size: 345
+        integrity: sha384-1bUJq/uSog0UcC91dE/S0CkUknqb7/p2t7aUt3mENGSwW2WQSDaF1+WxQZMbMkkV
+      - source: web/images/toolbarButton-signaturePropertiesVerified.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-signaturePropertiesVerified.svg
+        size: 356
+        integrity: sha384-Z9IOAxoejehT3s4+HiZx1WTEqrsQSDYpPOkJ9ifWq4ToB5khcdhXU7M1tAFf5CVr
+      - source: web/images/toolbarButton-viewAttachments.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-viewAttachments.svg
+        size: 570
+        integrity: sha384-xVRoTplWAMN6Ym4mfIALFaKezJq2i7EWIpqeV05aLUGP4r9scgkt0sQHvGCQbJo+
+      - source: web/images/toolbarButton-viewLayers.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-viewLayers.svg
+        size: 671
+        integrity: sha384-MvFz5vA5+uPtfVZ1CobPzLCYRzsUMHEHAQElV4QpGxmYpqQAHWo/itrAYeiPmK+r
+      - source: web/images/toolbarButton-viewOutline.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-viewOutline.svg
+        size: 332
+        integrity: sha384-/PTMrh2XLK0pAwhYVBZax/H5PtnkHNICVM7oFnKlDJ+KU+QZANQUzFE6JF+JR50B
+      - source: web/images/toolbarButton-viewThumbnail.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-viewThumbnail.svg
+        size: 1396
+        integrity: sha384-wOnvxiR5yivFMOF9CmmtpjYTI1QWSNdhGkwGHuFdOFD1oPUmaeDGWyXzh9GSuOaN
+      - source: web/images/toolbarButton-viewsManagerToggle.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-viewsManagerToggle.svg
+        size: 1560
+        integrity: sha384-wjevmoveG0Udx/7IlqCXTTfe7nV3izNE4FPFXIT55qfkhex4gKCnnVusnaab8MqF
+      - source: web/images/toolbarButton-zoomIn.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-zoomIn.svg
+        size: 958
+        integrity: sha384-5JP1OIc47vTAYIZlf571d9ERKOUKcl0iMqW23kjQ/JA+p3emadHQUm/P0n7By7vs
+      - source: web/images/toolbarButton-zoomOut.svg
+        path: internal/adapters/web/pdfjs/web/images/toolbarButton-zoomOut.svg
+        size: 472
+        integrity: sha384-5ZFVkk4a/ij41WBSSjHZ51BN3p1BKHW95lFtR7qbuhn9jcRByxVlnfCMxw71GPf/
+      - source: web/images/treeitem-collapsed.svg
+        path: internal/adapters/web/pdfjs/web/images/treeitem-collapsed.svg
+        size: 93
+        integrity: sha384-w4tPUI56A4AfrDpbEBspx3GMBLo3sGdHiHFdCjqkrXBPmz8y3EAUdnw2g+DZ0Yac
+      - source: web/images/treeitem-expanded.svg
+        path: internal/adapters/web/pdfjs/web/images/treeitem-expanded.svg
+        size: 94
+        integrity: sha384-nxDWLrWpdAzZsw2g33/hxgusrsbOIEL+eWXFwLl7Vtpa8mxlXAtF+ekW1tptEsCj
+      - source: web/pdf_viewer.css
+        path: internal/adapters/web/pdfjs/web/pdf_viewer.css
+        size: 168800
+        integrity: sha384-hluVn3jZnyK+DEGuU61LpUJcRa7k2hZ7tWlgu4f+7F0gitQhLUAAjOWkDqLNRCrP
