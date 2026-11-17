@@ -312,6 +312,16 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   assert.notEqual(await phone.locator('#message-composer').evaluate(composer=>getComputedStyle(composer).userSelect),'none','the touch composer keeps native text selection');
   const desktopMessage=page.locator('[data-message-bubble="'+message+'"]');
   assert.notEqual(await desktopMessage.evaluate(bubble=>getComputedStyle(bubble).userSelect),'none','desktop messages remain selectable');
+  await text.evaluate(node=>node.append('Uma mensagem longa precisa de espaço para ser lida com conforto. '.repeat(10)));
+  const layout=await messageBubble.evaluate(body=>({
+   textWidth:body.querySelector('[data-rendered-message]').getBoundingClientRect().width,
+   avatarWidth:body.closest('.oie-message').querySelector('.oie-sender-avatar').getBoundingClientRect().width,
+   shortcutRight:body.querySelector('.oie-reaction-shortcut').getBoundingClientRect().right,
+   viewportWidth:document.documentElement.clientWidth,
+  }));
+  assert(layout.textWidth>layout.viewportWidth*.65,'long mobile messages use more of the available width');
+  assert.equal(layout.avatarWidth,28,'mobile sender avatar is compact');
+  assert(layout.shortcutRight<=layout.viewportWidth,'the wider bubble leaves room for the reaction shortcut');
   await doubleTap(text);
   await phoneDialog.waitFor({state:'visible'});
   assert.equal(state.effects,noWrites,'double tap only prepares a reaction');
@@ -328,6 +338,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   await phoneCatalog.waitFor({state:'visible'});
   await phone.keyboard.press('Escape');await phoneCatalog.waitFor({state:'hidden'});
   await phone.keyboard.press('Escape');await phoneDialog.waitFor({state:'hidden'});
+  await text.evaluate(node=>node.lastChild.remove());
   const r=await text.boundingBox(),point={x:r.x+Math.min(30,r.width/2),y:r.y+r.height/2};
   const copyMessage=phone.locator('#copy-message-'+message);
   await startTouch(point);
