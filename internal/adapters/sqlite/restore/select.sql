@@ -12,6 +12,32 @@ INSERT INTO restore_chats(id,is_new)
 SELECT c.id, NOT EXISTS(SELECT 1 FROM conversations d WHERE d.id=c.id)
 FROM backup.conversations c JOIN restore_accounts a ON a.id=c.account_id;
 
+-- Opening a room can promote an empty direct placeholder under the same ID.
+-- Skip an ancestor of that room so its old direct scope cannot import data.
+DELETE FROM restore_chats
+WHERE is_new=0 AND EXISTS (
+  SELECT 1 FROM backup.conversations b
+  JOIN conversations d ON d.id=b.id AND d.account_id=b.account_id AND d.address=b.address
+  JOIN backup.conversation_revisions original ON original.id=b.revision_id AND original.entity_id=b.id
+  WHERE b.id=restore_chats.id AND b.revision_id<>d.revision_id
+    AND json_extract(b.payload,'$.Kind')='direct' AND json_extract(d.payload,'$.Kind')='room'
+    AND json_extract(original.payload,'$.Kind')='direct'
+    AND NOT EXISTS(SELECT 1 FROM backup.messages m WHERE m.conversation_id=b.id)
+    AND NOT EXISTS(SELECT 1 FROM backup.staged_attachments f WHERE f.conversation_id=b.id)
+    AND EXISTS (
+      WITH RECURSIVE ancestors(id) AS (
+        SELECT d.revision_id
+        UNION
+        SELECT parent.value FROM ancestors a
+        JOIN conversation_revisions r ON r.id=a.id AND r.entity_id=d.id
+        JOIN json_each(r.parents) parent ON parent.type='text'
+      )
+      SELECT 1 FROM ancestors a
+      JOIN conversation_revisions known ON known.id=a.id AND known.entity_id=d.id
+      WHERE known.id=b.revision_id AND json_extract(known.payload,'$.Kind')='direct'
+    )
+);
+
 CREATE TEMP TABLE restore_messages (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
 INSERT INTO restore_messages
 SELECT m.id, d.id IS NULL FROM backup.messages m
@@ -50,6 +76,16 @@ WHERE (d.id IS NOT NULL OR (
 AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
 AND m.state NOT IN ('queued','dispatching','unknown');
 
+-- Restore send evidence onto the original local row. An own archive echo
+-- retained under another row ID would duplicate that message in the timeline.
+DELETE FROM restore_messages
+WHERE is_new=1 AND EXISTS (
+  SELECT 1 FROM backup.messages m
+  JOIN messages d ON d.id=m.provider_id AND d.id=d.provider_id
+    AND d.account_id=m.account_id AND d.conversation_id=m.conversation_id AND d.is_own=1
+  WHERE m.id=restore_messages.id AND m.is_own=1 AND m.state='submitted'
+);
+
 DELETE FROM restore_messages
 WHERE is_new=1 AND EXISTS (
   SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=restore_messages.id
@@ -57,12 +93,38 @@ WHERE is_new=1 AND EXISTS (
   AND NOT EXISTS(SELECT 1 FROM messages root WHERE root.id=a.canonical_id)
 );
 
+-- Supplemental protocol facts can change the display and shared-content index
+-- without making a message revision. Compare the same keys as the insertions.
+CREATE TEMP TABLE restore_message_metadata_changes (id TEXT PRIMARY KEY) WITHOUT ROWID;
+INSERT INTO restore_message_metadata_changes
+SELECT b.message_id FROM backup.message_references b
+JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
+WHERE NOT EXISTS (
+  SELECT 1 FROM message_references d WHERE d.message_id=b.message_id AND d.scope=b.scope
+    AND d.remote_id=b.remote_id AND d.author=b.author AND d.source_hash=b.source_hash
+)
+UNION
+SELECT b.message_id FROM backup.message_replies b
+JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
+WHERE NOT EXISTS (
+  SELECT 1 FROM message_replies d WHERE d.message_id=b.message_id AND d.body_hash=b.body_hash
+)
+UNION
+SELECT b.message_id FROM backup.message_sender_identities b
+JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
+WHERE NOT EXISTS (
+  SELECT 1 FROM message_sender_identities d WHERE d.message_id=b.message_id
+    AND d.personal_address=b.personal_address AND d.source_hash=b.source_hash
+);
+
 -- Detect a history change before inserting any revision rows. Chats whose
 -- newest item and unread count stay the same still need a refresh when
--- retained messages or edit history are added.
+-- retained messages, edit history, or protocol facts are added.
 UPDATE restore_chats SET history_changed=1
 WHERE id IN (
   SELECT m.conversation_id FROM backup.messages m JOIN restore_messages r ON r.id=m.id AND r.is_new=1
+  UNION
+  SELECT m.conversation_id FROM messages m JOIN restore_message_metadata_changes r ON r.id=m.id
   UNION
   SELECT m.conversation_id FROM backup.message_revisions b
   JOIN restore_messages r ON r.id=b.entity_id AND r.is_new=0
@@ -88,3 +150,11 @@ WHERE id IN (
     WHERE d.account_id=b.account_id AND d.room_address=b.room_address AND d.stanza_id=b.stanza_id
   )
 );
+
+DELETE FROM shared_content_state WHERE message_id IN (
+  SELECT id FROM restore_message_metadata_changes
+  UNION
+  SELECT a.canonical_id FROM message_canonical_aliases a
+  JOIN restore_message_metadata_changes r ON r.id=a.alias_id
+);
+DROP TABLE restore_message_metadata_changes;

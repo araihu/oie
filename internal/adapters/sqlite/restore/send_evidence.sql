@@ -13,6 +13,23 @@ WHERE m.is_own=1 AND COALESCE(o.state,m.state) IN ('cancelled','submitted','fail
   AND (p.message_id IS NOT NULL OR d.state='queued'
        OR (d.id IS NULL AND selected.id IS NULL AND COALESCE(o.state,m.state) IN ('cancelled','submitted','failed')));
 
+-- Another engine can retain our verified own echo under a different local
+-- row ID. The scoped sender ID is still the UUID of the original send.
+INSERT INTO restore_send_evidence
+SELECT b.provider_id,'submitted',r.created_at,b.payload
+FROM backup.messages b
+JOIN restore_chats x ON x.id=b.conversation_id
+JOIN backup.message_revisions r ON r.id=b.revision_id AND r.entity_id=b.id
+WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id AND (
+    EXISTS(SELECT 1 FROM messages m JOIN outbox o ON o.message_id=m.id
+           WHERE m.id=b.provider_id AND m.provider_id=m.id AND m.is_own=1
+             AND m.account_id=b.account_id AND m.conversation_id=b.conversation_id
+             AND m.state='queued' AND o.state='queued')
+    OR EXISTS(SELECT 1 FROM recovered_sends p
+              WHERE p.message_id=b.provider_id AND p.conversation_id=b.conversation_id)
+)
+ON CONFLICT(id) DO NOTHING;
+
 INSERT INTO restore_send_evidence
 SELECT m.id,'unknown',r.retracted_at,NULL FROM messages m
 JOIN restore_chats x ON x.id=m.conversation_id

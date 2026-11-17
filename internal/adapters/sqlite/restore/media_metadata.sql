@@ -15,24 +15,47 @@ ON CONFLICT(id) DO NOTHING;
 -- profiles can reach the same generation after different deletions, so
 -- only an untouched or new device can acquire old download memberships.
 CREATE TEMP TABLE restore_downloads AS
-SELECT f.*
-FROM backup.device_downloads f
-JOIN backup.download_devices source ON source.device_id=f.device_id
-LEFT JOIN download_devices destination ON destination.device_id=f.device_id
-JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
-    AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
-WHERE (destination.device_id IS NULL OR (destination.generation=0 AND source.generation=0))
-AND (COALESCE(destination.days,source.days)=0
-     OR f.downloaded_at_ms>CAST(@now_ms AS INTEGER)-COALESCE(destination.days,source.days)*86400000)
-AND (
-    f.kind='file' AND EXISTS(
-        SELECT 1 FROM shared_content ref JOIN restore_messages x ON x.id=ref.message_id WHERE ref.id=f.source_id
-    )
-    OR f.kind='image' AND EXISTS(
-        SELECT 1 FROM backup.message_previews p JOIN restore_messages x ON x.id=p.message_id
-        WHERE p.id=f.source_id AND json_extract(p.payload,'$.FileHash')=f.hash
-    )
-);
+WITH eligible AS (
+    SELECT f.*
+    FROM backup.device_downloads f
+    JOIN backup.download_devices source ON source.device_id=f.device_id
+    LEFT JOIN download_devices destination ON destination.device_id=f.device_id
+    JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
+        AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
+    WHERE (destination.device_id IS NULL OR (destination.generation=0 AND source.generation=0))
+      AND (COALESCE(destination.days,source.days)=0
+           OR f.downloaded_at_ms>CAST(@now_ms AS INTEGER)-COALESCE(destination.days,source.days)*86400000)
+), matching_messages AS (
+    SELECT x.id, COALESCE(local_head.revision_id,local.revision_id) AS revision_id
+    FROM restore_messages x
+    JOIN backup.messages source ON source.id=x.id
+    LEFT JOIN backup.message_content_heads source_head ON source_head.canonical_id=x.id
+    JOIN messages local ON local.id=x.id
+    LEFT JOIN message_content_heads local_head ON local_head.canonical_id=x.id
+    WHERE COALESCE(source_head.revision_id,source.revision_id)=COALESCE(local_head.revision_id,local.revision_id)
+)
+SELECT f.device_id, local.id AS source_id, f.source_revision, f.kind, f.hash, f.mime_type,
+       f.size, f.verified_algorithm, f.downloaded_at_ms
+FROM eligible f
+JOIN backup.shared_content source ON source.id=f.source_id
+JOIN matching_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
+JOIN shared_content local ON local.message_id=source.message_id AND local.url=source.url AND local.kind=source.kind
+WHERE f.kind='file'
+UNION ALL
+SELECT f.device_id, COALESCE(local.id,source.id), f.source_revision, f.kind, f.hash, f.mime_type,
+       f.size, f.verified_algorithm, f.downloaded_at_ms
+FROM eligible f
+JOIN backup.message_previews source ON source.id=f.source_id
+JOIN matching_messages m ON m.id=source.message_id
+LEFT JOIN message_previews local ON local.message_id=source.message_id AND local.url=source.url
+WHERE f.kind='image' AND source.download_state='ready' AND json_extract(source.payload,'$.FileHash')=f.hash
+  AND (local.id IS NULL OR (
+      json_extract(local.payload,'$.Kind')='image'
+      AND (
+          local.download_state='ready' AND json_extract(local.payload,'$.FileHash')=f.hash
+          OR local.download_state IN ('not_downloaded','failed') AND COALESCE(json_extract(local.payload,'$.FileHash'),'')=''
+      )
+  ));
 
 -- Preview rows are a cache. If referenced files are missing, let the engine
 -- derive a fresh preview from the restored message, with a usable download
@@ -58,25 +81,3 @@ SELECT r.* FROM backup.preview_revisions r JOIN backup.message_previews b ON b.i
 JOIN message_previews p ON p.id=b.id AND p.message_id=b.message_id
 JOIN restore_messages x ON x.id=b.message_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
-
-INSERT INTO media_files SELECT f.* FROM backup.media_files f
-JOIN restore_media_files bytes ON bytes.name='media/images/'||f.hash AND bytes.size=f.size
-WHERE EXISTS (SELECT 1 FROM message_previews p JOIN restore_messages x ON x.id=p.message_id
-    WHERE f.hash IN (json_extract(p.payload,'$.FileHash'), json_extract(p.payload,'$.ImageHash'), json_extract(p.payload,'$.FaviconHash')))
-ON CONFLICT(hash) DO NOTHING;
-
-DELETE FROM restore_downloads
-WHERE kind='image' AND NOT EXISTS(
-    SELECT 1 FROM message_previews p WHERE p.id=restore_downloads.source_id
-    AND json_extract(p.payload,'$.FileHash')=restore_downloads.hash
-);
-INSERT INTO download_devices
-SELECT DISTINCT d.device_id,d.days,d.generation FROM backup.download_devices d
-JOIN restore_downloads f ON f.device_id=d.device_id
-WHERE TRUE ON CONFLICT(device_id) DO NOTHING;
-
-INSERT INTO device_downloads
-SELECT f.* FROM restore_downloads f WHERE TRUE ON CONFLICT DO NOTHING;
-
-DROP TABLE restore_downloads;
-DROP TABLE restore_media_files;

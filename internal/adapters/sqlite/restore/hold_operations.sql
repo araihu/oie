@@ -26,3 +26,11 @@ WHERE result='null' AND EXISTS (
     AND b.resource_id=operations.resource_id AND b.result<>'null'
     AND NOT EXISTS(SELECT 1 FROM discarded_recovered_sends x WHERE x.message_id=b.resource_id)
 );
+
+-- A cancellation from the archive can retire an already-present queue row.
+-- Keep its actual acceptance receipt even when no new message was inserted.
+INSERT INTO operations
+SELECT o.* FROM backup.operations o JOIN restore_send_evidence e ON e.id=o.resource_id
+JOIN messages m ON m.id=e.id AND m.state='cancelled'
+WHERE e.state='cancelled' AND o.kind='cancel_message' AND o.result<>'null'
+ON CONFLICT(id) DO NOTHING;

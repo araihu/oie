@@ -13,12 +13,20 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
+	"github.com/araihu/oie/internal/domain"
+	"github.com/google/uuid"
 )
 
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile) ([]string, error) {
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, now time.Time) ([]string, error) {
 	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata"),
-		sql.Named("media_files", jsonText(files)), sql.Named("now_ms", time.Now().UnixMilli())); err != nil {
+		sql.Named("media_files", jsonText(files)), sql.Named("now_ms", now.UnixMilli())); err != nil {
 		return nil, fmt.Errorf("restore media metadata: %w", err)
+	}
+	if err := updateRestoredImageDownloads(ctx, tx, now); err != nil {
+		return nil, fmt.Errorf("restore image downloads: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_downloads")); err != nil {
+		return nil, fmt.Errorf("restore download memberships: %w", err)
 	}
 	references, err := restoredMediaReferences(ctx, tx, files)
 	if err != nil {
@@ -44,6 +52,47 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, fi
 		}
 	}
 	return published, nil
+}
+
+func updateRestoredImageDownloads(ctx context.Context, tx *sql.Tx, now time.Time) error {
+	rows, err := tx.QueryContext(ctx, restoreScript("media_preview_downloads"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var downloads []domain.MessagePreview
+	for rows.Next() {
+		var download domain.MessagePreview
+		if err := rows.Scan(&download.ID, &download.FileHash, &download.FileMimeType, &download.FileSize, &download.VerifiedAlgorithm); err != nil {
+			return err
+		}
+		downloads = append(downloads, download)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	q := dbgen.New(tx)
+	for _, download := range downloads {
+		preview, err := decodePreview(q.GetMessagePreview(ctx, string(download.ID)))
+		if err != nil {
+			return err
+		}
+		revision, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		parent := preview.RevisionID
+		preview.RevisionID = domain.ID(revision.String())
+		preview.UpdatedAt = now
+		preview.DownloadState = "ready"
+		preview.LastErrorCode = ""
+		preview.FileHash, preview.FileMimeType, preview.FileSize = download.FileHash, download.FileMimeType, download.FileSize
+		preview.VerifiedAlgorithm = download.VerifiedAlgorithm
+		if err := updatePreview(ctx, q, preview, parent); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) preflightRestoreMedia(ctx context.Context, files []backupFile, references map[string]string) ([]backupFile, error) {

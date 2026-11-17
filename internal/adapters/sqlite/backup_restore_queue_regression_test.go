@@ -98,8 +98,12 @@ func TestBackupRestoreUsesTerminalSendEvidenceOutsideRetention(t *testing.T) {
 	ctx := t.Context()
 	now := time.Now().UTC()
 	dest := copyRestoreFixture(t, source)
+	newestFirst := copyRestoreFixture(t, source)
 	days := 1
 	if _, err := testRestoreEngine(t, dest).SetConversationRetention(ctx, chat.ID, "0", &days); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testRestoreEngine(t, newestFirst).SetConversationRetention(ctx, chat.ID, "0", &days); err != nil {
 		t.Fatal(err)
 	}
 	message := queueBackupFixture(t, engine, chat.ID, "sent before cutoff", nil)
@@ -126,6 +130,15 @@ func TestBackupRestoreUsesTerminalSendEvidenceOutsideRetention(t *testing.T) {
 	}
 	if err := dest.ReviewRecoveredSend(ctx, message.ID, message.RevisionID, true, later); err == nil {
 		t.Fatal("send was resumed despite confirmed transmission in the newer archive")
+	}
+	if _, err := newestFirst.mergeBackup(ctx, newDB, newScratch, newManifest, later); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := newestFirst.mergeBackup(ctx, oldDB, oldScratch, oldManifest, later); err != nil {
+		t.Fatal(err)
+	}
+	if items, err := newestFirst.RecoveredSends(ctx); err != nil || len(items) != 0 {
+		t.Fatalf("an older archive revived an already-reconciled send: %+v %v", items, err)
 	}
 }
 

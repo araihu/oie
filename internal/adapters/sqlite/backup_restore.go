@@ -212,7 +212,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files)
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files, now)
 	if err != nil {
 		return result, err
 	}
