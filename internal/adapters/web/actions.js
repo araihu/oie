@@ -568,6 +568,18 @@ window.OieRuntime.register('global-read-receipts', life => {
 });
 
 window.OieRuntime.register('conversation-read-receipt-settings', life => {
+  life.on(document, 'close', event => {
+    const dialog = event.target;
+    if (dialog.id !== 'inbox-read-receipts-dialog' || dialog.open) return;
+    const focused = document.activeElement;
+    if (focused !== document.body && !dialog.contains(focused)) return;
+    const chat = dialog.querySelector('#inbox-read-receipts-content')?.dataset.readReceiptsConversation;
+    if (!chat) return;
+    const row = document.querySelector(`#conversation-list [data-conversation-row="${CSS.escape(chat)}"]`);
+    const target = row?.querySelector('button[data-read-receipts-conversation]') ||
+      row?.querySelector('a[data-conversation-id]') || document.getElementById('conversation-search');
+    target?.focus({preventScroll: true});
+  }, true);
   life.on(document, 'htmx:after:request', event => {
     const ctx = event.detail.ctx;
     const target = ctx?.target;

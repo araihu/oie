@@ -108,18 +108,30 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     const inbox = page.getByRole('button', {name: actionLabel, exact: true});
     await inbox.focus();
     const row = page.locator(`[data-conversation-row="${chat.id}"]`);
-    const rowVersion = await row.getAttribute('data-version');
-    const currentChat = await get(chatPath);
-    await call('PATCH', chatPath, {accountId: account.id, expectedRevisionId: currentChat.revisionId, favorite: !currentChat.favorite},
-      {'Idempotency-Key': fixtureKey(width)});
-    await page.waitForFunction(({id, version}) => {
-      const next = document.querySelector(`[data-conversation-row="${CSS.escape(id)}"]`);
-      return next && next.dataset.version !== version;
-    }, {id: chat.id, version: rowVersion});
+    const replaceInboxRow = async key => {
+      const rowVersion = await row.getAttribute('data-version');
+      const currentChat = await get(chatPath);
+      await call('PATCH', chatPath, {accountId: account.id, expectedRevisionId: currentChat.revisionId, favorite: !currentChat.favorite},
+        {'Idempotency-Key': fixtureKey(key)});
+      await page.waitForFunction(({id, version}) => {
+        const next = document.querySelector(`[data-conversation-row="${CSS.escape(id)}"]`);
+        return next && next.dataset.version !== version;
+      }, {id: chat.id, version: rowVersion});
+    };
+    await replaceInboxRow(width);
     assert.equal(await inbox.evaluate(button => button === document.activeElement), true);
     await inbox.press('Enter');
     const modal = page.locator('#inbox-read-receipts-dialog');
     const mode = modal.locator('#inbox-read-receipts-mode-trigger');
+    await expectMode('#inbox-read-receipts-mode-trigger', off);
+    await replaceInboxRow(width + 1);
+    await page.keyboard.press('Escape');
+    await modal.waitFor({state: 'hidden'});
+    await page.waitForFunction(id => {
+      const button = document.querySelector(`button[data-read-receipts-conversation="${CSS.escape(id)}"]`);
+      return document.activeElement === button;
+    }, chat.id);
+    await inbox.press('Enter');
     await expectMode('#inbox-read-receipts-mode-trigger', off);
     await choose(mode, on);
     const releaseConversation = await holdSave(modal.locator('button[type=submit]'));
