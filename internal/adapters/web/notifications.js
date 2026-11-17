@@ -27,7 +27,7 @@
   const tab = Math.random().toString(36).slice(2);
   let context, database, worker, pending = false, notice = '';
   let customSound, toneReady, toneChanges, editingTone = false;
-  let pushStatus, pushManager, pushCheck, pushPending = false, pushCheckFailed = false;
+  let pushStatus, pushManager, pushCheck, pushPending = false;
   let pushWrites = Promise.resolve();
 
   function read(key) {
@@ -413,9 +413,9 @@
       const optedIn = status.enabled && read(bannerKey) === '1' && window.Notification?.permission !== 'denied';
       write(pushStateKey, active ? status.engineId : optedIn && status.expired ? status.engineId + ':expired' : null);
       pushStatus = status;
-      pushCheckFailed = false;
+      if (notice === 'backgroundCheckFailed') notice = '';
     }).catch(() => {
-      if (!pushStatus) pushCheckFailed = true;
+      if (!pushStatus && !notice && !pending && !pushPending) notice = 'backgroundCheckFailed';
     }).finally(() => {
       pushCheck = undefined;
       renderSettings();
@@ -716,9 +716,9 @@
     reset.disabled = editingTone;
     syncSelect(root.querySelector('[data-notification-room-sound]'), roomSound());
     root.querySelector('[data-notification-preview]').disabled = !canSound;
+    const status = notice === 'backgroundCheckFailed' ? 'backgroundFailed' : notice;
     root.querySelector('[role="status"]').textContent =
-      root.dataset[notice] || (pushCheckFailed ? root.dataset.backgroundFailed :
-        pushPaused() ? root.dataset.backgroundPaused : !canBanner() ? root.dataset.unavailable :
+      root.dataset[status] || (pushPaused() ? root.dataset.backgroundPaused : !canBanner() ? root.dataset.unavailable :
         window.Notification?.permission === 'denied' && !desktop() ? root.dataset.denied : '');
   }
 
