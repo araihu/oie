@@ -1,5 +1,23 @@
 schema: 1
 directories:
+  - id: axe-core/browser-tests
+    url: https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz
+    path: tests/browser/fixtures/axe-core
+    size: 627805
+    integrity: sha384-Ck5Psq7A+8K1IG5Y623NPYQDoXHCSj5cLv5zbEIeZgV3Ns79OgEgTAp9aMEg4HRF
+    files:
+      - source: LICENSE
+        path: tests/browser/fixtures/axe-core/LICENSE
+        size: 15921
+        integrity: sha384-huImz98LFM4P7jkMIRcCLziQFxAj2rzo78x5VeIP8bHMFofak+fua4eCQys4sium
+      - source: LICENSE-3RD-PARTY.txt
+        path: tests/browser/fixtures/axe-core/LICENSE-3RD-PARTY.txt
+        size: 3766
+        integrity: sha384-kRupidJJw8EanDd+dHZzcWq65459pkQHNTA2O/ScYq2ZrJJN+xbMFG3kb5n4KF0P
+      - source: axe.min.js
+        path: tests/browser/fixtures/axe-core/axe.min.js
+        size: 580491
+        integrity: sha384-jzJDdyy7z7+/I7TeoAg0Gc8k9hD8b1xRN0W18hMptWJ0cdoiebywhPpCyP9eBOgn
   - id: lru-cache/browser
     url: https://registry.npmjs.org/lru-cache/-/lru-cache-11.2.6.tgz
     path: internal/adapters/web/cache_vendor

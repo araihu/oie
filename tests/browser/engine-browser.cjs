@@ -560,7 +560,7 @@ const {messageRetractionFlow} = require('./message-retraction-flow.cjs');
     await bobPage.goto(base + '/?chat=' + bobConversation.id + '&account=' + bob.id + '&theme=dark&lang=pt-BR');
     await bobPage.locator('#message-composer').waitFor({state: 'visible'});
     assert(await bobPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile has no horizontal page overflow');
-    await bobPage.addScriptTag({path: require.resolve('axe-core/axe.min.js')});
+    await bobPage.addScriptTag({path: require.resolve('./fixtures/axe-core/axe.min.js')});
     const a11y = await bobPage.evaluate(async () => window.axe.run(document, {runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa']}}));
     assert.deepEqual(a11y.violations.map(v => ({id: v.id, targets: v.nodes.map(n => n.target)})), [], 'live mobile accessibility');
     await bobPage.screenshot({path: 'artifacts/' + prefix + '-bob-mobile-pt.png', fullPage: true});

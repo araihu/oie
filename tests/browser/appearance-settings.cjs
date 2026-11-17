@@ -91,7 +91,7 @@ const id='019a5df0-0000-7000-8000-000000000001';
    await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.classList.contains('dark'));
    await page.emulateMedia({colorScheme:'light'});await page.waitForFunction(()=>!document.documentElement.classList.contains('dark'));
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const result=await dialog.evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(result.violations.map(v=>v.id),[]);
+   await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const result=await dialog.evaluate(node=>axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(result.violations.map(v=>v.id),[]);
    await context.close();
   }
   assert.deepEqual(errors,[]);console.log('PASS: appearance segmented radios, icons, HTMX document preservation, drawer, keyboard, cookie persistence, system theme, EN/PT, mobile/desktop and accessibility');

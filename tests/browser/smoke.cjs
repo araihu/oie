@@ -27,7 +27,7 @@ const { chromium } = require("playwright");
             assert.equal(await page.evaluate(() => document.documentElement.classList.contains("dark")), mode === "dark");
             assert(await page.locator("h2").filter({hasText: locale === "en" ? "Accounts" : "Contas"}).count());
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-            await page.addScriptTag({path: require.resolve("axe-core/axe.min.js")});
+            await page.addScriptTag({path: require.resolve("./fixtures/axe-core/axe.min.js")});
             const accessibility = await page.evaluate(async () => window.axe.run(document, {
               runOnly: {type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"]}
             }));

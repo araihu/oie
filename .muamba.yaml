@@ -1,5 +1,20 @@
 schema: 1
 resources:
+  axe-core:
+    version: "4.13.0"
+    directories:
+      browser-tests:
+        url: https://registry.npmjs.org/axe-core/-/axe-core-${version}.tgz
+        archive: tar.gz
+        path: tests/browser/fixtures/axe-core
+        strip_components: 1
+        include:
+          - LICENSE
+          - LICENSE-3RD-PARTY.txt
+          - axe.min.js
+        max_size: 2MiB
+        max_files: 128
+        max_unpacked_size: 8MiB
   lru-cache:
     version: "11.2.6"
     directories:

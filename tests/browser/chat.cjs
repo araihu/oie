@@ -22,7 +22,7 @@ const casa='019a5df0-0000-7000-8000-000000000102';
    assert(await page.locator('.oie-composer button').last().isDisabled());
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    const composer=await page.locator('.oie-composer').boundingBox();assert(composer.y+composer.height<=961);
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+   await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
    const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
    assert.deepEqual(a11y.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],[width,theme,mode,locale].join('-'));
    await page.screenshot({path:`artifacts/workspace-${width}-${theme}-${mode}-${locale}.png`,fullPage:true});

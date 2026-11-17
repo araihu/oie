@@ -328,7 +328,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     await close(page);
     await toast.waitFor({state:'detached'});
    }finally{state.failure=false}
-  }await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
+  }await open(page,good);await loaded(page);await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(value=>({id:value.id,nodes:value.nodes.map(node=>node.target)})),[]);assert(await viewer(page).evaluate(dialog=>dialog.getBoundingClientRect().right<=innerWidth&&dialog.getBoundingClientRect().bottom<=innerHeight));const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`documents-${config.locale}-${config.width}.png`)});await close(page);await context.close()}
   stage='bundled PDF font fallback';
   state.pdfCatalog=[pdf];
   const fallback=await contextFor();

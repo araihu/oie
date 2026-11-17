@@ -134,7 +134,7 @@ async function assertDisplay(page, value) {
         await assertDisplay(page, preferred);
         assert.equal(await zoneValue(page).inputValue(), explicitZone);
         assert.match(await trigger.textContent(), /\(UTC\+14:00\)/);
-        await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+        await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
         const result = await dialog.evaluate(node => axe.run(node, {
           runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']},
         }));

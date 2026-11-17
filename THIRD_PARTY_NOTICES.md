@@ -81,6 +81,13 @@ Inc. The license is included at `internal/adapters/web/emoji/LICENSE.txt` and
 served at `/ui/emoji/LICENSE.txt`. Regenerate the validation base table with
 `python3 tools/generate-reaction-emoji-bases.py`.
 
+## Browser accessibility test assets
+
+The browser tests use the axe-core 4.13.0 bundle pinned by Muamba alongside its
+MPL-2.0 license and third-party notices in `tests/browser/fixtures/axe-core`.
+The release source archive includes the editable upstream sources for this
+[axe-core release](https://github.com/dequelabs/axe-core/releases/tag/v4.13.0).
+
 ## Interface icons and browser runtime
 
 Goshtoso embeds the Heroicons 2.2.0 sprite under MIT, HTMX 4.0.0 under 0BSD,

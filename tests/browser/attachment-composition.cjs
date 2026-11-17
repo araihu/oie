@@ -209,7 +209,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       assert.equal(await composer.inputValue(), revised, 'staging preserves text typed during the request');
       assert.deepEqual(requestPaths, ['/ui/scheduling/stage']);
       assert.equal((await retained()).items.length, messagesBefore);
-      await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+      await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
       const violations = await page.evaluate(async () =>
         (await window.axe.run('[data-composer-attachments]', {runOnly:{type:'tag', values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v => v.id));
       assert.deepEqual(violations, []);

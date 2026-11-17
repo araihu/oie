@@ -1,7 +1,7 @@
 {
   "inputs": {
-    ".muamba.lock.yaml": "b45846de25cfd5ef7ac436e8e9d686ac811da940f98b994fd6dffeaba081edde",
-    ".muamba.yaml": "409266271e6d588614f6e87b8a67aabe504596a9cbc6bb5fb3f75502d78c50ad",
+    ".muamba.lock.yaml": "e16a4d7802418b39db0cae0131620c34c5f81e06a086c97cf85f33c83348ee2b",
+    ".muamba.yaml": "6a75f8467f72d43a7dcbd7a23e3b55ddad3d9378e2a2c8081d35a9d6b55002c8",
     "internal/adapters/web/brand/SOURCE.json": "0bcdd90f39a8d794dc74fa29552c792c864242b374359ba7d99d3472c75da2bf",
     "internal/adapters/web/wavesurfer/manifest.json": "3905e0a28dbf028eb0049a7522fcc0d5bd711fc8ee459f94c7c1662883513deb",
     "internal/adapters/web/wavesurfer/player.mjs": "ff2222536e300c20c2d09bfb5f025b3c019406c7858bc32549e91a6c1294a62c",
@@ -142,6 +142,16 @@
       ],
       "packaged_name": "katex-0.19.1-source.tar",
       "packaged_sha256": "6d8f695fe6bc64a6e98df9d8d3d349989fed24483108136a79eb371122023e22"
+    },
+    {
+      "name": "axe-core-4.13.0.tar.gz",
+      "url": "https://codeload.github.com/dequelabs/axe-core/tar.gz/refs/tags/v4.13.0",
+      "sha256": "74239772e23f4f05df31df396576cced84dc5dbb16534d90bf3e303d0d2a27e4",
+      "exclude": [
+        "test"
+      ],
+      "packaged_name": "axe-core-4.13.0-source.tar",
+      "packaged_sha256": "8d156774a8b926d8c04f31d94ce9322d48505b17d3590ffe575877eba3e3834a"
     },
     {
       "name": "lru-cache-11.2.6.tar.gz",

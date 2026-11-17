@@ -122,7 +122,7 @@ const engine=id(1),account=id(2),chat=id(3);
     const box=await retry.boundingBox(),bubble=await page.locator('[data-pending-send] .oie-message-content').boundingBox();assert(box.x>=bubble.x&&box.x+box.width<=bubble.x+bubble.width+1&&box.y>=bubble.y&&box.y+box.height<=bubble.y+bubble.height+1,'retry icon stays inside the bubble');assert.equal((await retry.textContent()).trim(),'','recovery has no visible status label');assert.equal(await page.locator('[data-pending-send]>.oie-message-meta').count(),0,'uncertain send has no status box');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal page overflow');
     await page.evaluate(()=>Promise.all([document.fonts.ready,...document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))]));
-    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+    await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
     const violations=await page.evaluate(async()=>{const result=await axe.run(document.querySelector('[data-pending-send]'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({html:n.html,checks:n.any.map(c=>c.data)}))}))});assert.deepEqual(violations,[],JSON.stringify({width,lang,mode,libraryTheme,violations}));
     if(lang==='en'&&libraryTheme==='goshtoso'){await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,`pending-send-${width}-${mode}.png`)});}
   }

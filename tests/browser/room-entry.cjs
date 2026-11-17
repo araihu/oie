@@ -785,7 +785,7 @@ async function waitFor(predicate) {
           await view.locator('#join-room-form').getByText('Bem-vindos!').waitFor();
           await view.locator('[data-room-bubble]').getByText('Saberes <script>', {exact: true}).waitFor();
           assert(await view.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-          await view.addScriptTag({path: require.resolve('axe-core/axe.min.js')});
+          await view.addScriptTag({path: require.resolve('./fixtures/axe-core/axe.min.js')});
           const scan = id => view.evaluate(selector => window.axe.run(selector,
             {runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa']}}), id);
           const cardIssues = await scan('[data-room-bubble]');

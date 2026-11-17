@@ -30,7 +30,7 @@ const { presentationVariants } = require('./fixtures/presentation-variants.cjs')
     const text=state==='empty'?(locale==='en'?'No accounts yet':'Nenhuma conta ainda'):state==='notFound'?(locale==='en'?'Page not found':'Página não encontrada'):(locale==='en'?'Engine unavailable':'Motor indisponível');
     const target=state==='unavailableSelected'?page.locator('.oie-chat-pane'):state==='unavailable'||state==='empty'?page.locator('.oie-list-pane'):page;assert(await target.getByText(text,{exact:true}).isVisible());
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+    await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
     const a11y=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));
     assert.deepEqual(a11y.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],`${state}/${width}/${theme}/${mode}/${locale}`);
     assert.deepEqual(errors,[]);

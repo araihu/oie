@@ -165,7 +165,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    state.delay=0;
    await field.fill('Oi @an');await until(async()=>await page.locator('[data-mention-option]').count()===1,'matrix click option');await page.locator('[data-mention-option]').click();assert.equal(await field.inputValue(),'Oi ana ');assert(await field.evaluate(e=>document.activeElement===e));await field.fill('@');await until(async()=>await page.locator('[data-mention-option]').count()===50,'matrix list');
    const geometry=await page.locator('#oie-mention-picker').boundingBox();assert(geometry&&geometry.x>=0&&geometry.y>=0&&geometry.x+geometry.width<=width+1&&geometry.height>0,JSON.stringify({width,geometry}));
-   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});const a11y=await page.evaluate(async()=>{const result=await axe.run(document.querySelector('#send-message-form'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.html)}))});assert.deepEqual(a11y,[],JSON.stringify({width,lang,theme,a11y}));
+   await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const a11y=await page.evaluate(async()=>{const result=await axe.run(document.querySelector('#send-message-form'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.html)}))});assert.deepEqual(a11y,[],JSON.stringify({width,lang,theme,a11y}));
    if(width===390&&lang==='pt-BR'&&theme==='dark'){await fs.mkdir(path.join(__dirname,'artifacts'),{recursive:true});await page.screenshot({path:path.join(__dirname,'artifacts/mentions-mobile.png')})}
    await ctx.close();
   }
