@@ -111,9 +111,11 @@ func storePeerPresence(peers map[string]map[string]peerResource, address, resour
 // Caller holds e.mu.
 func (e *entry) updateContactSubscriptions(items []application.ContactInput) {
 	subscriptions := make(map[string]bool, len(items))
+	audience := make(map[string]bool, len(items))
 	for _, item := range items {
 		if item.Subscription == "from" || item.Subscription == "both" {
 			delete(e.contactRequests, item.Address)
+			audience[item.Address] = true
 		}
 		if item.Subscription != "to" && item.Subscription != "both" {
 			continue
@@ -132,6 +134,7 @@ func (e *entry) updateContactSubscriptions(items []application.ContactInput) {
 		}
 	}
 	e.contactSubscriptions = subscriptions
+	e.readReceiptAudience = audience
 	e.initialPeerPresence = nil
 }
 

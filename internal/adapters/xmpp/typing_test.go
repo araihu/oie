@@ -40,8 +40,8 @@ func TestTypingExpiresAndWaitsForCumulativeAcknowledgment(t *testing.T) {
 		t.Fatal("typing can become stuck or bypass deduplication")
 	}
 	last := uint32(0)
-	if typingAwaitingAck(nil, 0) || !typingAwaitingAck(&last, ^uint32(0)) ||
-		typingAwaitingAck(&last, 0) || typingAwaitingAck(&last, 1) {
+	if ephemeralAwaitingAck(nil, 0) || !ephemeralAwaitingAck(&last, ^uint32(0)) ||
+		ephemeralAwaitingAck(&last, 0) || ephemeralAwaitingAck(&last, 1) {
 		t.Fatal("acknowledgment failed across counter wrap")
 	}
 }

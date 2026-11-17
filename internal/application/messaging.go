@@ -30,6 +30,7 @@ type Incoming struct {
 	ModerationTombstone                       bool
 	CheckDirectHistory                        bool
 	DirectArchiveID                           string
+	ReadReceiptID                             string
 	Reaction                                  *IncomingReaction
 	SenderAddress                             string
 	FileReferences                            []domain.SharedReference
@@ -129,6 +130,7 @@ type CancelMutation struct {
 	MessageID, ExpectedRevisionID, RevisionID domain.ID
 }
 type ConversationResult struct {
+	DisplayedMarker    *domain.DisplayedMarker
 	Conversation       domain.Conversation
 	Replayed, Existing bool
 }
@@ -625,6 +627,9 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 		}
 	}
 	m := domain.Message{ID: ids[3], RevisionID: ids[4], AccountID: a.ID, Sender: domain.Sender{DisplayName: address, PersonalAddress: in.SenderAddress}, OriginalText: in.OriginalText, CreatedAt: created, ReceivedAt: now, IsOwn: in.IsOwn, SendState: "received", ProviderID: in.ProviderID, ArchiveScope: in.ArchiveScope, ArchiveID: in.ArchiveID, Historical: in.Historical, FileReferences: normalizeFileReferences(in.FileReferences), AudioURLs: normalizeAudioURLs(in.AudioURLs), References: in.References, ReplyReference: in.Reply, Correction: in.Correction}
+	if !in.IsOwn && !in.Historical && validText(in.ReadReceiptID, 4096) {
+		m.ReadReceiptID = in.ReadReceiptID
+	}
 	refs := MessageSharedReferences(m)
 	m.MediaThumbnails = normalizeThumbnailReferences(refs, in.MediaThumbnails)
 	m.FileDigests = normalizeFileDigests(refs, in.FileDigests)

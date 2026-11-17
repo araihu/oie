@@ -17,6 +17,9 @@ func (s *Server) changeAccountCommunication(ctx context.Context, r *http.Request
 	if r.Form.Has("sendTypingField") {
 		input.SendTyping = new(r.Form.Get("sendTyping") == "on")
 	}
+	if r.Form.Has("sendReadReceiptsField") {
+		input.SendReadReceipts = new(r.Form.Get("sendReadReceipts") == "on")
+	}
 	if revision != "" {
 		input.RevisionId = &revision
 	}

@@ -349,6 +349,12 @@ func (m *Manager) rosterPush(e *entry, iq stanza.IQ, payload contactRosterPayloa
 	e.mu.Lock()
 	if item.Subscription == "from" || item.Subscription == "both" {
 		delete(e.contactRequests, item.Address)
+		if e.readReceiptAudience == nil {
+			e.readReceiptAudience = make(map[string]bool)
+		}
+		e.readReceiptAudience[item.Address] = true
+	} else {
+		delete(e.readReceiptAudience, item.Address)
 	}
 	if item.Subscription == "to" || item.Subscription == "both" {
 		if e.contactSubscriptions == nil {

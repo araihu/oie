@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AcknowledgeMessageSearchPending(ctx context.Context, arg AcknowledgeMessageSearchPendingParams) error
 	AcquireWriteLock(ctx context.Context) error
+	AdvanceDisplayedHead(ctx context.Context, arg AdvanceDisplayedHeadParams) (int64, error)
 	AdvanceDownloadGeneration(ctx context.Context, deviceID string) error
 	AdvanceMessageSearchIndex(ctx context.Context, arg AdvanceMessageSearchIndexParams) (int64, error)
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
@@ -144,10 +145,13 @@ type Querier interface {
 	InterruptedMessages(ctx context.Context) ([]Message, error)
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
+	IsCurrentDisplayedHead(ctx context.Context, arg IsCurrentDisplayedHeadParams) (bool, error)
 	IsDiscardedReplyReference(ctx context.Context, arg IsDiscardedReplyReferenceParams) (bool, error)
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
 	IsExpiredReplyReference(ctx context.Context, arg IsExpiredReplyReferenceParams) (bool, error)
+	// XEP-0333 signals a position, so an eligible target must precede any unread message.
+	LatestDisplayedTarget(ctx context.Context, arg LatestDisplayedTargetParams) (LatestDisplayedTargetRow, error)
 	LatestLogicalMessage(ctx context.Context, conversationID string) (Message, error)
 	LatestOwnMessage(ctx context.Context, conversationID string) (Message, error)
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)

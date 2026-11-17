@@ -38,6 +38,10 @@ templ accountCommunication(v view, account string, preferences engineapi.Account
 			<input type="hidden" name="sendTypingField" value="true"/>
 			@toggle.Toggle(toggle.Config{ID:"account-send-typing",Name:"sendTyping",Value:"on",Label:v.Text.SendTyping,Checked:restoreDraft && v.field("sendTyping")=="on" || !restoreDraft && *preferences.SendTyping})
 		}
+		if preferences.SendReadReceipts != nil {
+			<input type="hidden" name="sendReadReceiptsField" value="true"/>
+			@toggle.Toggle(toggle.Config{ID:"account-send-read-receipts",Name:"sendReadReceipts",Value:"on",Label:v.Text.SendReadReceipts,Checked:restoreDraft && v.field("sendReadReceipts")=="on" || !restoreDraft && *preferences.SendReadReceipts})
+		}
 		@button.Button(button.WithType("submit"),button.WithSize(button.SizeSmall)){ {v.Text.AccountPresenceSave} }
 		<p data-form-feedback role="status" aria-live="polite">
 			if v.FormTarget == "account-communication" {

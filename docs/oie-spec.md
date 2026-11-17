@@ -797,7 +797,8 @@ Automatically mark visible incoming messages read in the active, focused convers
 Implemented alpha scope: record read identities in the owning engine with durable independent UUID revisions and idempotent read batches. Away from the latest end, only visible incoming messages qualify. At the latest end, the engine verifies the displayed conversation revision and latest message before clearing unread state in that snapshot. Reading preserves subsequent arrivals, message content and conversation activity ordering. Hosted clients observe the shared counter through conversation events. Manual read marks all unread messages in the reviewed conversation revision.
 Manual unread adds a conversation reminder and preserves message read evidence.
 A later explicit Mark as read clears the reminder. Independent-engine read
-replication and provider receipt emission remain separate work.
+replication remains separate work. XMPP read-marker emission is described
+in [read state](read-state.md#xmpp-read-receipts).
 
 **AGREED:** highlight received room messages that mention the account's room nickname, with or without `@`. Show an `@` indicator on the conversation while it has any unread mentions. Reading clears the conversation indicator once all matching messages have been read. See [room mentions](mentions.md).
 

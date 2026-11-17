@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.38.0
+  version: 0.39.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -4424,6 +4424,7 @@ components:
           - 0.36.0
           - 0.37.0
           - 0.38.0
+          - 0.39.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -5178,7 +5179,7 @@ components:
           format: date-time
           description: UTC time of the last successful complete roster observation.
     AccountCommunicationPreferences:
-      description: Manual availability and outbound typing preferences for one owning account.
+      description: Manual availability, typing and read receipt preferences for one owning account.
       type: object
       additionalProperties: false
       required: [revisionId, presence]
@@ -5191,10 +5192,14 @@ components:
         sendTyping:
           description: Whether to tell compatible contacts when this account is typing. Omit on updates to preserve the saved preference.
           type: boolean
+        sendReadReceipts:
+          description: Whether to send read confirmations where supported. Enabled by default. Omit on updates to preserve the saved preference.
+          type: boolean
       example:
         revisionId: null
         presence: available
         sendTyping: true
+        sendReadReceipts: true
     TypingState:
       description: Ephemeral composing state for a supported direct conversation.
       type: object

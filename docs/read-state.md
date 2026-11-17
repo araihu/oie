@@ -23,11 +23,31 @@ reviewed revision. The user can retry after the fresh state loads.
 
 Mark as unread adds a reminder to the inbox and the unread filter. A reminder
 with no unread messages is shown as a dot. The reminder remains until an explicit
-Mark as read. Message read evidence continues to follow visibility. XMPP read
-receipts, persistent offline commands and replication across independent engines
+Mark as read. Message read evidence continues to follow visibility. Persistent offline read commands and replication across independent engines
 remain open.
 
 Verification includes concurrent receive/read batches, partial visibility, offscreen messages, focus and visibility guards, modal overlays, lost acknowledgements with stable keys, later arrivals, atomic rollback, account/conversation isolation, restart persistence and preservation of message/outbox state. Browser fixtures use an isolated local API and BFF. They do not connect to the real account or change its unread counters.
+
+## XMPP read receipts
+
+In the account profile, **Send read receipts** defaults to on. Save the setting
+to change it for that account across all clients connected to the same engine.
+The account preference is independent of local unread counts and the unread
+reminder. Older clients can omit the field when saving presence or typing.
+
+Oiê emits [XEP-0333 displayed markers](https://xmpp.org/extensions/xep-0333.html)
+after automatic or explicit **Mark as read**. A direct message must request a
+marker, and its sender must be allowed to see the account's presence. A joined
+room must advertise XEP-0359 and assign a verifiable stanza ID. Markers use
+the original direct message ID or the ID assigned by the room. Own messages,
+recovered history and incoming markers do not request a response.
+
+The engine stores the position in the same transaction as the newly observed
+reads. It considers the newest eligible message read in that transaction before
+the first remaining unread message. A second tab or retried HTTP request cannot
+emit another marker for the same position. Dispatch is best effort while
+connected. Markers are neither durable send intents nor replayed by the engine
+after reconnect. The adapter rechecks the account's preference before writing.
 
 ## Verification on 2026-11-08
 

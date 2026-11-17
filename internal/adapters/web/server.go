@@ -642,6 +642,7 @@ type copy struct {
 	CapabilityEditMessages                                                                          string
 	CapabilityRetractMessages                                                                       string
 	CapabilityReactions                                                                             string
+	SendReadReceipts                                                                                string
 	CapabilityReadReceipts                                                                          string
 	CapabilityTyping                                                                                string
 	CapabilityPresence                                                                              string

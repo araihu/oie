@@ -40,6 +40,9 @@ func TestRoomArchiveBootstrapAndResume(t *testing.T) {
 	room := jid.MustParse("bootstrap-" + string(id()) + "@conference.localhost")
 	occupant, _ := room.WithResource("Fixture Bob")
 	joined, lastMessage := make(chan struct{}, 1), make(chan struct{}, 1)
+	liveStanzaIDs := make(chan string, 1)
+	markers := make(chan string, 2)
+	const liveBody = "A live room message eligible for a read receipt"
 	const count = 53
 	lastBody := "Archive fixture " + strconv.Itoa(count-1)
 	go func() {
@@ -55,12 +58,37 @@ func TestRoomArchiveBootstrapAndResume(t *testing.T) {
 					}
 				}
 			case "message":
-				var m sentReplyWire
-				if decoder.Decode(&m) == nil && m.From.Equal(occupant) && m.Body == lastBody {
-					select {
-					case lastMessage <- struct{}{}:
-					default:
+				var m struct {
+					stanza.Message
+					Body   string `xml:"jabber:client body"`
+					Stable []struct {
+						ID string `xml:"id,attr"`
+						By string `xml:"by,attr"`
+					} `xml:"urn:xmpp:sid:0 stanza-id"`
+					Displayed *struct {
+						ID string `xml:"id,attr"`
+					} `xml:"urn:xmpp:chat-markers:0 displayed"`
+				}
+				if err := decoder.Decode(&m); err != nil {
+					return err
+				}
+				if m.From.Equal(occupant) {
+					if m.Body == lastBody {
+						select {
+						case lastMessage <- struct{}{}:
+						default:
+						}
 					}
+					if m.Body == liveBody {
+						for _, ref := range m.Stable {
+							if ref.By == room.String() {
+								liveStanzaIDs <- ref.ID
+							}
+						}
+					}
+				}
+				if m.Type == stanza.GroupChatMessage && m.From.Bare().Equal(room) && m.Displayed != nil {
+					markers <- m.Displayed.ID
 				}
 			}
 			return nil
@@ -170,5 +198,65 @@ func TestRoomArchiveBootstrapAndResume(t *testing.T) {
 	result, err := engine.RequestRoomArchive(ctx, c.ID, "", "search", "Archive fixture", "")
 	if err != nil || result.Outcome != "unsupported" {
 		t.Fatal("development archive unexpectedly reported text search", result.Outcome, err)
+	}
+
+	workers := make(chan error, 1)
+	go func() { workers <- engine.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-workers; err != nil {
+			t.Errorf("engine workers: %v", err)
+		}
+	}()
+	session, err := engine.RoomSession(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.JoinRoom(ctx, id(), c.ID, "Oiê reader", session.IntentRevisionID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		session, err := engine.RoomSession(ctx, c.ID)
+		return err == nil && session.State == "joined"
+	})
+	wire := string(id())
+	msg := stanza.Message{To: room, Type: stanza.GroupChatMessage, ID: wire}
+	if err := seed.Send(ctx, msg.Wrap(xml.NewDecoder(strings.NewReader("<body>"+liveBody+"</body>")))); err != nil {
+		t.Fatal(err)
+	}
+	var stanzaID string
+	select {
+	case stanzaID = <-liveStanzaIDs:
+		if stanzaID == "" || stanzaID == wire {
+			t.Fatal("the room did not assign a distinct stanza ID", stanzaID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the room did not supply a stanza ID")
+	}
+	var target domain.Message
+	eventually(t, func() bool {
+		messages, err := engine.Messages(ctx, c.ID, "", 1)
+		if err == nil && len(messages) > 0 && messages[0].OriginalText == liveBody && !messages[0].Historical {
+			target = messages[0]
+			return true
+		}
+		return false
+	})
+	updated, err := engine.Conversation(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.MarkLatestRead(ctx, id(), c.ID, application.ReadLatest{
+		MessageID: target.ID, ConversationRevisionID: updated.RevisionID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-markers:
+		if got != stanzaID {
+			t.Fatalf("room displayed marker used %q instead of %q", got, stanzaID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the room did not receive a displayed marker")
 	}
 }

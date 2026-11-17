@@ -42,7 +42,7 @@ func copyPreference(value *bool) *bool {
 
 // UpdateConversationPreferences changes only supplied flags. The repository
 // serializes its receipt, precondition and projection updates in one transaction.
-// No protocol call or send intent is involved.
+// A committed Mark as read may queue a best-effort displayed marker.
 func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, conversationID domain.ID, in ConversationPreferencesInput) (ConversationResult, error) {
 	if !validID(key) || !validID(conversationID) || !validID(in.AccountID) || !validID(in.ExpectedRevisionID) || (in.Archived == nil && in.Favorite == nil && in.Read == nil && !in.AcceptRequest) || ((in.AcceptRequest || in.Read != nil) && (in.Archived != nil || in.Favorite != nil)) || (in.AcceptRequest && in.Read != nil) {
 		return ConversationResult{}, ErrInvalid
@@ -85,6 +85,7 @@ func (e *Engine) UpdateConversationPreferences(ctx context.Context, key, convers
 	})
 	if err == nil && (in.AcceptRequest || read != nil) && !result.Replayed {
 		e.notifyEvents()
+		e.queueDisplayedMarker(result.DisplayedMarker)
 	}
 	return result, err
 }

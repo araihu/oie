@@ -129,13 +129,17 @@ func (s *Store) MarkMessagesRead(ctx context.Context, in application.ReadMutatio
 			return application.ReadResult{}, err
 		}
 	}
+	marker, err := reserveDisplayedMarker(ctx, q, c, in.RevisionID, len(ids))
+	if err != nil {
+		return application.ReadResult{}, err
+	}
 	if err = q.SetOperationResult(ctx, dbgen.SetOperationResultParams{ID: string(in.Operation.ID), ResourceID: string(c.ID), Result: jsonText(state)}); err != nil {
 		return application.ReadResult{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return application.ReadResult{}, err
 	}
-	return application.ReadResult{State: state}, nil
+	return application.ReadResult{State: state, DisplayedMarker: marker}, nil
 }
 
 func insertAllMessageReads(ctx context.Context, q *dbgen.Queries, conversation, revision domain.ID) ([]domain.ID, error) {

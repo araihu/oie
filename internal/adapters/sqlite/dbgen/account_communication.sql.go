@@ -12,36 +12,44 @@ import (
 const getAccountCommunicationPreferences = `-- name: GetAccountCommunicationPreferences :one
 SELECT CAST(COALESCE(p.revision_id, '') AS TEXT) AS revision_id,
        CAST(COALESCE(p.presence, 'available') AS TEXT) AS presence,
-       CAST(COALESCE(p.send_typing, 1) AS INTEGER) AS send_typing
+       CAST(COALESCE(p.send_typing, 1) AS INTEGER) AS send_typing,
+       CAST(COALESCE(p.send_read_receipts, 1) AS INTEGER) AS send_read_receipts
 FROM accounts a
 LEFT JOIN account_communication_preferences p ON p.account_id = a.id
 WHERE a.id = ?1
 `
 
 type GetAccountCommunicationPreferencesRow struct {
-	RevisionID string
-	Presence   string
-	SendTyping int64
+	RevisionID       string
+	Presence         string
+	SendTyping       int64
+	SendReadReceipts int64
 }
 
 func (q *Queries) GetAccountCommunicationPreferences(ctx context.Context, accountID string) (GetAccountCommunicationPreferencesRow, error) {
 	row := q.db.QueryRowContext(ctx, getAccountCommunicationPreferences, accountID)
 	var i GetAccountCommunicationPreferencesRow
-	err := row.Scan(&i.RevisionID, &i.Presence, &i.SendTyping)
+	err := row.Scan(
+		&i.RevisionID,
+		&i.Presence,
+		&i.SendTyping,
+		&i.SendReadReceipts,
+	)
 	return i, err
 }
 
 const putAccountCommunicationPreferences = `-- name: PutAccountCommunicationPreferences :exec
-INSERT INTO account_communication_preferences(account_id,revision_id,presence,send_typing)
-VALUES(?,?,?,?)
-ON CONFLICT(account_id) DO UPDATE SET revision_id=excluded.revision_id,presence=excluded.presence,send_typing=excluded.send_typing
+INSERT INTO account_communication_preferences(account_id,revision_id,presence,send_typing,send_read_receipts)
+VALUES(?,?,?,?,?)
+ON CONFLICT(account_id) DO UPDATE SET revision_id=excluded.revision_id,presence=excluded.presence,send_typing=excluded.send_typing,send_read_receipts=excluded.send_read_receipts
 `
 
 type PutAccountCommunicationPreferencesParams struct {
-	AccountID  string
-	RevisionID string
-	Presence   string
-	SendTyping int64
+	AccountID        string
+	RevisionID       string
+	Presence         string
+	SendTyping       int64
+	SendReadReceipts int64
 }
 
 func (q *Queries) PutAccountCommunicationPreferences(ctx context.Context, arg PutAccountCommunicationPreferencesParams) error {
@@ -50,6 +58,7 @@ func (q *Queries) PutAccountCommunicationPreferences(ctx context.Context, arg Pu
 		arg.RevisionID,
 		arg.Presence,
 		arg.SendTyping,
+		arg.SendReadReceipts,
 	)
 	return err
 }

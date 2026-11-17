@@ -19,8 +19,9 @@ type ReadLatest struct {
 	MessageID, ConversationRevisionID domain.ID
 }
 type ReadResult struct {
-	State    domain.ReadState
-	Replayed bool
+	DisplayedMarker *domain.DisplayedMarker
+	State           domain.ReadState
+	Replayed        bool
 }
 type ReadRepository interface {
 	ConversationReadState(context.Context, domain.ID) (domain.ReadState, error)
@@ -96,5 +97,9 @@ func (e *Engine) markRead(ctx context.Context, key domain.ID, kind string, inten
 	in.Fingerprint = fingerprint(kind, intent)
 	in.RevisionID = revision
 	in.ConversationRevisionID = conversationRevision
-	return r.MarkMessagesRead(ctx, in)
+	result, err := r.MarkMessagesRead(ctx, in)
+	if err == nil && !result.Replayed {
+		e.queueDisplayedMarker(result.DisplayedMarker)
+	}
+	return result, err
 }

@@ -23,10 +23,11 @@ type AccountArchiveRetention struct {
 }
 
 type AccountCommunicationPreference struct {
-	AccountID  string
-	RevisionID string
-	Presence   string
-	SendTyping int64
+	AccountID        string
+	RevisionID       string
+	Presence         string
+	SendTyping       int64
+	SendReadReceipts int64
 }
 
 type ArchiveAlias struct {
@@ -103,6 +104,12 @@ type Conversation struct {
 	UnreadCount      int64
 	Archived         int64
 	Favorite         int64
+}
+
+type ConversationDisplayedHead struct {
+	ConversationID string
+	PositionMs     int64
+	MessageID      string
 }
 
 type ConversationReadRevision struct {

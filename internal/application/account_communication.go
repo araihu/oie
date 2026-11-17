@@ -8,7 +8,11 @@ import (
 
 type AccountCommunicationRepository interface {
 	AccountCommunicationPreferences(context.Context, domain.ID) (domain.AccountCommunicationPreferences, error)
-	SaveAccountCommunicationPreferences(context.Context, domain.ID, domain.ID, domain.AccountCommunicationPreferences, *bool) (domain.AccountCommunicationPreferences, error)
+	SaveAccountCommunicationPreferences(context.Context, domain.ID, domain.ID, domain.AccountCommunicationPreferences, AccountCommunicationToggles) (domain.AccountCommunicationPreferences, error)
+}
+
+type AccountCommunicationToggles struct {
+	SendTyping, SendReadReceipts *bool
 }
 
 type AccountPresenceHost interface {
@@ -30,7 +34,7 @@ func (e *Engine) AccountCommunicationPreferences(ctx context.Context, accountID 
 	return repo.AccountCommunicationPreferences(ctx, accountID)
 }
 
-func (e *Engine) SetAccountCommunicationPreferences(ctx context.Context, accountID, revision domain.ID, presence string, sendTyping *bool) (domain.AccountCommunicationPreferences, error) {
+func (e *Engine) SetAccountCommunicationPreferences(ctx context.Context, accountID, revision domain.ID, presence string, toggles AccountCommunicationToggles) (domain.AccountCommunicationPreferences, error) {
 	if revision != "" && !validID(revision) {
 		return domain.AccountCommunicationPreferences{}, ErrInvalid
 	}
@@ -51,7 +55,7 @@ func (e *Engine) SetAccountCommunicationPreferences(ctx context.Context, account
 	if err != nil {
 		return domain.AccountCommunicationPreferences{}, err
 	}
-	saved, err := repo.SaveAccountCommunicationPreferences(ctx, accountID, revision, domain.AccountCommunicationPreferences{RevisionID: next, Presence: presence}, sendTyping)
+	saved, err := repo.SaveAccountCommunicationPreferences(ctx, accountID, revision, domain.AccountCommunicationPreferences{RevisionID: next, Presence: presence}, toggles)
 	if err == nil {
 		if protocol, ok := e.protocols.(AccountPresenceProtocol); ok {
 			protocol.RefreshAccountPresence(account)

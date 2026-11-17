@@ -44,15 +44,17 @@ func (s *Store) UpdateConversationPreferences(ctx context.Context, in applicatio
 	if in.AcceptRequest && conversation.Request != domain.MessageRequest || in.Read != nil && conversation.Request != "" {
 		return application.ConversationResult{}, application.ConversationPreferencesConflict{Current: conversation}
 	}
+	var marker *domain.DisplayedMarker
 	next, changed := applyConversationPreferences(conversation, in)
 	if in.Read != nil {
 		next.UnreadReminder = !*in.Read
 		changed = conversation.UnreadReminder != next.UnreadReminder
 		if *in.Read {
-			marked, readErr := markConversationRead(ctx, q, &next, in)
-			if readErr != nil {
-				return application.ConversationResult{}, readErr
+			marked, displayed, err := markConversationRead(ctx, q, &next, in)
+			if err != nil {
+				return application.ConversationResult{}, err
 			}
+			marker = displayed
 			changed = changed || marked
 		}
 	}
@@ -69,24 +71,28 @@ func (s *Store) UpdateConversationPreferences(ctx context.Context, in applicatio
 	if err = tx.Commit(); err != nil {
 		return application.ConversationResult{}, err
 	}
-	return application.ConversationResult{Conversation: conversation}, nil
+	return application.ConversationResult{Conversation: conversation, DisplayedMarker: marker}, nil
 }
 
-func markConversationRead(ctx context.Context, q *dbgen.Queries, next *domain.Conversation, in application.ConversationPreferencesMutation) (bool, error) {
+func markConversationRead(ctx context.Context, q *dbgen.Queries, next *domain.Conversation, in application.ConversationPreferencesMutation) (bool, *domain.DisplayedMarker, error) {
 	state, err := readState(ctx, q, *next)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	ids, err := insertAllMessageReads(ctx, q, next.ID, in.ReadRevisionID)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if len(ids) == 0 && next.UnreadCount == 0 && !next.UnreadMention {
-		return false, nil
+		return false, nil, nil
 	}
 	next.UnreadCount, next.UnreadMention = 0, false
 	_, err = writeReadRevision(ctx, q, state, in.ReadRevisionID, in.CreatedAt, next.UnreadCount, ids)
-	return true, err
+	if err != nil {
+		return false, nil, err
+	}
+	marker, err := reserveDisplayedMarker(ctx, q, *next, in.ReadRevisionID, len(ids))
+	return true, marker, err
 }
 
 func applyConversationPreferences(current domain.Conversation, in application.ConversationPreferencesMutation) (domain.Conversation, bool) {

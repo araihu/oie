@@ -88,7 +88,8 @@ type entry struct {
 	presenceShow         string
 	presenceWake         chan struct{}
 	typingPeers          map[string]typingPeer
-	pendingTyping        *uint32
+	pendingEphemeral     *uint32
+	readReceiptAudience  map[string]bool
 	contactsGate         chan struct{}
 	contactRequests      map[string]struct{}
 	contactSubscriptions map[string]bool
@@ -459,6 +460,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if !e.replaying {
 				e.contactRequests = make(map[string]struct{})
 				e.contactSubscriptions = nil
+				e.readReceiptAudience = nil
 				e.initialPeerPresence = make(map[string]map[string]peerResource)
 			}
 			e.historyWake = make(chan struct{}, 1)
@@ -542,14 +544,14 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.raw = nil
 			e.presenceWake = nil
 			status := session.StreamManagement()
-			hasPendingTyping := typingAwaitingAck(e.pendingTyping, status.Acknowledged)
-			e.pendingTyping = nil
+			hasPendingEphemeral := ephemeralAwaitingAck(e.pendingEphemeral, status.Acknowledged)
+			e.pendingEphemeral = nil
 			for address, peer := range e.typingPeers {
 				peer.until = time.Time{}
 				peer.sent = false
 				e.typingPeers[address] = peer
 			}
-			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingTyping
+			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingEphemeral
 			if resumable {
 				e.suspended = session
 			} else {
@@ -563,7 +565,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if !resumable {
 				m.resetRoomSessions(ctx, e, session)
 			}
-			if !served || hasPendingTyping {
+			if !served || hasPendingEphemeral {
 				management = new(mx.StreamManagement)
 			}
 		}
@@ -919,6 +921,7 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			reactionMetadata
 			roomModerationMetadata
 			typingMetadata
+			displayedMarkerMetadata
 			Subject     *string        `xml:"jabber:client subject"`
 			Body        string         `xml:"jabber:client body"`
 			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
@@ -1024,9 +1027,13 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if len(msg.Origins) == 0 && usableID(msg.ID) {
 			refs = append(refs, domain.MessageReference{Scope: "sender:" + msg.From.Bare().String(), ID: msg.ID, Author: msg.From.Bare().String()})
 		}
+		var readReceiptID string
+		if msg.Delay.Stamp == "" && msg.Delay.From == "" {
+			readReceiptID = msg.requestedID(msg.ID)
+		}
 		_, requestsEnabled := m.host.(application.ConversationRequestHost)
 		own, _ := jid.Parse(e.account.Address)
-		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}
