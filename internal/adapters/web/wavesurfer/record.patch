@@ -1,0 +1,127 @@
+diff --git a/src/plugins/record.ts b/src/plugins/record.ts
+index a9e1d33..62d6317 100644
+--- a/src/plugins/record.ts
++++ b/src/plugins/record.ts
+@@ -7,0 +8 @@ import { FrameScheduler } from '../frame-scheduler.js'
++import type { Scope } from '../scope.js'
+@@ -38,0 +40,2 @@ export type RecordPluginEvents = BasePluginEvents & {
++  /** Fires when the browser reports a recording failure */
++  'record-error': [Event]
+@@ -204,5 +207,33 @@ function setupRecord(
+-  const renderMicStream = (micMediaStream: MediaStream): MicStream => {
+-    const audioContext = new AudioContext()
+-    const source = audioContext.createMediaStreamSource(micMediaStream)
+-    const analyser = audioContext.createAnalyser()
+-    source.connect(analyser)
++  const createMicContext = (scope: Scope) => {
++    const context = new AudioContext()
++    scope.add(() => {
++      void context.close().catch(() => {})
++    })
++    if (context.state !== 'running') void context.resume().catch(() => {})
++    return context
++  }
++
++  const renderMicStream = (
++    micMediaStream: MediaStream,
++    micScope = ctx.scope.child(),
++    audioContext?: AudioContext,
++  ): MicStream => {
++    const mic = {
++      onDestroy: () => micScope.dispose(),
++      onEnd: () => {
++        isWaveformPaused = true
++        stopMic()
++      },
++    }
++    let analyser: AnalyserNode
++    try {
++      audioContext ??= createMicContext(micScope)
++      const source = audioContext.createMediaStreamSource(micMediaStream)
++      micScope.add(() => source.disconnect())
++      analyser = audioContext.createAnalyser()
++      source.connect(analyser)
++    } catch {
++      // The waveform is optional. MediaRecorder can still record the stream.
++      micScope.dispose()
++      return mic
++    }
+@@ -373,12 +403,0 @@ function setupRecord(
+-    // A child of the lifecycle scope: startMic()/stopMic() can run several
+-    // times over the plugin's life, so these mic-specific resources need
+-    // their own disposable unit. Being a CHILD also means destroy() (which
+-    // disposes ctx.scope) cleans this up even if stopMic() was never called.
+-    const micScope = ctx.scope.child()
+-    // Registered before the interval so LIFO disposal clears the interval
+-    // first and only then disconnects/closes the audio graph (stop drawing
+-    // before tearing down what it reads).
+-    micScope.add(() => {
+-      source?.disconnect()
+-      audioContext?.close()
+-    })
+@@ -387,11 +406 @@ function setupRecord(
+-    return {
+-      onDestroy: () => micScope.dispose(),
+-      onEnd: () => {
+-        // Fires when a recording ends on its own (not via an explicit
+-        // stopMic()/destroy() call) -- a domain-event reaction, not a
+-        // teardown resource, so it stays wired through the plugin's own
+-        // 'record-end' (see startMic()).
+-        isWaveformPaused = true
+-        stopMic()
+-      },
+-    }
++    return mic
+@@ -405,0 +415,9 @@ function setupRecord(
++    const micScope = ctx.scope.child()
++    let audioContext: AudioContext | undefined
++    try {
++      // WebKit can require activation before the permission prompt resolves.
++      audioContext = createMicContext(micScope)
++    } catch {
++      // Capture remains available when Web Audio cannot be initialized.
++    }
++
+@@ -411,0 +430 @@ function setupRecord(
++      micScope.dispose()
+@@ -424,3 +442,0 @@ function setupRecord(
+-    const newMicStream = renderMicStream(newStream)
+-    micStream = newMicStream
+-    unsubscribeRecordEnd = host.onceRecordEnd(newMicStream.onEnd)
+@@ -427,0 +444,6 @@ function setupRecord(
++    if (audioContext) micStream = renderMicStream(newStream, micScope, audioContext)
++    else micScope.dispose()
++    unsubscribeRecordEnd = host.onceRecordEnd(() => {
++      isWaveformPaused = true
++      stopMic()
++    })
+@@ -496,0 +519,2 @@ function setupRecord(
++      previousRecorder.onstart = null
++      previousRecorder.onerror = null
+@@ -562,0 +587,11 @@ function setupRecord(
++    recorder.onstart = () => {
++      if (ctx.scope.disposed || mediaRecorder !== recorder || recorder.state !== 'recording') return
++      lastStartTime = performance.now()
++      frameScheduler.start(tick)
++      ctx.emit('record-start')
++    }
++    recorder.onerror = (event) => {
++      if (ctx.scope.disposed || mediaRecorder !== recorder) return
++      frameScheduler.stop()
++      ctx.emit('record-error', event)
++    }
+@@ -563,0 +599,4 @@ function setupRecord(
++    recorder.onstop = () => {
++      frameScheduler.stop()
++      emitWithBlob('record-end')
++    }
+@@ -565,4 +603,0 @@ function setupRecord(
+-    recorder.onstop = () => emitWithBlob('record-end')
+-
+-    recorder.start(options.mediaRecorderTimeslice)
+-    lastStartTime = performance.now()
+@@ -572,3 +607 @@ function setupRecord(
+-    frameScheduler.start(tick)
+-
+-    ctx.emit('record-start')
++    recorder.start(options.mediaRecorderTimeslice)

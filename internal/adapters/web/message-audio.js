@@ -144,7 +144,8 @@ window.OieRuntime.register('message-audio', life => {
     if (player.waveUnavailable && !media.controls) useNativeControls(player);
     if (media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) status(card, card.dataset.audioLoading);
     try {
-      await media.play();
+      const playback = player.wave?.getMediaElement() === media ? player.wave : media;
+      await playback.play();
     } catch (error) {
       if (active !== player || media.src !== attemptedSource || error.name === 'AbortError') return;
       if (error.name === 'NotAllowedError') {
@@ -225,7 +226,8 @@ window.OieRuntime.register('message-audio', life => {
       player.wave = WaveSurfer.create({container: shape, media: document.createElement('audio'), waveColor: colors.color,
         progressColor: colors.getPropertyValue('--oie-accent-text').trim(), height: 24, normalize: true,
         barWidth: 2, barGap: 2, barRadius: 2, barMinHeight: 2, cursorWidth: 0});
-      player.wave.replacePeaks(peaks, duration);
+      await player.wave.load('', peaks, duration);
+      if (!current(player)) return;
       player.wave.setMediaElement(media);
       shape.tabIndex = 0;
       shape.setAttribute('role', 'slider');
@@ -299,7 +301,9 @@ window.OieRuntime.register('message-audio', life => {
     if (!player) return;
     if (active === player && (player.playRequested || !player.media.paused)) {
       player.playRequested = false;
-      player.media.pause();
+      const {wave, media} = player;
+      const playback = wave?.getMediaElement() === media ? wave : media;
+      playback.pause();
       status(card);
       update(player);
       return;
