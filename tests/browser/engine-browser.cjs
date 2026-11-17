@@ -109,9 +109,9 @@ const {messageRetractionFlow} = require('./message-retraction-flow.cjs');
   };
   try {
     await fs.mkdir('artifacts', {recursive: true});
-    const aliceContext = await browser.newContext({viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'});
-    const bobContext = await browser.newContext({viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'});
-    for (const context of [aliceContext, bobContext]) {
+    const contextOptions = {viewport: {width: 1440, height: 900}, locale: 'en-US', timezoneId: 'America/Sao_Paulo'};
+    const newContext = async (options = {}) => {
+      const context = await browser.newContext({...contextOptions, ...options});
       await context.addInitScript(() => {
         // This fixture exercises messaging without a host audio device.
         window.AudioContext = class extends AudioContext {
@@ -120,13 +120,16 @@ const {messageRetractionFlow} = require('./message-retraction-flow.cjs');
           }
         };
       });
-    }
+      return context;
+    };
+    const aliceContext = await newContext();
+    const bobContext = await newContext();
     const alicePage = await aliceContext.newPage();
     const bobPage = await bobContext.newPage();
     const preferenceConflictURLs=new Map(),readConflictURLs=new Map(),consoleLocations=[];
     const searchTransport=[];alicePage.on('response',async response=>{if(response.url().includes('/ui/message-search?'))searchTransport.push({url:response.url(),status:response.status(),body:await response.text().catch(()=>'<response unavailable>')})});
     let expectedLostReply = false;
-    for (const page of [alicePage, bobPage]) {
+    const observePage = page => {
       page.on('response', response => {
         const url = new URL(response.url());
         const request = response.request();
@@ -140,7 +143,9 @@ const {messageRetractionFlow} = require('./message-retraction-flow.cjs');
         if (expectedLostReply && message.text().includes('net::ERR_FAILED')) evidence.expectedTransportFailures.push(message.text());
         else {evidence.consoleErrors.push(message.text());consoleLocations.push(message.location().url||'')}
       }});
-    }
+    };
+    observePage(alicePage);
+    observePage(bobPage);
     await alicePage.goto(base + '/?theme=dark&lang=en');
     await openAccounts(alicePage);
     const accounts = [];
@@ -570,7 +575,12 @@ const {messageRetractionFlow} = require('./message-retraction-flow.cjs');
     await attachmentComposition({base, api, until, alicePage, bobPage, alice, bob, aliceConversation, bobConversation,
       expectTransportFailure:value => {expectedLostReply = value;}, prefix});
     evidence.workflows.push('Paste and drop files directly into the draft, wrap previews, remove and retry staged attachments. Explicit send reaches the receiver with caption and file URL.');
-    await messageRetractionFlow({base, api, until, send, alicePage, bobPage, alice, bob, aliceConversation, bobConversation, prefix});
+    // Chromium can send a controlled page's keepalive request past Playwright's
+    // route. Use a fresh context for Alice so this flow can hold the real POST.
+    const retractionContext = await newContext({viewport: alicePage.viewportSize(), serviceWorkers: 'block'});
+    const retractionPage = await retractionContext.newPage();
+    observePage(retractionPage);
+    await messageRetractionFlow({base, api, until, send, alicePage: retractionPage, bobPage, alice, bob, aliceConversation, bobConversation, prefix});
     evidence.workflows.push('Retract a sent message over XMPP, preserve the composer through a delayed request, and reveal or search the retained original explicitly.');
     for(let index=evidence.consoleErrors.length-1;index>=0;index--){
       const url=consoleLocations[index],message=evidence.consoleErrors[index];
