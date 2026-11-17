@@ -630,53 +630,69 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	return tx.Commit()
 }
 
-// An authenticated echo can arrive after a restored send was reviewed and
-// resumed. Retire it under the same write lock as the claim and wire marker.
 func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, echo *domain.Message, revision domain.ID) error {
-	if echo.OwnOriginID == "" {
+	if !echo.IsOwn || echo.OwnOriginID == "" {
 		return nil
 	}
-	row, err := q.GetMessage(ctx, string(echo.OwnOriginID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if (row.State != "queued" && row.State != "dispatching") || row.ProviderID != row.ID || row.IsOwn != 1 || row.AccountID != string(incoming.AccountID) {
-		return nil
-	}
-	chatRow, err := q.GetConversation(ctx, row.ConversationID)
-	if err != nil {
-		return err
-	}
-	chat, err := decodeConversation(chatRow)
-	if err != nil || chat.Kind != incoming.Kind || chat.Address != incoming.Address {
-		return err
-	}
-	if row.State == "dispatching" {
-		outbox, err := q.GetOutbox(ctx, row.ID)
-		if err != nil || outbox.WireStage != "awaiting" {
-			return err
-		}
-	}
-	queued, err := decodeMessage(row)
-	if err != nil {
+	queued, err := ownMessageBeforeWire(ctx, q, incoming, echo.OwnOriginID)
+	if err != nil || queued.ID == "" {
 		return err
 	}
 	state := "unknown"
-	if sameSubmittedComposition(queued, *echo) {
+	if echoesPlainSend(queued, *echo) {
 		state = "submitted"
 	}
 	observed := echo.ReceivedAt
+	if echo.Historical && !echo.CreatedAt.IsZero() {
+		observed = echo.CreatedAt
+	}
 	if observed.IsZero() {
 		observed = incoming.UpdatedAt
 	}
 	if _, err := updateMessage(ctx, q, queued, state, revision, observed, observed, false); err != nil {
 		return err
 	}
-	echo.ProviderID = row.ProviderID
+	echo.ProviderID = queued.ProviderID
 	return nil
+}
+
+func echoesPlainSend(sent, echo domain.Message) bool {
+	if sent.OriginalText != echo.OriginalText || sent.OutboundReply != nil || echo.ReplyReference != nil ||
+		len(sent.Attachments) != 0 || len(sent.Mentions) != 0 || len(echo.FileReferences) != 0 || len(echo.AudioURLs) != 0 {
+		return false
+	}
+	composition := sent.Composition
+	return composition == nil || (composition.ReplyTo == "" && len(composition.Mentions) == 0 && len(composition.AttachmentIDs) == 0)
+}
+
+// An authenticated observation can arrive after explicit resume. Resolve the
+// original pending row under the same write lock as the claim and wire marker.
+func ownMessageBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, id domain.ID) (domain.Message, error) {
+	row, err := q.GetMessage(ctx, string(id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Message{}, nil
+	}
+	if err != nil {
+		return domain.Message{}, err
+	}
+	if (row.State != "queued" && row.State != "dispatching") || row.ProviderID != row.ID || row.IsOwn != 1 || row.AccountID != string(incoming.AccountID) {
+		return domain.Message{}, nil
+	}
+	chatRow, err := q.GetConversation(ctx, row.ConversationID)
+	if err != nil {
+		return domain.Message{}, err
+	}
+	chat, err := decodeConversation(chatRow)
+	if err != nil || chat.Kind != incoming.Kind || chat.Address != incoming.Address {
+		return domain.Message{}, err
+	}
+	if row.State == "dispatching" {
+		outbox, err := q.GetOutbox(ctx, row.ID)
+		if err != nil || outbox.WireStage != "awaiting" {
+			return domain.Message{}, err
+		}
+	}
+	return decodeMessage(row)
 }
 
 func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time, guardWire bool) (domain.Message, error) {

@@ -1,4 +1,5 @@
 DROP VIEW restore_source_echoes;
+DROP VIEW restore_pre_wire_sends;
 DROP TABLE restore_messages;
 DROP TABLE restore_chats;
 DROP TABLE restore_accounts;

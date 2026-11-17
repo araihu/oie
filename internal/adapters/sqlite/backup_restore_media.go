@@ -18,7 +18,15 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, now time.Time) ([]string, error) {
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, hasDownloadCleanup bool, now time.Time) ([]string, error) {
+	if _, err := tx.ExecContext(ctx, restoreScript("media_download_devices")); err != nil {
+		return nil, fmt.Errorf("read backup download devices: %w", err)
+	}
+	if hasDownloadCleanup {
+		if _, err := tx.ExecContext(ctx, restoreScript("media_download_cleanup")); err != nil {
+			return nil, fmt.Errorf("read backup download cleanup revisions: %w", err)
+		}
+	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata"),
 		sql.Named("media_files", jsonText(files)), sql.Named("now_ms", now.UnixMilli())); err != nil {
 		return nil, fmt.Errorf("restore media metadata: %w", err)

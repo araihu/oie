@@ -74,6 +74,10 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 		if err != nil {
 			return err
 		}
+		mentionsChanged, err := refreshRestoredMentions(ctx, tx, q, id)
+		if err != nil {
+			return err
+		}
 		if redacted || scrubbed {
 			if err := q.ScrubConversationEventPreviews(ctx, id); err != nil {
 				return err
@@ -88,7 +92,7 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 		if err := refreshRestoredConversation(ctx, q, id, added, promoted, now); err != nil {
 			return err
 		}
-		if !added && (historyChanged || scrubbed || redacted) {
+		if !added && (historyChanged || scrubbed || redacted || mentionsChanged) {
 			if _, err := change(ctx, q, "conversation.history_pruned", domain.HistoryPruned{
 				ConversationID: domain.ID(id), MessageIDs: []domain.ID{},
 			}, now); err != nil {
@@ -97,6 +101,35 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 		}
 	}
 	return rows.Err()
+}
+
+func refreshRestoredMentions(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, id string) (bool, error) {
+	rows, err := tx.QueryContext(ctx, restoreScript("mention_sources"), id)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	changed := false
+	for rows.Next() {
+		var sourceID string
+		if err := rows.Scan(&sourceID); err != nil {
+			return false, err
+		}
+		row, err := q.GetMessage(ctx, sourceID)
+		if err != nil {
+			return false, err
+		}
+		source, err := decodeMessage(row)
+		if err != nil {
+			return false, err
+		}
+		updated, err := refreshMessageMention(ctx, q, &source)
+		if err != nil {
+			return false, err
+		}
+		changed = changed || updated
+	}
+	return changed, rows.Err()
 }
 
 func scrubRestoredQuotePreviews(ctx context.Context, tx *sql.Tx, q *dbgen.Queries) error {

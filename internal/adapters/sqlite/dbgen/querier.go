@@ -234,6 +234,7 @@ type Querier interface {
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
 	PutConversationReadReceipts(ctx context.Context, arg PutConversationReadReceiptsParams) error
 	PutConversationRetention(ctx context.Context, arg PutConversationRetentionParams) error
+	PutDownloadCleanupRevision(ctx context.Context, arg PutDownloadCleanupRevisionParams) error
 	PutGlobalReadReceipts(ctx context.Context, enabled int64) error
 	PutGlobalRetention(ctx context.Context, arg PutGlobalRetentionParams) error
 	PutGuardedArchiveCheckpoint(ctx context.Context, arg PutGuardedArchiveCheckpointParams) (int64, error)

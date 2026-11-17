@@ -348,6 +348,22 @@ func (q *Queries) ListRetainedDownloadHashes(ctx context.Context) ([]string, err
 	return items, nil
 }
 
+const putDownloadCleanupRevision = `-- name: PutDownloadCleanupRevision :exec
+INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
+SELECT d.device_id,d.generation,?1 FROM download_devices d WHERE d.device_id=?2
+ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation,revision_id=excluded.revision_id
+`
+
+type PutDownloadCleanupRevisionParams struct {
+	RevisionID string
+	DeviceID   string
+}
+
+func (q *Queries) PutDownloadCleanupRevision(ctx context.Context, arg PutDownloadCleanupRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, putDownloadCleanupRevision, arg.RevisionID, arg.DeviceID)
+	return err
+}
+
 const queueDownloadGarbage = `-- name: QueueDownloadGarbage :exec
 INSERT INTO download_garbage(kind,hash) VALUES(?,?) ON CONFLICT DO NOTHING
 `

@@ -118,7 +118,16 @@ func (s *Store) PurgeDownloads(ctx context.Context, device domain.ID, now time.T
 	}
 	var removed []dbgen.DeviceDownload
 	if device != "" {
+		revision, revisionErr := newID()
+		if revisionErr != nil {
+			return revisionErr
+		}
 		if err = q.AdvanceDownloadGeneration(ctx, string(device)); err != nil {
+			return err
+		}
+		if err = q.PutDownloadCleanupRevision(ctx, dbgen.PutDownloadCleanupRevisionParams{
+			DeviceID: string(device), RevisionID: string(revision),
+		}); err != nil {
 			return err
 		}
 		removed, err = q.DropDeviceDownloads(ctx, string(device))

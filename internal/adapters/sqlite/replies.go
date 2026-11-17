@@ -68,8 +68,8 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		if err != nil {
 			return err
 		}
-		if n > 0 && emit {
-			if err = refreshMentionAfterReply(ctx, q, &old, in.ReplyReference.Fallback); err != nil {
+		if n > 0 && emit && len(in.ReplyReference.Fallback) > 0 {
+			if err = refreshMentionAfterReply(ctx, q, &old); err != nil {
 				return err
 			}
 		}

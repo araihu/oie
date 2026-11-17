@@ -38,6 +38,13 @@ WHERE wire_id GLOB '????????-????-7???-[89ab]???-????????????'
 ON CONFLICT DO NOTHING;
 
 -- The send state is evidence even if its history has expired at the destination.
+CREATE TEMP VIEW restore_pre_wire_sends AS
+SELECT m.id,m.account_id,m.conversation_id,m.provider_id
+FROM messages m JOIN outbox o ON o.message_id=m.id
+JOIN restore_chats x ON x.id=m.conversation_id
+WHERE m.is_own=1 AND m.state=o.state
+  AND (m.state='queued' OR (m.state='dispatching' AND o.wire_stage='awaiting'));
+
 CREATE TEMP TABLE restore_send_evidence (id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT, payload TEXT) WITHOUT ROWID;
 INSERT INTO restore_send_evidence
 SELECT m.id,CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed')
@@ -48,8 +55,9 @@ JOIN restore_chats c ON c.id=m.conversation_id
 LEFT JOIN recovered_sends p ON p.message_id=m.id AND p.conversation_id=c.id
 LEFT JOIN restore_messages selected ON selected.id=m.id
 LEFT JOIN messages d ON d.id=m.id AND d.conversation_id=m.conversation_id AND d.account_id=m.account_id AND d.is_own=1
+LEFT JOIN restore_pre_wire_sends active ON active.id=d.id
 WHERE m.is_own=1 AND COALESCE(o.state,m.state) IN ('cancelled','submitted','failed','dispatching','unknown')
-  AND (p.message_id IS NOT NULL OR d.state='queued'
+  AND (p.message_id IS NOT NULL OR active.id IS NOT NULL
        OR (d.id IS NULL AND selected.id IS NULL AND COALESCE(o.state,m.state) IN ('cancelled','submitted','failed')));
 
 -- Another engine can retain our verified own echo under a different local
@@ -59,10 +67,9 @@ SELECT b.wire_id,'submitted',r.created_at,b.payload
 FROM restore_source_echoes b
 JOIN backup.message_revisions r ON r.id=b.revision_id AND r.entity_id=b.id
 WHERE (
-    EXISTS(SELECT 1 FROM messages m JOIN outbox o ON o.message_id=m.id
-           WHERE m.id=b.wire_id AND m.provider_id=m.id AND m.is_own=1
-             AND m.account_id=b.account_id AND m.conversation_id=b.conversation_id
-             AND m.state='queued' AND o.state='queued')
+    EXISTS(SELECT 1 FROM restore_pre_wire_sends m
+           WHERE m.id=b.wire_id AND m.provider_id=m.id
+             AND m.account_id=b.account_id AND m.conversation_id=b.conversation_id)
     OR EXISTS(SELECT 1 FROM recovered_sends p
               WHERE p.message_id=b.wire_id AND p.conversation_id=b.conversation_id)
 )
@@ -71,17 +78,15 @@ ON CONFLICT(id) DO NOTHING;
 
 -- Previously restored proof may survive after the echo's history expired.
 INSERT INTO restore_send_evidence
-SELECT m.id,'unknown',NULL,NULL FROM messages m
-JOIN restore_chats x ON x.id=m.conversation_id
+SELECT m.id,'unknown',NULL,NULL FROM restore_pre_wire_sends m
 JOIN restored_own_echoes e ON e.account_id=m.account_id AND e.conversation_id=m.conversation_id AND e.message_id=m.id
-WHERE m.is_own=1 AND m.state='queued'
+WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 
 -- Expiry implies that the snapshot no longer had an executable send.
 INSERT INTO restore_send_evidence
-SELECT e.id,'unknown',NULL,NULL FROM backup.expired_message_ids e JOIN messages m ON m.id=e.id
-JOIN restore_chats c ON c.id=m.conversation_id
-WHERE m.is_own=1 AND m.state='queued'
+SELECT e.id,'unknown',NULL,NULL FROM backup.expired_message_ids e JOIN restore_pre_wire_sends m ON m.id=e.id
+WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 
 -- Once terminal evidence is available a stale next restore must not recreate

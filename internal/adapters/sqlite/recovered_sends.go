@@ -182,7 +182,7 @@ func scrubRecoveredSendQuotes(ctx context.Context, q *dbgen.Queries, conversatio
 }
 
 func rememberOwnOrigin(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, m domain.Message) error {
-	if m.OwnOriginID == "" {
+	if !m.IsOwn || m.OwnOriginID == "" {
 		return nil
 	}
 	return q.RememberOwnOrigin(ctx, dbgen.RememberOwnOriginParams{

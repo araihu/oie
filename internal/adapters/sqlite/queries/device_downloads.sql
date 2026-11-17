@@ -12,6 +12,11 @@ ON CONFLICT(device_id) DO UPDATE SET days=excluded.days;
 INSERT INTO download_devices(device_id,generation) VALUES(?,1)
 ON CONFLICT(device_id) DO UPDATE SET generation=generation+1;
 
+-- name: PutDownloadCleanupRevision :exec
+INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
+SELECT d.device_id,d.generation,sqlc.arg(revision_id) FROM download_devices d WHERE d.device_id=sqlc.arg(device_id)
+ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation,revision_id=excluded.revision_id;
+
 -- name: GetDeviceDownload :one
 SELECT * FROM device_downloads WHERE device_id=? AND source_id=? AND source_revision=? AND kind='file';
 

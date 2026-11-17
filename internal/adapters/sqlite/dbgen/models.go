@@ -205,6 +205,12 @@ type DiscardedRecoveredSend struct {
 	MessageID string
 }
 
+type DownloadCleanupRevision struct {
+	DeviceID   string
+	Generation int64
+	RevisionID string
+}
+
 type DownloadDevice struct {
 	DeviceID   string
 	Days       int64

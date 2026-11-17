@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
 )
 
 func TestBackupRestoreMergesRoomEchoWithExistingLogicalSend(t *testing.T) {
@@ -44,16 +45,53 @@ func TestBackupRestoreMergesRoomEchoWithExistingLogicalSend(t *testing.T) {
 }
 
 func TestBackupRestoreResumedSendCannotDispatchAfterAuthenticatedEcho(t *testing.T) {
-	t.Run("before claim", func(t *testing.T) { checkResumedSendBeforeWireEcho(t, false) })
-	t.Run("after guarded claim", func(t *testing.T) { checkResumedSendBeforeWireEcho(t, true) })
+	checkResumedSendBeforeWire(t, func(t *testing.T, store *Store, chat domain.Conversation, message domain.Message, _ time.Time) {
+		receiveBackupOwnDirectEcho(t, store, chat, message)
+	})
 }
 
-func checkResumedSendBeforeWireEcho(t *testing.T, claimBeforeEcho bool) {
+func TestBackupRestoreResumedSendCannotDispatchAfterAuthenticatedRetraction(t *testing.T) {
+	checkResumedSendBeforeWire(t, func(t *testing.T, store *Store, chat domain.Conversation, message domain.Message, now time.Time) {
+		ctx := t.Context()
+		engine := testRestoreEngine(t, store)
+		engine.SetProtocols(&outboundProtocol{})
+		account, err := engine.Account(ctx, chat.AccountID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before, err := store.Message(ctx, message.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		retract := func(sender string) {
+			t.Helper()
+			if err := engine.Receive(ctx, application.Incoming{
+				AccountID: chat.AccountID, Kind: "direct", Address: chat.Address,
+				Retraction: &application.IncomingRetraction{Scope: "xmpp:correct:sender:" + sender, RemoteID: string(message.ID), At: now},
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		retract(chat.Address)
+		if current, err := store.Message(ctx, message.ID); err != nil || current.RevisionID != before.RevisionID || current.SendState != before.SendState {
+			t.Fatalf("peer retraction affected our pending message: %+v, %v", current, err)
+		}
+		retract(account.Address)
+	})
+}
+
+func checkResumedSendBeforeWire(t *testing.T, observe func(*testing.T, *Store, domain.Conversation, domain.Message, time.Time)) {
+	t.Helper()
+	t.Run("before claim", func(t *testing.T) { checkResumedSendObservation(t, observe, false) })
+	t.Run("after guarded claim", func(t *testing.T) { checkResumedSendObservation(t, observe, true) })
+}
+
+func checkResumedSendObservation(t *testing.T, observe func(*testing.T, *Store, domain.Conversation, domain.Message, time.Time), claimedBeforeObservation bool) {
 	t.Helper()
 	source, engine, chat := outboxFixture(t)
 	dest := copyRestoreFixture(t, source)
 	ctx := t.Context()
-	pending := queueBackupFixture(t, engine, chat.ID, "echo arrives after review", nil)
+	pending := queueBackupFixture(t, engine, chat.ID, "server evidence arrives after review", nil)
 	now := pending.CreatedAt.Add(time.Hour)
 	manifest, archive, scratch := backupRestoreFixture(t, source, false)
 	if _, err := dest.mergeBackup(ctx, archive, scratch, manifest, now); err != nil {
@@ -67,7 +105,7 @@ func checkResumedSendBeforeWireEcho(t *testing.T, claimBeforeEcho bool) {
 		t.Fatalf("worker did not observe the resumed send: %+v, %v", observed, err)
 	}
 	claimedRevision := observed[0].RevisionID
-	if claimBeforeEcho {
+	if claimedBeforeObservation {
 		claimed, err := dest.ClaimDispatchMessage(ctx, pending.ID, claimedRevision, "", migrationID(), now, true)
 		if err != nil {
 			t.Fatal(err)
@@ -75,15 +113,57 @@ func checkResumedSendBeforeWireEcho(t *testing.T, claimBeforeEcho bool) {
 		claimedRevision = claimed.RevisionID
 	}
 
-	receiveBackupOwnDirectEcho(t, dest, chat, pending)
+	observe(t, dest, chat, pending, now)
 	if due, err := dest.PendingMessages(ctx, now); err != nil || len(due) != 0 {
-		t.Errorf("resumed original still appears ready after its authenticated echo: %+v, %v", due, err)
+		t.Errorf("resumed original still appears ready after authenticated evidence: %+v, %v", due, err)
 	}
-	if claimBeforeEcho {
+	if claimedBeforeObservation {
 		if err := dest.RecordOriginalWireAttempt(ctx, pending.ID, claimedRevision, ""); !errors.Is(err, application.ErrStateConflict) {
 			t.Errorf("worker advanced an already-observed send to the wire: %v", err)
 		}
 	} else if claimed, err := dest.ClaimDispatchMessage(ctx, pending.ID, claimedRevision, "", migrationID(), now, true); !errors.Is(err, application.ErrStateConflict) {
-		t.Errorf("worker claim after the echo: %s, %s, %v", claimed.ID, claimed.SendState, err)
+		t.Errorf("worker claim after authenticated evidence: %s, %s, %v", claimed.ID, claimed.SendState, err)
+	}
+}
+
+func TestBackupRestoreAuthenticatesPlainHistoricalEchoAndKeepsTimestamp(t *testing.T) {
+	for _, tc := range []struct{ state, wireText string }{
+		{"submitted", "scheduled text"},
+		{"unknown", "earlier composition"},
+	} {
+		t.Run(tc.state, func(t *testing.T) {
+			source, engine, chat := outboxFixture(t)
+			dest := copyRestoreFixture(t, source)
+			ctx := t.Context()
+			due := time.Now().UTC().Truncate(time.Millisecond).Add(time.Hour)
+			pending := queueBackupFixture(t, engine, chat.ID, "scheduled text", &due)
+			sentAt, observedAt := due.Add(time.Minute), due.Add(48*time.Hour)
+			manifest, archive, scratch := backupRestoreFixture(t, source, false)
+			if _, err := dest.mergeBackup(ctx, archive, scratch, manifest, observedAt); err != nil {
+				t.Fatal(err)
+			}
+			if err := dest.ReviewRecoveredSend(ctx, pending.ID, pending.RevisionID, true, observedAt); err != nil {
+				t.Fatal(err)
+			}
+			receiver, err := application.New(dest, "local", func() (domain.ID, error) { return migrationID(), nil }, func() time.Time { return observedAt })
+			if err != nil {
+				t.Fatal(err)
+			}
+			receiver.SetProtocols(&outboundProtocol{})
+			if err := receiver.Receive(ctx, application.Incoming{
+				Kind: "direct", Address: chat.Address, AccountID: chat.AccountID, IsOwn: true,
+				ProviderID: string(pending.ID), ArchiveID: "scheduled-own-echo", ArchiveScope: "alice@localhost",
+				OriginalText: tc.wireText, CreatedAt: sentAt, Historical: true,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			current, err := dest.Message(ctx, pending.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.SendState != tc.state || current.OriginalText != pending.OriginalText || !current.TimelineTime().Equal(sentAt) {
+				t.Fatalf("reconciled scheduled message: state=%s text=%q timeline=%s", current.SendState, current.OriginalText, current.TimelineTime())
+			}
+		})
 	}
 }

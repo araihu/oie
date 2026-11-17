@@ -11,17 +11,20 @@ OR EXISTS (SELECT 1 FROM messages m JOIN restore_messages x ON x.id=m.id
     WHERE m.conversation_id=f.conversation_id AND json_extract(a.value,'$.ID')=f.id)
 ON CONFLICT(id) DO NOTHING;
 
--- A destination device's generation advances on deletion. Independent
--- profiles can reach the same generation after different deletions, so
--- only an untouched or new device can acquire old download memberships.
+-- A destination with cleanup history can acquire a membership only from
+-- the same cleanup revision. Independent clear operations can have equal
+-- numeric generations and older snapshots can lack a revision entirely.
 CREATE TEMP TABLE restore_eligible_downloads AS
 SELECT f.*
 FROM backup.device_downloads f
-JOIN backup.download_devices source ON source.device_id=f.device_id
+JOIN restore_download_devices source ON source.device_id=f.device_id
 LEFT JOIN download_devices destination ON destination.device_id=f.device_id
+LEFT JOIN download_cleanup_revisions cleanup ON cleanup.device_id=f.device_id AND cleanup.generation=destination.generation
 JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
     AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
-WHERE (destination.device_id IS NULL OR (destination.generation=0 AND source.generation=0))
+WHERE (COALESCE(destination.generation,0)=0 OR (
+    destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision
+))
   -- Settings claims legacy originals before clearing the real device.
   -- Older archives lack the identity of the device that claimed them.
   AND (f.device_id<>'legacy' OR NOT EXISTS (
