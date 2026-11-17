@@ -51,14 +51,14 @@ The PDF JavaScript scripting sandbox is excluded.
 Run `make check-vendored-assets` to verify the committed files once the Go tool
 dependencies are available. Restore the pinned files with
 `go tool -modfile=tools/go.mod muamba sync --strict pdfjs`.
-The tool verifies its SHA-512 package integrity before writing selected assets.
 
 ## lru-cache browser runtime
 
 `lru-cache` 11.2.6 is distributed under the Blue Oak Model License 1.0.0.
-The browser ESM build is served locally. The license and pinned archive/source
-checksums are in `internal/adapters/web/cache_vendor`. Reproduce the asset with
-`python3 tools/vendor-lru-cache.py`. Project: https://github.com/isaacs/node-lru-cache.
+Muamba pins the npm archive, browser ESM build and license in
+`.muamba.lock.yaml`. The UI serves the module with its license notice and
+provides the full license at `/ui/cache/LICENSE.md`. Restore the pinned files
+with `go tool -modfile=tools/go.mod muamba sync --strict lru-cache`.
 
 ## WaveSurfer.js browser assets
 

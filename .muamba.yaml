@@ -1,5 +1,19 @@
 schema: 1
 resources:
+  lru-cache:
+    version: "11.2.6"
+    directories:
+      browser:
+        url: https://registry.npmjs.org/lru-cache/-/lru-cache-${version}.tgz
+        archive: tar.gz
+        path: internal/adapters/web/cache_vendor
+        strip_components: 1
+        include:
+          - LICENSE.md
+          - dist/esm/index.min.js
+        max_size: 2MiB
+        max_files: 128
+        max_unpacked_size: 4MiB
   pdfjs:
     version: "6.5.438"
     directories:

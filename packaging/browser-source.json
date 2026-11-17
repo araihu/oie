@@ -1,9 +1,8 @@
 {
   "inputs": {
-    ".muamba.lock.yaml": "631a6187f117670d397fbf89dc40b2261eac4180fb23b890b63d8b6dbab644e3",
-    ".muamba.yaml": "b055906512ac80d72e8ea37cf81b8d42938b1c31c1df7a1c5e85354ca0bdf49d",
+    ".muamba.lock.yaml": "b45846de25cfd5ef7ac436e8e9d686ac811da940f98b994fd6dffeaba081edde",
+    ".muamba.yaml": "409266271e6d588614f6e87b8a67aabe504596a9cbc6bb5fb3f75502d78c50ad",
     "internal/adapters/web/brand/SOURCE.json": "0bcdd90f39a8d794dc74fa29552c792c864242b374359ba7d99d3472c75da2bf",
-    "internal/adapters/web/cache_vendor/manifest.json": "d5f93763d96f0b961ec57b11d71729cd9cec0c0535622ec8066a14ef1584f9ad",
     "internal/adapters/web/wavesurfer/manifest.json": "3905e0a28dbf028eb0049a7522fcc0d5bd711fc8ee459f94c7c1662883513deb",
     "internal/adapters/web/wavesurfer/player.mjs": "ff2222536e300c20c2d09bfb5f025b3c019406c7858bc32549e91a6c1294a62c",
     "internal/adapters/web/wavesurfer/record.mjs": "5772579dc31ca549715ead4fabd994d04a594c95c4a818f4f977f0fb98db4641",

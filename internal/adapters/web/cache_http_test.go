@@ -1,12 +1,9 @@
 package web
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -82,20 +79,19 @@ func TestBrowserAssetsShareConditionalDecorator(t *testing.T) {
 	}
 }
 
-func TestCacheLibraryMatchesPinnedManifest(t *testing.T) {
-	body, err := os.ReadFile("cache_vendor/manifest.json")
+func TestCacheLibraryServesLicense(t *testing.T) {
+	ui, err := New("http://127.0.0.1:1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var manifest struct {
-		Version string `json:"version"`
-		SHA256  string `json:"sha256"`
+	script := httptest.NewRecorder()
+	ui.ServeHTTP(script, httptest.NewRequest("GET", "/ui/cache/lru-cache.min.mjs", nil))
+	if script.Code != 200 || !strings.Contains(script.Body.String(), "https://blueoakcouncil.org/license/1.0.0") {
+		t.Fatal("cache runtime is missing the license notice")
 	}
-	if err := json.Unmarshal(body, &manifest); err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(cacheLibrary)
-	if manifest.Version != "11.2.6" || manifest.SHA256 != hex.EncodeToString(digest[:]) || !strings.Contains(string(cacheLibraryLicense), "Blue Oak Model License") {
-		t.Fatal("cache runtime integrity/license drift")
+	license := httptest.NewRecorder()
+	ui.ServeHTTP(license, httptest.NewRequest("GET", "/ui/cache/LICENSE.md", nil))
+	if license.Code != 200 || !strings.Contains(license.Body.String(), "Blue Oak Model License") {
+		t.Fatal("cache runtime license is unavailable")
 	}
 }

@@ -1,5 +1,19 @@
 schema: 1
 directories:
+  - id: lru-cache/browser
+    url: https://registry.npmjs.org/lru-cache/-/lru-cache-11.2.6.tgz
+    path: internal/adapters/web/cache_vendor
+    size: 188669
+    integrity: sha384-s81IMG3wnRDqTgqJ0Xou0G7LNqmR3ag+pOza8fA5PzKj0iK+uWN+3AVZ5+Ym1LDd
+    files:
+      - source: LICENSE.md
+        path: internal/adapters/web/cache_vendor/LICENSE.md
+        size: 1552
+        integrity: sha384-q+oGihu2N9QwmApquaVUGj6dMCskJWnqUegNuRdbeV8n2kK4/yLwdj7qoSFMCKRu
+      - source: dist/esm/index.min.js
+        path: internal/adapters/web/cache_vendor/dist/esm/index.min.js
+        size: 17436
+        integrity: sha384-O3XzEC9cD6l5LVHQtKkvOs/FrGZclpk+IRwbUKO9IOunYKCSXWSnYE+No4AD3G/9
   - id: pdfjs/display
     url: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz
     path: internal/adapters/web/pdfjs
