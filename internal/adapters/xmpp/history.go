@@ -204,6 +204,9 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 	occupantVerified := trust.OccupantVerified && scope == msg.From.Bare().String()
 	in.Correction = decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, in.Kind == "room", occupantVerified)
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
+	if in.IsOwn {
+		in.WireMentions = msg.wireMentionEvidence()
+	}
 	if in.Kind == "room" {
 		if provider := roomProviderID(msg.From, msg.ID, in.References); provider != "" {
 			in.ProviderID = provider

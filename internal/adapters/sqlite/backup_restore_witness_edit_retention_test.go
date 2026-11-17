@@ -110,6 +110,29 @@ func TestBackupRestoreKeepsWitnessedEditsOfRetainedOlderRoomSend(t *testing.T) {
 			if retained, err := store.Message(ctx, original.ID); err != nil || retained.Edited || retained.OriginalText != original.OriginalText {
 				t.Fatalf("an excluded chain changed the original: %+v, %v", retained, err)
 			}
+			retention, err := store.ConversationRetention(ctx, room.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wider := 7
+			if _, err := testRestoreEngine(t, store).SetConversationRetention(ctx, room.ID, retention.Revision, &wider); err != nil {
+				t.Fatal(err)
+			}
+			if result, err := store.mergeBackup(ctx, database, scratch, archive, mergeAt); err != nil || result.Messages != 1 {
+				t.Fatalf("widening should restore only the unrelated message: %+v, %v", result, err)
+			}
+			for _, id := range []domain.ID{domain.ID(firstID), domain.ID(latestID)} {
+				if raw, err := store.MessageSource(ctx, id); !errors.Is(err, application.ErrNotFound) {
+					t.Fatalf("widening restored excluded correction content: %q, %v", raw.OriginalText, err)
+				}
+			}
+			if retained, err := store.Message(ctx, original.ID); err != nil || retained.RevisionID != original.RevisionID ||
+				retained.Edited || retained.OriginalText != original.OriginalText {
+				t.Fatalf("widening changed the retained original: %+v, %v", retained, err)
+			}
+			if retained, err := store.Message(ctx, outside.ID); err != nil || retained.OriginalText != outside.OriginalText {
+				t.Fatalf("widening did not restore unrelated eligible content: %+v, %v", retained, err)
+			}
 		})
 	}
 	sameNative := copyRestoreFixture(t, destination)
@@ -130,6 +153,22 @@ func TestBackupRestoreKeepsWitnessedEditsOfRetainedOlderRoomSend(t *testing.T) {
 	}
 	if result, err := destination.mergeBackup(ctx, database, scratch, archive, mergeAt); err != nil || result != (RestoreSummary{}) {
 		t.Fatalf("repeating the restore changed the corrected root: %+v, %v", result, err)
+	}
+	retainedChain := copyRestoreFixture(t, destination)
+	storedEdit, err := retainedChain.MessageSource(ctx, domain.ID(latestID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := retainedChain.db.ExecContext(ctx, `INSERT INTO expired_message_references VALUES(?,?,?,?,?)`,
+		room.ID, first.Scope, first.ID, first.Author, recent.UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := retainedChain.mergeBackup(ctx, database, scratch, archive, mergeAt); err != nil || result != (RestoreSummary{}) {
+		t.Fatalf("reapplying the archive changed a retained correction chain: %+v, %v", result, err)
+	}
+	if kept, err := retainedChain.MessageSource(ctx, domain.ID(latestID)); err != nil || kept.RevisionID != storedEdit.RevisionID ||
+		kept.OriginalText != storedEdit.OriginalText {
+		t.Fatalf("an exclusion removed the destination's retained correction: %+v, %v", kept, err)
 	}
 	relayed, relayedDB, relayedScratch := backupRestoreFixture(t, destination, false)
 	if result, err := sameNative.mergeBackup(ctx, relayedDB, relayedScratch, relayed, mergeAt); err != nil || result != (RestoreSummary{}) {

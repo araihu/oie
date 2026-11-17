@@ -23,10 +23,10 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var id, state string
+		var id, state, kind string
 		var when, payload sql.NullString
 		var timeline, submittedAt sql.NullInt64
-		if err := rows.Scan(&id, &state, &when, &payload, &timeline, &submittedAt); err != nil {
+		if err := rows.Scan(&id, &state, &when, &payload, &timeline, &submittedAt, &kind); err != nil {
 			return err
 		}
 		messageRow, err := q.GetMessage(ctx, id)
@@ -45,7 +45,7 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 			if message.SendState == "unknown" && !matchesUncertainNativeComposition(message, submitted) {
 				continue
 			}
-			if !matchesSubmittedComposition(message, submitted) {
+			if !matchesSubmittedComposition(message, submitted, kind == "room") {
 				state = "unknown"
 			} else if submitted.ID == message.ID && len(message.Attachments) != 0 && message.AttachmentWireText == "" {
 				message.AttachmentWireText = submitted.AttachmentWireText
@@ -91,17 +91,21 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 	return rows.Err()
 }
 
-func matchesSubmittedComposition(current, submitted domain.Message) bool {
+func matchesSubmittedComposition(current, submitted domain.Message, room bool) bool {
 	if current.ID != submitted.ID {
 		// An independently witnessed echo records the wire text. For a plain
 		// send, that text is the same proof used to reconcile a live echo.
-		return current.OutboundReply == nil && len(current.Mentions) == 0 &&
+		return submitted.ConfirmsNoWireMentions(room) && current.OutboundReply == nil && len(current.Mentions) == 0 &&
 			len(current.Attachments) == 0 && current.AttachmentWireText == "" &&
 			submitted.OutboundReply == nil && len(submitted.Mentions) == 0 &&
 			len(submitted.Attachments) == 0 && len(submitted.FileReferences) == 0 &&
 			len(submitted.AudioURLs) == 0 && len(submitted.FileDigests) == 0 && len(submitted.MediaThumbnails) == 0 &&
 			current.MatchesWireBody(submitted.OriginalText)
 	}
+	return matchesNativeComposition(current, submitted)
+}
+
+func matchesNativeComposition(current, submitted domain.Message) bool {
 	return current.OriginalText == submitted.OriginalText &&
 		reflect.DeepEqual(current.Composition, submitted.Composition) &&
 		reflect.DeepEqual(current.Attachments, submitted.Attachments) &&
@@ -110,7 +114,7 @@ func matchesSubmittedComposition(current, submitted domain.Message) bool {
 }
 
 func matchesUncertainNativeComposition(current, submitted domain.Message) bool {
-	return current.ID == submitted.ID && matchesSubmittedComposition(current, submitted) &&
+	return current.ID == submitted.ID && matchesNativeComposition(current, submitted) &&
 		(current.AttachmentWireText == "" || current.AttachmentWireText == submitted.AttachmentWireText)
 }
 

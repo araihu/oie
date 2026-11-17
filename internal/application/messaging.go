@@ -37,6 +37,7 @@ type Incoming struct {
 	AudioURLs                                 []string
 	FileDigests                               []domain.FileDigest
 	MediaThumbnails                           []domain.MediaThumbnail
+	WireMentions                              domain.WireMentionEvidence
 	AccountID                                 domain.ID
 	Address, ProviderID, OriginalText         string
 	CreatedAt                                 time.Time
@@ -559,7 +560,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
-		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.MatchesWireBody(in.OriginalText) {
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.MatchesWireBody(in.OriginalText) && existing.MatchesWireMentionPresence(in.WireMentions) {
 			chat, err := r.Conversation(ctx, existing.ConversationID)
 			if err != nil {
 				return err
@@ -574,7 +575,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 				if editErr != nil && !errors.Is(editErr, ErrNotFound) {
 					return editErr
 				}
-				if editErr == nil && pending.Command.AccountID == a.ID && pending.WireBody() == in.OriginalText {
+				if editErr == nil && pending.Command.AccountID == a.ID && pending.WireBody() == in.OriginalText && in.WireMentions != domain.WireMentionsPresent {
 					chat, err := r.Conversation(ctx, pending.Command.ConversationID)
 					if err != nil {
 						return err
@@ -643,6 +644,9 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 			m.OwnOriginID, _ = domain.ParseID(string(in.CanonicalID))
 			if m.OwnOriginID == "" && in.Kind == "direct" {
 				m.OwnOriginID, _ = domain.ParseID(in.ProviderID)
+			}
+			if m.OwnOriginID != "" {
+				m.WireMentions = in.WireMentions
 			}
 		}
 	}

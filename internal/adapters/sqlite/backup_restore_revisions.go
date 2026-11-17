@@ -156,6 +156,10 @@ func selectRestoredMessageRevision(ctx context.Context, q *dbgen.Queries, id, re
 	if current.OwnOriginID != "" {
 		next.OwnOriginID = current.OwnOriginID
 	}
+	if current.WireMentions != "" && (next.WireMentions == "" || current.WireMentions == domain.WireMentionsPresent) &&
+		current.SourceBodyHash() == next.SourceBodyHash() {
+		next.WireMentions = current.WireMentions
+	}
 	if next.IsOwn != current.IsOwn {
 		next.Sender.ID = current.Sender.ID
 	}

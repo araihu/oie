@@ -116,7 +116,8 @@ WHERE m.is_new=0 OR m.days=0 OR m.age_ms>=@now_ms - 86400000 * m.days
 -- Restore send evidence onto the original local row. An own archive echo
 -- retained under another row ID would duplicate that message in the timeline.
 CREATE TEMP VIEW restore_source_echoes AS
-SELECT m.*,COALESCE(NULLIF(json_extract(m.payload,'$.OwnOriginID'),''), m.provider_id) AS wire_id
+SELECT m.*,COALESCE(NULLIF(json_extract(m.payload,'$.OwnOriginID'),''), m.provider_id) AS wire_id,
+       json_extract(c.payload,'$.Kind') AS conversation_kind
 FROM backup.messages m JOIN restore_chats x ON x.id=m.conversation_id
 JOIN backup.conversations c ON c.id=x.id AND c.account_id=m.account_id
 WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
@@ -135,6 +136,7 @@ JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
 LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
 LEFT JOIN backup.outbox o ON o.message_id=m.id
 WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
+  AND (m.conversation_kind<>'room' OR oie_wire_mentions_match(d.payload,json_extract(m.payload,'$.WireMentions'))=1)
   AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
   AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
   AND NOT EXISTS (
@@ -178,6 +180,7 @@ WITH echoes AS (
     AND NOT EXISTS(SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=b.id)
     AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=b.id)
     AND json_type(e.payload,'$.OriginalText')='text' AND json_type(b.payload,'$.OriginalText')='text'
+    AND oie_wire_mentions_match(b.payload,json_extract(e.payload,'$.WireMentions'))=1
 )
 SELECT echo_id,original_id FROM pairs p
 WHERE (json_type(original_payload,'$.Attachments[0]') IS NULL AND echo_hash=COALESCE(
@@ -217,9 +220,13 @@ WITH originals AS (
   FROM restore_messages selected JOIN backup.messages archived ON archived.id=selected.id
   JOIN messages retained ON retained.id=archived.id AND retained.account_id=archived.account_id
     AND retained.conversation_id=archived.conversation_id
-  JOIN conversations chat ON chat.id=retained.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
-  WHERE selected.is_new=0 AND archived.is_own=1 AND archived.id=archived.provider_id AND archived.state='submitted'
-    AND retained.is_own=1 AND retained.id=retained.provider_id AND retained.state='submitted'
+  WHERE selected.is_new=0 AND (
+    (archived.is_own=1 AND archived.id=archived.provider_id AND archived.state='submitted'
+     AND retained.is_own=1 AND retained.id=retained.provider_id AND retained.state='submitted')
+    OR (archived.is_own=0 AND archived.state='received' AND retained.is_own=0 AND retained.state='received'
+        AND archived.provider_id=retained.provider_id AND archived.provider_id<>''
+        AND archived.revision_id=retained.revision_id)
+  )
 )
 SELECT e.source_id,e.retained_id,f.scope,f.author,f.remote_id,f.target_id,f.source_hash,
        native.revision_id AS source_revision_id
@@ -231,6 +238,7 @@ JOIN messages native ON native.id=e.retained_id
 JOIN message_revisions retained ON retained.id=native.revision_id AND retained.entity_id=native.id
 WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
   AND json_type(native.payload,'$.Attachments[0]') IS NULL
+  AND (e.source_id=e.retained_id OR oie_wire_mentions_match(native.payload,json_extract(echo.payload,'$.WireMentions'))=1)
   AND f.source_hash=COALESCE(NULLIF(json_extract(echo.payload,'$.WireBodySHA256'),''),
                             oie_source_hash(json_extract(echo.payload,'$.OriginalText')))
   AND f.source_hash=COALESCE(NULLIF(json_extract(archived.payload,'$.WireBodySHA256'),''),
@@ -240,6 +248,11 @@ WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
   AND f.source_hash=COALESCE(NULLIF(json_extract(retained.payload,'$.WireBodySHA256'),''),
                             oie_source_hash(json_extract(retained.payload,'$.OriginalText')))
   AND NOT EXISTS (
+    SELECT 1 FROM message_correction_facts known
+    WHERE known.message_id=native.id AND known.source_hash=f.source_hash
+      AND (known.scope<>f.scope OR known.author<>f.author OR known.remote_id<>f.remote_id OR known.target_id<>'')
+  )
+  AND NOT EXISTS (
     SELECT 1 FROM message_correction_facts existing
     JOIN messages owner ON owner.id=existing.message_id
       AND owner.account_id=native.account_id AND owner.conversation_id=native.conversation_id
@@ -248,45 +261,70 @@ WHERE f.scope<>'' AND f.author<>'' AND f.remote_id<>''
       AND COALESCE(alias.canonical_id,owner.id)<>e.retained_id
   );
 
--- A room's minimum can keep a native send beyond the age cutoff. Its exact
--- correction sources follow the retained root only through verified links.
-WITH RECURSIVE retained_edits(source_id,scope,author,remote_id,account_id,conversation_id,id,is_new) AS (
-  SELECT root.source_id,root.scope,root.author,root.remote_id,native.account_id,native.conversation_id,NULL,0
+-- A room minimum or a local star can keep an original beyond the cutoff.
+-- Track verified correction links even through excluded intermediates so
+-- the normal age window cannot expose their descendants as new sources.
+CREATE TEMP TABLE restore_retained_correction_sources AS
+WITH RECURSIVE retained_edits(source_id,scope,author,remote_id,account_id,conversation_id,id,is_new,allowed) AS (
+  SELECT root.source_id,root.scope,root.author,root.remote_id,native.account_id,native.conversation_id,NULL,0,
+    NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (root.source_id,root.retained_id))
+    AND NOT EXISTS (
+        SELECT 1 FROM expired_message_references expired
+        WHERE expired.conversation_id=chat.id AND expired.scope=root.scope
+          AND expired.remote_id=root.remote_id AND expired.author=root.author
+    )
   FROM restore_verified_correction_roots root
-  JOIN messages native ON native.id=root.retained_id AND native.state='submitted'
-  JOIN conversations chat ON chat.id=native.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
-  WHERE NOT EXISTS (
-      SELECT 1 FROM expired_message_references expired
-      WHERE expired.conversation_id=chat.id AND expired.scope=root.scope
-        AND expired.remote_id=root.remote_id AND expired.author=root.author
+  JOIN messages native ON native.id=root.retained_id AND native.state IN ('received','submitted')
+  JOIN conversations chat ON chat.id=native.conversation_id
+  WHERE json_extract(chat.payload,'$.Kind')='room' OR EXISTS (
+      SELECT 1 FROM message_stars star WHERE star.starred=1 AND (
+        star.message_id=native.id OR star.message_id IN (
+            SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=native.id
+        )
+      )
   )
   UNION
-  SELECT parent.source_id,parent.scope,parent.author,fact.remote_id,parent.account_id,parent.conversation_id,child.id,child.is_new
+  SELECT parent.source_id,parent.scope,parent.author,fact.remote_id,parent.account_id,parent.conversation_id,
+      archived.id,COALESCE(child.is_new,1),
+      parent.allowed AND child.id IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id=archived.id)
+      AND NOT EXISTS (
+          SELECT 1 FROM expired_message_references expired
+          WHERE expired.conversation_id=parent.conversation_id AND (
+            (expired.scope=fact.scope AND expired.remote_id=fact.remote_id AND expired.author=fact.author)
+            OR EXISTS (
+                SELECT 1 FROM backup.message_references ref WHERE ref.message_id=archived.id
+                  AND ref.scope=expired.scope AND ref.remote_id=expired.remote_id AND ref.author=expired.author
+            )
+          )
+      )
   FROM retained_edits parent
   JOIN backup.message_correction_facts fact ON fact.scope=parent.scope AND fact.author=parent.author AND fact.target_id=parent.remote_id
-  JOIN restore_message_candidates child ON child.id=fact.message_id AND child.canonical_id=parent.source_id
-  JOIN backup.messages archived ON archived.id=child.id AND archived.account_id=parent.account_id
+  JOIN backup.message_canonical_aliases alias ON alias.alias_id=fact.message_id AND alias.canonical_id=parent.source_id
+  JOIN backup.messages archived ON archived.id=alias.alias_id AND archived.account_id=parent.account_id
     AND archived.conversation_id=parent.conversation_id
-  JOIN backup.message_revisions revision ON revision.id=fact.source_revision_id AND revision.entity_id=child.id
+  LEFT JOIN restore_message_candidates child ON child.id=archived.id
+  JOIN backup.message_revisions revision ON revision.id=fact.source_revision_id AND revision.entity_id=archived.id
   WHERE fact.remote_id<>''
     AND fact.source_hash=COALESCE(NULLIF(json_extract(archived.payload,'$.WireBodySHA256'),''),
                                  oie_source_hash(json_extract(archived.payload,'$.OriginalText')))
     AND fact.source_hash=COALESCE(NULLIF(json_extract(revision.payload,'$.WireBodySHA256'),''),
                                  oie_source_hash(json_extract(revision.payload,'$.OriginalText')))
     AND NOT EXISTS (
-        SELECT 1 FROM expired_message_references expired
-        WHERE expired.conversation_id=parent.conversation_id AND expired.scope=fact.scope
-          AND expired.remote_id=fact.remote_id AND expired.author=fact.author
-    )
-    AND NOT EXISTS (
         SELECT 1 FROM message_correction_facts existing JOIN messages owner ON owner.id=existing.message_id
           AND owner.account_id=parent.account_id AND owner.conversation_id=parent.conversation_id
         WHERE existing.scope=fact.scope AND existing.author=fact.author AND existing.remote_id=fact.remote_id
-          AND existing.message_id<>child.id
+          AND existing.message_id<>archived.id
     )
 )
+SELECT id,MIN(is_new) AS is_new,MAX(allowed) AS allowed FROM retained_edits
+WHERE id IS NOT NULL GROUP BY id;
+
+DELETE FROM restore_messages
+WHERE is_new=1 AND id IN (SELECT id FROM restore_retained_correction_sources WHERE allowed=0);
+
 INSERT INTO restore_messages
-SELECT id,is_new FROM retained_edits WHERE id IS NOT NULL
+SELECT id,is_new FROM restore_retained_correction_sources WHERE allowed=1
 ON CONFLICT DO NOTHING;
 
 DELETE FROM restore_messages

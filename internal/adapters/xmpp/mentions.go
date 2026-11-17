@@ -18,6 +18,15 @@ import (
 
 const mentionNS = "urn:xmpp:reference:0"
 
+func (m replyMetadata) wireMentionEvidence() domain.WireMentionEvidence {
+	for _, reference := range m.MentionReferences {
+		if reference.Type == "mention" {
+			return domain.WireMentionsPresent
+		}
+	}
+	return domain.WireMentionsAbsent
+}
+
 type observedMention struct {
 	present bool
 	uri     string

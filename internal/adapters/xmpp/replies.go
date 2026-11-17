@@ -36,10 +36,13 @@ type wireFallback struct {
 	Others   []struct{} `xml:",any"`
 }
 type replyMetadata struct {
-	Origins  []wireID       `xml:"urn:xmpp:sid:0 origin-id"`
-	Stable   []wireID       `xml:"urn:xmpp:sid:0 stanza-id"`
-	Replies  []wireReply    `xml:"urn:xmpp:reply:0 reply"`
-	Fallback []wireFallback `xml:"urn:xmpp:fallback:0 fallback"`
+	Origins           []wireID       `xml:"urn:xmpp:sid:0 origin-id"`
+	Stable            []wireID       `xml:"urn:xmpp:sid:0 stanza-id"`
+	Replies           []wireReply    `xml:"urn:xmpp:reply:0 reply"`
+	Fallback          []wireFallback `xml:"urn:xmpp:fallback:0 fallback"`
+	MentionReferences []struct {
+		Type string `xml:"type,attr"`
+	} `xml:"urn:xmpp:reference:0 reference"`
 }
 
 func usableID(id string) bool {

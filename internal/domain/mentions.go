@@ -1,10 +1,30 @@
 package domain
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
+
+// WireMentionEvidence describes only whether the observed stanza carried a
+// structured mention. Older room histories do not record its absence.
+type WireMentionEvidence string
+
+const (
+	WireMentionsAbsent  WireMentionEvidence = "absent"
+	WireMentionsPresent WireMentionEvidence = "present"
+)
+
+func (m Message) ConfirmsNoWireMentions(room bool) bool {
+	return m.WireMentions == WireMentionsAbsent || (m.WireMentions == "" && !room)
+}
+
+func (m Message) MatchesWireMentionPresence(observed WireMentionEvidence) bool {
+	return observed != WireMentionsPresent || slices.ContainsFunc(m.Mentions, func(mention MessageMention) bool {
+		return mention.ReferenceMode == "structured"
+	})
+}
 
 // MentionBoundary follows Gajim's nickname delimiters and keeps Unicode marks
 // attached to the surrounding text. Zero is the boundary of the message.

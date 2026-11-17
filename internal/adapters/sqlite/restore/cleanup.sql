@@ -5,6 +5,7 @@ DROP VIEW restore_represented_echo_references;
 DROP TABLE restore_represented_echoes;
 DROP TABLE restore_suppressed_echoes;
 DROP TABLE restore_verified_correction_roots;
+DROP TABLE restore_retained_correction_sources;
 DROP VIEW restore_own_echo_aliases;
 DROP TABLE restore_conflicting_relayed_echo_refs;
 DROP TABLE restore_conflicting_relayed_echo_aliases;

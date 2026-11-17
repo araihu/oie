@@ -818,7 +818,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 				break
 			}
 		}
-		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
+		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText, mentions: len(payload.Mentions) != 0}
 		e.mu.Unlock()
 	}
 
@@ -1036,7 +1036,15 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		_, requestsEnabled := m.host.(application.ConversationRequestHost)
 		own, _ := jid.Parse(e.account.Address)
-		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		err := m.host.Receive(ctx, application.Incoming{
+			AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID,
+			OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address,
+			CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable),
+			References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false),
+			WireMentions: msg.wireMentionEvidence(), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata),
+			FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata),
+			FileReferences: decodeFileReferences(msg.fileSharingMetadata),
+		})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

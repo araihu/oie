@@ -659,7 +659,7 @@ func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming 
 		return err
 	}
 	state := "unknown"
-	if echoesPlainSend(queued, *echo) {
+	if echoesPlainSend(queued, *echo, incoming.Kind == "room") {
 		state = "submitted"
 	}
 	observed := echo.ReceivedAt
@@ -678,13 +678,17 @@ func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming 
 		!queued.MatchesAttachmentWireBody(echo.OriginalText) {
 		return nil
 	}
+	if !queued.MatchesWireMentionPresence(echo.WireMentions) {
+		return nil
+	}
 	echo.ProviderID = queued.ProviderID
 	return nil
 }
 
-func echoesPlainSend(sent, echo domain.Message) bool {
+func echoesPlainSend(sent, echo domain.Message, room bool) bool {
 	if sent.OriginalText != echo.OriginalText || sent.OutboundReply != nil || echo.ReplyReference != nil ||
-		len(sent.Attachments) != 0 || len(sent.Mentions) != 0 || len(echo.FileReferences) != 0 || len(echo.AudioURLs) != 0 {
+		len(sent.Attachments) != 0 || len(sent.Mentions) != 0 || len(echo.FileReferences) != 0 || len(echo.AudioURLs) != 0 ||
+		!echo.ConfirmsNoWireMentions(room) {
 		return false
 	}
 	composition := sent.Composition
@@ -934,6 +938,9 @@ func (s *Store) reconcileArchivedAuthor(ctx context.Context, q *dbgen.Queries, i
 	old.IsOwn = true
 	old.Sender.ID = in.AccountID
 	old.SendState = "submitted"
+	if old.SourceBodyHash() == in.SourceBodyHash() {
+		old.OwnOriginID, old.WireMentions = in.OwnOriginID, in.WireMentions
+	}
 	old.RevisionID = revision
 	at := time.Now().UTC()
 	if err = q.ReconcileMessageAuthor(ctx, dbgen.ReconcileMessageAuthorParams{RevisionID: string(revision), Payload: jsonText(old), ID: id}); err != nil {
