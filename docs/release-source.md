@@ -48,9 +48,11 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C oie build -mod=vendor -tags server \
   Wails TypeScript, Goshtoso's asset recipe and the modernc Go translations.
 - `browser-sources/` contains the pinned upstream JavaScript, WebAssembly
   decoder, font, icon and artwork sources. It includes the Mermaid and PDF.js
-  distributions with source maps. `release-tooling/packaging/browser-source.json`
-  records the downloaded and packaged archive digests and the input manifests
-  or assets they cover. Selected upstream tarballs are repacked as inner
+  distributions with source maps. The tagged
+  `oie/packaging/browser-source.json` records the downloaded and packaged
+  archive digests and the input manifests or assets they cover. Packaging and
+  verification use that manifest even when the tooling comes from a newer
+  revision. Selected upstream tarballs are repacked as inner
   uncompressed tar archives with the editable inputs and notices, excluding
   unrelated test fixtures, demo assets and site media. For example, the PDF.js
   test corpus contains PDF works with separate terms and is omitted.

@@ -8,11 +8,12 @@ CODEGEN = GOWORK=off $(GO) tool -modfile=tools/go.mod
 VACUUM ?= python3 tools/ci/linter.py vacuum
 GOLANGCI_LINT ?= python3 tools/ci/linter.py golangci-lint
 CLI_GENERATOR = GOWORK=off $(GO) -C tools run ./cmd/generate-oiectl
+PDFJS_GENERATOR = GOWORK=off $(GO) -C tools run ./cmd/generate-pdfjs-embed
 GO_TEST_EXEC = $(if $(OIE_GO_TEST_EXEC),-exec "$(OIE_GO_TEST_EXEC)")
 
 .PHONY: generate generate-cli lint lint-go build build-cli run check test test-race check-generated dev-up dev-down test-xmpp test-engine-xmpp
 
-generate:
+generate: generate-pdfjs-embed
 	python3 tools/generate-reaction-emoji-bases.py
 	$(CODEGEN) sqlc generate
 	$(CODEGEN) oapi-codegen --config api/codegen.yaml api/openapi.yaml
@@ -71,9 +72,13 @@ check: lint lint-go check-generated check-api-compatibility check-ci-tools check
 	$(MAKE) test
 	$(COMPOSE) config --quiet
 
-.PHONY: check-vendored-assets
+.PHONY: generate-pdfjs-embed check-vendored-assets
+generate-pdfjs-embed:
+	$(PDFJS_GENERATOR)
+
 check-vendored-assets:
 	$(CODEGEN) muamba verify --strict > /dev/null
+	$(PDFJS_GENERATOR) -check
 
 .PHONY: check-ci-tools
 check-ci-tools:

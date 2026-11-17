@@ -51,6 +51,8 @@ The PDF JavaScript scripting sandbox is excluded.
 Run `make check-vendored-assets` to verify the committed files once the Go tool
 dependencies are available. Restore the pinned files with
 `go tool -modfile=tools/go.mod muamba sync --strict pdfjs`.
+After changing the lock, run `make generate-pdfjs-embed` to update the exact
+set of PDF.js files embedded by the server.
 
 ## lru-cache browser runtime
 

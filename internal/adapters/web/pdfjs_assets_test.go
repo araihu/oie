@@ -58,7 +58,7 @@ func TestPDFJSAssetsAreLocalConditionalResourcesWithNoDirectoryBrowsing(t *testi
 			t.Fatal("unchanged static dependency was retransmitted", tc.path, cached.Code)
 		}
 	}
-	for _, name := range []string{"", "../server.go", "build/", "build/pdf.sandbox.mjs", "standard_fonts/"} {
+	for _, name := range []string{"", "../server.go", "build/", "build/pdf.sandbox.mjs", "build/unlocked.mjs", "standard_fonts/"} {
 		w := httptest.NewRecorder()
 		s.servePDFJS(w, httptest.NewRequest(http.MethodGet, "/ui/pdfjs/"+name, nil))
 		if w.Code != 404 {
