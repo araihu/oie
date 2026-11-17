@@ -67,6 +67,9 @@ default:
 @infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
 if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
 @infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
+if v.canSetReadReceipts(v.Selected) {
+@infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
+}
 @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
 <template data-info-participants-loading>
 	@infoParticipantsSkeleton(v)
@@ -80,9 +83,9 @@ if !v.Preview && v.requestKind()=="" {
 })
 if v.Selected.Kind!="room" {
 @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
-}
 if v.canSetReadReceipts(v.Selected) {
 @infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
+}
 }
 }
 if v.RoomArchive != nil {
