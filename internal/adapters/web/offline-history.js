@@ -6,8 +6,33 @@
   const shell = body.hasAttribute('data-offline-history');
   const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 
+  const revokedEngines = new Set();
+  let displayedEngine;
   if (shell) {
+    const title = document.getElementById('offline-title');
+    const recentTitle = title.textContent;
+    const revoke = engine => {
+      if (!uuid(engine)) return;
+      revokedEngines.add(engine);
+      if (displayedEngine !== engine) return;
+      for (const id of ['offline-conversations', 'offline-messages']) {
+        const list = document.getElementById(id);
+        list.replaceChildren();
+        list.hidden = true;
+      }
+      title.textContent = recentTitle;
+      const empty = document.getElementById('offline-empty');
+      if (new URLSearchParams(location.search).has('chat')) empty.textContent = body.dataset.conversationMissing;
+      empty.hidden = false;
+    };
+    window.addEventListener('storage', event => {
+      if (event.key === 'oie.reset.notice') revoke(event.newValue);
+    });
     navigator.serviceWorker.addEventListener('message', ({data}) => {
+      if (data?.type === 'oie:offline-history-reset') {
+        revoke(data.engine);
+        return;
+      }
       if (data?.type !== 'oie:notification-click') return;
       const {engine, account, conversation, message} = data;
       if (![engine, account, conversation, message].every(uuid)) return;
@@ -165,7 +190,8 @@
     const chat = query.get('chat');
     const message = query.get('message');
     const expectedEngine = query.get('notificationEngine');
-    const entries = expectedEngine && expectedEngine !== state?.engine ? [] :
+    displayedEngine = state?.engine;
+    const entries = revokedEngines.has(displayedEngine) || expectedEngine && expectedEngine !== displayedEngine ? [] :
       (state?.entries ?? []).filter(entry => !account || entry.account === account);
     const params = new URLSearchParams({lang});
     if (theme === 'light' || theme === 'dark') params.set('theme', theme);

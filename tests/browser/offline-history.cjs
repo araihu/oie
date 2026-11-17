@@ -17,19 +17,25 @@ function savedHistory() {
 
 async function checkNavigationAuthority(id) {
   const engine = id(1), other = id(2);
-  const saved = {engine, checkpoint: engine + ':1', entries: [{cursor: engine + ':1'}]};
+  const saved = {engine, checkpoint: engine + ':1', entries: [{chat: id(8), cursor: engine + ':1', savedAt: Date.now()}]};
   const source = await fs.readFile(path.join(__dirname, '../../internal/adapters/web/offline-worker.js'), 'utf8');
   const handlers = new Map();
   const requests = new Map();
+  const notices = [];
   const sandbox = vm.createContext({
-    self: {addEventListener: (type, handler) => handlers.set(type, handler), location: {origin: 'http://test'}},
+    self: {
+      addEventListener: (type, handler) => handlers.set(type, handler),
+      location: {origin: 'http://test'},
+      clients: {matchAll: async () => [{url: 'http://test/', postMessage: notice => notices.push(notice)}]},
+    },
     URL, Response, TextEncoder, caches: {match: async () => null},
     fetch: request => new Promise((resolve, reject) => requests.set(request.key, {resolve, reject})),
   });
   vm.runInContext(source, sandbox);
   let current = saved;
   sandbox.state = async update => current = update?.(current) ?? current;
-  const send = key => sandbox.workspace({key, signal: {aborted: false}}, new URL('http://test/'));
+  const send = (key, chat) => sandbox.workspace({key, signal: {aborted: false}},
+    new URL('http://test/' + (chat ? '?chat=' + chat : '')));
   const ok = identity => new Response('workspace', {headers: {
     'X-Oie-Offline-History': identity, 'X-Oie-Offline-Cursor': identity + ':1',
   }});
@@ -53,6 +59,17 @@ async function checkNavigationAuthority(id) {
   assert(current.blocked && !current.entries.length, 'a newer network outage cannot conceal a confirmed denial');
 
   current = saved;
+  const lateMissing = send('missing chat', id(8));
+  const otherChat = send('different chat', id(9));
+  requests.get('different chat').resolve(ok(engine));
+  await otherChat;
+  requests.get('missing chat').resolve(new Response('missing', {status: 404, headers: {
+    'X-Oie-Offline-History': engine, 'X-Oie-Offline-Cursor': engine + ':1',
+  }}));
+  await lateMissing;
+  assert.equal(current.entries.length, 0, 'a disjoint newer success preserves the authority of an older scoped 404');
+
+  current = saved;
   current = sandbox.invalidate(current, {engine, chat: id(9), through: engine + ':3', confirmedMissing: true});
   assert.equal(current.checkpoint, engine + ':1', 'another chat’s 404 cannot certify an unobserved event gap');
   assert.equal(sandbox.progress(current, {engine, through: engine + ':4'}), undefined, 'an isolated event cannot certify an earlier gap');
@@ -74,6 +91,8 @@ async function checkNavigationAuthority(id) {
   await reset;
   assert.equal(current.engine, other);
   assert.equal(current.entries.length, 1, 'the delayed result of the old reset preserves the new engine');
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].engine, engine, 'the already open shells receive the reset of the old engine');
 }
 
 module.exports = async function checkOfflineHistory({browser, base, account, chat, state, until, id}) {
@@ -204,12 +223,32 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       assert.equal(denied.headers()['x-oie-offline-history'], 'denied');
       await page.locator('#oie-route[data-engine-unavailable]').waitFor();
       await until(async () => (await page.evaluate(savedHistory))?.entries.length === 0, 'denied response purges history');
+
+      state.engineDenied = false;
+      state.resetEnabled = true;
+      await page.goto(route);
+      await until(async () => (await page.evaluate(savedHistory))?.entries.length === 1, 'chat saved before same-profile reset');
+      const peer = await newPage();
+      await context.setOffline(true);
+      await peer.goto(route);
+      await peer.locator('#offline-messages').getByText(latest, {exact: true}).waitFor();
+      await context.setOffline(false);
+      const engine = (await page.evaluate(savedHistory)).engine;
+      const resetStatus = await page.evaluate(async engine => {
+        const csrf = document.querySelector('meta[name="oie-csrf"]').content;
+        const body = new URLSearchParams({csrf, engineId: engine, confirmation: 'delete'});
+        return (await fetch('/ui/engine/reset', {method: 'POST', body})).status;
+      }, engine);
+      assert.equal(resetStatus, 204);
+      await peer.locator('#offline-empty').waitFor();
+      assert.equal(await peer.getByText(latest, {exact: true}).count(), 0, 'reset immediately clears already open offline history');
       assert.deepEqual(errors, []);
       console.log('PASS: Offline history, draft recovery and engine outage (' + lang + ', ' + width + ' px)');
     } finally {
       state.engineDown = false;
       state.chatRemoved = false;
       state.engineDenied = false;
+      state.resetEnabled = false;
       await context.close();
     }
   }

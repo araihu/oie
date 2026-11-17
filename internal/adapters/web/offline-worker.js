@@ -180,6 +180,16 @@ async function offlineResponse(url, fallback) {
   return new Response(page.body, {status: fallback?.status ?? 200, headers: page.headers});
 }
 
+async function notifyReset(engine) {
+  const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+  for (const client of windows) {
+    const url = new URL(client.url);
+    if (url.origin === self.location.origin && (url.pathname === '/' || url.pathname === shell)) {
+      client.postMessage({type: 'oie:offline-history-reset', engine});
+    }
+  }
+}
+
 async function workspace(request, url) {
   const turn = ++navigation;
   let response;
@@ -196,12 +206,17 @@ async function workspace(request, url) {
     const account = url.searchParams.get('account');
     const missingChat = response.status === 404 && id.test(chat) &&
       (account === null || id.test(account)) && !url.searchParams.has('notificationEngine');
+    const removal = {engine, account, chat, through, confirmedMissing: true};
     await state(current => {
-      if (turn < verifiedNavigation) return;
+      if (turn < verifiedNavigation) {
+        // A newer response can establish engine scope without proving that
+        // another conversation still exists.
+        return missingChat ? invalidate(current, removal) : undefined;
+      }
       verifiedNavigation = turn;
       const verified = verify(current, engine, through);
-      return (missingChat && invalidate(verified, {engine, account, chat, through, confirmedMissing: true})) ||
-        (verified !== current ? verified : undefined);
+      const next = missingChat ? invalidate(verified, removal) ?? verified : verified;
+      if (next !== current) return next;
     }).catch(() => {});
   } else if (engine === 'unavailable' && response.status === 503) {
     return offlineResponse(url, response);
@@ -229,7 +244,7 @@ self.addEventListener('fetch', event => {
           if (current.engine !== engine) return;
           verifiedNavigation = ++navigation;
           return {...current, blocked: true, entries: []};
-        }).catch(() => {});
+        }).then(() => notifyReset(engine)).catch(() => {});
       }
       return response;
     })());
