@@ -44,8 +44,10 @@ ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE SET cleanup_revi
 -- name: KeepLegacyDownloadMembership :exec
 INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
 SELECT d.device_id,sqlc.arg(source_id),sqlc.arg(source_revision),sqlc.arg(kind) FROM download_devices d
-WHERE d.device_id=sqlc.arg(device_id) AND d.generation>0 AND NOT EXISTS (
-  SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+WHERE d.device_id=sqlc.arg(device_id) AND d.generation>0 AND (
+  CAST(sqlc.arg(claimed_legacy) AS INTEGER)=1 OR NOT EXISTS (
+    SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+  )
 )
 ON CONFLICT DO NOTHING;
 
@@ -103,11 +105,12 @@ SELECT EXISTS(SELECT 1 FROM message_previews WHERE
 -- name: DeleteDownloadImageFile :exec
 DELETE FROM media_files WHERE hash=?;
 
--- name: CopyLegacyImageDownloads :exec
+-- name: CopyLegacyImageDownloads :many
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 SELECT sqlc.arg(device_id),source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms
 FROM device_downloads WHERE device_id='legacy'
-ON CONFLICT DO NOTHING;
+ON CONFLICT DO NOTHING
+RETURNING source_id,source_revision,kind;
 
 -- name: RemoveLegacyDownloadDevice :exec
 DELETE FROM download_devices WHERE device_id='legacy';

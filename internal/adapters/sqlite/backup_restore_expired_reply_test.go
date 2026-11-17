@@ -100,3 +100,54 @@ func TestRecoveredSendResumesOnlySanitizedReplyToMissingExpiredTarget(t *testing
 		})
 	}
 }
+
+func TestRecoveredSendResumesAfterSenderOnlyQuoteIsScrubbed(t *testing.T) {
+	source, engine, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	const fallback = "> only a fallback quote\n"
+	const answer = "the new authored answer"
+	target := replySeed(t, source, chat, fallback, now.AddDate(0, 0, -20), nil, &domain.ReplyReference{
+		Target:   domain.MessageReference{ID: "earlier"},
+		Fallback: []domain.TextRange{{Start: 0, End: len(fallback)}},
+	})
+	if got, err := engine.Message(ctx, target.ID); err != nil || got.Reply == nil || got.Reply.BodyText != "" || len(got.References) != 0 {
+		t.Fatalf("target fixture did not have an empty authored body and no wire reference: %+v, %v", got, err)
+	}
+	destination := copyRestoreFixture(t, source)
+	engine.SetProtocols(&outboundProtocol{wireReply: true})
+	accepted, err := engine.SendMessageWithReply(ctx, migrationID(), chat.ID, answer, target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := accepted.Message
+	if plan := message.OutboundReply; plan == nil || plan.Excerpt != "" || plan.Reference != nil ||
+		plan.SenderName == "" || len(plan.Fallback) == 0 || message.OriginalText == answer {
+		t.Fatalf("fixture did not freeze a sender-only quote: %+v", message)
+	}
+	manifest, archive, scratch := backupRestoreFixture(t, source, false)
+	if _, err := destination.mergeBackup(ctx, archive, scratch, manifest, now); err != nil {
+		t.Fatal(err)
+	}
+	days := 1
+	if _, err := testRestoreEngine(t, destination).SetConversationRetention(ctx, chat.ID, "0", &days); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := destination.PurgeExpiredHistory(ctx, now, func() (domain.ID, error) { return migrationID(), nil }); err != nil || count != 1 {
+		t.Fatalf("target purge fixture: %d, %v", count, err)
+	}
+	items, err := destination.RecoveredSends(ctx)
+	if err != nil || len(items) != 1 || items[0].Text != answer {
+		t.Fatalf("sender-only quote was not scrubbed from review: %+v, %v", items, err)
+	}
+	if err := destination.ReviewRecoveredSend(ctx, message.ID, message.RevisionID, true, now); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := destination.ClaimDispatchMessage(ctx, message.ID, message.RevisionID, "", migrationID(), now, true)
+	if err != nil || claimed.OriginalText != answer || claimed.SourceBodyHash() != message.SourceBodyHash() {
+		t.Fatalf("claim did not retain the answer and original wire identity: %+v, %v", claimed, err)
+	}
+	if err := destination.RecordOriginalWireAttempt(ctx, claimed.ID, claimed.RevisionID, application.Outgoing{OriginalText: answer}, ""); err != nil {
+		t.Fatalf("sanitized reply did not reach the wire gate: %v", err)
+	}
+}

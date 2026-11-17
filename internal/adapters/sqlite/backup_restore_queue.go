@@ -25,7 +25,8 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 	for rows.Next() {
 		var id, state string
 		var when, payload sql.NullString
-		if err := rows.Scan(&id, &state, &when, &payload); err != nil {
+		var timeline, submittedAt sql.NullInt64
+		if err := rows.Scan(&id, &state, &when, &payload, &timeline, &submittedAt); err != nil {
 			return err
 		}
 		messageRow, err := q.GetMessage(ctx, id)
@@ -37,12 +38,14 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 			return err
 		}
 		if state == "submitted" {
-			matches, err := matchesSubmittedComposition(message, payload.String)
-			if err != nil {
+			var submitted domain.Message
+			if err := json.Unmarshal([]byte(payload.String), &submitted); err != nil {
 				return err
 			}
-			if !matches {
+			if !matchesSubmittedComposition(message, submitted) {
 				state = "unknown"
+			} else if submitted.ID == message.ID && len(message.Attachments) != 0 && message.AttachmentWireText == "" {
+				message.AttachmentWireText = submitted.AttachmentWireText
 			}
 		}
 		at := now
@@ -52,15 +55,24 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 				return err
 			}
 		}
-		if message.ScheduledAt != nil && message.TimelineAt == nil && (state == "submitted" || state == "failed" || state == "unknown") {
+		publishSchedule := message.ScheduledAt != nil && (state == "submitted" || state == "failed" || state == "unknown")
+		if message.TimelineAt == nil && (timeline.Valid || publishSchedule) {
 			// Place the restored send at its historical time. The restore summary
 			// updates the conversation under its existing activity and revision.
 			millis := at.UnixMilli()
+			if timeline.Valid {
+				millis = timeline.Int64
+			}
 			if err := q.SetMessageTimelineAt(ctx, dbgen.SetMessageTimelineAtParams{ID: id, TimelineAtMs: &millis}); err != nil {
 				return err
 			}
 			setTimelineTime(&message, &millis)
 			if _, err := tx.ExecContext(ctx, "UPDATE restore_chats SET history_changed=1 WHERE id=?", message.ConversationID); err != nil {
+				return err
+			}
+		}
+		if submittedAt.Valid {
+			if err := q.SetMessageSubmittedAt(ctx, dbgen.SetMessageSubmittedAtParams{ID: id, SubmittedAtMs: &submittedAt.Int64}); err != nil {
 				return err
 			}
 		}
@@ -75,17 +87,12 @@ func reconcileRestoredSendEvidence(ctx context.Context, tx *sql.Tx, q *dbgen.Que
 	return rows.Err()
 }
 
-func matchesSubmittedComposition(current domain.Message, payload string) (bool, error) {
-	var submitted domain.Message
-	if err := json.Unmarshal([]byte(payload), &submitted); err != nil {
-		return false, err
-	}
-	domain.ProjectOutboundReply(&submitted)
+func matchesSubmittedComposition(current, submitted domain.Message) bool {
 	return current.OriginalText == submitted.OriginalText &&
 		reflect.DeepEqual(current.Composition, submitted.Composition) &&
 		reflect.DeepEqual(current.Attachments, submitted.Attachments) &&
 		reflect.DeepEqual(current.Mentions, submitted.Mentions) &&
-		reflect.DeepEqual(current.OutboundReply, submitted.OutboundReply), nil
+		reflect.DeepEqual(current.OutboundReply, submitted.OutboundReply)
 }
 
 func mergeRestoredQueue(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, engine domain.ID, hasRecovered, hasHistory bool) error {

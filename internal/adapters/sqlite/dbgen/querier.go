@@ -26,7 +26,7 @@ type Querier interface {
 	ClearPeerRetentionCheckpoints(ctx context.Context, arg ClearPeerRetentionCheckpointsParams) error
 	ClearRoomReactionVisibility(ctx context.Context, arg ClearRoomReactionVisibilityParams) error
 	ConversationUnreadSummary(ctx context.Context, conversationID string) (ConversationUnreadSummaryRow, error)
-	CopyLegacyImageDownloads(ctx context.Context, deviceID string) error
+	CopyLegacyImageDownloads(ctx context.Context, deviceID string) ([]CopyLegacyImageDownloadsRow, error)
 	CorrectionNeighbors(ctx context.Context, arg CorrectionNeighborsParams) ([]CorrectionNeighborsRow, error)
 	CountCatalogPage(ctx context.Context, arg CountCatalogPageParams) (int64, error)
 	CountDeviceDownloads(ctx context.Context, deviceID string) (int64, error)

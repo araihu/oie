@@ -112,6 +112,66 @@ func TestBackupRestoreReexportsNewDownloadsOnLegacyDevice(t *testing.T) {
 	}
 }
 
+func TestBackupRestoreReexportsLegacyImagesClaimedInSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		version     uint
+		preexisting bool
+	}{
+		{name: "unproven cleanup", version: 39},
+		{name: "known cleanup", version: 43},
+		{name: "existing membership is not reclassified", version: 43, preexisting: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source, _, chat := outboxFixture(t)
+			ctx := t.Context()
+			now := time.Now().UTC()
+			preview, device := seedBackupDownloadedImage(t, source, chat, now)
+			primary := openLegacyDownloadDestination(t)
+			wantFiles := 1
+			if tc.preexisting {
+				first, firstArchive, firstScratch := backupRestoreFixture(t, source, true)
+				if result, err := primary.mergeBackup(ctx, firstArchive, firstScratch, first, now); err != nil || result.MediaFiles != 1 {
+					t.Fatalf("could not seed the existing device membership: %+v, %v", result, err)
+				}
+				wantFiles = 0
+			}
+			// The original predates download ownership and survived a cleanup
+			// of the actual device in the old profile.
+			if err := source.queries.EnsureDownloadDevice(ctx, "legacy"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := source.db.ExecContext(ctx, "UPDATE device_downloads SET device_id='legacy' WHERE device_id=?", device); err != nil {
+				t.Fatal(err)
+			}
+			clearBackupDownloads(t, source, device, now)
+			migrateFixtureToVersion(t, source, tc.version)
+			old, oldArchive, oldScratch := backupRestoreFixture(t, source, true)
+			if result, err := primary.mergeBackup(ctx, oldArchive, oldScratch, old, now); err != nil || result.MediaFiles != wantFiles {
+				t.Fatalf("old archive did not restore the original: %+v, %v", result, err)
+			}
+			if policy, err := testRestoreEngine(t, primary).SetDownloadPolicy(ctx, device, 0, false); err != nil ||
+				policy.Count != 1 || policy.Generation != 1 {
+				t.Fatalf("changing device settings did not claim the retained original: %+v, %v", policy, err)
+			}
+
+			relayed, relayedArchive, relayedScratch := backupRestoreFixture(t, primary, true)
+			fresh := openLegacyDownloadDestination(t)
+			if result, err := fresh.mergeBackup(ctx, relayedArchive, relayedScratch, relayed, now); err != nil || result.MediaFiles != wantFiles {
+				t.Fatalf("re-export restored the wrong membership after claiming legacy originals: %+v, %v", result, err)
+			}
+			if got, err := fresh.Preview(ctx, preview.ID); !tc.preexisting && (err != nil || got.FileHash != preview.FileHash) {
+				t.Fatalf("claimed original did not survive re-export: %+v, %v", got, err)
+			}
+			var proofs int
+			if err := fresh.readDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM download_membership_cleanup_revisions WHERE device_id=?", device).
+				Scan(&proofs); err != nil || proofs != 0 {
+				t.Fatalf("claiming older media created cleanup proof: %d, %v", proofs, err)
+			}
+		})
+	}
+}
+
 func TestBackupRestoreCompletesDeferredLegacyDownloadAfterRelayingMetadata(t *testing.T) {
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()

@@ -30,7 +30,8 @@ func init() {
 			return nil, err
 		}
 		plan := m.OutboundReply
-		if plan == nil || plan.Excerpt == "" && plan.Reference == nil {
+		if plan == nil || (m.OriginalText == plan.BodyText && plan.SenderName == "" && plan.Excerpt == "" &&
+			plan.Reference == nil && len(plan.Fallback) == 0) {
 			return payload, nil
 		}
 		if m.OriginalText != plan.BodyText {

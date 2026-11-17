@@ -249,8 +249,17 @@ func (s *Store) ClaimLegacyImageDownloads(ctx context.Context, device domain.ID)
 	if err = q.EnsureDownloadDevice(ctx, string(device)); err != nil {
 		return err
 	}
-	if err = q.CopyLegacyImageDownloads(ctx, string(device)); err != nil {
+	claimed, err := q.CopyLegacyImageDownloads(ctx, string(device))
+	if err != nil {
 		return err
+	}
+	for _, download := range claimed {
+		if err := q.KeepLegacyDownloadMembership(ctx, dbgen.KeepLegacyDownloadMembershipParams{
+			DeviceID: string(device), SourceID: download.SourceID,
+			SourceRevision: download.SourceRevision, Kind: download.Kind, ClaimedLegacy: 1,
+		}); err != nil {
+			return err
+		}
 	}
 	if _, err = q.DropDeviceDownloads(ctx, "legacy"); err != nil {
 		return err

@@ -19,16 +19,41 @@ func (q *Queries) AdvanceDownloadGeneration(ctx context.Context, deviceID string
 	return err
 }
 
-const copyLegacyImageDownloads = `-- name: CopyLegacyImageDownloads :exec
+const copyLegacyImageDownloads = `-- name: CopyLegacyImageDownloads :many
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 SELECT ?1,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms
 FROM device_downloads WHERE device_id='legacy'
 ON CONFLICT DO NOTHING
+RETURNING source_id,source_revision,kind
 `
 
-func (q *Queries) CopyLegacyImageDownloads(ctx context.Context, deviceID string) error {
-	_, err := q.db.ExecContext(ctx, copyLegacyImageDownloads, deviceID)
-	return err
+type CopyLegacyImageDownloadsRow struct {
+	SourceID       string
+	SourceRevision string
+	Kind           string
+}
+
+func (q *Queries) CopyLegacyImageDownloads(ctx context.Context, deviceID string) ([]CopyLegacyImageDownloadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, copyLegacyImageDownloads, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CopyLegacyImageDownloadsRow{}
+	for rows.Next() {
+		var i CopyLegacyImageDownloadsRow
+		if err := rows.Scan(&i.SourceID, &i.SourceRevision, &i.Kind); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countDeviceDownloads = `-- name: CountDeviceDownloads :one
@@ -300,8 +325,10 @@ func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDown
 const keepLegacyDownloadMembership = `-- name: KeepLegacyDownloadMembership :exec
 INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
 SELECT d.device_id,?1,?2,?3 FROM download_devices d
-WHERE d.device_id=?4 AND d.generation>0 AND NOT EXISTS (
-  SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+WHERE d.device_id=?4 AND d.generation>0 AND (
+  CAST(?5 AS INTEGER)=1 OR NOT EXISTS (
+    SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+  )
 )
 ON CONFLICT DO NOTHING
 `
@@ -311,6 +338,7 @@ type KeepLegacyDownloadMembershipParams struct {
 	SourceRevision string
 	Kind           string
 	DeviceID       string
+	ClaimedLegacy  int64
 }
 
 func (q *Queries) KeepLegacyDownloadMembership(ctx context.Context, arg KeepLegacyDownloadMembershipParams) error {
@@ -319,6 +347,7 @@ func (q *Queries) KeepLegacyDownloadMembership(ctx context.Context, arg KeepLega
 		arg.SourceRevision,
 		arg.Kind,
 		arg.DeviceID,
+		arg.ClaimedLegacy,
 	)
 	return err
 }

@@ -45,11 +45,15 @@ JOIN restore_chats x ON x.id=m.conversation_id
 WHERE m.is_own=1 AND m.state=o.state
   AND (m.state='queued' OR (m.state='dispatching' AND o.wire_stage='awaiting'));
 
-CREATE TEMP TABLE restore_send_evidence (id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT, payload TEXT) WITHOUT ROWID;
+CREATE TEMP TABLE restore_send_evidence (
+    id TEXT PRIMARY KEY,state TEXT NOT NULL,at TEXT,payload TEXT,timeline_at_ms INTEGER,submitted_at_ms INTEGER
+) WITHOUT ROWID;
 INSERT INTO restore_send_evidence
 SELECT m.id,CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed')
          THEN COALESCE(o.state,m.state) ELSE 'unknown' END,
-    (SELECT r.created_at FROM backup.message_revisions r WHERE r.id=m.revision_id AND r.entity_id=m.id),m.payload
+    (SELECT r.created_at FROM backup.message_revisions r WHERE r.id=m.revision_id AND r.entity_id=m.id),m.payload,
+    CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed') THEN m.timeline_at_ms END,
+    CASE WHEN COALESCE(o.state,m.state) IN ('cancelled','submitted','failed') THEN m.submitted_at_ms END
 FROM backup.messages m LEFT JOIN backup.outbox o ON o.message_id=m.id
 JOIN restore_chats c ON c.id=m.conversation_id
 LEFT JOIN recovered_sends p ON p.message_id=m.id AND p.conversation_id=c.id
@@ -63,7 +67,7 @@ WHERE m.is_own=1 AND COALESCE(o.state,m.state) IN ('cancelled','submitted','fail
 -- Another engine can retain our verified own echo under a different local
 -- row ID. The scoped sender ID is still the UUID of the original send.
 INSERT INTO restore_send_evidence
-SELECT b.wire_id,'submitted',r.created_at,b.payload
+SELECT b.wire_id,'submitted',r.created_at,b.payload,NULL,NULL
 FROM restore_source_echoes b
 JOIN backup.message_revisions r ON r.id=b.revision_id AND r.entity_id=b.id
 WHERE (
@@ -78,14 +82,14 @@ ON CONFLICT(id) DO NOTHING;
 
 -- Previously restored proof may survive after the echo's history expired.
 INSERT INTO restore_send_evidence
-SELECT m.id,'unknown',NULL,NULL FROM restore_pre_wire_sends m
+SELECT m.id,'unknown',NULL,NULL,NULL,NULL FROM restore_pre_wire_sends m
 JOIN restored_own_echoes e ON e.account_id=m.account_id AND e.conversation_id=m.conversation_id AND e.message_id=m.id
 WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 
 -- Expiry implies that the snapshot no longer had an executable send.
 INSERT INTO restore_send_evidence
-SELECT e.id,'unknown',NULL,NULL FROM backup.expired_message_ids e JOIN restore_pre_wire_sends m ON m.id=e.id
+SELECT e.id,'unknown',NULL,NULL,NULL,NULL FROM backup.expired_message_ids e JOIN restore_pre_wire_sends m ON m.id=e.id
 WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 
