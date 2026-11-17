@@ -112,6 +112,15 @@ FROM device_downloads WHERE device_id='legacy'
 ON CONFLICT DO NOTHING
 RETURNING source_id,source_revision,kind;
 
+-- name: RecordClaimedLegacyImages :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,legacy.source_revision,legacy.hash,legacy.size
+FROM device_downloads legacy JOIN message_previews p ON p.id=legacy.source_id
+JOIN device_downloads assigned ON assigned.device_id=sqlc.arg(device_id) AND assigned.source_id=legacy.source_id
+    AND assigned.source_revision=legacy.source_revision AND assigned.kind=legacy.kind
+WHERE legacy.device_id='legacy' AND legacy.kind='image' AND legacy.hash<>'' AND legacy.size>=0
+ON CONFLICT DO NOTHING;
+
 -- name: RemoveLegacyDownloadDevice :exec
 DELETE FROM download_devices WHERE device_id='legacy';
 

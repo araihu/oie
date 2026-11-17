@@ -672,6 +672,12 @@ func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming 
 	if _, err := updateMessage(ctx, q, queued, state, revision, observed, observed, false); err != nil {
 		return err
 	}
+	// An observed origin stops replay, but only the uploaded body identifies
+	// a room attachment's message and structured reply target.
+	if incoming.Kind == "room" && (len(queued.Attachments) != 0 || queued.AttachmentWireText != "") &&
+		!queued.MatchesAttachmentWireBody(echo.OriginalText) {
+		return nil
+	}
 	echo.ProviderID = queued.ProviderID
 	return nil
 }

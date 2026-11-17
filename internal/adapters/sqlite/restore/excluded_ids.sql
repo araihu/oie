@@ -3,6 +3,7 @@ LEFT JOIN restore_messages x ON x.id=m.id
 WHERE m.conversation_id=? AND x.id IS NULL
 AND m.state NOT IN ('queued','dispatching','unknown')
 AND NOT EXISTS (SELECT 1 FROM messages d WHERE d.id=m.id)
+AND NOT EXISTS (SELECT 1 FROM restore_represented_echoes e WHERE e.source_id=m.id)
 UNION
 SELECT json_extract(r.payload,'$.OutboundReply.TargetID')
 FROM message_revisions r JOIN messages m ON m.id=r.entity_id AND m.conversation_id=?1

@@ -80,9 +80,11 @@ func (m Message) SourceBodyHash() string {
 
 // MatchesWireBody recognizes a retained message before or after quote removal.
 func (m Message) MatchesWireBody(body string) bool {
+	if len(m.Attachments) != 0 || m.AttachmentWireText != "" {
+		return m.MatchesAttachmentWireBody(body)
+	}
 	return m.OriginalText == body ||
-		(m.WireBodySHA256 != "" && (Message{OriginalText: body}).SourceBodyHash() == m.WireBodySHA256) ||
-		m.MatchesAttachmentWireBody(body)
+		(m.WireBodySHA256 != "" && (Message{OriginalText: body}).SourceBodyHash() == m.WireBodySHA256)
 }
 
 // MatchesAttachmentWireBody verifies the caption and all uploaded URLs.

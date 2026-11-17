@@ -306,6 +306,14 @@ type LegacyDownloadRestoreAdmission struct {
 	CleanupRevision string
 }
 
+type LegacyImageClaim struct {
+	MessageID      string
+	Url            string
+	SourceRevision string
+	Hash           string
+	Size           int64
+}
+
 type MediaFile struct {
 	Hash      string
 	MimeType  string

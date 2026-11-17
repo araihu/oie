@@ -169,10 +169,16 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	if !in.IsOwn || in.Kind != "room" || in.CanonicalID != outID || in.Address != slot.conversation.Address || len(in.References) != 1 || in.References[0].Scope != "room:"+slot.conversation.Address || in.References[0].ID != "server-room-id" {
 		t.Fatal("self echo lost canonical scope", in)
 	}
+	ownFrom, err := jid.Parse(slot.conversation.Address + "/" + slot.snapshot.Nickname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider := roomProviderID(ownFrom, "wire-client", in.References); in.ProviderID != provider {
+		t.Fatalf("untracked own echo replaced its room provider identity: got %q, want %q", in.ProviderID, provider)
+	}
 	// Another occupant cannot nominate an own-message UUID even if it copies origin-id.
 	from, _ := jid.Parse(slot.conversation.Address + "/Other")
-	err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", "", fileSharingMetadata{}, false)
-	if err != nil {
+	if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", "", fileSharingMetadata{}, false); err != nil {
 		t.Fatal(err)
 	}
 	if host.received[1].CanonicalID != "" || host.received[1].IsOwn {

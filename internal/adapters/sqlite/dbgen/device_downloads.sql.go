@@ -493,6 +493,21 @@ func (q *Queries) QueueDownloadGarbage(ctx context.Context, arg QueueDownloadGar
 	return err
 }
 
+const recordClaimedLegacyImages = `-- name: RecordClaimedLegacyImages :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,legacy.source_revision,legacy.hash,legacy.size
+FROM device_downloads legacy JOIN message_previews p ON p.id=legacy.source_id
+JOIN device_downloads assigned ON assigned.device_id=?1 AND assigned.source_id=legacy.source_id
+    AND assigned.source_revision=legacy.source_revision AND assigned.kind=legacy.kind
+WHERE legacy.device_id='legacy' AND legacy.kind='image' AND legacy.hash<>'' AND legacy.size>=0
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) RecordClaimedLegacyImages(ctx context.Context, deviceID string) error {
+	_, err := q.db.ExecContext(ctx, recordClaimedLegacyImages, deviceID)
+	return err
+}
+
 const removeDownloadGarbage = `-- name: RemoveDownloadGarbage :exec
 DELETE FROM download_garbage WHERE kind=? AND hash=?
 `

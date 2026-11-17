@@ -40,6 +40,7 @@ type Querier interface {
 	CountSharedContentFirstPage(ctx context.Context, arg CountSharedContentFirstPageParams) (int64, error)
 	DeleteDownloadImageFile(ctx context.Context, hash string) error
 	DeleteExpiredMessages(ctx context.Context, ids string) error
+	DeleteMessageReference(ctx context.Context, arg DeleteMessageReferenceParams) (int64, error)
 	DeleteObsoleteSharedContent(ctx context.Context, arg DeleteObsoleteSharedContentParams) error
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
@@ -259,6 +260,7 @@ type Querier interface {
 	ReactionObservationsForTargets(ctx context.Context, arg ReactionObservationsForTargetsParams) ([]ReactionObservationsForTargetsRow, error)
 	ReconcileMessageAuthor(ctx context.Context, arg ReconcileMessageAuthorParams) error
 	ReconcileReactionObservation(ctx context.Context, arg ReconcileReactionObservationParams) error
+	RecordClaimedLegacyImages(ctx context.Context, deviceID string) error
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
 	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error

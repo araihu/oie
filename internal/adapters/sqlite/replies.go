@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -50,6 +51,14 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 	if err != nil {
 		return err
 	}
+	incomingHash, retainedHash := in.SourceBodyHash(), old.SourceBodyHash()
+	attachmentRoom := ""
+	if len(in.References) > 0 && incomingHash != retainedHash {
+		attachmentRoom, err = verifiedAttachmentReferenceRoom(ctx, q, old, in)
+		if err != nil {
+			return err
+		}
+	}
 	for i, r := range in.References {
 		if i >= 8 {
 			break
@@ -57,14 +66,28 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		if !referenceValid(r) || r.Scope == "" {
 			continue
 		}
-		n, err := q.InsertMessageReference(ctx, dbgen.InsertMessageReferenceParams{MessageID: id, Scope: r.Scope, RemoteID: r.ID, Author: r.Author, SourceHash: in.SourceBodyHash()})
+		verifiedAttachment := attachmentRoom != "" && r.Scope == "room:"+attachmentRoom && strings.HasPrefix(r.Author, attachmentRoom+"/")
+		referenceHash := incomingHash
+		if verifiedAttachment {
+			referenceHash = retainedHash
+			// Earlier ingestions could attach the verified identifier using the
+			// hash of the full uploaded body, which cannot identify the caption.
+			n, err := q.DeleteMessageReference(ctx, dbgen.DeleteMessageReferenceParams{
+				MessageID: id, Scope: r.Scope, RemoteID: r.ID, Author: r.Author, SourceHash: incomingHash,
+			})
+			if err != nil {
+				return err
+			}
+			changed += n
+		}
+		n, err := q.InsertMessageReference(ctx, dbgen.InsertMessageReferenceParams{MessageID: id, Scope: r.Scope, RemoteID: r.ID, Author: r.Author, SourceHash: referenceHash})
 		if err != nil {
 			return err
 		}
 		changed += n
 	}
-	if in.ReplyReference != nil && old.SourceBodyHash() == in.SourceBodyHash() && referenceValid(in.ReplyReference.Target) && len(in.ReplyReference.Fallback) <= 16 {
-		n, err := q.InsertMessageReply(ctx, dbgen.InsertMessageReplyParams{MessageID: id, BodyHash: in.SourceBodyHash(), Payload: jsonText(in.ReplyReference)})
+	if in.ReplyReference != nil && retainedHash == incomingHash && referenceValid(in.ReplyReference.Target) && len(in.ReplyReference.Fallback) <= 16 {
+		n, err := q.InsertMessageReply(ctx, dbgen.InsertMessageReplyParams{MessageID: id, BodyHash: incomingHash, Payload: jsonText(in.ReplyReference)})
 		if err != nil {
 			return err
 		}
@@ -84,6 +107,31 @@ func recordReplyMetadata(ctx context.Context, q *dbgen.Queries, id string, in do
 		_, err = emitCanonicalMessageEvent(ctx, q, "message.updated", old, time.Now().UTC())
 	}
 	return err
+}
+
+func verifiedAttachmentReferenceRoom(ctx context.Context, q *dbgen.Queries, old, in domain.Message) (string, error) {
+	if !in.IsOwn || !old.IsOwn || in.OwnOriginID != old.ID || old.ProviderID != string(old.ID) {
+		return "", nil
+	}
+	matched := old.MatchesAttachmentWireBody(in.OriginalText)
+	if !matched {
+		var err error
+		matched, err = q.HasArchivedAttachmentWireBody(ctx, dbgen.HasArchivedAttachmentWireBodyParams{
+			MessageID: string(old.ID), AccountID: string(old.AccountID), ConversationID: string(old.ConversationID), WireBody: in.OriginalText,
+		})
+		if err != nil || !matched {
+			return "", err
+		}
+	}
+	row, err := q.GetConversation(ctx, string(old.ConversationID))
+	if err != nil {
+		return "", err
+	}
+	chat, err := decodeConversation(row)
+	if err != nil || chat.Kind != "room" {
+		return "", err
+	}
+	return chat.Address, nil
 }
 
 func stripInboundQuote(m *domain.Message, ref domain.ReplyReference) bool {

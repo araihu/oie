@@ -121,13 +121,15 @@ WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
   AND (json_extract(m.payload,'$.OwnOriginID')<>'' OR json_extract(c.payload,'$.Kind')='direct'
        OR json_extract(m.payload,'$.Historical')=0);
 
-DELETE FROM restore_messages
-WHERE is_new=1 AND EXISTS (
-  SELECT 1 FROM restore_source_echoes m
-  JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
-    AND d.account_id=m.account_id AND d.conversation_id=m.conversation_id AND d.is_own=1
-  WHERE m.id=restore_messages.id
-);
+CREATE TEMP TABLE restore_suppressed_echoes (
+  source_id TEXT PRIMARY KEY, retained_id TEXT NOT NULL
+) WITHOUT ROWID;
+INSERT INTO restore_suppressed_echoes
+SELECT m.id,d.id FROM restore_source_echoes m
+JOIN restore_messages x ON x.id=m.id AND x.is_new=1
+JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
+  AND d.account_id=m.account_id AND d.conversation_id=m.conversation_id AND d.is_own=1;
+DELETE FROM restore_messages WHERE id IN (SELECT source_id FROM restore_suppressed_echoes);
 
 DELETE FROM restore_messages
 WHERE is_new=1 AND EXISTS (

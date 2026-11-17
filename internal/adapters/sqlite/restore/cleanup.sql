@@ -1,5 +1,8 @@
 DROP VIEW restore_source_echoes;
 DROP VIEW restore_pre_wire_sends;
+DROP VIEW restore_represented_echo_references;
+DROP TABLE restore_represented_echoes;
+DROP TABLE restore_suppressed_echoes;
 DROP TABLE restore_messages;
 DROP TABLE restore_chats;
 DROP TABLE restore_accounts;

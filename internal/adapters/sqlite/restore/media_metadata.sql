@@ -52,6 +52,22 @@ WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND c
   -- Settings claims legacy originals before clearing the real device.
   -- Older archives lack the identity of the device that claimed them.
   AND (f.device_id<>'legacy' OR known.cleared=0 OR unclaimed.source_engine_id IS NOT NULL)
+  -- A Settings claim closes the original global membership even if the
+  -- destination device expires its claimed bytes later.
+  AND (f.device_id<>'legacy' OR f.kind<>'image' OR NOT EXISTS (
+      SELECT 1 FROM backup.message_previews archived
+      WHERE archived.id=f.source_id AND (
+          EXISTS (
+              SELECT 1 FROM legacy_image_claims claim WHERE claim.message_id=archived.message_id AND claim.url=archived.url
+                AND claim.source_revision=f.source_revision AND claim.hash=f.hash AND claim.size=f.size
+          ) OR EXISTS (
+              SELECT 1 FROM message_previews local
+              JOIN device_downloads assigned ON assigned.source_id=local.id AND assigned.kind=f.kind
+                  AND assigned.source_revision=f.source_revision AND assigned.hash=f.hash AND assigned.size=f.size
+              WHERE local.message_id=archived.message_id AND local.url=archived.url AND assigned.device_id NOT IN ('','legacy')
+          )
+      )
+  ))
   AND (COALESCE(destination.days,source.days)=0
        OR f.downloaded_at_ms>CAST(@now_ms AS INTEGER)-COALESCE(destination.days,source.days)*86400000);
 

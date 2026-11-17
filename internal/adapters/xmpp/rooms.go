@@ -659,12 +659,13 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 	ownsNickname := msg.From.Resourcepart() == nickname
 	own := ownsNickname && stamp == "" && delayFrom == ""
 	var canonical domain.ID
+	var matchesTrackedSend bool
 	if ownsNickname && len(meta.Origins) == 1 && usableID(meta.Origins[0].ID) && meta.Origins[0].Text == "" && len(meta.Origins[0].Children) == 0 {
 		origin := meta.Origins[0].ID
 		tracked, known := e.ownRoomMessages[origin]
 		// A delayed message can belong to a previous occupant of the same
 		// nickname. Authenticate an own echo by its tracked scope and body.
-		matchesTrackedSend := known && tracked.address == address && tracked.body == body
+		matchesTrackedSend = known && tracked.address == address && tracked.body == body
 		if matchesTrackedSend || own && !known {
 			canonical, _ = domain.ParseID(origin)
 			own = own || canonical != ""
@@ -682,7 +683,9 @@ func (m *Manager) receiveRoomMessage(ctx context.Context, e *entry, msg stanza.M
 		provider = "live-room:" + randomQueryID()
 	}
 
-	if canonical != "" {
+	// An untracked origin carries ownership evidence, while the room
+	// provider ID identifies the observed stanza until its body is verified.
+	if canonical != "" && matchesTrackedSend {
 		provider = string(canonical)
 	}
 	created := time.Now().UTC()

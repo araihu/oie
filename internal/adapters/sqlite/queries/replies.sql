@@ -1,6 +1,9 @@
 -- name: InsertMessageReference :execrows
 INSERT INTO message_references(message_id,scope,remote_id,author,source_hash) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING;
 
+-- name: DeleteMessageReference :execrows
+DELETE FROM message_references WHERE message_id=? AND scope=? AND remote_id=? AND author=? AND source_hash=?;
+
 -- name: InsertMessageReply :execrows
 INSERT INTO message_replies(message_id,body_hash,payload) VALUES(?,?,?) ON CONFLICT DO NOTHING;
 

@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 47
+	newestRestoreSchema = 48
 )
 
 type RestoreSummary struct {
@@ -128,7 +128,8 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, extendedSchemaValid bool
 	var downloads restoreDownloadSchema
 	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes,
-		&downloads.cleanup, &downloads.lineage, &downloads.legacy, &downloads.admissions, &downloads.unclaimedAdmissions, &extendedSchemaValid); err != nil {
+		&downloads.cleanup, &downloads.lineage, &downloads.legacy, &downloads.admissions,
+		&downloads.unclaimedAdmissions, &downloads.legacyImageClaims, &extendedSchemaValid); err != nil {
 		return result, err
 	}
 	if !extendedSchemaValid {

@@ -261,6 +261,9 @@ func (s *Store) ClaimLegacyImageDownloads(ctx context.Context, device domain.ID)
 			return err
 		}
 	}
+	if err := q.RecordClaimedLegacyImages(ctx, string(device)); err != nil {
+		return err
+	}
 	if _, err = q.DropDeviceDownloads(ctx, "legacy"); err != nil {
 		return err
 	}
