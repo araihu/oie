@@ -94,13 +94,20 @@ func updateRestoredImageDownloads(ctx context.Context, tx *sql.Tx, now time.Time
 		if preview.Kind == "link" {
 			preview.Kind, preview.State = "image", "ready"
 			preview.Title, preview.Description, preview.SiteName = download.Title, download.Description, download.SiteName
-			preview.ImageHash, preview.FaviconHash = download.ImageHash, download.FaviconHash
 			preview.RefreshRequested = false
 		}
-		preview.DownloadState = "ready"
-		preview.LastErrorCode = ""
-		preview.FileHash, preview.FileMimeType, preview.FileSize = download.FileHash, download.FileMimeType, download.FileSize
-		preview.VerifiedAlgorithm = download.VerifiedAlgorithm
+		if preview.ImageHash == "" {
+			preview.ImageHash = download.ImageHash
+		}
+		if preview.FaviconHash == "" {
+			preview.FaviconHash = download.FaviconHash
+		}
+		if preview.DownloadState != "ready" {
+			preview.DownloadState = "ready"
+			preview.LastErrorCode = ""
+			preview.FileHash, preview.FileMimeType, preview.FileSize = download.FileHash, download.FileMimeType, download.FileSize
+			preview.VerifiedAlgorithm = download.VerifiedAlgorithm
+		}
 		if err := updatePreview(ctx, q, preview, parent); err != nil {
 			return err
 		}

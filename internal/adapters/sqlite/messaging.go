@@ -472,6 +472,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err := rememberOwnOrigin(ctx, q, c, m); err != nil {
 		return err
 	}
+	if err := reconcileOwnEchoBeforeWire(ctx, q, c, &m, revision); err != nil {
+		return err
+	}
 	if !m.ReceivedAt.IsZero() {
 		days, err := retentionDays(ctx, q, c.AccountID, c.Address, c.Kind)
 		if err != nil {
@@ -626,6 +629,56 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	}
 	return tx.Commit()
 }
+
+// An authenticated echo can arrive after a restored send was reviewed and
+// resumed. Retire it under the same write lock as the claim and wire marker.
+func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, echo *domain.Message, revision domain.ID) error {
+	if echo.OwnOriginID == "" {
+		return nil
+	}
+	row, err := q.GetMessage(ctx, string(echo.OwnOriginID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if (row.State != "queued" && row.State != "dispatching") || row.ProviderID != row.ID || row.IsOwn != 1 || row.AccountID != string(incoming.AccountID) {
+		return nil
+	}
+	chatRow, err := q.GetConversation(ctx, row.ConversationID)
+	if err != nil {
+		return err
+	}
+	chat, err := decodeConversation(chatRow)
+	if err != nil || chat.Kind != incoming.Kind || chat.Address != incoming.Address {
+		return err
+	}
+	if row.State == "dispatching" {
+		outbox, err := q.GetOutbox(ctx, row.ID)
+		if err != nil || outbox.WireStage != "awaiting" {
+			return err
+		}
+	}
+	queued, err := decodeMessage(row)
+	if err != nil {
+		return err
+	}
+	state := "unknown"
+	if sameSubmittedComposition(queued, *echo) {
+		state = "submitted"
+	}
+	observed := echo.ReceivedAt
+	if observed.IsZero() {
+		observed = incoming.UpdatedAt
+	}
+	if _, err := updateMessage(ctx, q, queued, state, revision, observed, observed, false); err != nil {
+		return err
+	}
+	echo.ProviderID = row.ProviderID
+	return nil
+}
+
 func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time, guardWire bool) (domain.Message, error) {
 	if state == "dispatching" {
 		outbox, err := q.GetOutbox(ctx, string(m.ID))

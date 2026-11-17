@@ -1,3 +1,4 @@
+DROP VIEW restore_source_echoes;
 DROP TABLE restore_messages;
 DROP TABLE restore_chats;
 DROP TABLE restore_accounts;

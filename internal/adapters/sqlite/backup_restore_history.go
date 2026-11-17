@@ -53,6 +53,9 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 			return err
 		}
 	}
+	if err := scrubRestoredQuotePreviews(ctx, tx, q); err != nil {
+		return err
+	}
 	if err := publishRestoredAccounts(ctx, tx, q, now); err != nil {
 		return err
 	}
@@ -94,6 +97,30 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 		}
 	}
 	return rows.Err()
+}
+
+func scrubRestoredQuotePreviews(ctx context.Context, tx *sql.Tx, q *dbgen.Queries) error {
+	rows, err := tx.QueryContext(ctx, restoreScript("redacted_preview_bodies"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	removed := make(redactedQuoteURLs)
+	for rows.Next() {
+		var message, canonical domain.ID
+		var before, after string
+		if err := rows.Scan(&message, &canonical, &before, &after); err != nil {
+			return err
+		}
+		removed.add(message, canonical, before, after)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DROP TABLE restore_redacted_quotes"); err != nil {
+		return err
+	}
+	return removed.prune(ctx, q)
 }
 
 func publishRestoredAccounts(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, now time.Time) error {

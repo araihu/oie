@@ -244,9 +244,14 @@ func (q *Queries) PutRecoveredSendRevision(ctx context.Context, arg PutRecovered
 }
 
 const recoveredSendHasDestinationEvidence = `-- name: RecoveredSendHasDestinationEvidence :one
-SELECT CAST(EXISTS(SELECT 1 FROM messages m WHERE m.id=?1
+SELECT CAST(EXISTS(SELECT 1 FROM messages m JOIN conversations chat ON chat.id=m.conversation_id
+  WHERE m.id=?1
   OR (m.account_id=?2 AND m.conversation_id=?3
-      AND m.is_own=1 AND m.provider_id=?1))
+      AND m.is_own=1 AND (
+        json_extract(m.payload,'$.OwnOriginID')=?1
+        OR (m.provider_id=?1
+            AND (json_extract(chat.payload,'$.Kind')='direct' OR json_extract(m.payload,'$.Historical')=0))
+      )))
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=?1
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
 OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1)

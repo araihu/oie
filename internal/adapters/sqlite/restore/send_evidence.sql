@@ -2,14 +2,15 @@
 -- The original wire ID may survive only as a direct sender reference after
 -- the witness's own retention has removed its local message row.
 WITH proofs(account_id,conversation_id,wire_id) AS (
-    SELECT b.account_id,b.conversation_id,b.provider_id FROM backup.messages b
-    JOIN restore_chats x ON x.id=b.conversation_id
-    JOIN conversations c ON c.id=x.id AND c.account_id=b.account_id
-    WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
+    SELECT b.account_id,b.conversation_id,b.wire_id FROM restore_source_echoes b
+    JOIN conversations c ON c.id=b.conversation_id AND c.account_id=b.account_id
     UNION
-    SELECT d.account_id,d.conversation_id,d.provider_id FROM messages d
+    SELECT d.account_id,d.conversation_id,COALESCE(NULLIF(json_extract(d.payload,'$.OwnOriginID'),''), d.provider_id) FROM messages d
     JOIN restore_chats x ON x.id=d.conversation_id
+    JOIN conversations c ON c.id=x.id AND c.account_id=d.account_id
     WHERE d.is_own=1 AND d.state='submitted' AND d.id<>d.provider_id
+      AND (json_extract(d.payload,'$.OwnOriginID')<>'' OR json_extract(c.payload,'$.Kind')='direct'
+           OR json_extract(d.payload,'$.Historical')=0)
     UNION
     SELECT c.account_id,c.id,r.remote_id FROM message_retractions r
     JOIN conversations c ON c.account_id=r.account_id AND c.address=r.address
@@ -54,18 +55,18 @@ WHERE m.is_own=1 AND COALESCE(o.state,m.state) IN ('cancelled','submitted','fail
 -- Another engine can retain our verified own echo under a different local
 -- row ID. The scoped sender ID is still the UUID of the original send.
 INSERT INTO restore_send_evidence
-SELECT b.provider_id,'submitted',r.created_at,b.payload
-FROM backup.messages b
-JOIN restore_chats x ON x.id=b.conversation_id
+SELECT b.wire_id,'submitted',r.created_at,b.payload
+FROM restore_source_echoes b
 JOIN backup.message_revisions r ON r.id=b.revision_id AND r.entity_id=b.id
-WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id AND (
+WHERE (
     EXISTS(SELECT 1 FROM messages m JOIN outbox o ON o.message_id=m.id
-           WHERE m.id=b.provider_id AND m.provider_id=m.id AND m.is_own=1
+           WHERE m.id=b.wire_id AND m.provider_id=m.id AND m.is_own=1
              AND m.account_id=b.account_id AND m.conversation_id=b.conversation_id
              AND m.state='queued' AND o.state='queued')
     OR EXISTS(SELECT 1 FROM recovered_sends p
-              WHERE p.message_id=b.provider_id AND p.conversation_id=b.conversation_id)
+              WHERE p.message_id=b.wire_id AND p.conversation_id=b.conversation_id)
 )
+ORDER BY r.created_at DESC,b.id
 ON CONFLICT(id) DO NOTHING;
 
 -- Previously restored proof may survive after the echo's history expired.

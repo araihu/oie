@@ -1,0 +1,1 @@
+SELECT DISTINCT message_id,canonical_id,previous_body,body FROM restore_redacted_quotes;

@@ -3,6 +3,7 @@
 CREATE TEMP TABLE restore_redacted_quotes AS
 SELECT m.id AS message_id,m.conversation_id,d.id AS revision_id,
        COALESCE(a.canonical_id,m.id) AS canonical_id,r.body_hash AS wire_hash,
+       json_extract(d.payload,'$.OriginalText') AS previous_body,
        min(json_extract(b.payload,'$.OriginalText')) AS body
 FROM backup.message_replies r
 JOIN restore_messages x ON x.id=r.message_id AND x.is_new=0
@@ -71,4 +72,3 @@ DELETE FROM shared_content_state WHERE message_id IN (
 );
 UPDATE restore_chats SET quotes_redacted=1
 WHERE id IN (SELECT conversation_id FROM restore_redacted_quotes);
-DROP TABLE restore_redacted_quotes;

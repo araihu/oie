@@ -45,9 +45,14 @@ DELETE FROM recovered_sends
 WHERE EXISTS(SELECT 1 FROM messages m WHERE m.id=recovered_sends.message_id);
 
 -- name: RecoveredSendHasDestinationEvidence :one
-SELECT CAST(EXISTS(SELECT 1 FROM messages m WHERE m.id=sqlc.arg(message_id)
+SELECT CAST(EXISTS(SELECT 1 FROM messages m JOIN conversations chat ON chat.id=m.conversation_id
+  WHERE m.id=sqlc.arg(message_id)
   OR (m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversation_id)
-      AND m.is_own=1 AND m.provider_id=sqlc.arg(message_id)))
+      AND m.is_own=1 AND (
+        json_extract(m.payload,'$.OwnOriginID')=sqlc.arg(message_id)
+        OR (m.provider_id=sqlc.arg(message_id)
+            AND (json_extract(chat.payload,'$.Kind')='direct' OR json_extract(m.payload,'$.Historical')=0))
+      )))
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=sqlc.arg(message_id)
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
 OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=sqlc.arg(message_id))

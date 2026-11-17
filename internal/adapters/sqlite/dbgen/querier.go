@@ -44,6 +44,10 @@ type Querier interface {
 	DeletePendingReplyMetadata(ctx context.Context, messageID string) error
 	DeleteReactionObservation(ctx context.Context, ordinal int64) error
 	DeleteRecoveredSend(ctx context.Context, messageID string) error
+	DeleteRedactedQuotePreviewEvents(ctx context.Context, previewIds string) error
+	DeleteRedactedQuotePreviewRevisions(ctx context.Context, previewIds string) error
+	DeleteRedactedQuotePreviews(ctx context.Context, previewIds string) error
+	DeleteRedactedQuoteSharedContent(ctx context.Context, arg DeleteRedactedQuoteSharedContentParams) error
 	DiscardPendingImageDownloads(ctx context.Context, sourceID string) error
 	DiscardRecoveredSend(ctx context.Context, messageID string) error
 	DropDeviceDownloads(ctx context.Context, deviceID string) ([]DeviceDownload, error)
@@ -252,6 +256,7 @@ type Querier interface {
 	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
 	RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error)
+	RedactedQuotePreviewIDs(ctx context.Context, arg RedactedQuotePreviewIDsParams) ([]string, error)
 	RememberOwnOrigin(ctx context.Context, arg RememberOwnOriginParams) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveBackupRoomPasswords(ctx context.Context) error
@@ -299,6 +304,7 @@ type Querier interface {
 	Snapshot(ctx context.Context) (SnapshotRow, error)
 	StartMessageSearchIndex(ctx context.Context, arg StartMessageSearchIndexParams) error
 	SummarizeBackup(ctx context.Context) (SummarizeBackupRow, error)
+	UnredactedQuoteBodies(ctx context.Context, arg UnredactedQuoteBodiesParams) ([]string, error)
 	UpdateAccountLabel(ctx context.Context, arg UpdateAccountLabelParams) error
 	UpdateAvatar(ctx context.Context, arg UpdateAvatarParams) error
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error

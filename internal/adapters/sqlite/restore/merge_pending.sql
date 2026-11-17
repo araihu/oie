@@ -31,6 +31,7 @@ WHERE EXISTS(SELECT 1 FROM messages m WHERE m.id=restore_pending_candidates.mess
       SELECT 1 FROM messages d JOIN conversations c ON c.id=restore_pending_candidates.conversation_id
       WHERE d.account_id=c.account_id AND d.conversation_id=c.id AND d.is_own=1
         AND d.provider_id=restore_pending_candidates.message_id
+        AND (json_extract(c.payload,'$.Kind')='direct' OR json_extract(d.payload,'$.Historical')=0)
   )
   OR EXISTS(
       SELECT 1 FROM operations d WHERE d.resource_id=restore_pending_candidates.message_id

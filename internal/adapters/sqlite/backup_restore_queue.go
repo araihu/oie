@@ -69,11 +69,15 @@ func matchesSubmittedComposition(current domain.Message, payload string) (bool, 
 		return false, err
 	}
 	domain.ProjectOutboundReply(&submitted)
+	return sameSubmittedComposition(current, submitted), nil
+}
+
+func sameSubmittedComposition(current, submitted domain.Message) bool {
 	return current.OriginalText == submitted.OriginalText &&
 		reflect.DeepEqual(current.Composition, submitted.Composition) &&
 		reflect.DeepEqual(current.Attachments, submitted.Attachments) &&
 		reflect.DeepEqual(current.Mentions, submitted.Mentions) &&
-		reflect.DeepEqual(current.OutboundReply, submitted.OutboundReply), nil
+		reflect.DeepEqual(current.OutboundReply, submitted.OutboundReply)
 }
 
 func mergeRestoredQueue(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, engine domain.ID, hasRecovered, hasHistory bool) error {

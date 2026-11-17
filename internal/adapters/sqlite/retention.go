@@ -363,6 +363,7 @@ func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool,
 		return false, err
 	}
 	scrubbed := false
+	removedURLs := make(redactedQuoteURLs)
 	for _, quote := range quotes {
 		var ref domain.ReplyReference
 		if err := json.Unmarshal([]byte(quote.Payload), &ref); err != nil {
@@ -374,6 +375,14 @@ func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool,
 		}
 		if !expired {
 			continue
+		}
+		bodies, err := q.UnredactedQuoteBodies(ctx, dbgen.UnredactedQuoteBodiesParams{MessageID: quote.MessageID, BodyHash: quote.BodyHash})
+		if err != nil {
+			return false, err
+		}
+		for _, before := range bodies {
+			after, _ := domain.ReplyBody(before, ref.Fallback)
+			removedURLs.add(domain.ID(quote.MessageID), domain.ID(quote.CanonicalID), before, after)
 		}
 		if err := q.ScrubMessageInboundQuote(ctx, dbgen.ScrubMessageInboundQuoteParams{SourceID: quote.MessageID, ReplyMetadata: quote.Payload, BodyHash: quote.BodyHash}); err != nil {
 			return false, err
@@ -392,7 +401,7 @@ func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool,
 		}
 		scrubbed = true
 	}
-	return scrubbed, nil
+	return scrubbed, removedURLs.prune(ctx, q)
 }
 
 func repairExpiredConversation(ctx context.Context, q *dbgen.Queries, id, kind string, now time.Time, newID application.NewID) error {

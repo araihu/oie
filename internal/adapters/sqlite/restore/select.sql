@@ -113,12 +113,20 @@ AND m.state NOT IN ('queued','dispatching','unknown');
 
 -- Restore send evidence onto the original local row. An own archive echo
 -- retained under another row ID would duplicate that message in the timeline.
+CREATE TEMP VIEW restore_source_echoes AS
+SELECT m.*,COALESCE(NULLIF(json_extract(m.payload,'$.OwnOriginID'),''), m.provider_id) AS wire_id
+FROM backup.messages m JOIN restore_chats x ON x.id=m.conversation_id
+JOIN backup.conversations c ON c.id=x.id AND c.account_id=m.account_id
+WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
+  AND (json_extract(m.payload,'$.OwnOriginID')<>'' OR json_extract(c.payload,'$.Kind')='direct'
+       OR json_extract(m.payload,'$.Historical')=0);
+
 DELETE FROM restore_messages
 WHERE is_new=1 AND EXISTS (
-  SELECT 1 FROM backup.messages m
-  JOIN messages d ON d.id=m.provider_id AND d.id=d.provider_id
+  SELECT 1 FROM restore_source_echoes m
+  JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
     AND d.account_id=m.account_id AND d.conversation_id=m.conversation_id AND d.is_own=1
-  WHERE m.id=restore_messages.id AND m.is_own=1 AND m.state='submitted'
+  WHERE m.id=restore_messages.id
 );
 
 DELETE FROM restore_messages

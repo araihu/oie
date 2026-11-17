@@ -98,7 +98,17 @@ WHERE TRUE ON CONFLICT(message_id) DO NOTHING;
 
 -- Preserve stable catalog IDs for downloaded files. Search/document projections
 -- are rebuilt locally after restore.
-INSERT INTO shared_content SELECT ref.* FROM backup.shared_content ref JOIN restore_messages x ON x.id=ref.message_id AND x.is_new=1
-WHERE TRUE ON CONFLICT DO NOTHING;
-INSERT INTO shared_content_state SELECT r.* FROM backup.shared_content_state r JOIN restore_messages x ON x.id=r.message_id AND x.is_new=1
-WHERE TRUE ON CONFLICT DO NOTHING;
+INSERT INTO shared_content
+SELECT ref.* FROM backup.shared_content ref JOIN restore_messages x ON x.id=ref.message_id AND x.is_new=1
+JOIN backup.messages m ON m.id=x.id
+LEFT JOIN backup.message_content_heads h ON h.canonical_id=m.id
+WHERE oie_quote_preview_allowed(COALESCE(h.payload,m.payload),ref.url)
+ON CONFLICT DO NOTHING;
+INSERT INTO shared_content_state
+SELECT r.* FROM backup.shared_content_state r JOIN restore_messages x ON x.id=r.message_id AND x.is_new=1
+JOIN backup.messages m ON m.id=x.id
+LEFT JOIN backup.message_content_heads h ON h.canonical_id=m.id
+-- Saved captions may predate inbound quote redaction. Index the retained body.
+WHERE COALESCE(json_extract(COALESCE(h.payload,m.payload),'$.WireBodySHA256'),'')=''
+   OR COALESCE(json_type(COALESCE(h.payload,m.payload),'$.OutboundReply'),'null')<>'null'
+ON CONFLICT DO NOTHING;

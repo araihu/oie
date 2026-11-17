@@ -81,6 +81,7 @@ func TestBackupRestoreRestoresOriginalImageWithMissingDerivative(t *testing.T) {
 	if err := source.SavePreview(ctx, preview, parent); err != nil {
 		t.Fatal(err)
 	}
+	full, fullArchive, fullScratch := backupRestoreFixture(t, source, true)
 	// Export tolerates a derivative cache file missing from a retained preview.
 	if err := os.Remove(filepath.Join(images, thumbnail.Hash)); err != nil {
 		t.Fatal(err)
@@ -106,6 +107,29 @@ func TestBackupRestoreRestoresOriginalImageWithMissingDerivative(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(destination.dir, "media", "images", hash)); err != nil {
 			t.Fatal(err)
 		}
+	}
+	parent = got.RevisionID
+	got.RevisionID, got.Title, got.FaviconHash = migrationID(), "Local title", got.FileHash
+	if err := destination.SavePreview(ctx, got, parent); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := destination.mergeBackup(ctx, fullArchive, fullScratch, full, now); err != nil || result.MediaFiles != 1 {
+		t.Fatalf("later archive did not fill the missing thumbnail: %+v, %v", result, err)
+	}
+	repaired, err := destination.Preview(ctx, preview.ID)
+	if err != nil || repaired.RevisionID == got.RevisionID || repaired.ImageHash != thumbnail.Hash ||
+		repaired.Title != got.Title || repaired.FaviconHash != got.FaviconHash ||
+		repaired.FileHash != got.FileHash || repaired.DownloadState != "ready" {
+		t.Fatalf("repair changed the current preview or left the thumbnail missing: %+v, %v", repaired, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination.dir, "media", "images", thumbnail.Hash)); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := destination.mergeBackup(ctx, fullArchive, fullScratch, full, now); err != nil || result.MediaFiles != 0 {
+		t.Fatalf("replaying archive changed the repaired preview assets: %+v, %v", result, err)
+	}
+	if current, err := destination.Preview(ctx, preview.ID); err != nil || current.RevisionID != repaired.RevisionID {
+		t.Fatalf("replaying archive created another preview revision: %+v, %v", current, err)
 	}
 }
 
@@ -175,6 +199,7 @@ func TestBackupRestoreRebindsFileOnlyForMatchingMessageRevision(t *testing.T) {
 	const url = "https://example.invalid/report.pdf"
 	message := replySeed(t, source, chat, url, now, nil, nil)
 	matching, different := copyRestoreFixture(t, source), copyRestoreFixture(t, source)
+	unindexed := copyRestoreFixture(t, source)
 	index := func(store *Store, current domain.Message) domain.ID {
 		t.Helper()
 		id := migrationID()
@@ -218,6 +243,19 @@ func TestBackupRestoreRebindsFileOnlyForMatchingMessageRevision(t *testing.T) {
 	download, err := matching.DeviceDownload(ctx, device, localID, message.RevisionID)
 	if err != nil || download.Hash != hash {
 		t.Fatalf("file was not rebound to the local catalog identifier: %+v %v", download, err)
+	}
+	if result, err := unindexed.mergeBackup(ctx, archive, scratch, manifest, now); err != nil || result.MediaFiles != 1 {
+		t.Fatalf("file was lost before destination indexing: %+v %v", result, err)
+	}
+	if _, err := unindexed.SharedContentItem(ctx, sourceID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("restored file bypassed destination indexing: %v", err)
+	}
+	index(unindexed, message)
+	if item, err := unindexed.SharedContentItem(ctx, sourceID); err != nil || item.URL != url {
+		t.Fatalf("local indexing did not reuse the restored catalog identifier: %+v %v", item, err)
+	}
+	if download, err := unindexed.DeviceDownload(ctx, device, sourceID, message.RevisionID); err != nil || download.Hash != hash {
+		t.Fatalf("local indexing lost the restored download: %+v %v", download, err)
 	}
 	if result, err := different.mergeBackup(ctx, archive, scratch, manifest, now); err != nil || result.MediaFiles != 0 {
 		t.Fatalf("download for stale message revision was restored: %+v %v", result, err)
