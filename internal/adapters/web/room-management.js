@@ -32,6 +32,7 @@ window.OieRuntime.register('room-management', life => {
   const root = document.querySelector('[data-room-management]');
   if (!root) return;
   const content = root.querySelector('[data-room-management-content]');
+  const destructive = document.querySelector('[data-room-destroy-content]');
   const loadError = root.querySelector('[data-room-management-error]');
   let request, opener, message = '', invite = false, active = false;
   let bansRequest, bansFresh = false, participantsDirty = false;
@@ -43,7 +44,8 @@ window.OieRuntime.register('room-management', life => {
   const drafts = new Map();
   const openForms = new Set();
   const isPending = form => form.dataset.busy === 'true' || pending.has(form);
-  const hasPending = () => [...content.querySelectorAll('form')].some(isPending);
+  const managementForms = () => [...content.querySelectorAll('form'), ...destructive.querySelectorAll('form')];
+  const hasPending = () => managementForms().some(isPending);
   const participantViews = new Map();
   const listQueries = new Map();
   const tabSelected = id => content.querySelector('[aria-controls="' + id + '"]')?.getAttribute('aria-selected') === 'true';
@@ -271,18 +273,19 @@ window.OieRuntime.register('room-management', life => {
       }
       if (replace) {
         if (hasPending()) return;
-        for (const form of content.querySelectorAll('form')) {
+        for (const form of managementForms()) {
           if (!form.closest('[data-room-profile-slot]')) remember(form);
         }
         render(template);
         restoreForms(content);
+        restoreForms(destructive);
       } else {
         const revision = template.content.querySelector('[name=expectedRevision]')?.value;
         if (!revision && !template.content.querySelector('.oie-room-management-tabs')) {
           render(template);
         } else {
           const fresh = new Map([...template.content.querySelectorAll('form')].map(form => [identity(form), form]));
-          for (const form of content.querySelectorAll('form')) {
+          for (const form of managementForms()) {
             if (isPending(form) || form.closest('[data-room-profile-slot]')) continue;
             const freshForm = fresh.get(identity(form));
             const permissionChanged = form.elements.managementAction.value === 'update_details' &&
@@ -348,6 +351,15 @@ window.OieRuntime.register('room-management', life => {
   }
 
   function render(template) {
+    const destroyFragment = template.content.querySelector('[data-room-destroy-fragment]');
+    const destroyFocused = destructive.contains(document.activeElement);
+    destructive.replaceChildren(...(destroyFragment?.childNodes || []));
+    destroyFragment?.remove();
+    if (destroyFocused) {
+      const target = destructive.querySelector('#room-destroy-open') ||
+        destructive.parentElement.querySelector('.oie-settings-back');
+      target?.focus({preventScroll:true});
+    }
     const currentTabs = content.querySelector('.oie-room-management-tabs');
     const incomingTabs = template.content.querySelector('.oie-room-management-tabs');
     const sameTabs = currentTabs && incomingTabs && currentTabs.dataset.tabsConfig === incomingTabs.dataset.tabsConfig;
@@ -379,10 +391,6 @@ window.OieRuntime.register('room-management', life => {
     const view = participantViews.get(panel.id);
     view?.controller.abort();
     const slot = view && panel.querySelector('[data-room-profile-slot]');
-    if (panel.querySelector('#room-destructive-actions')?.open) {
-      const disclosure = incoming.querySelector('#room-destructive-actions');
-      if (disclosure) disclosure.open = true;
-    }
     panel.replaceChildren(...incoming.childNodes);
     const search = panel.querySelector('[data-room-list-search]');
     if (search) {
@@ -460,13 +468,6 @@ window.OieRuntime.register('room-management', life => {
     avatarRefresh = life.timeout(() => { if (active) void load(false, true); }, 250);
   });
 
-  life.on(content, 'toggle', event => {
-    const disclosure = event.target;
-    if (disclosure.id !== 'room-destructive-actions' || disclosure.open) return;
-    const form = disclosure.querySelector('#room-destroy-form:not([hidden])');
-    if (form) cancelAction(form, false);
-  }, true);
-
   life.on(document, 'click', event => {
     const row = event.target.closest('[data-room-participant-open]');
     if (row && content.contains(row)) {
@@ -479,21 +480,21 @@ window.OieRuntime.register('room-management', life => {
       return;
     }
     const cancel = event.target.closest('[data-room-action-cancel]');
-    if (cancel && content.contains(cancel)) {
+    if (cancel && (content.contains(cancel) || destructive.contains(cancel))) {
       cancelAction(cancel.form);
       return;
     }
     const trigger = event.target.closest('[data-room-action-open]');
     if (trigger) {
       if (hasPending()) return;
-      const form = content.querySelector(`[data-room-action-form="${CSS.escape(trigger.id)}"]`);
+      const form = managementForms().find(form => form.dataset.roomActionForm === trigger.id);
       if (!form) return;
       if (!form.hidden && trigger.hasAttribute('aria-expanded')) {
         setActionOpen(form, false);
         return;
       }
-      for (const open of content.querySelectorAll('form[data-room-action-form]:not([hidden])')) {
-        if (open.dataset.roomActionForm) setActionOpen(open, false);
+      for (const open of managementForms()) {
+        if (open.dataset.roomActionForm && !open.hidden) setActionOpen(open, false);
       }
       setActionOpen(form, true);
       const focusTarget = form.hasAttribute('data-room-action-confirmation')
@@ -542,8 +543,9 @@ window.OieRuntime.register('room-management', life => {
         life.raf(open);
         return;
       }
-      for (const form of content.querySelectorAll('form')) remember(form);
+      for (const form of managementForms()) remember(form);
       content.replaceChildren();
+      destructive.replaceChildren();
     }
     message = nextMessage;
     invite = nextInvite;
@@ -573,8 +575,19 @@ window.OieRuntime.register('room-management', life => {
     else closeParticipant(slot.closest('[role=tabpanel]'), true);
   }, true);
 
+  function dismissDestroyConfirmation() {
+    const form = destructive.querySelector('#room-destroy-form:not([hidden])');
+    if (form) cancelAction(form, false);
+  }
+
+  life.on(window, 'drawer:close', event => {
+    if (event.detail?.id === 'room-destructive-actions') dismissDestroyConfirmation();
+  });
+
   life.on(window, 'drawer:close-request', event => {
-    if (event.detail?.id !== 'room-management') return;
+    const id = event.detail?.id;
+    if (id !== 'room-management' && id !== 'room-destructive-actions') return;
+    if (id === 'room-destructive-actions') dismissDestroyConfirmation();
     active = false;
     request?.abort();
     stopBans();
@@ -585,7 +598,7 @@ window.OieRuntime.register('room-management', life => {
 
   life.on(document, 'oie:room-management-result', event => {
     const {form, result} = event.detail;
-    if (!active || !root.contains(form)) return;
+    if (!active || (!root.contains(form) && !destructive.contains(form))) return;
     if (!result.ok && !result.rejected) {
       pending.set(form, true);
       for (const input of form.querySelectorAll('input:not([type=hidden]),textarea')) input.readOnly = true;
@@ -597,6 +610,7 @@ window.OieRuntime.register('room-management', life => {
       const focused = form.contains(document.activeElement);
       const trigger = setActionOpen(form, false);
       if (result.ok) {
+        window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-destructive-actions'}}));
         window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'room-management'}}));
       } else {
         if (focused) trigger?.focus({preventScroll:true});

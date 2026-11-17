@@ -5,7 +5,7 @@ the account's room permissions. **Details** shows the room image and offers
 editable name and multiline topic fields with one **Save changes** button.
 Owners can change the name and can replace or remove the room image when
 the service supports room vCards. Moderators can change the topic and adjust current occupants' roles.
-To delete a room you own, expand **Destructive actions** in **Details**, select
+To delete a room you own, open **Destructive actions** in **Details**, select
 **Delete room for everyone**, and confirm.
 **More → Invite people** opens the invitation form when the room permits it.
 The room may let other occupants edit the topic or invite people. **Participants** groups occupants by room permissions. Select a name to see

@@ -607,6 +607,7 @@
   "RoomModerators": "Moderators",
   "RoomVisitors": "Visitors",
   "RoomBackToParticipants": "Back to participants",
+  "RoomBackToDetails": "Back to details",
   "RoomBackToBans": "Back to bans",
   "RoomGrantVoice": "Allow speaking",
   "RoomRevokeVoice": "Revoke speaking permission",

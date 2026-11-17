@@ -360,7 +360,7 @@ type copy struct {
 	RoomAdministrators                                                                                                                                                                                       string
 	RoomModerators                                                                                                                                                                                           string
 	RoomVisitors                                                                                                                                                                                             string
-	RoomBackToParticipants                                                                                                                                                                                   string
+	RoomBackToParticipants, RoomBackToDetails                                                                                                                                                                string
 	RoomBackToBans                                                                                                                                                                                           string
 	RoomGrantVoice                                                                                                                                                                                           string
 	RoomRevokeVoice                                                                                                                                                                                          string

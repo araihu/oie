@@ -36,6 +36,9 @@ templ roomManagementDrawer(v view) {
 				</template>
 			</div>
 		}
+		@drawerSubpage("room-management", "room-destructive-actions", v.Text.DestructiveActions, v.Text.RoomBackToDetails) {
+			<div data-room-destroy-content></div>
+		}
 	}
 }
 
@@ -76,6 +79,11 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID st
 			{{ pages = append(pages, tabs.Tab{ID: "bans", Label: v.Text.RoomBans, Content: roomManagementBans(v, state)}) }}
 		}
 		@tabs.Tabs(tabs.Config{ID: "room-management-tabs", RootClass: "oie-room-management-tabs", Tabs: pages})
+		if slices.Contains(state.Actions, engineapi.Destroy) {
+			<div data-room-destroy-fragment hidden>
+				@roomDestroyControls(v, *state.Revision)
+			</div>
+		}
 	}
 }
 
@@ -98,19 +106,12 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 		<p class="oie-details-plain">{ v.managementTopic() }</p>
 	}
 	if slices.Contains(state.Actions, engineapi.Destroy) {
-		<details id="room-destructive-actions" class="oie-room-destructive-actions">
-			<summary id="room-destructive-actions-summary" class="oie-info-entry">
-				@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"})
-				<span>{ v.Text.DestructiveActions }</span>
-				@glyph(heroicons.Icon16SolidChevronRight)
-			</summary>
-			@roomDestroyControls(v, *state.Revision)
-		</details>
+		@drawerSubpageEntry("room-management", "room-destructive-actions", v.Text.DestructiveActions, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"}))
 	}
 }
 
 templ roomDestroyControls(v view, revision string) {
-	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"id": "room-destroy-open", "data-room-action-open": "", "aria-expanded": "false", "aria-controls": "room-destroy-form"})) {
+	@button.Button(button.WithType("button"), button.WithTone(button.ToneDanger), button.WithAttrs(templ.Attributes{"id": "room-destroy-open", "data-room-action-open": "", "aria-expanded": "false", "aria-controls": "room-destroy-form"})) {
 		{ v.Text.RoomDestroy }
 	}
 	@form.Form(form.Config{ID: "room-destroy-form", Action: "/ui/rooms/manage", Method: "post", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-action-form": "room-destroy-open", "data-room-action-confirmation": "", "hidden": true}}) {

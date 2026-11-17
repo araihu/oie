@@ -711,10 +711,6 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-ban-footer .oie-room-action-buttons{justify-content:flex-end}
 .oie-room-ban-footer [data-form-feedback]:empty{display:none}
 .oie-room-management-avatar{display:grid;justify-items:center;margin-block:4px}
-.oie-room-destructive-actions{border:1px solid var(--oie-border);border-radius:8px;padding-inline:8px}
-.oie-room-destructive-actions>summary{cursor:pointer;list-style:none}
-.oie-room-destructive-actions>summary::-webkit-details-marker{display:none}
-.oie-room-destructive-actions[open]>summary>.oie-icon:last-child{transform:rotate(90deg)}
 .oie-room-participants,.oie-room-addresses{margin:0;padding:0;list-style:none}
 .oie-room-list-search{position:sticky;inset-block-start:0;z-index:1;background:var(--oie-panel);padding-bottom:12px}
 .oie-room-participant-row{scroll-margin-block-start:56px}
