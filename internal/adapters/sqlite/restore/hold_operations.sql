@@ -1,3 +1,13 @@
+-- Terminal evidence can outlive the destination's retention cutoff. Preserve
+-- its original operation keys without copying receipts that contain the body.
+INSERT INTO operations
+SELECT o.id,o.fingerprint,o.resource_id,'null',o.created_at,o.kind
+FROM backup.operations o JOIN restore_send_evidence e ON e.id=o.resource_id
+WHERE e.state IN ('cancelled','submitted','failed')
+  AND o.kind IN ('send_message','forward_message','update_pending_message','send_scheduled_message_now','cancel_message')
+  AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.id=e.id)
+ON CONFLICT(id) DO NOTHING;
+
 INSERT INTO operations
 SELECT o.id,o.fingerprint,o.resource_id,'null',o.created_at,o.kind
 FROM backup.operations o JOIN recovered_sends s ON s.message_id=o.resource_id

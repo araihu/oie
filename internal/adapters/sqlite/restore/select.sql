@@ -93,8 +93,7 @@ WHERE (d.id IS NOT NULL OR (
     WHERE e.conversation_id=m.conversation_id AND ref.message_id IN (m.id,a.canonical_id)
   )
   AND (
-    m.state='cancelled'
-    OR COALESCE(r.days,CASE json_extract(c.payload,'$.Kind') WHEN 'room' THEN g.rooms_days ELSE g.direct_days END)=0
+    COALESCE(r.days,CASE json_extract(c.payload,'$.Kind') WHEN 'room' THEN g.rooms_days ELSE g.direct_days END)=0
     OR COALESCE(
         (SELECT COALESCE(root.submitted_at_ms,root.timeline_at_ms,root.created_at_ms)
          FROM backup.messages root WHERE root.id=a.canonical_id),
@@ -124,11 +123,22 @@ WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
 CREATE TEMP TABLE restore_suppressed_echoes (
   source_id TEXT PRIMARY KEY, retained_id TEXT NOT NULL
 ) WITHOUT ROWID;
+-- The destination can retain its own original beyond the archive cutoff.
+-- The verified echo may still contribute metadata for that retained body.
 INSERT INTO restore_suppressed_echoes
 SELECT m.id,d.id FROM restore_source_echoes m
-JOIN restore_messages x ON x.id=m.id AND x.is_new=1
 JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
-  AND d.account_id=m.account_id AND d.conversation_id=m.conversation_id AND d.is_own=1;
+  AND d.account_id=m.account_id AND d.conversation_id=m.conversation_id AND d.is_own=1
+LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
+LEFT JOIN backup.outbox o ON o.message_id=m.id
+WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
+  AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
+  AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
+  AND NOT EXISTS (
+    SELECT 1 FROM expired_message_references e JOIN backup.message_references ref
+      ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
+    WHERE e.conversation_id=m.conversation_id AND ref.message_id IN (m.id,a.canonical_id)
+  );
 DELETE FROM restore_messages WHERE id IN (SELECT source_id FROM restore_suppressed_echoes);
 
 DELETE FROM restore_messages

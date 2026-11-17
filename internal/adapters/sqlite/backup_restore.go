@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 48
+	newestRestoreSchema = 49
 )
 
 type RestoreSummary struct {
