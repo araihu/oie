@@ -606,26 +606,30 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = matchArchivedAttachmentWireBody(ctx, q, c, &m); err != nil {
 		return err
 	}
-	if m.ProviderID != "" {
-		var existing dbgen.Message
-		existing, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
-		if err == nil {
-			if !archiveAlreadyBound {
-				if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
-					return err
-				}
-			}
-			if err = recordCorrectionMetadata(ctx, q, existing.ID, m); err != nil {
-				return err
-			}
-			if err = recordReplyMetadata(ctx, q, existing.ID, m, true); err != nil {
-				return err
-			}
-			return tx.Commit()
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+	existingID, err := findDirectEchoWithoutStanzaID(ctx, q, c, m)
+	if err != nil {
+		return err
+	}
+	if existingID == "" && m.ProviderID != "" {
+		existing, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
+		existingID = existing.ID
+	}
+	if existingID != "" {
+		if !archiveAlreadyBound {
+			if err = archiveAlias(ctx, q, m, existingID); err != nil {
+				return err
+			}
+		}
+		if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+			return err
+		}
+		if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 	if m.ReplyReference != nil && referenceValid(m.ReplyReference.Target) {
 		expired, err := unavailableExpiredQuote(ctx, q, m.AccountID, m.ConversationID, m.ReplyReference.Target)

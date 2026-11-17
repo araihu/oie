@@ -1,18 +1,21 @@
 -- A direct stanza can use the original send's ID but carry a distinct
 -- structured composition. Keep its own references and origin evidence
--- without competing for the native message's provider key.
+-- without competing for the native message's provider key. Ambiguous legacy
+-- observations likewise keep their own row without reserving a native key.
 CREATE TEMP TABLE restore_direct_mention_echo_keys (
-  id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, is_local INTEGER NOT NULL
+  id TEXT NOT NULL, provider_id TEXT NOT NULL, is_local INTEGER NOT NULL, ambiguous_origin INTEGER NOT NULL,
+  PRIMARY KEY(is_local,id)
 ) WITHOUT ROWID;
 INSERT INTO restore_direct_mention_echo_keys
-SELECT b.id,oie_direct_mention_echo_provider_id(b.payload),0
+SELECT b.id,oie_direct_mention_echo_provider_id(b.payload),0,0
 FROM backup.messages b JOIN restore_messages x ON x.id=b.id
 JOIN backup.conversations c ON c.id=b.conversation_id AND c.account_id=b.account_id
 WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
   AND b.provider_id=json_extract(b.payload,'$.OwnOriginID')
   AND json_extract(b.payload,'$.WireMentions')='present' AND json_extract(c.payload,'$.Kind')='direct'
+  AND NOT EXISTS (SELECT 1 FROM restore_legacy_direct_origins old WHERE old.is_backup=1 AND old.id=b.id AND old.wire_id='')
 UNION ALL
-SELECT d.id,oie_direct_mention_echo_provider_id(d.payload),1
+SELECT d.id,oie_direct_mention_echo_provider_id(d.payload),1,0
 FROM backup.messages b JOIN restore_messages x ON x.id=b.id AND x.is_new=1
 JOIN backup.conversations c ON c.id=b.conversation_id AND c.account_id=b.account_id
 JOIN messages d ON d.account_id=b.account_id AND d.conversation_id=b.conversation_id
@@ -21,7 +24,13 @@ WHERE b.is_own=1 AND b.id=b.provider_id AND json_extract(c.payload,'$.Kind')='di
   AND d.state='submitted' AND d.id<>d.provider_id
   AND d.provider_id=json_extract(d.payload,'$.OwnOriginID')
   AND json_extract(d.payload,'$.WireMentions')='present'
-  AND oie_wire_mentions_match(b.payload,json_extract(d.payload,'$.WireMentions'),json_extract(d.payload,'$.WireMentionDigest'))=0;
+  AND oie_wire_mentions_match(b.payload,json_extract(d.payload,'$.WireMentions'),json_extract(d.payload,'$.WireMentionDigest'))=0
+  AND NOT EXISTS (SELECT 1 FROM restore_legacy_direct_origins old WHERE old.is_backup=0 AND old.id=d.id AND old.wire_id='')
+UNION ALL
+SELECT old.id,'legacy-direct-echo:'||old.id,1-old.is_backup,1
+FROM restore_legacy_direct_origins old
+WHERE old.wire_id='' AND old.provider_id GLOB '????????-????-7???-[89ab]???-????????????'
+  AND length(replace(old.provider_id,'-',''))=32 AND replace(old.provider_id,'-','') NOT GLOB '*[^0-9a-f]*';
 
 CREATE TEMP VIEW restore_own_echo_aliases AS
 SELECT echo_id,original_id FROM restore_witness_echoes

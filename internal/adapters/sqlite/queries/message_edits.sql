@@ -47,7 +47,7 @@ JOIN message_correction_facts fact ON fact.message_id=witness.id AND fact.remote
   AND fact.scope=json_extract(command.payload,'$.Plan.Scope') AND fact.author=json_extract(command.payload,'$.Plan.Author')
   AND fact.target_id=root.provider_id AND fact.target_id=json_extract(command.payload,'$.Plan.OriginalWireID')
 JOIN message_revisions content ON content.id=fact.source_revision_id AND content.entity_id=witness.id
-WHERE command.state='submitted' AND command.message_id=sqlc.arg(message_id)
+WHERE command.state IN ('submitted','failed') AND command.message_id=sqlc.arg(message_id)
   AND command.account_id=sqlc.arg(account_id) AND command.conversation_id=sqlc.arg(conversation_id)
   AND (alias.alias_id IS NULL OR alias.canonical_id=command.message_id)
   AND json_extract(command.payload,'$.ContentRevisionID')=CAST(sqlc.arg(content_revision_id) AS TEXT)

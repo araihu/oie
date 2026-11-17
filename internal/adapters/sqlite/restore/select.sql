@@ -116,6 +116,7 @@ WHERE m.is_new=0 OR m.days=0 OR m.age_ms>=@now_ms - 86400000 * m.days
 -- Earlier direct observations could keep the sender reference while taking
 -- the origin from the ordinary provider ID. Its exact scoped reference can
 -- prevent a resend without being sufficient to identify the wire contents.
+-- Multiple exact references rule out the guessed provider but prove no origin.
 CREATE TEMP TABLE restore_legacy_direct_origins (
   is_backup INTEGER NOT NULL,id TEXT NOT NULL,account_id TEXT NOT NULL,conversation_id TEXT NOT NULL,
   provider_id TEXT NOT NULL,wire_id TEXT NOT NULL,PRIMARY KEY(is_backup,id)
@@ -143,14 +144,18 @@ WITH candidates(is_backup,id,account_id,conversation_id,provider_id,payload,remo
     AND NOT EXISTS (
         SELECT 1 FROM message_correction_facts f WHERE f.message_id=m.id AND f.target_id<>''
     )
+), exact AS (
+  SELECT is_backup,id,account_id,conversation_id,provider_id,MIN(remote_id) AS wire_id,
+         COUNT(DISTINCT remote_id) AS reference_count
+  FROM candidates
+  WHERE source_hash=COALESCE(NULLIF(json_extract(payload,'$.WireBodySHA256'),''),
+                             oie_source_hash(json_extract(payload,'$.OriginalText')))
+  GROUP BY is_backup,id,account_id,conversation_id,provider_id
 )
-SELECT is_backup,id,account_id,conversation_id,provider_id,MIN(remote_id) AS wire_id FROM candidates
-WHERE source_hash=COALESCE(NULLIF(json_extract(payload,'$.WireBodySHA256'),''),
-                           oie_source_hash(json_extract(payload,'$.OriginalText')))
-GROUP BY is_backup,id,account_id,conversation_id,provider_id
-HAVING COUNT(DISTINCT remote_id)=1 AND wire_id<>provider_id
+SELECT is_backup,id,account_id,conversation_id,provider_id,CASE WHEN reference_count=1 THEN wire_id ELSE '' END
+FROM exact WHERE reference_count>1 OR (wire_id<>provider_id
    AND wire_id GLOB '????????-????-7???-[89ab]???-????????????'
-   AND length(replace(wire_id,'-',''))=32 AND replace(wire_id,'-','') NOT GLOB '*[^0-9a-f]*';
+   AND length(replace(wire_id,'-',''))=32 AND replace(wire_id,'-','') NOT GLOB '*[^0-9a-f]*');
 
 -- Restore send evidence onto the original local row. An own archive echo
 -- retained under another row ID would duplicate that message in the timeline.
@@ -176,6 +181,36 @@ LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
 LEFT JOIN backup.outbox o ON o.message_id=m.id
 WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
   AND oie_wire_mentions_match(d.payload,json_extract(m.payload,'$.WireMentions'),json_extract(m.payload,'$.WireMentionDigest'))=1
+  -- A submitted correction can also use its native acceptance ID as the
+  -- provider key. A conflicting body or correction target must stay visible
+  -- to the identity checker instead of being discarded as an ordinary echo.
+  AND NOT EXISTS (
+    SELECT 1 FROM backup.message_correction_facts observed WHERE observed.message_id=m.id AND observed.target_id<>''
+      AND NOT EXISTS (
+        SELECT 1 FROM message_correction_facts retained
+        JOIN message_revisions local_proof ON local_proof.id=retained.source_revision_id AND local_proof.entity_id=d.id
+        JOIN backup.message_revisions backup_proof ON backup_proof.id=observed.source_revision_id AND backup_proof.entity_id=m.id
+        WHERE retained.message_id=d.id AND retained.scope=observed.scope AND retained.author=observed.author
+          AND retained.remote_id=observed.remote_id AND retained.target_id=observed.target_id
+          AND retained.source_hash=observed.source_hash
+          AND retained.source_hash=COALESCE(NULLIF(json_extract(d.payload,'$.WireBodySHA256'),''),
+                                           oie_source_hash(json_extract(d.payload,'$.OriginalText')))
+          AND retained.source_hash=COALESCE(NULLIF(json_extract(local_proof.payload,'$.WireBodySHA256'),''),
+                                           oie_source_hash(json_extract(local_proof.payload,'$.OriginalText')))
+          AND observed.source_hash=COALESCE(NULLIF(json_extract(m.payload,'$.WireBodySHA256'),''),
+                                           oie_source_hash(json_extract(m.payload,'$.OriginalText')))
+          AND observed.source_hash=COALESCE(NULLIF(json_extract(backup_proof.payload,'$.WireBodySHA256'),''),
+                                           oie_source_hash(json_extract(backup_proof.payload,'$.OriginalText')))
+      )
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM message_correction_facts retained WHERE retained.message_id=d.id AND retained.target_id<>''
+      AND NOT EXISTS (
+        SELECT 1 FROM backup.message_correction_facts observed WHERE observed.message_id=m.id
+          AND observed.scope=retained.scope AND observed.author=retained.author AND observed.remote_id=retained.remote_id
+          AND observed.target_id=retained.target_id AND observed.source_hash=retained.source_hash
+      )
+  )
   AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
   AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
   AND NOT EXISTS (
@@ -217,6 +252,7 @@ WITH echoes AS (
   JOIN restore_messages selected ON selected.id=b.id
   LEFT JOIN message_canonical_aliases d ON d.alias_id=e.id
   WHERE b.is_own=1 AND b.id=b.provider_id AND b.state IN ('submitted','failed')
+    AND NOT EXISTS (SELECT 1 FROM backup.message_correction_facts f WHERE f.message_id=b.id AND f.target_id<>'')
     AND (d.alias_id IS NULL OR d.canonical_id=b.id)
     AND NOT EXISTS(SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=b.id)
     AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=b.id)

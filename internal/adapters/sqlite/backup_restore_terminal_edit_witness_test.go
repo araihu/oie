@@ -17,6 +17,7 @@ func TestBackupRestoreKeepsDirectWitnessWhenImportingTerminalEdit(t *testing.T) 
 	ctx := t.Context()
 	original := ownSubmittedEdit(t, source, editor, chat, "the original native body")
 	destination, conflicting := copyRestoreFixture(t, source), copyRestoreFixture(t, source)
+	missingProof := copyRestoreFixture(t, source)
 	first := queuedEdit(t, editor, original.ID, "the submitted edit seen in MAM")
 	finishEdit(t, source, first.Command.ID, "submitted")
 	latest := queuedEdit(t, editor, original.ID, "the later edit accepted on the native revision")
@@ -47,6 +48,15 @@ func TestBackupRestoreKeepsDirectWitnessWhenImportingTerminalEdit(t *testing.T) 
 	}
 	receive(destination, first.Command.OriginalText)
 	receive(conflicting, "a conflicting body using the same edit ID")
+	plainObserver := testRestoreEngine(t, missingProof)
+	plainObserver.SetProtocols(&outboundProtocol{})
+	if err := plainObserver.Receive(ctx, application.Incoming{
+		AccountID: chat.AccountID, Address: chat.Address, Kind: "direct", Historical: true, IsOwn: true,
+		SenderAddress: author, ProviderID: string(first.Command.ID), OriginalText: first.Command.OriginalText, CreatedAt: at,
+		ArchiveScope: author, ArchiveID: archiveID,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	aliasKey := dbgen.GetArchiveAliasParams{AccountID: string(chat.AccountID), Scope: author, ArchiveID: archiveID}
 	witnessID, err := destination.queries.GetArchiveAlias(ctx, aliasKey)
 	if err != nil || witnessID == string(first.Command.ID) {
@@ -98,4 +108,28 @@ func TestBackupRestoreKeepsDirectWitnessWhenImportingTerminalEdit(t *testing.T) 
 	relay := openLegacyDownloadDestination(t)
 	assertLocalEditRestoreRepeats(t, relay, forwarded, forwardedDB, forwardedScratch, at)
 	check(relay)
+	t.Run("native before matching witness", func(t *testing.T) {
+		native := openLegacyDownloadDestination(t)
+		assertLocalEditRestoreRepeats(t, native, manifest, archive, scratch, at)
+		assertLocalEditRestoreRepeats(t, native, forwarded, forwardedDB, forwardedScratch, at)
+		if owner, err := native.queries.GetArchiveAlias(ctx, aliasKey); err != nil || owner != string(first.Command.ID) {
+			t.Fatalf("restoring the matching witness lost its archive key: %q, %v", owner, err)
+		}
+	})
+	t.Run("native before conflicting witness", func(t *testing.T) {
+		native := openLegacyDownloadDestination(t)
+		assertLocalEditRestoreRepeats(t, native, manifest, archive, scratch, at)
+		other, otherDB, otherScratch := backupRestoreFixture(t, conflicting, false)
+		if _, err := native.mergeBackup(ctx, otherDB, otherScratch, other, at); err == nil || !strings.Contains(err.Error(), "conflicting account, conversation, or message identities") {
+			t.Fatalf("a distinct correction body did not keep the provider identity conflict: %v", err)
+		}
+	})
+	t.Run("native before witness without correction proof", func(t *testing.T) {
+		native := openLegacyDownloadDestination(t)
+		assertLocalEditRestoreRepeats(t, native, manifest, archive, scratch, at)
+		other, otherDB, otherScratch := backupRestoreFixture(t, missingProof, false)
+		if _, err := native.mergeBackup(ctx, otherDB, otherScratch, other, at); err == nil || !strings.Contains(err.Error(), "conflicting account, conversation, or message identities") {
+			t.Fatalf("text alone was accepted as the same correction: %v", err)
+		}
+	})
 }

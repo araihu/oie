@@ -37,6 +37,7 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 		{name: "prior decoder guessed another UUID as the origin", oldObservation: "backup", alternateUUID: true},
 		{name: "prior decoder observation in the destination", oldObservation: "destination"},
 		{name: "multiple retained sender identifiers", oldObservation: "ambiguous"},
+		{name: "multiple retained sender identifiers and a native UUID provider", oldObservation: "ambiguous", alternateUUID: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -111,8 +112,17 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 			}
 			id := ` id="provider-stanza-id"`
 			var replacementID domain.ID
+			ambiguousProvider := tc.oldObservation == "ambiguous" && tc.alternateUUID
 			if tc.alternateUUID {
-				replacementID = mint()
+				if ambiguousProvider {
+					unrelated, err := engine.SendMessage(ctx, mint(), chat.ID, "another actual queued send")
+					if err != nil {
+						t.Fatal(err)
+					}
+					replacementID = unrelated.Message.ID
+				} else {
+					replacementID = mint()
+				}
 				id = fmt.Sprintf(" id=%q", replacementID)
 			}
 			if tc.omitStanzaID {
@@ -200,8 +210,12 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 			if tc.foreignSender || tc.duplicateOrigin || tc.oldObservation != "" {
 				wantRows = 2
 			}
+			if ambiguousProvider {
+				wantDue, wantRows = 2, 3
+			}
 			due, err := store.PendingMessages(ctx, time.Now().Add(time.Hour))
-			if err != nil || len(due) != wantDue || (wantDue > 0 && due[0].ID != origin) {
+			if err != nil || len(due) != wantDue || (wantDue > 0 && due[0].ID != origin) ||
+				(ambiguousProvider && due[1].ID != replacementID) {
 				t.Fatalf("wrong original send eligibility after observing a direct stanza: %+v, %v", due, err)
 			}
 			got, err := store.Message(ctx, origin)
@@ -224,7 +238,11 @@ func TestDirectOwnOriginIDAcrossStanzaIDs(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer db.Close()
+				defer func() {
+					if err := db.Close(); err != nil {
+						t.Error(err)
+					}
+				}()
 				var guessed bool
 				if err := db.QueryRowContext(ctx, `SELECT EXISTS (
 SELECT 1 FROM restored_own_echoes WHERE account_id=? AND conversation_id=? AND message_id=?

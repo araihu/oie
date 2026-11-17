@@ -40,12 +40,16 @@ SET provider_id=CASE WHEN d.provider_id=e.original_id THEN '' ELSE d.provider_id
 FROM restore_witness_echoes e WHERE d.id=e.echo_id
 AND (d.provider_id=e.original_id OR json_extract(d.payload,'$.OwnOriginID') IS NOT e.original_id);
 
-UPDATE messages AS d SET provider_id=e.provider_id,payload=json_set(d.payload,'$.ProviderID',e.provider_id)
+UPDATE messages AS d SET provider_id=e.provider_id,
+    payload=CASE WHEN e.ambiguous_origin=1 THEN json_remove(json_set(d.payload,'$.ProviderID',e.provider_id),'$.OwnOriginID')
+                 ELSE json_set(d.payload,'$.ProviderID',e.provider_id) END
 FROM restore_direct_mention_echo_keys e WHERE d.id=e.id AND e.is_local=1;
 
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms,timeline_at_ms,submitted_at_ms)
 SELECT m.id,m.revision_id,m.account_id,m.conversation_id,COALESCE(e.provider_id,m.provider_id),m.is_own,m.state,
-       CASE WHEN e.id IS NULL THEN m.payload ELSE json_set(m.payload,'$.ProviderID',e.provider_id) END,
+       CASE WHEN e.id IS NULL THEN m.payload
+            WHEN e.ambiguous_origin=1 THEN json_remove(json_set(m.payload,'$.ProviderID',e.provider_id),'$.OwnOriginID')
+            ELSE json_set(m.payload,'$.ProviderID',e.provider_id) END,
        m.created_at_ms,m.timeline_at_ms,m.submitted_at_ms
 FROM backup.messages m JOIN restore_messages x ON x.id=m.id AND x.is_new=1
 LEFT JOIN restore_direct_mention_echo_keys e ON e.id=m.id AND e.is_local=0;
@@ -120,7 +124,8 @@ WHERE edit.eligible=1 ON CONFLICT(id) DO UPDATE SET
        '$.Command.RevisionID',excluded.revision_id,'$.Command.State',excluded.state,
        '$.Command.UpdatedAt',json_extract(excluded.payload,'$.Command.UpdatedAt'),
        '$.Command.LastErrorCode',COALESCE(json_extract(excluded.payload,'$.Command.LastErrorCode'),''))
-WHERE message_edit_commands.state='queued' AND excluded.state='submitted';
+WHERE (message_edit_commands.state='queued' AND excluded.state IN ('submitted','failed','unknown'))
+   OR (message_edit_commands.state='unknown' AND excluded.state='submitted');
 INSERT INTO message_correction_facts SELECT f.* FROM backup.message_correction_facts f JOIN restore_messages x ON x.id=f.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_correction_facts(message_id,scope,author,remote_id,target_id,source_hash,source_revision_id)

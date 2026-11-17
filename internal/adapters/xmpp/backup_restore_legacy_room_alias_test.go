@@ -158,7 +158,11 @@ func TestBackupRestoreKeepsDistinctStructuredPacketBehindLegacyRoomAlias(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	var owner string
 	if err := db.QueryRowContext(ctx, `SELECT message_id FROM archive_aliases WHERE account_id=? AND scope=? AND archive_id=?`,
 		a.ID, incoming.ArchiveScope, incoming.ArchiveID).Scan(&owner); err != nil || owner != string(pending.Message.ID) {

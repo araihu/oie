@@ -153,7 +153,9 @@ func selectRestoredMessageRevision(ctx context.Context, q *dbgen.Queries, id, re
 		return nil
 	}
 	next.ProviderID, next.ArchiveID, next.ArchiveScope = current.ProviderID, current.ArchiveID, current.ArchiveScope
-	if current.OwnOriginID != "" {
+	if current.ProviderID == "legacy-direct-echo:"+string(id) {
+		next.OwnOriginID = ""
+	} else if current.OwnOriginID != "" {
 		next.OwnOriginID = current.OwnOriginID
 	}
 	if current.WireMentions != "" && current.SourceBodyHash() == next.SourceBodyHash() &&
