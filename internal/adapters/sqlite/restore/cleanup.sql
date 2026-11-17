@@ -3,6 +3,8 @@ DROP VIEW restore_pre_wire_sends;
 DROP VIEW restore_represented_echo_references;
 DROP TABLE restore_represented_echoes;
 DROP TABLE restore_suppressed_echoes;
+DROP VIEW restore_own_echo_aliases;
+DROP TABLE restore_witness_echoes;
 DROP TABLE restore_messages;
 DROP TABLE restore_chats;
 DROP TABLE restore_accounts;

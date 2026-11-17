@@ -264,6 +264,7 @@ type Querier interface {
 	RecordDiscardedMessageReference(ctx context.Context, arg RecordDiscardedMessageReferenceParams) (int64, error)
 	RecordDisplayedPolicyEpoch(ctx context.Context, arg RecordDisplayedPolicyEpochParams) error
 	RecordOriginalTransmission(ctx context.Context, id string) error
+	RecordRetiredImageMembership(ctx context.Context, arg RecordRetiredImageMembershipParams) error
 	RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error)
 	RedactedQuotePreviewIDs(ctx context.Context, arg RedactedQuotePreviewIDsParams) ([]string, error)
 	RememberOwnOrigin(ctx context.Context, arg RememberOwnOriginParams) error

@@ -139,6 +139,69 @@ WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
       ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
     WHERE e.conversation_id=m.conversation_id AND ref.message_id IN (m.id,a.canonical_id)
   );
+-- A witness can arrive before the original sending profile. Keep its source
+-- row and revisions, but display the logical send under the original ID.
+CREATE TEMP TABLE restore_witness_echoes (
+  echo_id TEXT PRIMARY KEY, original_id TEXT NOT NULL
+) WITHOUT ROWID;
+INSERT INTO restore_witness_echoes
+WITH echoes AS (
+  SELECT d.id,d.account_id,d.conversation_id,d.provider_id,d.payload,
+         json_extract(c.payload,'$.Kind') AS kind
+  FROM messages d JOIN restore_chats x ON x.id=d.conversation_id
+  JOIN conversations c ON c.id=x.id AND c.account_id=d.account_id
+  WHERE d.is_own=1 AND d.state='submitted' AND d.id<>d.provider_id
+  UNION ALL
+  SELECT b.id,b.account_id,b.conversation_id,b.provider_id,b.payload,
+         json_extract(c.payload,'$.Kind') AS kind
+  FROM backup.messages b JOIN restore_messages selected ON selected.id=b.id AND selected.is_new=1
+  JOIN backup.message_canonical_aliases a ON a.alias_id=b.id
+  JOIN backup.conversations c ON c.id=b.conversation_id AND c.account_id=b.account_id
+  WHERE b.is_own=1 AND b.state='submitted' AND b.id<>b.provider_id
+    AND json_extract(b.payload,'$.OwnOriginID')=a.canonical_id
+), pairs AS (
+  SELECT e.id AS echo_id,b.id AS original_id,b.account_id,b.conversation_id,b.payload AS original_payload,
+         json_extract(e.payload,'$.OriginalText') AS echo_body,
+         COALESCE(NULLIF(json_extract(e.payload,'$.WireBodySHA256'),''),
+                  oie_source_hash(json_extract(e.payload,'$.OriginalText'))) AS echo_hash
+  FROM echoes e JOIN backup.messages b
+    ON b.id=COALESCE(NULLIF(json_extract(e.payload,'$.OwnOriginID'),''),
+                     CASE WHEN e.kind='direct' OR json_extract(e.payload,'$.Historical')=0 THEN e.provider_id END)
+    AND b.account_id=e.account_id AND b.conversation_id=e.conversation_id
+  JOIN restore_messages selected ON selected.id=b.id
+  LEFT JOIN message_canonical_aliases d ON d.alias_id=e.id
+  WHERE b.is_own=1 AND b.id=b.provider_id AND b.state IN ('submitted','failed')
+    AND (d.alias_id IS NULL OR d.canonical_id=b.id)
+    AND NOT EXISTS(SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=b.id)
+    AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=b.id)
+    AND json_type(e.payload,'$.OriginalText')='text' AND json_type(b.payload,'$.OriginalText')='text'
+)
+SELECT echo_id,original_id FROM pairs p
+WHERE (json_type(original_payload,'$.Attachments[0]') IS NULL AND echo_hash=COALESCE(
+          NULLIF(json_extract(original_payload,'$.WireBodySHA256'),''),
+          oie_source_hash(json_extract(original_payload,'$.OriginalText'))))
+   OR (COALESCE(json_extract(original_payload,'$.AttachmentWireText'),'')<>''
+       AND oie_source_hash(json_extract(original_payload,'$.AttachmentWireText'))=echo_hash)
+   OR oie_attachment_wire_matches(json_extract(original_payload,'$.OriginalText'),json_extract(original_payload,'$.AttachmentWireText'),
+          json_extract(original_payload,'$.WireBodySHA256'),echo_body)=1
+   OR EXISTS (
+     SELECT 1 FROM backup.message_revisions r WHERE r.entity_id=p.original_id
+       AND json_extract(r.payload,'$.IsOwn')=1 AND json_extract(r.payload,'$.ProviderID')=p.original_id
+       AND json_extract(r.payload,'$.AccountID')=p.account_id AND json_extract(r.payload,'$.ConversationID')=p.conversation_id
+       AND json_extract(r.payload,'$.SendState') IN ('submitted','failed')
+       AND json_extract(r.payload,'$.Attachments[0]') IS NOT NULL
+       AND COALESCE(json_extract(r.payload,'$.AttachmentWireText'),'')<>''
+       AND (oie_source_hash(json_extract(r.payload,'$.AttachmentWireText'))=p.echo_hash
+            OR oie_attachment_wire_matches(json_extract(r.payload,'$.OriginalText'),json_extract(r.payload,'$.AttachmentWireText'),
+                 json_extract(r.payload,'$.WireBodySHA256'),p.echo_body)=1)
+   );
+
+-- A relayed backup can carry both proven source rows and their canonical
+-- edge. Keep that witness revision even if the native row is already local.
+DELETE FROM restore_suppressed_echoes WHERE EXISTS (
+  SELECT 1 FROM restore_witness_echoes e
+  WHERE e.echo_id=restore_suppressed_echoes.source_id AND e.original_id=restore_suppressed_echoes.retained_id
+);
 DELETE FROM restore_messages WHERE id IN (SELECT source_id FROM restore_suppressed_echoes);
 
 DELETE FROM restore_messages
@@ -147,6 +210,15 @@ WHERE is_new=1 AND EXISTS (
   AND NOT EXISTS(SELECT 1 FROM restore_messages root WHERE root.id=a.canonical_id)
   AND NOT EXISTS(SELECT 1 FROM messages root WHERE root.id=a.canonical_id)
 );
+
+CREATE TEMP VIEW restore_own_echo_aliases AS
+SELECT echo_id,original_id FROM restore_witness_echoes
+UNION
+SELECT a.alias_id,a.canonical_id FROM message_canonical_aliases a
+JOIN messages e ON e.id=a.alias_id AND e.is_own=1 AND e.state='submitted'
+JOIN messages d ON d.id=a.canonical_id AND d.id=d.provider_id AND d.is_own=1
+  AND d.account_id=e.account_id AND d.conversation_id=e.conversation_id
+WHERE json_extract(e.payload,'$.OwnOriginID')=d.id;
 
 -- Supplemental protocol facts can change the display and shared-content index
 -- without making a message revision. Compare the same keys as the insertions.
@@ -178,6 +250,9 @@ WHERE NOT EXISTS (
 UPDATE restore_chats SET history_changed=1
 WHERE id IN (
   SELECT m.conversation_id FROM backup.messages m JOIN restore_messages r ON r.id=m.id AND r.is_new=1
+  UNION
+  SELECT b.conversation_id FROM restore_witness_echoes e JOIN backup.messages b ON b.id=e.original_id
+  WHERE NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=e.echo_id AND a.canonical_id=e.original_id)
   UNION
   SELECT m.conversation_id FROM messages m JOIN restore_message_metadata_changes r ON r.id=m.id
   UNION

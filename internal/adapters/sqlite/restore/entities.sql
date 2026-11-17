@@ -31,9 +31,32 @@ INSERT INTO accepted_direct_history
 SELECT a.* FROM backup.accepted_direct_history a JOIN restore_chats x ON x.id=a.conversation_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 
+-- A direct witness used the original wire ID as its provider key. Release the
+-- key for the native row while retaining the witness's scoped archive aliases.
+UPDATE messages AS d
+SET provider_id=CASE WHEN d.provider_id=e.original_id THEN '' ELSE d.provider_id END,
+    payload=json_set(d.payload,'$.OwnOriginID',e.original_id,'$.ProviderID',
+                     CASE WHEN d.provider_id=e.original_id THEN '' ELSE d.provider_id END)
+FROM restore_witness_echoes e WHERE d.id=e.echo_id
+AND (d.provider_id=e.original_id OR json_extract(d.payload,'$.OwnOriginID') IS NOT e.original_id);
+
 INSERT INTO messages SELECT m.* FROM backup.messages m JOIN restore_messages x ON x.id=m.id AND x.is_new=1;
 INSERT INTO message_revisions SELECT r.* FROM backup.message_revisions r JOIN restore_messages x ON x.id=r.entity_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
+INSERT INTO message_canonical_aliases(alias_id,canonical_id)
+SELECT echo_id,original_id FROM restore_witness_echoes WHERE TRUE ON CONFLICT(alias_id) DO NOTHING;
+
+-- A witness may already have an authenticated correction family. Keep its
+-- revisions and proof, while placing the content projection on the native ID.
+UPDATE message_canonical_aliases AS a SET canonical_id=e.original_id
+FROM restore_witness_echoes e WHERE a.canonical_id=e.echo_id AND a.alias_id<>e.original_id;
+INSERT INTO message_content_heads(canonical_id,source_id,revision_id,payload,edited_at)
+SELECT e.original_id,h.source_id,h.revision_id,
+       json_set(h.payload,'$.ID',e.original_id,'$.CreatedAt',json_extract(m.payload,'$.CreatedAt')),h.edited_at
+FROM restore_witness_echoes e JOIN message_content_heads h ON h.canonical_id=e.echo_id
+JOIN messages m ON m.id=e.original_id
+ORDER BY h.edited_at DESC,h.revision_id DESC ON CONFLICT(canonical_id) DO NOTHING;
+DELETE FROM message_content_heads WHERE canonical_id IN (SELECT echo_id FROM restore_witness_echoes);
 
 -- A terminal outbox entry still supplies timeline and cancellation evidence.
 INSERT INTO outbox SELECT o.* FROM backup.outbox o JOIN restore_messages x ON x.id=o.message_id AND x.is_new=1
@@ -67,6 +90,17 @@ INSERT INTO message_edit_commands SELECT e.* FROM backup.message_edit_commands e
 WHERE e.state IN ('submitted','failed') ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_correction_facts SELECT f.* FROM backup.message_correction_facts f JOIN restore_messages x ON x.id=f.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
+INSERT INTO message_correction_facts(message_id,scope,author,remote_id,target_id,source_hash,source_revision_id)
+SELECT e.original_id,f.scope,f.author,f.remote_id,'',f.source_hash,m.revision_id
+FROM restore_witness_echoes e JOIN message_correction_facts f ON f.message_id=e.echo_id AND f.target_id=''
+JOIN message_revisions p ON p.id=f.source_revision_id AND p.entity_id=f.message_id
+JOIN messages m ON m.id=e.original_id
+JOIN message_revisions r ON r.id=m.revision_id AND r.entity_id=m.id
+WHERE f.source_hash=COALESCE(NULLIF(json_extract(p.payload,'$.WireBodySHA256'),''),
+                            oie_source_hash(json_extract(p.payload,'$.OriginalText')))
+  AND f.source_hash=COALESCE(NULLIF(json_extract(r.payload,'$.WireBodySHA256'),''),
+                             oie_source_hash(json_extract(r.payload,'$.OriginalText')))
+ON CONFLICT DO NOTHING;
 
 INSERT INTO account_communication_preferences (account_id,revision_id,presence,send_typing)
 SELECT a.account_id,a.revision_id,a.presence,a.send_typing

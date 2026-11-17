@@ -12,7 +12,9 @@ import (
 const listMessageHistoryProofs = `-- name: ListMessageHistoryProofs :many
 WITH source_ids AS (
  SELECT CAST(?3 AS TEXT) AS id
- UNION SELECT alias_id AS id FROM message_canonical_aliases WHERE canonical_id=?3
+ UNION SELECT a.alias_id AS id FROM message_canonical_aliases a JOIN messages m ON m.id=a.alias_id
+ WHERE a.canonical_id=?3
+ AND NOT (m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID') IS a.canonical_id)
  LIMIT 129
 )
 SELECT f.message_id, f.scope, f.author, f.remote_id, f.target_id, f.source_hash, f.source_revision_id,r.payload AS proof_payload
@@ -75,7 +77,9 @@ func (q *Queries) ListMessageHistoryProofs(ctx context.Context, arg ListMessageH
 const listMessageHistorySources = `-- name: ListMessageHistorySources :many
 WITH source_ids AS (
  SELECT CAST(?3 AS TEXT) AS id
- UNION SELECT alias_id AS id FROM message_canonical_aliases WHERE canonical_id=?3
+ UNION SELECT a.alias_id AS id FROM message_canonical_aliases a JOIN messages m ON m.id=a.alias_id
+ WHERE a.canonical_id=?3
+ AND NOT (m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID') IS a.canonical_id)
  LIMIT 129
 )
 SELECT m.id AS source_id,r.id AS revision_id,r.payload,r.created_at

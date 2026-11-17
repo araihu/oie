@@ -12,6 +12,16 @@ import (
 )
 
 func TestBackupRestoreKeepsExpiredLegacyImageClaimAcrossReleasedUpgrade(t *testing.T) {
+	t.Run("expired before upgrade", func(t *testing.T) {
+		testBackupRestoreReleasedLegacyImageClaim(t, false)
+	})
+	t.Run("expired after upgrade", func(t *testing.T) {
+		testBackupRestoreReleasedLegacyImageClaim(t, true)
+	})
+}
+
+func testBackupRestoreReleasedLegacyImageClaim(t *testing.T, upgradeBeforeExpiry bool) {
+	t.Helper()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -68,23 +78,53 @@ func TestBackupRestoreKeepsExpiredLegacyImageClaimAcrossReleasedUpgrade(t *testi
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := destination.SetDownloadDays(ctx, device, 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := destination.PurgeDownloads(ctx, "", now, func() (domain.ID, error) { return migrationID(), nil }); err != nil {
-		t.Fatal(err)
-	}
-	if policy, err := destination.DownloadPolicy(ctx, device); err != nil || policy.Count != 0 || policy.Days != 1 || policy.Generation != 0 {
-		t.Fatalf("released retention did not expire the claimed image: %+v, %v", policy, err)
-	}
-	if err := mediafiles.New(images).Remove(preview.FileHash); err != nil {
-		t.Fatal(err)
-	}
-	if err := destination.CompleteDownloadGarbage(ctx, domain.DownloadGarbage{Kind: "image", Hash: preview.FileHash}, true); err != nil {
-		t.Fatal(err)
-	}
-	destination = upgradeDownloadFixture(t, destination, 0)
 	archive, database, scratch := backupRestoreFixture(t, source, true)
+	if upgradeBeforeExpiry {
+		destination = upgradeDownloadFixture(t, destination, 0)
+		metadata, metadataDB, metadataScratch := backupRestoreFixture(t, destination, false)
+		relay := openLegacyDownloadDestination(t)
+		if _, err := relay.mergeBackup(ctx, metadataDB, metadataScratch, metadata, now); err != nil {
+			t.Fatal(err)
+		}
+		if result, err := relay.mergeBackup(ctx, database, scratch, archive, now); err != nil || result.MediaFiles != 0 {
+			t.Fatalf("metadata re-export lost the released Settings claim: %+v, %v", result, err)
+		}
+		host := testRestoreEngine(t, destination)
+		host.SetPreviewServices(nil, mediafiles.New(images))
+		if policy, err := host.SetDownloadPolicy(ctx, device, 1, false); err != nil || policy.Count != 0 || policy.Days != 1 || policy.Generation != 0 {
+			t.Fatalf("current Settings did not expire the claimed image: %+v, %v", policy, err)
+		}
+	} else {
+		// Released retention detaches the preview without a durable claim.
+		if err := destination.SetDownloadDays(ctx, device, 1); err != nil {
+			t.Fatal(err)
+		}
+		tx, q, err := begin(ctx, destination)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		removed, err := q.DropExpiredDownloads(ctx, now.UnixMilli())
+		if err != nil || len(removed) != 1 || removed[0].SourceID != string(preview.ID) {
+			t.Fatalf("released retention did not remove the claimed membership: %+v, %v", removed, err)
+		}
+		if err := detachDownloadedImage(ctx, q, removed[0].SourceID, now, func() (domain.ID, error) { return migrationID(), nil }); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		if policy, err := destination.DownloadPolicy(ctx, device); err != nil || policy.Count != 0 || policy.Days != 1 || policy.Generation != 0 {
+			t.Fatalf("released retention did not expire the claimed image: %+v, %v", policy, err)
+		}
+		if err := mediafiles.New(images).Remove(preview.FileHash); err != nil {
+			t.Fatal(err)
+		}
+		if err := destination.CompleteDownloadGarbage(ctx, domain.DownloadGarbage{Kind: "image", Hash: preview.FileHash}, true); err != nil {
+			t.Fatal(err)
+		}
+		destination = upgradeDownloadFixture(t, destination, 0)
+	}
 	if err := checkRestoreDatabase(ctx, database); err != nil {
 		t.Fatal(err)
 	}
@@ -112,5 +152,42 @@ func TestBackupRestoreKeepsExpiredLegacyImageClaimAcrossReleasedUpgrade(t *testi
 	}
 	if policy, err := destination.DownloadPolicy(ctx, "legacy"); err != nil || policy.Count != 1 {
 		t.Fatalf("more than the separate membership was restored: %+v, %v", policy, err)
+	}
+}
+
+func TestBackupRestoreKeepsCurrentNamedImageExpiryAcrossReexport(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	oldAt := now.AddDate(0, 0, -2)
+	const address = "https://example.invalid/claimed.png"
+	message := replySeed(t, source, chat, address, oldAt, nil, nil)
+	destination := copyRestoreFixture(t, source)
+	archived, staleDevice := seedBackupDownloadedImageForMessage(t, source, message, address, oldAt)
+	local, device := seedBackupDownloadedImageForMessage(t, destination, message, address, oldAt)
+	if local.ID == archived.ID || local.FileHash != archived.FileHash {
+		t.Fatal("fixture must have independently indexed the same original")
+	}
+	if err := source.queries.EnsureDownloadDevice(ctx, "legacy"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.db.ExecContext(ctx, "UPDATE device_downloads SET device_id='legacy' WHERE device_id=?", staleDevice); err != nil {
+		t.Fatal(err)
+	}
+	host := testRestoreEngine(t, destination)
+	host.SetPreviewServices(nil, mediafiles.New(filepath.Join(destination.dir, "media", "images")))
+	if policy, err := host.SetDownloadPolicy(ctx, device, 1, false); err != nil || policy.Count != 0 || policy.Generation != 0 {
+		t.Fatalf("Settings did not expire the named image: %+v, %v", policy, err)
+	}
+	metadata, metadataDB, metadataScratch := backupRestoreFixture(t, destination, false)
+	relay := openLegacyDownloadDestination(t)
+	if _, err := relay.mergeBackup(ctx, metadataDB, metadataScratch, metadata, now); err != nil {
+		t.Fatal(err)
+	}
+	stale, staleDB, staleScratch := backupRestoreFixture(t, source, true)
+	for _, store := range []*Store{destination, relay} {
+		if result, err := store.mergeBackup(ctx, staleDB, staleScratch, stale, now); err != nil || result.MediaFiles != 0 {
+			t.Fatalf("stale archive revived the expired membership: %+v, %v", result, err)
+		}
 	}
 }

@@ -38,35 +38,50 @@ WHERE (NOT has_attachments AND echo_hash=retained_hash)
             OR oie_attachment_wire_matches(json_extract(r.payload,'$.OriginalText'),json_extract(r.payload,'$.AttachmentWireText'),
                json_extract(r.payload,'$.WireBodySHA256'),e.echo_body)=1)
    );
+CREATE UNIQUE INDEX restore_represented_echoes_source ON restore_represented_echoes(source_id);
 
 CREATE TEMP VIEW restore_represented_echo_references AS
-SELECT e.source_id,e.retained_id,e.conversation_id,r.scope,r.remote_id,r.author,e.retained_hash,e.echo_hash
+SELECT e.source_id,e.retained_id,e.conversation_id,r.scope,r.remote_id,r.author,e.retained_hash,e.echo_hash,
+       EXISTS (
+           SELECT 1 FROM message_references local
+           JOIN messages owner ON owner.id=local.message_id AND owner.account_id=e.account_id AND owner.conversation_id=e.conversation_id
+           WHERE local.scope=r.scope AND local.remote_id=r.remote_id AND local.message_id<>e.retained_id
+       ) AS conflicting_owner
 FROM restore_represented_echoes e JOIN backup.message_references r ON r.message_id=e.source_id
 WHERE r.source_hash=e.echo_hash AND r.remote_id<>''
   AND ((e.kind='room' AND r.scope='room:'||e.address AND instr(r.author,e.address||'/')=1)
        OR (e.kind='direct' AND r.scope='sender:'||e.account_address AND r.author=e.account_address));
 
+-- Keep already-retained owners of scoped references and admit other identifiers independently.
 UPDATE restore_chats SET history_changed=1 WHERE id IN (
   SELECT e.conversation_id FROM restore_represented_echo_references e
-  WHERE NOT EXISTS (
+  WHERE NOT e.conflicting_owner AND (NOT EXISTS (
     SELECT 1 FROM message_references r WHERE r.message_id=e.retained_id AND r.scope=e.scope
       AND r.remote_id=e.remote_id AND r.author=e.author AND r.source_hash=e.retained_hash
   ) OR (e.echo_hash<>e.retained_hash AND EXISTS (
     SELECT 1 FROM message_references r WHERE r.message_id=e.retained_id AND r.scope=e.scope
       AND r.remote_id=e.remote_id AND r.author=e.author AND r.source_hash=e.echo_hash
-  ))
+  )))
 );
 DELETE FROM message_references WHERE (message_id,scope,remote_id,author,source_hash) IN (
-  SELECT retained_id,scope,remote_id,author,echo_hash FROM restore_represented_echo_references WHERE echo_hash<>retained_hash
+  SELECT retained_id,scope,remote_id,author,echo_hash FROM restore_represented_echo_references
+  WHERE NOT conflicting_owner AND echo_hash<>retained_hash
 );
 INSERT INTO message_references(message_id,scope,remote_id,author,source_hash)
 SELECT retained_id,scope,remote_id,author,retained_hash FROM restore_represented_echo_references
-WHERE TRUE ON CONFLICT DO NOTHING;
+WHERE NOT conflicting_owner ON CONFLICT DO NOTHING;
 
 INSERT INTO archive_aliases(account_id,scope,archive_id,message_id)
 SELECT a.account_id,a.scope,a.archive_id,e.retained_id
 FROM restore_represented_echoes e JOIN backup.archive_aliases a ON a.message_id=e.source_id AND a.account_id=e.account_id
+JOIN backup.messages packet ON packet.id=e.source_id
 WHERE a.archive_id<>'' AND (a.scope=e.account_address OR (e.kind='room' AND a.scope=e.address))
+  -- A replay of the archived packet could otherwise reattach its conflicting reference.
+  AND NOT (a.scope=COALESCE(json_extract(packet.payload,'$.ArchiveScope'),'')
+       AND a.archive_id=COALESCE(json_extract(packet.payload,'$.ArchiveID'),'')
+       AND EXISTS (
+           SELECT 1 FROM restore_represented_echo_references r WHERE r.source_id=e.source_id AND r.conflicting_owner
+       ))
 ON CONFLICT DO NOTHING;
 
 -- References of source messages excluded by the destination can be needed

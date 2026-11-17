@@ -121,6 +121,19 @@ JOIN device_downloads assigned ON assigned.device_id=sqlc.arg(device_id) AND ass
 WHERE legacy.device_id='legacy' AND legacy.kind='image' AND legacy.hash<>'' AND legacy.size>=0
 ON CONFLICT DO NOTHING;
 
+-- name: RecordRetiredImageMembership :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,sqlc.arg(source_revision),sqlc.arg(hash),sqlc.arg(size)
+FROM message_previews p
+WHERE p.id=sqlc.arg(source_id) AND json_extract(p.payload,'$.Kind')='image' AND sqlc.arg(size)>0
+  AND length(sqlc.arg(hash))=64 AND sqlc.arg(hash) NOT GLOB '*[^0-9a-f]*'
+  AND NOT EXISTS (
+    SELECT 1 FROM device_downloads legacy WHERE legacy.device_id='legacy' AND legacy.kind='image'
+      AND legacy.source_id=p.id AND legacy.source_revision=sqlc.arg(source_revision)
+      AND legacy.hash=sqlc.arg(hash) AND legacy.size=sqlc.arg(size)
+  )
+ON CONFLICT DO NOTHING;
+
 -- name: RemoveLegacyDownloadDevice :exec
 DELETE FROM download_devices WHERE device_id='legacy';
 

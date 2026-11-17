@@ -148,6 +148,9 @@ func selectRestoredMessageRevision(ctx context.Context, q *dbgen.Queries, id, re
 		return errors.New("invalid message revision in backup")
 	}
 	next.ProviderID, next.ArchiveID, next.ArchiveScope = current.ProviderID, current.ArchiveID, current.ArchiveScope
+	if current.OwnOriginID != "" {
+		next.OwnOriginID = current.OwnOriginID
+	}
 	if next.IsOwn != current.IsOwn {
 		next.Sender.ID = current.Sender.ID
 	}

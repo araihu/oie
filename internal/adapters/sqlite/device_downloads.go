@@ -161,11 +161,20 @@ func (s *Store) PurgeDownloads(ctx context.Context, device domain.ID, now time.T
 	}
 	images := map[string]bool{}
 	for _, row := range removed {
-		if row.Kind == "image" && !images[row.SourceID] {
-			if err = detachDownloadedImage(ctx, q, row.SourceID, now, newID); err != nil {
-				return err
+		if row.Kind == "image" {
+			if row.DeviceID != "" && row.DeviceID != "legacy" && row.Hash != "" {
+				if err := q.RecordRetiredImageMembership(ctx, dbgen.RecordRetiredImageMembershipParams{
+					SourceID: row.SourceID, SourceRevision: row.SourceRevision, Hash: row.Hash, Size: row.Size,
+				}); err != nil {
+					return err
+				}
 			}
-			images[row.SourceID] = true
+			if !images[row.SourceID] {
+				if err = detachDownloadedImage(ctx, q, row.SourceID, now, newID); err != nil {
+					return err
+				}
+				images[row.SourceID] = true
+			}
 		}
 		if row.Hash != "" {
 			if err = q.QueueDownloadGarbage(ctx, dbgen.QueueDownloadGarbageParams{Kind: row.Kind, Hash: row.Hash}); err != nil {

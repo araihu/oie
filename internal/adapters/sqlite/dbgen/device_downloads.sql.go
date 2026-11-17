@@ -508,6 +508,37 @@ func (q *Queries) RecordClaimedLegacyImages(ctx context.Context, deviceID string
 	return err
 }
 
+const recordRetiredImageMembership = `-- name: RecordRetiredImageMembership :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,?1,?2,?3
+FROM message_previews p
+WHERE p.id=?4 AND json_extract(p.payload,'$.Kind')='image' AND ?3>0
+  AND length(?2)=64 AND ?2 NOT GLOB '*[^0-9a-f]*'
+  AND NOT EXISTS (
+    SELECT 1 FROM device_downloads legacy WHERE legacy.device_id='legacy' AND legacy.kind='image'
+      AND legacy.source_id=p.id AND legacy.source_revision=?1
+      AND legacy.hash=?2 AND legacy.size=?3
+  )
+ON CONFLICT DO NOTHING
+`
+
+type RecordRetiredImageMembershipParams struct {
+	SourceRevision string
+	Hash           string
+	Size           int64
+	SourceID       string
+}
+
+func (q *Queries) RecordRetiredImageMembership(ctx context.Context, arg RecordRetiredImageMembershipParams) error {
+	_, err := q.db.ExecContext(ctx, recordRetiredImageMembership,
+		arg.SourceRevision,
+		arg.Hash,
+		arg.Size,
+		arg.SourceID,
+	)
+	return err
+}
+
 const removeDownloadGarbage = `-- name: RemoveDownloadGarbage :exec
 DELETE FROM download_garbage WHERE kind=? AND hash=?
 `

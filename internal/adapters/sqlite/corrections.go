@@ -159,11 +159,38 @@ func recordCorrectionMetadata(ctx context.Context, q *dbgen.Queries, id string, 
 		return nil
 	}
 	c := in.Correction
-	n, err := q.InsertCorrectionFact(ctx, dbgen.InsertCorrectionFactParams{MessageID: id, Scope: c.Scope, Author: c.Author, RemoteID: c.ID, TargetID: c.TargetID, SourceHash: in.SourceBodyHash(), SourceRevisionID: string(raw.RevisionID)})
+	fact := dbgen.InsertCorrectionFactParams{MessageID: id, Scope: c.Scope, Author: c.Author, RemoteID: c.ID, TargetID: c.TargetID, SourceHash: in.SourceBodyHash(), SourceRevisionID: string(raw.RevisionID)}
+	n, err := q.InsertCorrectionFact(ctx, fact)
+	if err != nil {
+		return err
+	}
+	mirrored, err := mirrorOwnEchoCorrectionFact(ctx, q, raw, fact)
+	n += mirrored
 	if err != nil || n == 0 {
 		return err
 	}
 	return reconcileCorrections(ctx, q, raw, c)
+}
+
+func mirrorOwnEchoCorrectionFact(ctx context.Context, q *dbgen.Queries, echo domain.Message, fact dbgen.InsertCorrectionFactParams) (int64, error) {
+	if !echo.IsOwn || echo.SendState != "submitted" || echo.OwnOriginID == "" || fact.TargetID != "" || fact.SourceHash != echo.SourceBodyHash() {
+		return 0, nil
+	}
+	originalID, err := resolveMessageAlias(ctx, q, echo.ID)
+	if err != nil || originalID == echo.ID || originalID != echo.OwnOriginID {
+		return 0, err
+	}
+	row, err := q.GetMessage(ctx, string(originalID))
+	if err != nil {
+		return 0, err
+	}
+	original, err := decodeMessage(row)
+	if err != nil || !original.IsOwn || original.ProviderID != string(originalID) || original.SourceBodyHash() != fact.SourceHash ||
+		original.AccountID != echo.AccountID || original.ConversationID != echo.ConversationID {
+		return 0, err
+	}
+	fact.MessageID, fact.SourceRevisionID = string(original.ID), string(original.RevisionID)
+	return q.InsertCorrectionFact(ctx, fact)
 }
 
 type correctionNode struct {
