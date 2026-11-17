@@ -1,5 +1,6 @@
--- The destination can retain the original even if the archive redacted it.
--- Restore only numeric spans over the existing copy of the verified wire body.
+-- The destination can keep the wire body or recover the quoted original later.
+-- Restore numeric spans over the verified local wire body as soon as the
+-- matching archive supplies the surviving answer.
 CREATE TEMP TABLE restore_reply_fallbacks AS
 SELECT d.message_id,d.body_hash,m.conversation_id,COALESCE(a.canonical_id,m.id) AS canonical_id,
        oie_restore_reply_fallback(json_extract(local.payload,'$.OriginalText'),min(json_extract(redacted.payload,'$.OriginalText'))) AS spans
@@ -19,14 +20,6 @@ WHERE COALESCE(json_array_length(json_extract(d.payload,'$.Fallback')),0)=0
   AND COALESCE(json_type(local.payload,'$.OutboundReply'),'null')='null'
   AND COALESCE(json_extract(local.payload,'$.WireBodySHA256'),'')=''
   AND oie_source_hash(json_extract(local.payload,'$.OriginalText'))=d.body_hash
-  AND EXISTS (
-      SELECT 1 FROM message_references ref JOIN messages target ON target.id=ref.message_id
-      WHERE target.account_id=m.account_id AND target.conversation_id=m.conversation_id AND target.id<>m.id
-        AND ref.remote_id=json_extract(b.payload,'$.Target.ID')
-        AND (json_extract(b.payload,'$.Target.Scope')='' OR ref.scope=json_extract(b.payload,'$.Target.Scope'))
-        AND (json_extract(b.payload,'$.Target.Author')='' OR ref.author=json_extract(b.payload,'$.Target.Author'))
-        AND ref.source_hash=COALESCE(NULLIF(json_extract(target.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(target.payload,'$.OriginalText')))
-  )
 GROUP BY d.message_id,d.body_hash,m.conversation_id,canonical_id,json_extract(local.payload,'$.OriginalText')
 HAVING count(DISTINCT json_extract(redacted.payload,'$.OriginalText'))=1 AND spans IS NOT NULL;
 

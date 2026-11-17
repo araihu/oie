@@ -14,19 +14,21 @@ ON CONFLICT(id) DO NOTHING;
 -- A device's cleanup branch and a membership's own proof are independent.
 -- A surviving download on a profile that merged a cleanup keeps its old proof.
 CREATE TEMP TABLE restore_eligible_downloads AS
-SELECT f.*, COALESCE(proof.cleanup_revision_id,'') AS cleanup_revision_id
+SELECT f.*, CASE
+    WHEN proof.cleanup_revision_id IS NOT NULL THEN proof.cleanup_revision_id
+    WHEN source.generation>0 AND source.has_membership_proofs=0 THEN ''
+END AS cleanup_revision_id
 FROM backup.device_downloads f
 JOIN restore_download_devices source ON source.device_id=f.device_id
 LEFT JOIN download_devices destination ON destination.device_id=f.device_id
 LEFT JOIN download_cleanup_revisions cleanup ON cleanup.device_id=f.device_id AND cleanup.generation=destination.generation
 LEFT JOIN restore_download_membership_proofs proof ON proof.device_id=f.device_id AND proof.source_id=f.source_id
     AND proof.source_revision=f.source_revision AND proof.kind=f.kind
-    AND proof.cleanup_revision_id=source.cleanup_revision
 JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
     AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
 WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision))
-  AND (source.generation=0 OR proof.cleanup_revision_id IS NOT NULL
-       OR (COALESCE(destination.generation,0)=0 AND source.has_membership_proofs=0))
+  AND (source.generation=0 OR (proof.cleanup_revision_id<>'' AND proof.cleanup_revision_id=source.cleanup_revision)
+       OR (COALESCE(destination.generation,0)=0 AND (source.has_membership_proofs=0 OR proof.cleanup_revision_id='')))
   -- Settings claims legacy originals before clearing the real device.
   -- Older archives lack the identity of the device that claimed them.
   AND (f.device_id<>'legacy' OR NOT EXISTS (

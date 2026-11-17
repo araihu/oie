@@ -29,7 +29,7 @@ func TestBackupRestoreReconcilesInterruptedClaimsBeforeWire(t *testing.T) {
 		}
 		claims[message.ID] = claim
 	}
-	if err := destination.RecordOriginalWireAttempt(ctx, wireStarted.ID, claims[wireStarted.ID].RevisionID, ""); err != nil {
+	if err := destination.RecordOriginalWireAttempt(ctx, wireStarted.ID, claims[wireStarted.ID].RevisionID, application.Outgoing{OriginalText: wireStarted.OriginalText}, ""); err != nil {
 		t.Fatal(err)
 	}
 

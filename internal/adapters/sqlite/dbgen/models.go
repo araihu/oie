@@ -286,6 +286,13 @@ type HistoryStatus struct {
 	Payload   string
 }
 
+type LegacyDownloadMembership struct {
+	DeviceID       string
+	SourceID       string
+	SourceRevision string
+	Kind           string
+}
+
 type MediaFile struct {
 	Hash      string
 	MimeType  string

@@ -42,6 +42,9 @@ FROM restore_downloads;
 INSERT INTO download_membership_cleanup_revisions(device_id,source_id,source_revision,kind,cleanup_revision_id)
 SELECT device_id,source_id,source_revision,kind,cleanup_revision_id FROM restore_downloads WHERE cleanup_revision_id<>'';
 
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT device_id,source_id,source_revision,kind FROM restore_downloads WHERE cleanup_revision_id='';
+
 DROP TABLE restore_downloads;
 DROP TABLE restore_download_devices;
 DROP TABLE restore_download_cleanup_parents;

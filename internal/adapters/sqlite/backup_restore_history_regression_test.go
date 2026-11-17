@@ -218,6 +218,14 @@ func TestBackupRestoreUsesDiscardedReferenceWithinDestinationRetention(t *testin
 			if got, err := tc.store.Message(ctx, original.ID); err != nil || got.OriginalText != secret {
 				t.Fatalf("discarded reference blocked recovery of the original: %+v, %v", got, err)
 			}
+			got, err = tc.store.Message(ctx, reply.ID)
+			if err != nil || got.Reply == nil || !got.Reply.Available ||
+				got.Reply.MessageID != original.ID || got.Reply.Excerpt != secret || got.Reply.BodyText != answer {
+				t.Fatalf("reply did not project correctly after the original was recovered: %+v, %v", got.Reply, err)
+			}
+			if !tc.wantScrub && (got.OriginalText != quote+answer || got.RevisionID != reply.RevisionID) {
+				t.Fatalf("recovering the fallback changed the destination wire body: %+v", got)
+			}
 		})
 	}
 }

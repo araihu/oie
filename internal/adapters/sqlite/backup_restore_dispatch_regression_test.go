@@ -111,7 +111,7 @@ func checkResumedSendObservation(t *testing.T, observe func(*testing.T, *Store, 
 		t.Errorf("resumed original still appears ready after authenticated evidence: %+v, %v", due, err)
 	}
 	if claimedBeforeObservation {
-		if err := dest.RecordOriginalWireAttempt(ctx, pending.ID, claimedRevision, ""); !errors.Is(err, application.ErrStateConflict) {
+		if err := dest.RecordOriginalWireAttempt(ctx, pending.ID, claimedRevision, application.Outgoing{OriginalText: pending.OriginalText}, ""); !errors.Is(err, application.ErrStateConflict) {
 			t.Errorf("worker advanced an already-observed send to the wire: %v", err)
 		}
 	} else if claimed, err := dest.ClaimDispatchMessage(ctx, pending.ID, claimedRevision, "", migrationID(), now, true); !errors.Is(err, application.ErrStateConflict) {
@@ -136,7 +136,7 @@ func TestBackupRestoreManagedAttemptCannotRetryAfterAuthenticatedEvidence(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := dest.RecordOriginalWireAttempt(ctx, claimed.ID, claimed.RevisionID, ""); err != nil {
+			if err := dest.RecordOriginalWireAttempt(ctx, claimed.ID, claimed.RevisionID, application.Outgoing{OriginalText: claimed.OriginalText}, ""); err != nil {
 				t.Fatal(err)
 			}
 			tc.observe(t, dest, chat, pending, now)

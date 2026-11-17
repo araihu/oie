@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, hasDownloadCleanup, hasDownloadLineage bool, now time.Time) ([]string, error) {
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads bool, now time.Time) ([]string, error) {
 	if _, err := tx.ExecContext(ctx, restoreScript("media_download_devices")); err != nil {
 		return nil, fmt.Errorf("read backup download devices: %w", err)
 	}
@@ -30,6 +30,11 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, fi
 	if hasDownloadLineage {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_lineage")); err != nil {
 			return nil, fmt.Errorf("read backup download membership and cleanup lineage: %w", err)
+		}
+	}
+	if hasLegacyDownloads {
+		if _, err := tx.ExecContext(ctx, restoreScript("media_download_legacy")); err != nil {
+			return nil, fmt.Errorf("read legacy download memberships: %w", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata"),

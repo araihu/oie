@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 44
+	newestRestoreSchema = 45
 )
 
 type RestoreSummary struct {
@@ -125,8 +125,9 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if hasRecoveredRows && !recoveredSchemaValid {
 		return result, errors.New("backup has an invalid recovered sends schema")
 	}
-	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, hasDownloadCleanup, hasDownloadLineage, extendedSchemaValid bool
-	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes, &hasDownloadCleanup, &hasDownloadLineage, &extendedSchemaValid); err != nil {
+	var hasDeletedAccounts, hasRecoveredHistory, hasOwnEchoes, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, extendedSchemaValid bool
+	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &hasOwnEchoes,
+		&hasDownloadCleanup, &hasDownloadLineage, &hasLegacyDownloads, &extendedSchemaValid); err != nil {
 		return result, err
 	}
 	if !extendedSchemaValid {
@@ -217,7 +218,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files, hasDownloadCleanup, hasDownloadLineage, now)
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, now)
 	if err != nil {
 		return result, err
 	}

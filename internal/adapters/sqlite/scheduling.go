@@ -166,7 +166,7 @@ func (s *Store) UpdatePendingMessage(ctx context.Context, in application.Pending
 	return application.MessageResult{Message: m}, tx.Commit()
 }
 
-func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision domain.ID, attachmentBody string) error {
+func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision domain.ID, frozen application.Outgoing, attachmentBody string) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -185,6 +185,13 @@ func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision doma
 	}
 	if m.RevisionID != revision || m.SendState != "dispatching" {
 		return application.StateConflict{Current: m}
+	}
+	current := m
+	if err := hydrateReply(ctx, q, &current); err != nil {
+		return err
+	}
+	if !frozen.MatchesOriginalContent(current) {
+		return application.StateConflict{Current: current}
 	}
 	if attachmentBody != "" {
 		m.AttachmentWireText = attachmentBody

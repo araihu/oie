@@ -51,11 +51,34 @@ func quotedReplyPrefix(plan *domain.OutboundReply) string {
 func quotedReplyBody(plan *domain.OutboundReply) string {
 	return quotedReplyPrefix(plan) + plan.BodyText
 }
+
+func outgoingReplyContent(m domain.Message) (string, *domain.ReplyReference) {
+	if m.Reply != nil && m.Reply.OriginalExpired {
+		return m.Reply.BodyText, nil
+	}
+	if m.OutboundReply != nil && m.OutboundReply.Reference != nil {
+		return m.OriginalText, &domain.ReplyReference{Target: *m.OutboundReply.Reference, Fallback: slices.Clone(m.OutboundReply.Fallback)}
+	}
+	return m.OriginalText, nil
+}
+
+// MatchesOriginalContent checks the text and reply bound at the dispatch claim.
+func (out Outgoing) MatchesOriginalContent(m domain.Message) bool {
+	body, reply := outgoingReplyContent(m)
+	if out.OriginalText != body {
+		return false
+	}
+	if out.Reply == nil || reply == nil {
+		return out.Reply == reply
+	}
+	return out.Reply.Target == reply.Target && slices.Equal(out.Reply.Fallback, reply.Fallback)
+}
+
 func outgoingMessage(m domain.Message, c domain.Conversation) Outgoing {
-	out := Outgoing{ID: m.ID, Address: c.Address, OriginalText: m.OriginalText, Kind: c.Kind}
+	body, reply := outgoingReplyContent(m)
+	out := Outgoing{ID: m.ID, Address: c.Address, OriginalText: body, Kind: c.Kind, Reply: reply}
 	out.Mentions = slices.Clone(m.Mentions)
 	if m.Reply != nil && m.Reply.OriginalExpired {
-		out.OriginalText = m.Reply.BodyText
 		return out
 	}
 	if m.OutboundReply != nil {
@@ -64,9 +87,6 @@ func outgoingMessage(m domain.Message, c domain.Conversation) Outgoing {
 			out.Mentions[i].Begin += offset
 			out.Mentions[i].End += offset
 		}
-	}
-	if m.OutboundReply != nil && m.OutboundReply.Reference != nil {
-		out.Reply = &domain.ReplyReference{Target: *m.OutboundReply.Reference, Fallback: append([]domain.TextRange(nil), m.OutboundReply.Fallback...)}
 	}
 	return out
 }
