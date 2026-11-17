@@ -16,6 +16,7 @@ const engine=id(1),account=id(2),chat=id(3);
   const write=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   const problem=(code,type,currentMessage)=>write(code,{type:'urn:oie:problem:'+type,title:'Problem',code:type,status:code,currentMessage});
   let raw='';for await(const chunk of req)raw+=chunk;let input={};try{if(raw)input=JSON.parse(raw)}catch{return problem(400,'invalid_request')}
+  if(u.pathname==='/api/v1/engine'&&state.engineDenied){res.statusCode=401;res.setHeader('Content-Type','application/problem+json');return res.end('{')}
   if(u.pathname==='/api/v1/engine')return state.engineDown ? problem(503,'unavailable') :
    write(200,{id:engine,role:'hosted',apiVersion:'0.2.0',eventCursor:engine+':'+state.seq});
   if(u.pathname==='/api/v1/accounts')return write(200,{items:[accountData]});

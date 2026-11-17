@@ -25,6 +25,42 @@
     void worker.then(registration => registration?.active?.postMessage(data)).catch(() => {});
   };
 
+  window.OieOfflineHistory = {
+    observe(action, response) {
+      const url = new URL(action, location.href);
+      const engine = document.body.dataset.engineId;
+      if (url.origin !== location.origin || url.pathname !== '/' || !uuid(engine)) return;
+      const identity = response.headers.get('X-Oie-Offline-History');
+      if (identity === 'denied') {
+        publish({type: 'oie:offline-history-clear', engine, blocked: true});
+      } else if (response.status === 404 && identity === engine && !url.searchParams.has('notificationEngine')) {
+        const chat = url.searchParams.get('chat');
+        const account = url.searchParams.get('account');
+        if (uuid(chat) && (account === null || uuid(account))) publish({
+          type: 'oie:offline-history-invalidate', engine, account, chat,
+          through: response.headers.get('X-Oie-Offline-Cursor'), confirmedMissing: true,
+        });
+      }
+    },
+    fallback(action, current, replace, onFailure) {
+      if (!navigator.serviceWorker.controller) return false;
+      const url = new URL(action, location.href);
+      const query = url.searchParams;
+      if (url.origin !== location.origin || url.pathname !== '/' ||
+          !['chats', 'archived'].includes(query.get('section') || 'chats') ||
+          query.has('open') || query.has('searchQuery')) return false;
+      void read().catch(() => null).then(state => {
+        if (!current()) return;
+        if (!state || state.engine !== document.body.dataset.engineId || !state.entries.length) {
+          onFailure();
+          return;
+        }
+        location[replace ? 'replace' : 'assign'](url.href);
+      });
+      return true;
+    },
+  };
+
   function snapshot(scope, header, timeline) {
     const {engineId, accountId, conversationId, eventCursor, contextMissing} = scope.dataset;
     if (!uuid(engineId) || window.OieEvents?.replaced || window.OieRuntime?.memory.get('device-reset')) return;
@@ -68,7 +104,10 @@
     const root = document.getElementById('oie-app');
     if (root) snapshot(root);
   });
-  window.addEventListener('oie:device-reset', () => publish({type: 'oie:offline-history-clear'}));
+  window.addEventListener('oie:device-reset', () => {
+    const engine = document.body.dataset.engineId;
+    if (uuid(engine)) publish({type: 'oie:offline-history-clear', engine, blocked: true});
+  });
   const events = window.OieEvents?.target;
   if (events) {
     const findScope = {
@@ -79,12 +118,15 @@
         ? {account: historyPruned.accountId, chat: historyPruned.conversationId} : null,
       'message.updated': ({message}) => message ? {account: message.accountId, chat: message.conversationId} : null,
     };
-    for (const [type, scope] of Object.entries(findScope)) {
+    for (const type of window.OieEvents.eventTypes) {
       events.addEventListener(type, ({detail: event}) => {
+        const engine = document.body.dataset.engineId;
+        const through = event.lastEventId;
         try {
-          const target = scope(JSON.parse(event.data));
-          if (uuid(target?.account)) publish({type: 'oie:offline-history-invalidate',
-            engine: document.body.dataset.engineId, through: event.lastEventId, ...target});
+          const target = findScope[type]?.(JSON.parse(event.data));
+          publish(uuid(target?.account)
+            ? {type: 'oie:offline-history-invalidate', engine, through, ...target}
+            : {type: 'oie:offline-history-progress', engine, through});
         } catch {}
       });
     }
@@ -92,7 +134,7 @@
       publish({type: 'oie:offline-history-clear', engine: document.body.dataset.engineId, through});
     });
     events.addEventListener('engine-changed', () => publish({
-      type: 'oie:offline-history-clear', engine: document.body.dataset.engineId,
+      type: 'oie:offline-history-clear', engine: document.body.dataset.engineId, blocked: true,
     }));
   }
 
@@ -159,7 +201,8 @@
     title.textContent = entry.title;
     const list = document.getElementById('offline-messages');
     const template = document.getElementById('offline-message');
-    const format = new Intl.DateTimeFormat(lang, {dateStyle: 'short', timeStyle: 'short'});
+    const dateOptions = {dateStyle: 'short', timeStyle: 'short'};
+    const format = window.OieTime?.format ?? (date => new Intl.DateTimeFormat(lang, dateOptions).format(date));
     let target;
     for (const item of entry.messages) {
       const row = template.content.firstElementChild.cloneNode(true);
@@ -169,7 +212,7 @@
       const time = row.querySelector('time');
       time.dateTime = item.date;
       const date = new Date(item.date);
-      if (Number.isFinite(date.getTime())) time.textContent = format.format(date);
+      if (Number.isFinite(date.getTime())) time.textContent = format(date, dateOptions);
       list.append(row);
       if (item.id === message) target = row;
     }

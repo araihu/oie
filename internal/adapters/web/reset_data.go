@@ -49,5 +49,6 @@ func (s *Server) resetData(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1, HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode})
 	}
 	w.Header().Set("Clear-Site-Data", `"cache"`)
+	w.Header().Set("X-Oie-Reset-Engine", id)
 	w.WriteHeader(http.StatusNoContent)
 }

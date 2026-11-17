@@ -432,6 +432,11 @@
   if(root!==app()||failedEpoch!==epoch||!root?.dataset.routeError)return;
   window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:root.dataset.routeError}}));
  }
+ function offlineFallback(ctx){
+  if(!['conversation-pane',routeID,'oie-app',inboxID].includes(ctx.oieKind)||ctx.request.method.toUpperCase()!=='GET')return false;
+  const current=()=>ctx.oieEpoch===epoch&&document.getElementById(ctx.oieKind)===ctx.target;
+  return window.OieOfflineHistory?.fallback(ctx.request.action,current,ctx.oieHistory,()=>showError(ctx))??false;
+ }
  function upgrade(root=document,process=true){if(!root)return;for(const node of root.querySelectorAll('a[href],form')){
   if(node.closest('[data-quick-search]')||node.matches('[data-global-search-form],[data-message-search-filter],[data-conversation-search-close],[data-open-sender],[data-room-invitation],[data-room-entry-open],a[download],a[target]:not([target="_self"])')||node.hasAttribute('hx-get')||node.hasAttribute('hx-post'))continue;
   const form=node.tagName==='FORM';if(form&&(node.method||'get').toLowerCase()!=='get')continue;
@@ -570,10 +575,9 @@
   if(ctx.oieInfoCancelled){event.preventDefault();return;}
   if(!ctx.oieKind)return;if(ctx.oieEpoch!==epoch){event.preventDefault();return}
   if(pendingConversation?.ctx===ctx)clearTimeout(pendingConversation.timer);
-  if(['conversation-pane',routeID,'oie-app'].includes(ctx.oieKind)&&ctx.response?.raw?.headers.get('X-Oie-Offline-History')==='fallback'){
-   event.preventDefault();
-   if(ctx.oieHistory)location.replace(ctx.request.action);else location.assign(ctx.request.action);
-   return;
+  if(ctx.response?.raw&&ctx.request.method.toUpperCase()==='GET')window.OieOfflineHistory?.observe(ctx.request.action,ctx.response.raw);
+  if(ctx.response?.raw?.headers.get('X-Oie-Offline-History')==='unavailable'&&offlineFallback(ctx)){
+   event.preventDefault();return;
   }
   if(ctx.oieKind==='conversation-pane'){
    if(!conversationResponse(ctx)){event.preventDefault();showError(ctx);}
@@ -824,6 +828,7 @@
  document.addEventListener('htmx:error',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind||ctx.oieInfoCancelled||ctx.oieEpoch!==epoch)return;
   ctx.target?.removeAttribute('aria-busy');
+  if(!ctx.response&&event.detail.error?.name==='TypeError'&&offlineFallback(ctx))return;
   if(ctx.sourceElement?.id==='shared-content-search'&&sharedFields()===ctx.oieSharedFields)syncSharedAccount(new URL(currentURL).searchParams);
   showError(ctx);
  });

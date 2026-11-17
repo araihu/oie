@@ -25,7 +25,7 @@ var offlineHistoryTemplate []byte
 // Make the browser reinstall the worker when its precached assets change.
 var offlineWorkerSource = func() []byte {
 	hash := sha256.New()
-	for _, asset := range [][]byte{offlineHistoryScript, offlineHistoryStylesheet, offlineHistoryTemplate} {
+	for _, asset := range [][]byte{offlineHistoryScript, offlineHistoryStylesheet, offlineHistoryTemplate, presentationTimeScript} {
 		hash.Write(asset)
 	}
 	for _, lang := range []string{"en", "pt-BR"} {
@@ -41,7 +41,7 @@ func (s *Server) offlineHistoryEnabled() bool {
 
 func (s *Server) serveOfflineHistory(w http.ResponseWriter, r *http.Request) bool {
 	switch r.URL.Path {
-	case "/offline-worker.js", "/ui/offline-history", "/ui/offline-history.js", "/ui/offline-history.css":
+	case "/offline-worker.js", "/ui/offline-history", "/ui/offline-history.js", "/ui/offline-history.css", "/ui/offline-history-time.js":
 	default:
 		return false
 	}
@@ -57,6 +57,8 @@ func (s *Server) serveOfflineHistory(w http.ResponseWriter, r *http.Request) boo
 		body = offlineHistoryScript
 	case "/ui/offline-history.css":
 		body = offlineHistoryStylesheet
+	case "/ui/offline-history-time.js":
+		body = presentationTimeScript
 	case "/ui/offline-history":
 		lang := locale(r)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
