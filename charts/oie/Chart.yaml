@@ -2,8 +2,8 @@ apiVersion: v2
 name: oie
 description: Oiê single-owner XMPP engine and browser interface
 type: application
-version: 0.2.17
-appVersion: "v0.0.1-rc.39"
+version: 0.2.18
+appVersion: "v0.0.1-rc.40"
 home: https://oie.araihu.com
 sources:
   - https://github.com/araihu/oie
