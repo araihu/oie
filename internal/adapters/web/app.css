@@ -711,6 +711,8 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-room-ban-footer .oie-room-action-buttons{justify-content:flex-end}
 .oie-room-ban-footer [data-form-feedback]:empty{display:none}
 .oie-room-management-avatar{display:grid;justify-items:center;margin-block:4px}
+[data-room-destroy-content]:has(>form:not([hidden]))>#room-destroy-open{display:none}
+[data-room-destroy-content]>form:not([hidden]){display:grid;gap:12px}
 .oie-room-participants,.oie-room-addresses{margin:0;padding:0;list-style:none}
 .oie-room-list-search{position:sticky;inset-block-start:0;z-index:1;background:var(--oie-panel);padding-bottom:12px}
 .oie-room-participant-row{scroll-margin-block-start:56px}

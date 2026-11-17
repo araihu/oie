@@ -551,6 +551,7 @@ async function waitFor(predicate) {
     await roomPanel.waitFor({state:'hidden'});
     await destroyToggle.click();
     await destroyForm.waitFor({state:'visible'});
+    assert.equal(await destroyToggle.isVisible(),false);
     await destructiveDrawer.getByRole('button',{name:'Voltar aos detalhes',exact:true}).click();
     await destructiveDrawer.waitFor({state:'hidden'});
     await roomPanel.waitFor({state:'visible'});
