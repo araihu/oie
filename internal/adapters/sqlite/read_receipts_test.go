@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-func TestDisplayedMarkersRespectUnreadGapsAndAccountPreference(t *testing.T) {
+func TestDisplayedMarkersRespectUnreadGapsAndCascadingPolicy(t *testing.T) {
 	_, e, chat := outboxFixture(t)
 	e.SetProtocols(&outboundProtocol{})
 	ctx := t.Context()
@@ -53,26 +54,47 @@ func TestDisplayedMarkersRespectUnreadGapsAndAccountPreference(t *testing.T) {
 	if got := mark(key, first); !got.Replayed || got.DisplayedMarker != nil {
 		t.Fatal("operation replay attempted a marker", got)
 	}
-	prefs, err := e.SetAccountCommunicationPreferences(ctx, chat.AccountID, "", "available",
-		application.AccountCommunicationToggles{SendReadReceipts: new(false)})
-	if err != nil || prefs.SendReadReceipts {
-		t.Fatal(prefs, err)
+	global, err := e.GlobalReadReceipts(ctx)
+	if err != nil || !global.Enabled {
+		t.Fatal(global, err)
+	}
+	global.Enabled = false
+	global, err = e.SetGlobalReadReceipts(ctx, global)
+	if err != nil || global.Enabled {
+		t.Fatal(global, err)
 	}
 	disabled := receive("while disabled", false, false)
 	if got := mark(migrationID(), disabled); got.DisplayedMarker != nil || got.State.UnreadCount != 0 {
 		t.Fatal("disabled receipt changed local read behavior", got)
 	}
-	prefs, err = e.SetAccountCommunicationPreferences(ctx, chat.AccountID, prefs.RevisionID, "available",
-		application.AccountCommunicationToggles{SendReadReceipts: new(true)})
-	if err != nil || !prefs.SendReadReceipts {
-		t.Fatal(prefs, err)
+	policy, err := e.ConversationReadReceipts(ctx, chat.ID)
+	if err != nil || policy.Override != nil || policy.EffectiveEnabled {
+		t.Fatal(policy, err)
+	}
+	policy, err = e.SetConversationReadReceipts(ctx, chat.ID, policy.Revision, new(true))
+	if err != nil || !policy.EffectiveEnabled || policy.GlobalEnabled || policy.Override == nil || !*policy.Override {
+		t.Fatal(policy, err)
 	}
 	if got := mark(migrationID(), disabled, receive("own", true, false), receive("archive", false, true)); got.DisplayedMarker != nil {
 		t.Fatal("read of an already read, own or historical message attempted a marker", got)
 	}
 	older, newest := receive("older", false, false), receive("newest", false, false)
-	if got := mark(migrationID(), older, newest); got.DisplayedMarker == nil || got.DisplayedMarker.RemoteID != "newest" ||
-		got.DisplayedMarker.PreferencesRevision != prefs.RevisionID {
+	got := mark(migrationID(), older, newest)
+	if got.DisplayedMarker == nil || got.DisplayedMarker.RemoteID != "newest" ||
+		got.DisplayedMarker.PolicyRevision != policy.Revision {
 		t.Fatal("expected coalesced marker at newest message", got)
+	}
+	if current, err := e.IsCurrentDisplayedMarker(ctx, *got.DisplayedMarker); err != nil || !current {
+		t.Fatal("expected eligible queued marker", current, err)
+	}
+	inherited, err := e.SetConversationReadReceipts(ctx, chat.ID, policy.Revision, nil)
+	if err != nil || inherited.Override != nil || inherited.EffectiveEnabled {
+		t.Fatal(inherited, err)
+	}
+	if current, err := e.IsCurrentDisplayedMarker(ctx, *got.DisplayedMarker); err != nil || current {
+		t.Fatal("stale marker survived a policy change", current, err)
+	}
+	if _, err := e.SetConversationReadReceipts(ctx, chat.ID, policy.Revision, new(false)); !errors.Is(err, application.ErrStateConflict) {
+		t.Fatal("stale conversation setting was accepted", err)
 	}
 }

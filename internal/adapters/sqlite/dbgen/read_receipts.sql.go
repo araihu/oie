@@ -29,9 +29,51 @@ func (q *Queries) AdvanceDisplayedHead(ctx context.Context, arg AdvanceDisplayed
 	return result.RowsAffected()
 }
 
+const getConversationReadReceipts = `-- name: GetConversationReadReceipts :one
+SELECT revision, override_enabled, global_enabled, effective_enabled
+FROM conversation_read_receipt_policy WHERE conversation_id=?
+`
+
+type GetConversationReadReceiptsRow struct {
+	Revision         string
+	OverrideEnabled  *int64
+	GlobalEnabled    int64
+	EffectiveEnabled int64
+}
+
+func (q *Queries) GetConversationReadReceipts(ctx context.Context, conversationID string) (GetConversationReadReceiptsRow, error) {
+	row := q.db.QueryRowContext(ctx, getConversationReadReceipts, conversationID)
+	var i GetConversationReadReceiptsRow
+	err := row.Scan(
+		&i.Revision,
+		&i.OverrideEnabled,
+		&i.GlobalEnabled,
+		&i.EffectiveEnabled,
+	)
+	return i, err
+}
+
+const getGlobalReadReceipts = `-- name: GetGlobalReadReceipts :one
+SELECT CAST(revision AS TEXT) AS revision, enabled FROM engine_read_receipt_settings WHERE singleton=1
+`
+
+type GetGlobalReadReceiptsRow struct {
+	Revision string
+	Enabled  int64
+}
+
+func (q *Queries) GetGlobalReadReceipts(ctx context.Context) (GetGlobalReadReceiptsRow, error) {
+	row := q.db.QueryRowContext(ctx, getGlobalReadReceipts)
+	var i GetGlobalReadReceiptsRow
+	err := row.Scan(&i.Revision, &i.Enabled)
+	return i, err
+}
+
 const isCurrentDisplayedHead = `-- name: IsCurrentDisplayedHead :one
 SELECT EXISTS(SELECT 1 FROM conversation_displayed_heads h JOIN messages m ON m.id=h.message_id
-WHERE h.conversation_id=? AND h.message_id=? AND m.is_own=0
+JOIN conversation_read_receipt_policy p ON p.conversation_id=h.conversation_id
+WHERE h.conversation_id=?1 AND h.message_id=?2 AND m.is_own=0
+AND p.effective_enabled=1 AND p.revision=?3
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM retained_message_retractions r WHERE r.source_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM shared_catalog_moderated_sources r WHERE r.message_id=m.id))
@@ -40,10 +82,11 @@ AND NOT EXISTS(SELECT 1 FROM shared_catalog_moderated_sources r WHERE r.message_
 type IsCurrentDisplayedHeadParams struct {
 	ConversationID string
 	MessageID      string
+	PolicyRevision string
 }
 
 func (q *Queries) IsCurrentDisplayedHead(ctx context.Context, arg IsCurrentDisplayedHeadParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isCurrentDisplayedHead, arg.ConversationID, arg.MessageID)
+	row := q.db.QueryRowContext(ctx, isCurrentDisplayedHead, arg.ConversationID, arg.MessageID, arg.PolicyRevision)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -85,4 +128,28 @@ func (q *Queries) LatestDisplayedTarget(ctx context.Context, arg LatestDisplayed
 	var i LatestDisplayedTargetRow
 	err := row.Scan(&i.ID, &i.PositionMs, &i.RemoteID)
 	return i, err
+}
+
+const putConversationReadReceipts = `-- name: PutConversationReadReceipts :exec
+INSERT INTO conversation_read_receipt_settings(conversation_id,enabled,revision) VALUES(?,?,1)
+ON CONFLICT(conversation_id) DO UPDATE SET enabled=excluded.enabled,revision=conversation_read_receipt_settings.revision+1
+`
+
+type PutConversationReadReceiptsParams struct {
+	ConversationID string
+	Enabled        *int64
+}
+
+func (q *Queries) PutConversationReadReceipts(ctx context.Context, arg PutConversationReadReceiptsParams) error {
+	_, err := q.db.ExecContext(ctx, putConversationReadReceipts, arg.ConversationID, arg.Enabled)
+	return err
+}
+
+const putGlobalReadReceipts = `-- name: PutGlobalReadReceipts :exec
+UPDATE engine_read_receipt_settings SET enabled=?, revision=revision+1 WHERE singleton=1
+`
+
+func (q *Queries) PutGlobalReadReceipts(ctx context.Context, enabled int64) error {
+	_, err := q.db.ExecContext(ctx, putGlobalReadReceipts, enabled)
+	return err
 }

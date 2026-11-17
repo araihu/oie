@@ -647,9 +647,9 @@ func (e *Engine) Run(ctx context.Context) error {
 	done := make(chan error, 7)
 	workers := 2
 	if protocol, ok := e.protocols.(DisplayedMarkerProtocol); ok {
-		if repo, ok := e.repo.(DisplayedMarkerRepository); ok {
+		if _, ok := e.repo.(displayedMarkerRepository); ok {
 			workers++
-			go func() { done <- e.runDisplayedMarkers(ctx, protocol, repo) }()
+			go func() { done <- e.runDisplayedMarkers(ctx, protocol) }()
 		}
 	}
 	if repo, ok := e.repo.(retentionRepository); ok {

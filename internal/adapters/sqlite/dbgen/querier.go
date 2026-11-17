@@ -74,10 +74,12 @@ type Querier interface {
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	GetConversationOpenedAt(ctx context.Context, entityID string) (string, error)
 	GetConversationReadHead(ctx context.Context, conversationID string) (GetConversationReadHeadRow, error)
+	GetConversationReadReceipts(ctx context.Context, conversationID string) (GetConversationReadReceiptsRow, error)
 	GetConversationRetention(ctx context.Context, conversationID string) (GetConversationRetentionRow, error)
 	GetCorrectionFacts(ctx context.Context, messageID string) ([]MessageCorrectionFact, error)
 	GetDeviceDownload(ctx context.Context, arg GetDeviceDownloadParams) (DeviceDownload, error)
 	GetDownloadDevice(ctx context.Context, deviceID string) (GetDownloadDeviceRow, error)
+	GetGlobalReadReceipts(ctx context.Context) (GetGlobalReadReceiptsRow, error)
 	GetGlobalRetention(ctx context.Context) (GetGlobalRetentionRow, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
 	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
@@ -218,7 +220,9 @@ type Querier interface {
 	PutContactSource(ctx context.Context, arg PutContactSourceParams) error
 	PutContentHead(ctx context.Context, arg PutContentHeadParams) error
 	PutConversationReadHead(ctx context.Context, arg PutConversationReadHeadParams) error
+	PutConversationReadReceipts(ctx context.Context, arg PutConversationReadReceiptsParams) error
 	PutConversationRetention(ctx context.Context, arg PutConversationRetentionParams) error
+	PutGlobalReadReceipts(ctx context.Context, enabled int64) error
 	PutGlobalRetention(ctx context.Context, arg PutGlobalRetentionParams) error
 	PutGuardedArchiveCheckpoint(ctx context.Context, arg PutGuardedArchiveCheckpointParams) (int64, error)
 	PutGuardedRoomArchiveProgress(ctx context.Context, arg PutGuardedRoomArchiveProgressParams) (int64, error)

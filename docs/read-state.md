@@ -30,10 +30,11 @@ Verification includes concurrent receive/read batches, partial visibility, offsc
 
 ## XMPP read receipts
 
-In the account profile, **Send read receipts** defaults to on. Save the setting
-to change it for that account across all clients connected to the same engine.
-The account preference is independent of local unread counts and the unread
-reminder. Older clients can omit the field when saving presence or typing.
+Settings → Engine → **Read receipts** sets the default for all conversations
+on that engine, initially **Send**. Open **Read receipts** in a direct
+conversation or room's details to set **Use the default**, **Send**, or
+**Do not send**. Clients on the same engine share these settings. The policy
+is independent of the local unread counter and unread reminder.
 
 Oiê emits [XEP-0333 displayed markers](https://xmpp.org/extensions/xep-0333.html)
 after automatic or explicit **Mark as read**. A direct message must request a
@@ -46,8 +47,8 @@ The engine stores the position in the same transaction as the newly observed
 reads. It considers the newest eligible message read in that transaction before
 the first remaining unread message. A second tab or retried HTTP request cannot
 emit another marker for the same position. Dispatch is best effort while
-connected. Markers are neither durable send intents nor replayed by the engine
-after reconnect. The adapter rechecks the account's preference before writing.
+connected, and missed markers expire. The adapter checks the current marker
+position and the conversation's effective policy immediately before writing.
 
 ## Verification on 2026-11-08
 

@@ -54,61 +54,65 @@ func New() (*cobra.Command, error) {
 		"GetMessageSourceContext":            build35,
 		"ListConversationPreviews":           build36,
 		"ListConversationReactions":          build37,
-		"GetConversationReadState":           build38,
-		"MarkConversationMessagesRead":       build39,
-		"RemoveDirectFromChats":              build40,
-		"RemoveRoomFromChats":                build41,
-		"GetConversationRetention":           build42,
-		"SetConversationRetention":           build43,
-		"GetRoomManagement":                  build44,
-		"ManageRoom":                         build45,
-		"GetRoomParticipants":                build46,
-		"GetRoomSession":                     build47,
-		"JoinRoom":                           build48,
-		"LeaveRoom":                          build49,
-		"GetStagedMessageAttachment":         build50,
-		"StageMessageAttachment":             build51,
-		"GetConversationTyping":              build52,
-		"SetConversationTyping":              build53,
-		"ClearDeviceDownloads":               build54,
-		"GetDownloadRetention":               build55,
-		"SetDownloadRetention":               build56,
-		"GetEngine":                          build57,
-		"ResetEngineData":                    build58,
-		"GetGlobalRetention":                 build59,
-		"SetGlobalRetention":                 build60,
-		"StreamEvents":                       build61,
-		"GetHealth":                          build62,
-		"ResolveDraftLinkPreview":            build63,
-		"GetMediaImage":                      build64,
-		"GetMessageEdit":                     build65,
-		"GetMessageReactionCommand":          build66,
-		"SearchMessages":                     build67,
-		"GetMessage":                         build68,
-		"CancelMessage":                      build69,
-		"GetMessageEditHistory":              build70,
-		"GetMessageEditTarget":               build71,
-		"EditMessage":                        build72,
-		"ForwardMessage":                     build73,
-		"UpdatePendingMessage":               build74,
-		"GetMessageReactions":                build75,
-		"SetMessageReactions":                build76,
-		"GetRetractedOriginal":               build77,
-		"RetractMessage":                     build78,
-		"SendScheduledMessageNow":            build79,
-		"GetMessageSenderProfile":            build80,
-		"GetMessageStar":                     build81,
-		"SetMessageStar":                     build82,
-		"GetOperation":                       build83,
-		"GetMessagePreview":                  build84,
-		"DownloadPreviewImage":               build85,
-		"RefreshMessagePreview":              build86,
-		"ListScheduledMessages":              build87,
-		"ListSharedContent":                  build88,
-		"GetSharedContentMedia":              build89,
-		"GetVideoThumbnail":                  build90,
-		"RequestVideoThumbnail":              build91,
-		"ListStarredMessages":                build92,
+		"GetConversationReadReceipts":        build38,
+		"SetConversationReadReceipts":        build39,
+		"GetConversationReadState":           build40,
+		"MarkConversationMessagesRead":       build41,
+		"RemoveDirectFromChats":              build42,
+		"RemoveRoomFromChats":                build43,
+		"GetConversationRetention":           build44,
+		"SetConversationRetention":           build45,
+		"GetRoomManagement":                  build46,
+		"ManageRoom":                         build47,
+		"GetRoomParticipants":                build48,
+		"GetRoomSession":                     build49,
+		"JoinRoom":                           build50,
+		"LeaveRoom":                          build51,
+		"GetStagedMessageAttachment":         build52,
+		"StageMessageAttachment":             build53,
+		"GetConversationTyping":              build54,
+		"SetConversationTyping":              build55,
+		"ClearDeviceDownloads":               build56,
+		"GetDownloadRetention":               build57,
+		"SetDownloadRetention":               build58,
+		"GetEngine":                          build59,
+		"GetGlobalReadReceipts":              build60,
+		"SetGlobalReadReceipts":              build61,
+		"ResetEngineData":                    build62,
+		"GetGlobalRetention":                 build63,
+		"SetGlobalRetention":                 build64,
+		"StreamEvents":                       build65,
+		"GetHealth":                          build66,
+		"ResolveDraftLinkPreview":            build67,
+		"GetMediaImage":                      build68,
+		"GetMessageEdit":                     build69,
+		"GetMessageReactionCommand":          build70,
+		"SearchMessages":                     build71,
+		"GetMessage":                         build72,
+		"CancelMessage":                      build73,
+		"GetMessageEditHistory":              build74,
+		"GetMessageEditTarget":               build75,
+		"EditMessage":                        build76,
+		"ForwardMessage":                     build77,
+		"UpdatePendingMessage":               build78,
+		"GetMessageReactions":                build79,
+		"SetMessageReactions":                build80,
+		"GetRetractedOriginal":               build81,
+		"RetractMessage":                     build82,
+		"SendScheduledMessageNow":            build83,
+		"GetMessageSenderProfile":            build84,
+		"GetMessageStar":                     build85,
+		"SetMessageStar":                     build86,
+		"GetOperation":                       build87,
+		"GetMessagePreview":                  build88,
+		"DownloadPreviewImage":               build89,
+		"RefreshMessagePreview":              build90,
+		"ListScheduledMessages":              build91,
+		"ListSharedContent":                  build92,
+		"GetSharedContentMedia":              build93,
+		"GetVideoThumbnail":                  build94,
+		"RequestVideoThumbnail":              build95,
+		"ListStarredMessages":                build96,
 	})
 }
 func build0(server string, input cliruntime.Input) (*http.Request, error) {
@@ -501,9 +505,23 @@ func build38(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
-	return api.NewGetConversationReadStateRequest(server, path0)
+	return api.NewGetConversationReadReceiptsRequest(server, path0)
 }
 func build39(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ConversationID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewSetConversationReadReceiptsRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
+}
+func build40(server string, input cliruntime.Input) (*http.Request, error) {
+	var path0 api.ConversationID
+	if err := input.Decode("path", "conversationId", &path0); err != nil {
+		return nil, err
+	}
+	return api.NewGetConversationReadStateRequest(server, path0)
+}
+func build41(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -517,7 +535,7 @@ func build39(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewMarkConversationMessagesReadRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build40(server string, input cliruntime.Input) (*http.Request, error) {
+func build42(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -528,7 +546,7 @@ func build40(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewRemoveDirectFromChatsRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build41(server string, input cliruntime.Input) (*http.Request, error) {
+func build43(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -539,21 +557,21 @@ func build41(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewRemoveRoomFromChatsRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build42(server string, input cliruntime.Input) (*http.Request, error) {
+func build44(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetConversationRetentionRequest(server, path0)
 }
-func build43(server string, input cliruntime.Input) (*http.Request, error) {
+func build45(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewSetConversationRetentionRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
 }
-func build44(server string, input cliruntime.Input) (*http.Request, error) {
+func build46(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -567,7 +585,7 @@ func build44(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetRoomManagementRequest(server, path0, &params)
 }
-func build45(server string, input cliruntime.Input) (*http.Request, error) {
+func build47(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -578,21 +596,21 @@ func build45(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewManageRoomRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build46(server string, input cliruntime.Input) (*http.Request, error) {
+func build48(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetRoomParticipantsRequest(server, path0)
 }
-func build47(server string, input cliruntime.Input) (*http.Request, error) {
+func build49(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetRoomSessionRequest(server, path0)
 }
-func build48(server string, input cliruntime.Input) (*http.Request, error) {
+func build50(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -603,7 +621,7 @@ func build48(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewJoinRoomRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build49(server string, input cliruntime.Input) (*http.Request, error) {
+func build51(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -614,7 +632,7 @@ func build49(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewLeaveRoomRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build50(server string, input cliruntime.Input) (*http.Request, error) {
+func build52(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -629,7 +647,7 @@ func build50(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetStagedMessageAttachmentRequest(server, path0, path1, &params)
 }
-func build51(server string, input cliruntime.Input) (*http.Request, error) {
+func build53(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
@@ -640,67 +658,73 @@ func build51(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewStageMessageAttachmentRequestWithBody(server, path0, path1, input.ContentType, bytes.NewReader(input.Body))
 }
-func build52(server string, input cliruntime.Input) (*http.Request, error) {
+func build54(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetConversationTypingRequest(server, path0)
 }
-func build53(server string, input cliruntime.Input) (*http.Request, error) {
+func build55(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ConversationID
 	if err := input.Decode("path", "conversationId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewSetConversationTypingRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
 }
-func build54(server string, input cliruntime.Input) (*http.Request, error) {
+func build56(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "deviceId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewClearDeviceDownloadsRequest(server, path0)
 }
-func build55(server string, input cliruntime.Input) (*http.Request, error) {
+func build57(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "deviceId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetDownloadRetentionRequest(server, path0)
 }
-func build56(server string, input cliruntime.Input) (*http.Request, error) {
+func build58(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "deviceId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewSetDownloadRetentionRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
 }
-func build57(server string, input cliruntime.Input) (*http.Request, error) {
+func build59(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetEngineRequest(server)
 }
-func build58(server string, input cliruntime.Input) (*http.Request, error) {
-	return api.NewResetEngineDataRequestWithBody(server, input.ContentType, bytes.NewReader(input.Body))
-}
-func build59(server string, input cliruntime.Input) (*http.Request, error) {
-	return api.NewGetGlobalRetentionRequest(server)
-}
 func build60(server string, input cliruntime.Input) (*http.Request, error) {
-	return api.NewSetGlobalRetentionRequestWithBody(server, input.ContentType, bytes.NewReader(input.Body))
+	return api.NewGetGlobalReadReceiptsRequest(server)
 }
 func build61(server string, input cliruntime.Input) (*http.Request, error) {
+	return api.NewSetGlobalReadReceiptsRequestWithBody(server, input.ContentType, bytes.NewReader(input.Body))
+}
+func build62(server string, input cliruntime.Input) (*http.Request, error) {
+	return api.NewResetEngineDataRequestWithBody(server, input.ContentType, bytes.NewReader(input.Body))
+}
+func build63(server string, input cliruntime.Input) (*http.Request, error) {
+	return api.NewGetGlobalRetentionRequest(server)
+}
+func build64(server string, input cliruntime.Input) (*http.Request, error) {
+	return api.NewSetGlobalRetentionRequestWithBody(server, input.ContentType, bytes.NewReader(input.Body))
+}
+func build65(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.StreamEventsParams
 	if err := input.Decode("header", "Last-Event-ID", &params.LastEventID); err != nil {
 		return nil, err
 	}
 	return api.NewStreamEventsRequest(server, &params)
 }
-func build62(server string, input cliruntime.Input) (*http.Request, error) {
+func build66(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewGetHealthRequest(server)
 }
-func build63(server string, input cliruntime.Input) (*http.Request, error) {
+func build67(server string, input cliruntime.Input) (*http.Request, error) {
 	return api.NewResolveDraftLinkPreviewRequestWithBody(server, input.ContentType, bytes.NewReader(input.Body))
 }
-func build64(server string, input cliruntime.Input) (*http.Request, error) {
+func build68(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 string
 	if err := input.Decode("path", "hash", &path0); err != nil {
 		return nil, err
@@ -711,21 +735,21 @@ func build64(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetMediaImageRequest(server, path0, &params)
 }
-func build65(server string, input cliruntime.Input) (*http.Request, error) {
+func build69(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "editId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageEditRequest(server, path0)
 }
-func build66(server string, input cliruntime.Input) (*http.Request, error) {
+func build70(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "commandId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageReactionCommandRequest(server, path0)
 }
-func build67(server string, input cliruntime.Input) (*http.Request, error) {
+func build71(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.SearchMessagesParams
 	if err := input.Decode("query", "q", &params.Q); err != nil {
 		return nil, err
@@ -753,14 +777,14 @@ func build67(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewSearchMessagesRequest(server, &params)
 }
-func build68(server string, input cliruntime.Input) (*http.Request, error) {
+func build72(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageRequest(server, path0)
 }
-func build69(server string, input cliruntime.Input) (*http.Request, error) {
+func build73(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -771,7 +795,7 @@ func build69(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewCancelMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build70(server string, input cliruntime.Input) (*http.Request, error) {
+func build74(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -788,14 +812,14 @@ func build70(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetMessageEditHistoryRequest(server, path0, &params)
 }
-func build71(server string, input cliruntime.Input) (*http.Request, error) {
+func build75(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageEditTargetRequest(server, path0)
 }
-func build72(server string, input cliruntime.Input) (*http.Request, error) {
+func build76(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -806,7 +830,7 @@ func build72(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewEditMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build73(server string, input cliruntime.Input) (*http.Request, error) {
+func build77(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -817,7 +841,7 @@ func build73(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewForwardMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build74(server string, input cliruntime.Input) (*http.Request, error) {
+func build78(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -828,14 +852,14 @@ func build74(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewUpdatePendingMessageRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build75(server string, input cliruntime.Input) (*http.Request, error) {
+func build79(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageReactionsRequest(server, path0)
 }
-func build76(server string, input cliruntime.Input) (*http.Request, error) {
+func build80(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -846,21 +870,21 @@ func build76(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewSetMessageReactionsRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build77(server string, input cliruntime.Input) (*http.Request, error) {
+func build81(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetRetractedOriginalRequest(server, path0)
 }
-func build78(server string, input cliruntime.Input) (*http.Request, error) {
+func build82(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewRetractMessageRequestWithBody(server, path0, input.ContentType, bytes.NewReader(input.Body))
 }
-func build79(server string, input cliruntime.Input) (*http.Request, error) {
+func build83(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -871,21 +895,21 @@ func build79(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewSendScheduledMessageNowRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build80(server string, input cliruntime.Input) (*http.Request, error) {
+func build84(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageSenderProfileRequest(server, path0)
 }
-func build81(server string, input cliruntime.Input) (*http.Request, error) {
+func build85(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessageStarRequest(server, path0)
 }
-func build82(server string, input cliruntime.Input) (*http.Request, error) {
+func build86(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.MessageID
 	if err := input.Decode("path", "messageId", &path0); err != nil {
 		return nil, err
@@ -896,7 +920,7 @@ func build82(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewSetMessageStarRequestWithBody(server, path0, &params, input.ContentType, bytes.NewReader(input.Body))
 }
-func build83(server string, input cliruntime.Input) (*http.Request, error) {
+func build87(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "operationId", &path0); err != nil {
 		return nil, err
@@ -907,14 +931,14 @@ func build83(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetOperationRequest(server, path0, &params)
 }
-func build84(server string, input cliruntime.Input) (*http.Request, error) {
+func build88(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "previewId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetMessagePreviewRequest(server, path0)
 }
-func build85(server string, input cliruntime.Input) (*http.Request, error) {
+func build89(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "previewId", &path0); err != nil {
 		return nil, err
@@ -925,14 +949,14 @@ func build85(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewDownloadPreviewImageRequest(server, path0, &params)
 }
-func build86(server string, input cliruntime.Input) (*http.Request, error) {
+func build90(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "previewId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewRefreshMessagePreviewRequest(server, path0)
 }
-func build87(server string, input cliruntime.Input) (*http.Request, error) {
+func build91(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListScheduledMessagesParams
 	if err := input.Decode("query", "conversationId", &params.ConversationId); err != nil {
 		return nil, err
@@ -948,7 +972,7 @@ func build87(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewListScheduledMessagesRequest(server, &params)
 }
-func build88(server string, input cliruntime.Input) (*http.Request, error) {
+func build92(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListSharedContentParams
 	if err := input.Decode("query", "type", &params.Type); err != nil {
 		return nil, err
@@ -985,7 +1009,7 @@ func build88(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewListSharedContentRequest(server, &params)
 }
-func build89(server string, input cliruntime.Input) (*http.Request, error) {
+func build93(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "itemId", &path0); err != nil {
 		return nil, err
@@ -1005,21 +1029,21 @@ func build89(server string, input cliruntime.Input) (*http.Request, error) {
 	}
 	return api.NewGetSharedContentMediaRequest(server, path0, &params)
 }
-func build90(server string, input cliruntime.Input) (*http.Request, error) {
+func build94(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "itemId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewGetVideoThumbnailRequest(server, path0)
 }
-func build91(server string, input cliruntime.Input) (*http.Request, error) {
+func build95(server string, input cliruntime.Input) (*http.Request, error) {
 	var path0 api.ID
 	if err := input.Decode("path", "itemId", &path0); err != nil {
 		return nil, err
 	}
 	return api.NewRequestVideoThumbnailRequest(server, path0)
 }
-func build92(server string, input cliruntime.Input) (*http.Request, error) {
+func build96(server string, input cliruntime.Input) (*http.Request, error) {
 	var params api.ListStarredMessagesParams
 	if err := input.Decode("query", "accountId", &params.AccountId); err != nil {
 		return nil, err

@@ -23,7 +23,23 @@ WHERE (excluded.position_ms,excluded.message_id)>(conversation_displayed_heads.p
 
 -- name: IsCurrentDisplayedHead :one
 SELECT EXISTS(SELECT 1 FROM conversation_displayed_heads h JOIN messages m ON m.id=h.message_id
-WHERE h.conversation_id=? AND h.message_id=? AND m.is_own=0
+JOIN conversation_read_receipt_policy p ON p.conversation_id=h.conversation_id
+WHERE h.conversation_id=sqlc.arg(conversation_id) AND h.message_id=sqlc.arg(message_id) AND m.is_own=0
+AND p.effective_enabled=1 AND p.revision=sqlc.arg(policy_revision)
 AND NOT EXISTS(SELECT 1 FROM message_canonical_aliases a WHERE a.alias_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM retained_message_retractions r WHERE r.source_id=m.id)
 AND NOT EXISTS(SELECT 1 FROM shared_catalog_moderated_sources r WHERE r.message_id=m.id));
+
+-- name: GetGlobalReadReceipts :one
+SELECT CAST(revision AS TEXT) AS revision, enabled FROM engine_read_receipt_settings WHERE singleton=1;
+
+-- name: PutGlobalReadReceipts :exec
+UPDATE engine_read_receipt_settings SET enabled=?, revision=revision+1 WHERE singleton=1;
+
+-- name: GetConversationReadReceipts :one
+SELECT revision, override_enabled, global_enabled, effective_enabled
+FROM conversation_read_receipt_policy WHERE conversation_id=?;
+
+-- name: PutConversationReadReceipts :exec
+INSERT INTO conversation_read_receipt_settings(conversation_id,enabled,revision) VALUES(?,?,1)
+ON CONFLICT(conversation_id) DO UPDATE SET enabled=excluded.enabled,revision=conversation_read_receipt_settings.revision+1;

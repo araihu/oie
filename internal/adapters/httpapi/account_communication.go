@@ -9,7 +9,7 @@ import (
 )
 
 func accountCommunicationPreferences(p domain.AccountCommunicationPreferences) engineapi.AccountCommunicationPreferences {
-	out := engineapi.AccountCommunicationPreferences{Presence: engineapi.AccountCommunicationPreferencesPresence(p.Presence), SendTyping: &p.SendTyping, SendReadReceipts: &p.SendReadReceipts}
+	out := engineapi.AccountCommunicationPreferences{Presence: engineapi.AccountCommunicationPreferencesPresence(p.Presence), SendTyping: &p.SendTyping}
 	if p.RevisionID != "" {
 		out.RevisionId = new(string(p.RevisionID))
 	}
@@ -32,7 +32,7 @@ func (s *Server) SetAccountCommunicationPreferences(ctx context.Context, r engin
 	if r.Body.RevisionId != nil {
 		revision = domain.ID(*r.Body.RevisionId)
 	}
-	preferences, err := s.engine.SetAccountCommunicationPreferences(ctx, domain.ID(r.AccountId), revision, string(r.Body.Presence), application.AccountCommunicationToggles{SendTyping: r.Body.SendTyping, SendReadReceipts: r.Body.SendReadReceipts})
+	preferences, err := s.engine.SetAccountCommunicationPreferences(ctx, domain.ID(r.AccountId), revision, string(r.Body.Presence), r.Body.SendTyping)
 	if err != nil {
 		return nil, err
 	}

@@ -4,8 +4,8 @@ import "time"
 
 // DisplayedMarker carries protocol-verified evidence for a newly read position.
 type DisplayedMarker struct {
-	ConversationID, AccountID, MessageID, PreferencesRevision ID
-	RemoteID                                                  string
+	ConversationID, AccountID, MessageID ID
+	PolicyRevision, RemoteID             string
 }
 
 // ReadState is independent of message content and conversation activity.
@@ -14,4 +14,15 @@ type ReadState struct {
 	UpdatedAt                             time.Time
 	FirstUnreadMessageID                  ID `json:",omitempty"`
 	UnreadCount                           int
+}
+
+type GlobalReadReceipts struct {
+	Revision string
+	Enabled  bool
+}
+
+type ConversationReadReceipts struct {
+	Revision                        string
+	Override                        *bool
+	EffectiveEnabled, GlobalEnabled bool
 }

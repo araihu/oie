@@ -83,7 +83,7 @@ func TestMessageRetractionsMigrateFromAccountCommunication(t *testing.T) {
 	ctx := t.Context()
 	store, _, chat := outboxFixture(t)
 	migrateFixtureToVersion(t, store, 34)
-	prefs := domain.AccountCommunicationPreferences{RevisionID: migrationID(), Presence: "dnd", SendReadReceipts: true}
+	prefs := domain.AccountCommunicationPreferences{RevisionID: migrationID(), Presence: "dnd"}
 	if _, err := store.db.ExecContext(ctx, `INSERT INTO account_communication_preferences
 		(account_id,revision_id,presence,send_typing) VALUES(?,?,?,0)`, chat.AccountID, prefs.RevisionID, prefs.Presence); err != nil {
 		t.Fatal(err)
@@ -102,6 +102,29 @@ func TestMessageRetractionsMigrateFromAccountCommunication(t *testing.T) {
 	retraction := application.IncomingRetraction{Scope: "xmpp:correct:sender:" + chat.Address, RemoteID: "retained-message", At: time.Now().UTC()}
 	if err = upgraded.RecordMessageRetraction(ctx, chat.AccountID, chat.Kind, chat.Address, retraction); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReadReceiptPolicyMigratesPreviewOptOut(t *testing.T) {
+	ctx := t.Context()
+	store, _, chat := outboxFixture(t)
+	migrateFixtureToVersion(t, store, 37)
+	if _, err := store.db.ExecContext(ctx, `INSERT INTO account_communication_preferences
+		(account_id,revision_id,presence,send_typing,send_read_receipts) VALUES(?,?,'available',1,0)`,
+		chat.AccountID, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, store.dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = upgraded.Close() })
+	policy, err := upgraded.ConversationReadReceipts(ctx, chat.ID)
+	if err != nil || !policy.GlobalEnabled || policy.EffectiveEnabled || policy.Override == nil || *policy.Override {
+		t.Fatal(policy, err)
 	}
 }
 

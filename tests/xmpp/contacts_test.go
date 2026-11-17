@@ -333,12 +333,12 @@ func TestDevelopmentContactActionsAndAvailability(t *testing.T) {
 	if err != nil || current.Presence != "available" {
 		t.Fatal(current, err)
 	}
-	saved, err := engine.SetAccountCommunicationPreferences(ctx, owner, current.RevisionID, "dnd", application.AccountCommunicationToggles{})
+	saved, err := engine.SetAccountCommunicationPreferences(ctx, owner, current.RevisionID, "dnd", nil)
 	if err != nil || saved.Presence != "dnd" {
 		t.Fatal(saved, err)
 	}
 	awaitPresence(stanza.AvailablePresence, "dnd")
-	if _, err := engine.SetAccountCommunicationPreferences(ctx, owner, current.RevisionID, "away", application.AccountCommunicationToggles{}); !errors.Is(err, application.ErrStateConflict) {
+	if _, err := engine.SetAccountCommunicationPreferences(ctx, owner, current.RevisionID, "away", nil); !errors.Is(err, application.ErrStateConflict) {
 		t.Fatal("stale presence preference", err)
 	}
 	if state, err := engine.AccountCommunicationPreferences(ctx, owner); err != nil || state != saved {
@@ -417,13 +417,13 @@ func verifyDirectDisplayedMarkers(t *testing.T, ctx context.Context, engine *app
 	await(first.ProviderID)
 	setPreference := func(enabled bool) {
 		t.Helper()
-		prefs, err := engine.AccountCommunicationPreferences(ctx, owner)
+		prefs, err := engine.GlobalReadReceipts(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		saved, err := engine.SetAccountCommunicationPreferences(ctx, owner, prefs.RevisionID, prefs.Presence,
-			application.AccountCommunicationToggles{SendReadReceipts: &enabled})
-		if err != nil || saved.SendReadReceipts != enabled {
+		prefs.Enabled = enabled
+		saved, err := engine.SetGlobalReadReceipts(ctx, prefs)
+		if err != nil || saved.Enabled != enabled {
 			t.Fatal(saved, err)
 		}
 	}
@@ -433,12 +433,31 @@ func verifyDirectDisplayedMarkers(t *testing.T, ctx context.Context, engine *app
 	if state, err := engine.ConversationReadState(ctx, first.ConversationID); err != nil || state.UnreadCount != 0 {
 		t.Fatal("the preference disabled local reading", state, err)
 	}
-	setPreference(true)
+	setOverride := func(value *bool) {
+		t.Helper()
+		policy, err := engine.ConversationReadReceipts(ctx, chat.Conversation.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := engine.SetConversationReadReceipts(ctx, chat.Conversation.ID, policy.Revision, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setOverride(new(true))
 	send(false)
 	markAll()
+	explicit := send(true)
+	markAll()
+	await(explicit.ProviderID)
+
+	setPreference(true)
+	setOverride(new(false))
+	send(true)
+	markAll()
+	setOverride(nil)
 	newest := send(true)
 	markAll()
-	// The next valid wire marker proves no disabled, unrequested or repeated
-	// marker ran ahead of it.
+	// The next valid wire marker proves the globally disabled, unrequested
+	// and explicitly disabled messages emitted no marker.
 	await(newest.ProviderID)
 }

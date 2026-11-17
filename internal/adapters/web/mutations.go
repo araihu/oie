@@ -607,13 +607,12 @@ func (s *Server) mutationResponse(w http.ResponseWriter, r *http.Request, status
 	v.ErrorMessage = result.Message
 	v.PreferenceRecovery = r.URL.Path == "/ui/conversations/preferences" && result.PreferencesPending
 	v.FormTarget = r.Form.Get("formTarget")
-	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "read", "presence", "sendTyping", "sendReadReceipts", "contactAction", "lang"} {
+	for _, key := range []string{"address", "nickname", "name", "label", "endpoint", "accountId", "conversationId", "originalText", "operationKey", "expectedRevisionId", "archived", "favorite", "acceptRequest", "read", "presence", "sendTyping", "contactAction", "lang"} {
 		v.Values[key] = r.Form.Get(key)
 	}
 	if r.URL.Path == "/ui/accounts/communication" && result.Code == "revision_conflict" {
 		delete(v.Values, "presence")
 		delete(v.Values, "sendTyping")
-		delete(v.Values, "sendReadReceipts")
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()

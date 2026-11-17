@@ -92,6 +92,14 @@ actions:
   - target: $.paths['/api/v1/accounts'].post
     update:
       x-cli-name: register
+  - target: $.paths['/api/v1/engine/read-receipts'].get
+    update:
+      x-cli-group: [engine, read-receipts]
+      x-cli-name: get
+  - target: $.paths['/api/v1/engine/read-receipts'].put
+    update:
+      x-cli-group: [engine, read-receipts]
+      x-cli-name: set
   - target: $.paths['/api/v1/engine/retention'].get
     update:
       x-cli-group: [engine, retention]
@@ -99,6 +107,14 @@ actions:
   - target: $.paths['/api/v1/engine/retention'].put
     update:
       x-cli-group: [engine, retention]
+      x-cli-name: set
+  - target: $.paths['/api/v1/conversations/{conversationId}/read-receipts'].get
+    update:
+      x-cli-group: [conversations, read-receipts]
+      x-cli-name: get
+  - target: $.paths['/api/v1/conversations/{conversationId}/read-receipts'].put
+    update:
+      x-cli-group: [conversations, read-receipts]
       x-cli-name: set
   - target: $.paths['/api/v1/conversations/{conversationId}/retention'].get
     update:

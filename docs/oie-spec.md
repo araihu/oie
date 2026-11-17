@@ -772,7 +772,8 @@ an available source. Explicit deletion continues to apply within its chosen scop
 | Conversation pins/favorites and archive state | Shared; archived chats stay archived on new arrivals. |
 | Read positions and manual read/unread actions | Shared; unread reminder does not undo sent receipts. |
 | Conversation mutes | Shared, with optional per-device overrides. |
-| Read-receipt and typing-sending preferences | Shared per protocol account; both default enabled where supported. |
+| Read-receipt preferences | Shared by clients of the selected engine. An engine-wide default applies unless a direct conversation or room has an override. |
+| Typing-sending preferences | Shared per protocol account and enabled by default where supported. |
 | Manual Available/Away/Do Not Disturb choice | Shared per account; DND suppresses notifications once received. |
 | Pending/scheduled send visibility | Shared visibility; execution and initial mutations remain owner-controlled. |
 | Full media files | Separate optional sync, off by default. |
@@ -804,9 +805,14 @@ in [read state](read-state.md#xmpp-read-receipts).
 
 **RECOMMENDED R12:** the current browser implementation requires 500 ms of foreground visibility and at least 60% of the message height, capped by the available timeline height for tall messages. Hidden tabs, unfocused documents and open modal overlays do not qualify. Visibility tuning remains open; these defaults are not a new device preference.
 
-Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, not reversal of delivery/read evidence. Explicit Mark as read sends supported/enabled protocol read receipts, respecting the account setting, without requiring every message to be individually viewed.
+Provide synced **Mark as read** and **Mark as unread**. Unread is a reminder, not reversal of delivery/read evidence. Explicit Mark as read sends supported/enabled protocol read receipts, respecting the effective conversation setting, without requiring every message to be individually viewed.
 
-Read-receipt sending defaults on where supported, with a synced per-account disable setting. Internal read-state tracking/sync remains independent.
+Read-receipt sending defaults on where supported. Set the default for the
+selected engine in Settings → Engine → Read receipts. Each saved direct
+conversation and room can inherit that default, explicitly enable receipts or
+explicitly disable them using Conversation details → Read receipts. Clients of
+the same engine share the policy. Local read tracking and synchronization of
+read positions are independent of receipt sending.
 
 Support incoming/outgoing typing indicators where supported. Sending defaults on with a synced per-account toggle. Typing events are ephemeral, expiring state, not retained message history or outbox items to replay.
 
@@ -1220,7 +1226,7 @@ These scenarios validate **AGREED** behavior; proposed mechanisms such as a part
 | Downloaded files | Small previews default automatic, originals on demand, preferences per device. Downloads persist until explicit deletion under the default. Optional file removal preserves shared references. A supported digest mismatch is not shown as verified success. |
 | Forwarding | Destination account/capabilities govern the new outgoing message. Source attribution is opt-in. Media is obtained/uploaded with progress/errors; unavailable files do not silently become forwarded source links. |
 | Rooms | Discover/join/create/invite and name/topic changes follow support/permissions. Reconnect rejoins active rooms except explicit leave/revoked access. Leaving preserves saved history. |
-| Read and presence | Automatic reads require the active, focused conversation. At the latest end, earlier unread messages clear too. Explicit Mark as read sends enabled/supported receipts; unread reminders do not reverse them. Account DND suppresses alerts while reception/counts continue. |
+| Read and presence | Automatic reads require the active, focused conversation. At the latest end, earlier unread messages clear too. Explicit Mark as read sends supported receipts under the effective conversation policy. An override takes precedence over the engine default. Unread reminders preserve sent receipts. Account DND suppresses alerts while reception/counts continue. |
 | Notifications | Focused active chat is silent by default. Cooperating same-profile tabs/PWA windows issue at most one banner per message and one sound every two seconds without queueing. Independent devices notify under their own effective policies. Hosted Web Push is opt-in and respects local mute and account Do Not Disturb. |
 | Presentation | Desktop/mobile layouts, send-key preferences, first-unread opening, Jump to latest, and follow-bottom behavior work without losing drafts/scroll on ordinary updates. |
 | PWA storage | Recently viewed history respects the configured device limit; protected cached conversations report insufficient space. Drafts and pending sends are not ordinary eviction candidates. Media-file retention is independent. |

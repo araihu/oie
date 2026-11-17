@@ -36,7 +36,7 @@ type displayedStanza struct {
 }
 
 func (m *Manager) SendDisplayedMarker(ctx context.Context, c domain.Conversation, marker domain.DisplayedMarker) {
-	host, ok := m.host.(application.AccountPresenceHost)
+	host, ok := m.host.(application.DisplayedMarkerHost)
 	if !ok || !usableID(marker.RemoteID) {
 		return
 	}
@@ -52,16 +52,16 @@ func (m *Manager) SendDisplayedMarker(ctx context.Context, c domain.Conversation
 	defer cancel()
 	e.sendMu.Lock()
 	defer e.sendMu.Unlock()
-	prefs, err := host.AccountCommunicationPreferences(ctx, c.AccountID)
-	if err != nil || !prefs.SendReadReceipts || prefs.RevisionID != marker.PreferencesRevision {
-		return
-	}
 	e.mu.RLock()
 	session, raw := e.session, e.raw
 	connected := session != nil && raw != nil && e.state.State == "connected"
 	kind, allowed := e.displayedDestination(c)
 	e.mu.RUnlock()
 	if !connected || !allowed || ctx.Err() != nil {
+		return
+	}
+
+	if current, err := host.IsCurrentDisplayedMarker(ctx, marker); err != nil || !current {
 		return
 	}
 

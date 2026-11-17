@@ -19,10 +19,10 @@ func accountCommunicationPreferences(ctx context.Context, q *dbgen.Queries, acco
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.AccountCommunicationPreferences{}, application.ErrNotFound
 	}
-	return domain.AccountCommunicationPreferences{RevisionID: domain.ID(row.RevisionID), Presence: row.Presence, SendTyping: row.SendTyping != 0, SendReadReceipts: row.SendReadReceipts != 0}, err
+	return domain.AccountCommunicationPreferences{RevisionID: domain.ID(row.RevisionID), Presence: row.Presence, SendTyping: row.SendTyping != 0}, err
 }
 
-func (s *Store) SaveAccountCommunicationPreferences(ctx context.Context, account, expected domain.ID, next domain.AccountCommunicationPreferences, toggles application.AccountCommunicationToggles) (domain.AccountCommunicationPreferences, error) {
+func (s *Store) SaveAccountCommunicationPreferences(ctx context.Context, account, expected domain.ID, next domain.AccountCommunicationPreferences, typing *bool) (domain.AccountCommunicationPreferences, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return domain.AccountCommunicationPreferences{}, err
@@ -36,21 +36,17 @@ func (s *Store) SaveAccountCommunicationPreferences(ctx context.Context, account
 		return current, err
 	}
 	next.SendTyping = current.SendTyping
-	next.SendReadReceipts = current.SendReadReceipts
-	if toggles.SendTyping != nil {
-		next.SendTyping = *toggles.SendTyping
-	}
-	if toggles.SendReadReceipts != nil {
-		next.SendReadReceipts = *toggles.SendReadReceipts
+	if typing != nil {
+		next.SendTyping = *typing
 	}
 	if current.RevisionID != expected {
 		return current, application.ErrStateConflict
 	}
-	if current.Presence == next.Presence && current.SendTyping == next.SendTyping && current.SendReadReceipts == next.SendReadReceipts {
+	if current.Presence == next.Presence && current.SendTyping == next.SendTyping {
 		return current, nil
 	}
 	if err := q.PutAccountCommunicationPreferences(ctx, dbgen.PutAccountCommunicationPreferencesParams{
-		AccountID: string(account), RevisionID: string(next.RevisionID), Presence: next.Presence, SendTyping: number(next.SendTyping), SendReadReceipts: number(next.SendReadReceipts),
+		AccountID: string(account), RevisionID: string(next.RevisionID), Presence: next.Presence, SendTyping: number(next.SendTyping),
 	}); err != nil {
 		return current, err
 	}
