@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 45
+	newestRestoreSchema = 46
 )
 
 type RestoreSummary struct {
@@ -218,7 +218,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, now)
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest, hasDownloadCleanup, hasDownloadLineage, hasLegacyDownloads, now)
 	if err != nil {
 		return result, err
 	}

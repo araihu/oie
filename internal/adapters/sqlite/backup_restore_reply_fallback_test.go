@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -9,6 +10,73 @@ import (
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 )
+
+func TestBackupRestoreRecoversExactFallbackFromOlderArchive(t *testing.T) {
+	base, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	const answer = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const middle = "[quoted middle 🍰]"
+	trailing := strings.Join(strings.Split(answer, ""), "#") + "#"
+	raw := answer[:13] + middle + answer[13:] + trailing
+	ref := domain.MessageReference{Scope: "sender:bob@localhost", Author: "bob@localhost", ID: "fallback-two-ranges"}
+	reply := replySeed(t, base, chat, raw, now, nil, nil)
+	newer, older, destination := copyRestoreFixture(t, base), copyRestoreFixture(t, base), copyRestoreFixture(t, base)
+	reply.ReplyReference = &domain.ReplyReference{
+		Target: ref,
+		Fallback: []domain.TextRange{
+			{Start: 13, End: 13 + utf8.RuneCountInString(middle)},
+			{Start: utf8.RuneCountInString(raw) - utf8.RuneCountInString(trailing), End: utf8.RuneCountInString(raw)},
+		},
+	}
+	if got, _ := domain.ReplyBody(raw, reply.ReplyReference.Fallback); got != answer {
+		t.Fatalf("invalid original fallback fixture: %q", got)
+	}
+	if err := older.ReceiveMessage(ctx, chat, reply, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	original := replySeed(t, older, chat, "retained quoted original", now.AddDate(0, 0, -9), []domain.MessageReference{ref}, nil)
+	oldManifest, oldArchive, oldScratch := backupRestoreFixture(t, older, false)
+	if err := newer.ReceiveMessage(ctx, chat, reply, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	short, long := 7, 14
+	if _, err := testRestoreEngine(t, newer).SetConversationRetention(ctx, chat.ID, "0", &short); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testRestoreEngine(t, destination).SetConversationRetention(ctx, chat.ID, "0", &long); err != nil {
+		t.Fatal(err)
+	}
+	original.ReceivedAt = now
+	if err := newer.ReceiveMessage(ctx, chat, original, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := newer.Message(ctx, reply.ID); err != nil || got.OriginalText != answer || got.Reply == nil || !got.Reply.OriginalExpired {
+		t.Fatalf("newer archive fixture did not redact the quote: %+v, %v", got, err)
+	}
+	newManifest, newArchive, newScratch := backupRestoreFixture(t, newer, false)
+	if _, err := destination.mergeBackup(ctx, newArchive, newScratch, newManifest, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := destination.mergeBackup(ctx, oldArchive, oldScratch, oldManifest, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := destination.Message(ctx, reply.ID)
+	if err != nil || got.Reply == nil || got.Reply.MessageID != original.ID || !got.Reply.Available ||
+		got.Reply.BodyText != answer || got.OriginalText != raw || got.RevisionID != reply.RevisionID {
+		t.Fatalf("restore lost the original fallback or changed the wire body: %+v, %v", got, err)
+	}
+	_, sequence, err := destination.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := destination.mergeBackup(ctx, oldArchive, oldScratch, oldManifest, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, repeated, err := destination.Snapshot(ctx); err != nil || repeated != sequence {
+		t.Fatalf("reapplying exact fallback metadata published extra events: %d to %d, %v", sequence, repeated, err)
+	}
+}
 
 func TestBackupRestoreProjectsReplyWhenDestinationRetainedOriginal(t *testing.T) {
 	source, engine, chat := outboxFixture(t)

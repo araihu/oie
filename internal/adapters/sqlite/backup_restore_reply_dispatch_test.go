@@ -127,3 +127,75 @@ func TestBackupRestoreResumedReplyReloadsAfterRetractedTarget(t *testing.T) {
 		return err == nil && message.SendState == application.Submitted
 	})
 }
+
+func TestBackupRestoreResumedReplyDropsAmbiguousWireReferenceOnRetry(t *testing.T) {
+	source, engine, chat := outboxFixture(t)
+	engine.SetProtocols(&outboundProtocol{wireReply: true})
+	ctx := t.Context()
+	now := time.Now().UTC()
+	ref := domain.MessageReference{Scope: "sender:bob@localhost", Author: "bob@localhost", ID: "reused-wire-id"}
+	target := replySeed(t, source, chat, "the approved original", now, []domain.MessageReference{ref}, nil)
+	destination := copyRestoreFixture(t, source)
+	accepted, err := engine.SendMessageWithReply(ctx, migrationID(), chat.ID, "the authored reply", target.ID)
+	if err != nil || accepted.Message.OutboundReply == nil || accepted.Message.OutboundReply.Reference == nil {
+		t.Fatalf("expected a verified reply reference: %+v, %v", accepted.Message.OutboundReply, err)
+	}
+	manifest, archive, scratch := backupRestoreFixture(t, source, false)
+	if _, err := destination.mergeBackup(ctx, archive, scratch, manifest, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := destination.ReviewRecoveredSend(ctx, accepted.Message.ID, accepted.Message.RevisionID, true, now); err != nil {
+		t.Fatal(err)
+	}
+	receiver := testRestoreEngine(t, destination)
+	protocol := &guardedReplyProtocol{
+		outboundProtocol: outboundProtocol{connected: true, wireReply: true},
+		claimed:          make(chan application.Outgoing, 2),
+		proceed:          make(chan struct{}),
+		attempted:        make(chan guardedReplyAttempt, 2),
+	}
+	receiver.SetProtocols(protocol)
+	stop := startOutboundWorker(t, receiver)
+	defer stop()
+	select {
+	case outgoing := <-protocol.claimed:
+		if outgoing.ID != accepted.Message.ID || outgoing.OriginalText != accepted.Message.OriginalText ||
+			outgoing.Reply == nil || outgoing.Reply.Target != ref {
+			t.Fatalf("initial claim did not include the approved reply and reference: %+v", outgoing)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not claim the resumed reply")
+	}
+	replySeed(t, destination, chat, "a different message that reuses the same reference", now.Add(time.Second), []domain.MessageReference{ref}, nil)
+	if original, err := receiver.Message(ctx, target.ID); err != nil || len(original.References) != 0 {
+		t.Fatalf("the reused ID still appears to be verified: %+v, %v", original.References, err)
+	}
+	close(protocol.proceed)
+	select {
+	case first := <-protocol.attempted:
+		if !errors.Is(first.err, application.ErrStateConflict) {
+			t.Fatalf("wire gate authorized the ambiguous reference: %+v, %v", first.message, first.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("first claim did not reach the wire gate")
+	}
+	select {
+	case retry := <-protocol.attempted:
+		if retry.err != nil || retry.message.ID != accepted.Message.ID || retry.message.Reply != nil ||
+			retry.message.OriginalText != accepted.Message.OriginalText {
+			t.Fatalf("retry changed the approved text or kept the ambiguous wire hint: %+v, %v", retry.message, retry.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not retry the reply with its current wire projection")
+	}
+	awaitOutbound(t, func() bool {
+		message, err := receiver.Message(ctx, accepted.Message.ID)
+		return err == nil && message.SendState == application.Submitted
+	})
+	current, err := receiver.Message(ctx, accepted.Message.ID)
+	if err != nil || current.OutboundReply == nil || current.OutboundReply.TargetID != target.ID ||
+		current.OutboundReply.Reference == nil || *current.OutboundReply.Reference != ref ||
+		current.OriginalText != accepted.Message.OriginalText {
+		t.Fatalf("wire projection changed the stored approved reply plan: %+v, %v", current, err)
+	}
+}

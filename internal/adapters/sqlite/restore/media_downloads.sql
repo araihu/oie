@@ -45,7 +45,11 @@ SELECT device_id,source_id,source_revision,kind,cleanup_revision_id FROM restore
 INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
 SELECT device_id,source_id,source_revision,kind FROM restore_downloads WHERE cleanup_revision_id='';
 
+INSERT INTO legacy_download_restore_admissions
+SELECT * FROM restore_pending_legacy_downloads WHERE TRUE ON CONFLICT DO NOTHING;
+
 DROP TABLE restore_downloads;
+DROP TABLE restore_pending_legacy_downloads;
 DROP TABLE restore_download_devices;
 DROP TABLE restore_download_cleanup_parents;
 DROP TABLE restore_download_membership_proofs;

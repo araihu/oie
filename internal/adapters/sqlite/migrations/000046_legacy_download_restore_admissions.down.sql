@@ -1,0 +1,2 @@
+DROP TRIGGER clear_legacy_download_restore_admissions;
+DROP TABLE legacy_download_restore_admissions;

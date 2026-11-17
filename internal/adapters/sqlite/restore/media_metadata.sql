@@ -17,18 +17,30 @@ CREATE TEMP TABLE restore_eligible_downloads AS
 SELECT f.*, CASE
     WHEN proof.cleanup_revision_id IS NOT NULL THEN proof.cleanup_revision_id
     WHEN source.generation>0 AND source.has_membership_proofs=0 THEN ''
-END AS cleanup_revision_id
+END AS cleanup_revision_id,
+    bytes.name IS NOT NULL AS has_bytes, source.generation, source.cleanup_revision,
+    COALESCE(destination.generation,0)=0 AND source.generation>0
+        AND (source.has_membership_proofs=0 OR proof.cleanup_revision_id='') AS defer_legacy
 FROM backup.device_downloads f
 JOIN restore_download_devices source ON source.device_id=f.device_id
 LEFT JOIN download_devices destination ON destination.device_id=f.device_id
 LEFT JOIN download_cleanup_revisions cleanup ON cleanup.device_id=f.device_id AND cleanup.generation=destination.generation
 LEFT JOIN restore_download_membership_proofs proof ON proof.device_id=f.device_id AND proof.source_id=f.source_id
     AND proof.source_revision=f.source_revision AND proof.kind=f.kind
-JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
+LEFT JOIN restore_media_files bytes ON bytes.hash=f.hash AND bytes.size=f.size
     AND bytes.name=(CASE f.kind WHEN 'image' THEN 'media/images/' ELSE 'media/downloads/' END)||f.hash
-WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision))
+LEFT JOIN legacy_download_restore_admissions admission ON admission.device_id=f.device_id
+    AND admission.source_engine_id=@source_engine AND admission.source_id=f.source_id
+    AND admission.source_revision=f.source_revision AND admission.kind=f.kind
+    AND admission.hash=f.hash AND admission.size=f.size AND admission.downloaded_at_ms=f.downloaded_at_ms
+    AND admission.generation=source.generation AND admission.generation=destination.generation
+    AND admission.cleanup_revision=source.cleanup_revision AND admission.cleanup_revision=COALESCE(cleanup.revision_id,'')
+WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND cleanup.revision_id=source.cleanup_revision)
+       OR admission.device_id IS NOT NULL)
   AND (source.generation=0 OR (proof.cleanup_revision_id<>'' AND proof.cleanup_revision_id=source.cleanup_revision)
-       OR (COALESCE(destination.generation,0)=0 AND (source.has_membership_proofs=0 OR proof.cleanup_revision_id='')))
+       OR ((COALESCE(destination.generation,0)=0 OR admission.device_id IS NOT NULL)
+           AND (source.has_membership_proofs=0 OR proof.cleanup_revision_id='')))
+  AND (has_bytes=1 OR defer_legacy=1)
   -- Settings claims legacy originals before clearing the real device.
   -- Older archives lack the identity of the device that claimed them.
   AND (f.device_id<>'legacy' OR NOT EXISTS (
@@ -47,6 +59,25 @@ JOIN messages local ON local.id=x.id
 LEFT JOIN message_content_heads local_head ON local_head.canonical_id=x.id
 WHERE COALESCE(source_head.revision_id,source.revision_id)=COALESCE(local_head.revision_id,local.revision_id);
 
+-- Remember legacy media that an untouched device could import already.
+-- Only a later snapshot with the same source and membership can fill it.
+CREATE TEMP TABLE restore_pending_legacy_downloads AS
+SELECT f.device_id,@source_engine AS source_engine_id,f.source_id,f.source_revision,
+       f.kind,f.hash,f.size,f.downloaded_at_ms,f.generation,f.cleanup_revision
+FROM restore_eligible_downloads f
+WHERE f.defer_legacy=1 AND f.has_bytes=0 AND length(f.hash)=64 AND f.hash NOT GLOB '*[^0-9a-f]*' AND f.size>=0
+  AND (
+      f.kind='file' AND EXISTS (
+          SELECT 1 FROM backup.shared_content ref
+          JOIN restore_matching_media_messages m ON m.id=ref.message_id AND m.revision_id=f.source_revision
+          WHERE ref.id=f.source_id AND oie_quote_preview_allowed(m.payload,ref.url)
+      ) OR f.kind='image' AND EXISTS (
+          SELECT 1 FROM backup.message_previews p JOIN restore_matching_media_messages m ON m.id=p.message_id
+          WHERE p.id=f.source_id AND p.download_state='ready' AND json_extract(p.payload,'$.Kind')='image'
+            AND json_extract(p.payload,'$.FileHash')=f.hash AND oie_quote_preview_allowed(m.payload,p.url)
+      )
+  );
+
 -- Reserve the matching file reference for a message still awaiting local
 -- indexing. The catalog worker owns visibility and can reuse this ID.
 INSERT INTO shared_content
@@ -54,7 +85,7 @@ SELECT DISTINCT source.*
 FROM restore_eligible_downloads f
 JOIN backup.shared_content source ON source.id=f.source_id
 JOIN restore_matching_media_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
-WHERE f.kind='file' AND oie_quote_preview_allowed(m.payload,source.url)
+WHERE f.kind='file' AND f.has_bytes=1 AND oie_quote_preview_allowed(m.payload,source.url)
   AND NOT EXISTS (SELECT 1 FROM shared_content_state s WHERE s.message_id=source.message_id)
 ON CONFLICT DO NOTHING;
 
@@ -69,7 +100,7 @@ FROM restore_eligible_downloads f
 JOIN backup.shared_content source ON source.id=f.source_id
 JOIN restore_matching_media_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
 JOIN shared_content local ON local.message_id=source.message_id AND local.url=source.url AND local.kind=source.kind
-WHERE f.kind='file' AND oie_quote_preview_allowed(m.payload,source.url)
+WHERE f.kind='file' AND f.has_bytes=1 AND oie_quote_preview_allowed(m.payload,source.url)
 UNION ALL
 SELECT f.device_id, COALESCE(local.id,source.id), f.source_revision, f.kind, f.hash, f.mime_type,
        f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
@@ -78,7 +109,7 @@ JOIN backup.message_previews source ON source.id=f.source_id
 JOIN restore_matching_media_messages m ON m.id=source.message_id
 LEFT JOIN message_previews local ON local.message_id=source.message_id AND local.url=source.url
 LEFT JOIN resolved_links resolved ON resolved.entity_id=local.id
-WHERE f.kind='image' AND source.download_state='ready' AND json_extract(source.payload,'$.Kind')='image'
+WHERE f.kind='image' AND f.has_bytes=1 AND source.download_state='ready' AND json_extract(source.payload,'$.Kind')='image'
   AND oie_quote_preview_allowed(m.payload,source.url)
   AND json_extract(source.payload,'$.FileHash')=f.hash
   AND (local.id IS NULL OR (

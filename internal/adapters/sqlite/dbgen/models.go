@@ -293,6 +293,19 @@ type LegacyDownloadMembership struct {
 	Kind           string
 }
 
+type LegacyDownloadRestoreAdmission struct {
+	DeviceID        string
+	SourceEngineID  string
+	SourceID        string
+	SourceRevision  string
+	Kind            string
+	Hash            string
+	Size            int64
+	DownloadedAtMs  int64
+	Generation      int64
+	CleanupRevision string
+}
+
 type MediaFile struct {
 	Hash      string
 	MimeType  string

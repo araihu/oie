@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -105,7 +106,32 @@ func (s *Store) claimDispatchMessage(ctx context.Context, id, expected, roomInte
 	if err != nil {
 		return m, err
 	}
+	if err := projectDispatchReplyReference(ctx, q, &m); err != nil {
+		return m, err
+	}
 	return m, tx.Commit()
+}
+
+// Keep the approved reply plan and quote. The wire hint can only identify a
+// currently verified reference to the same scoped target.
+func projectDispatchReplyReference(ctx context.Context, q *dbgen.Queries, m *domain.Message) error {
+	plan := m.OutboundReply
+	if plan == nil || plan.Reference == nil {
+		return nil
+	}
+	if m.Reply != nil && m.Reply.Available && !m.Reply.OriginalExpired {
+		target := domain.Message{ID: m.Reply.MessageID}
+		if err := hydrateReferences(ctx, q, &target); err != nil {
+			return err
+		}
+		if slices.Contains(target.References, *plan.Reference) {
+			return nil
+		}
+	}
+	projected := *plan
+	projected.Reference = nil
+	m.OutboundReply = &projected
+	return nil
 }
 
 // RecoverInterruptedMessage requeues only claims with durable evidence that

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"strings"
 	"unicode/utf8"
 
@@ -10,6 +11,21 @@ import (
 )
 
 func init() {
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_verified_reply_fallback", 2, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		original, originalOK := args[0].(string)
+		fallback, fallbackOK := args[1].(string)
+		if !originalOK || !fallbackOK || !utf8.ValidString(original) {
+			return nil, nil
+		}
+		var spans []domain.TextRange
+		if err := json.Unmarshal([]byte(fallback), &spans); err != nil {
+			return nil, nil
+		}
+		if body, _ := domain.ReplyBody(original, spans); body == original {
+			return nil, nil
+		}
+		return jsonText(spans), nil
+	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_restore_reply_fallback", 2, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		original, originalOK := args[0].(string)
 		body, bodyOK := args[1].(string)

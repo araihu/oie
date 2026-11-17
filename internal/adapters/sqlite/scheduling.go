@@ -190,6 +190,9 @@ func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision doma
 	if err := hydrateReply(ctx, q, &current); err != nil {
 		return err
 	}
+	if err := projectDispatchReplyReference(ctx, q, &current); err != nil {
+		return err
+	}
 	if !frozen.MatchesOriginalContent(current) {
 		return application.StateConflict{Current: current}
 	}

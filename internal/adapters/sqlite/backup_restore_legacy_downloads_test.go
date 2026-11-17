@@ -114,6 +114,56 @@ func TestBackupRestoreKeepsOlderUnprovenDownloadPortableWithoutCertifyingIt(t *t
 	}
 }
 
+func TestBackupRestoreCompletesPortableLegacyDownloadAfterMetadataOnlySnapshot(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	preview, device := seedBackupDownloadedImage(t, source, chat, now)
+	clearBackupDownloads(t, source, device, now)
+	redownloadBackupImage(t, source, preview, device, now)
+	upgraded := upgradeDownloadFixture(t, source, 43)
+	metadata, metadataArchive, metadataScratch := backupRestoreFixture(t, upgraded, false)
+	full, fullArchive, fullScratch := backupRestoreFixture(t, upgraded, true)
+
+	for _, tc := range []struct {
+		name           string
+		clearLocally   bool
+		wantFiles      int
+		wantGeneration int64
+	}{
+		{name: "complete the earlier restore", wantFiles: 1, wantGeneration: 1},
+		{name: "clear before restoring bytes", clearLocally: true, wantGeneration: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dest := openLegacyDownloadDestination(t)
+			if _, err := dest.mergeBackup(ctx, metadataArchive, metadataScratch, metadata, now); err != nil {
+				t.Fatal(err)
+			}
+			if policy, err := dest.DownloadPolicy(ctx, device); err != nil || policy.Count != 0 || policy.Generation != 1 {
+				t.Fatalf("metadata-only restore did not install the cleanup without media: %+v, %v", policy, err)
+			}
+			dest = upgradeDownloadFixture(t, dest, 0)
+			if tc.clearLocally {
+				clearBackupDownloads(t, dest, device, now.Add(time.Minute))
+			}
+			if result, err := dest.mergeBackup(ctx, fullArchive, fullScratch, full, now); err != nil || result.MediaFiles != tc.wantFiles {
+				t.Fatalf("full legacy restore after metadata: %+v, %v", result, err)
+			}
+			if result, err := dest.mergeBackup(ctx, fullArchive, fullScratch, full, now); err != nil || result.MediaFiles != 0 {
+				t.Fatalf("legacy restore changed on repeat: %+v, %v", result, err)
+			}
+			if policy, err := dest.DownloadPolicy(ctx, device); err != nil || policy.Count != tc.wantFiles || policy.Generation != tc.wantGeneration {
+				t.Fatalf("partial legacy restore invalidated the device policy: %+v, %v", policy, err)
+			}
+			var proofs int
+			if err := dest.readDB.QueryRowContext(ctx, "SELECT count(*) FROM download_membership_cleanup_revisions WHERE device_id=?", device).
+				Scan(&proofs); err != nil || proofs != 0 {
+				t.Fatalf("receiving legacy bytes manufactured a cleanup proof: %d, %v", proofs, err)
+			}
+		})
+	}
+}
+
 func upgradeDownloadFixture(t *testing.T, store *Store, oldVersion uint) *Store {
 	t.Helper()
 	if oldVersion != 0 {
