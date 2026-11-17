@@ -59,6 +59,17 @@ func (q *Queries) GetRecoveredSend(ctx context.Context, messageID string) (Recov
 	return i, err
 }
 
+const hasRecoveredSendReceipt = `-- name: HasRecoveredSendReceipt :one
+SELECT EXISTS(SELECT 1 FROM recovered_send_operations WHERE operation_id=?)
+`
+
+func (q *Queries) HasRecoveredSendReceipt(ctx context.Context, operationID string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasRecoveredSendReceipt, operationID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listBackupMedia = `-- name: ListBackupMedia :many
 SELECT 'avatars' AS subdir, CAST(hash || '.png' AS TEXT) AS filename, hash, -1 AS size
 FROM (
@@ -94,6 +105,39 @@ func (q *Queries) ListBackupMedia(ctx context.Context) ([]ListBackupMediaRow, er
 			&i.Filename,
 			&i.Hash,
 			&i.Size,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecoveredSendRevisions = `-- name: ListRecoveredSendRevisions :many
+SELECT id, message_id, parents, payload, created_at FROM recovered_send_revisions WHERE message_id=? ORDER BY id
+`
+
+func (q *Queries) ListRecoveredSendRevisions(ctx context.Context, messageID string) ([]RecoveredSendRevision, error) {
+	rows, err := q.db.QueryContext(ctx, listRecoveredSendRevisions, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecoveredSendRevision{}
+	for rows.Next() {
+		var i RecoveredSendRevision
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessageID,
+			&i.Parents,
+			&i.Payload,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -163,13 +207,55 @@ func (q *Queries) ListRecoveredSends(ctx context.Context) ([]ListRecoveredSendsR
 	return items, nil
 }
 
+const preserveResumedRevision = `-- name: PreserveResumedRevision :exec
+INSERT INTO message_revisions (id,entity_id,parents,payload,created_at)
+SELECT id,message_id,parents,payload,created_at FROM recovered_send_revisions WHERE message_id=?
+ON CONFLICT(id) DO UPDATE SET parents=excluded.parents,payload=excluded.payload,created_at=excluded.created_at
+WHERE message_revisions.entity_id=excluded.entity_id
+`
+
+func (q *Queries) PreserveResumedRevision(ctx context.Context, messageID string) error {
+	_, err := q.db.ExecContext(ctx, preserveResumedRevision, messageID)
+	return err
+}
+
+const putRecoveredSendRevision = `-- name: PutRecoveredSendRevision :exec
+INSERT INTO recovered_send_revisions (id,message_id,parents,payload,created_at) VALUES (?,?,?,?,?)
+ON CONFLICT(id) DO NOTHING
+`
+
+type PutRecoveredSendRevisionParams struct {
+	ID        string
+	MessageID string
+	Parents   string
+	Payload   string
+	CreatedAt string
+}
+
+func (q *Queries) PutRecoveredSendRevision(ctx context.Context, arg PutRecoveredSendRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, putRecoveredSendRevision,
+		arg.ID,
+		arg.MessageID,
+		arg.Parents,
+		arg.Payload,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const recoveredSendHasDestinationEvidence = `-- name: RecoveredSendHasDestinationEvidence :one
 SELECT CAST(EXISTS(SELECT 1 FROM messages m WHERE m.id=?1
   OR (m.account_id=?2 AND m.conversation_id=?3
       AND m.is_own=1 AND m.provider_id=?1))
 OR EXISTS(SELECT 1 FROM operations o WHERE o.resource_id=?1
   AND NOT EXISTS(SELECT 1 FROM recovered_send_operations h WHERE h.operation_id=o.id))
-OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1) AS INTEGER)
+OR EXISTS(SELECT 1 FROM expired_message_ids WHERE id=?1)
+OR EXISTS(
+ SELECT 1 FROM conversations c JOIN accounts a ON a.id=c.account_id
+ JOIN message_retractions r ON r.account_id=c.account_id AND r.address=c.address AND r.kind='direct'
+   AND r.scope='xmpp:correct:sender:'||a.address AND r.remote_id=?1
+ WHERE c.id=?3 AND json_extract(c.payload,'$.Kind')='direct'
+) AS INTEGER)
 `
 
 type RecoveredSendHasDestinationEvidenceParams struct {
@@ -214,6 +300,54 @@ func (q *Queries) RestoreReviewedSendReceipts(ctx context.Context, messageID str
 	return err
 }
 
+const scrubRecoveredSendPayloads = `-- name: ScrubRecoveredSendPayloads :exec
+UPDATE recovered_sends SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE conversation_id=?1
+  AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubRecoveredSendPayloadsParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubRecoveredSendPayloads(ctx context.Context, arg ScrubRecoveredSendPayloadsParams) error {
+	_, err := q.db.ExecContext(ctx, scrubRecoveredSendPayloads, arg.OwnerID, arg.ExpiredIds)
+	return err
+}
+
+const scrubRecoveredSendReceipts = `-- name: ScrubRecoveredSendReceipts :exec
+UPDATE recovered_send_operations SET result=oie_strip_expired_outbound_quote(result)
+WHERE message_id IN (SELECT message_id FROM recovered_sends WHERE conversation_id=?1)
+  AND json_extract(result,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubRecoveredSendReceiptsParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubRecoveredSendReceipts(ctx context.Context, arg ScrubRecoveredSendReceiptsParams) error {
+	_, err := q.db.ExecContext(ctx, scrubRecoveredSendReceipts, arg.OwnerID, arg.ExpiredIds)
+	return err
+}
+
+const scrubRecoveredSendRevisions = `-- name: ScrubRecoveredSendRevisions :exec
+UPDATE recovered_send_revisions SET payload=oie_strip_expired_outbound_quote(payload)
+WHERE message_id IN (SELECT message_id FROM recovered_sends WHERE conversation_id=?1)
+  AND json_extract(payload,'$.OutboundReply.TargetID') IN (SELECT value FROM json_each(CAST(?2 AS TEXT)))
+`
+
+type ScrubRecoveredSendRevisionsParams struct {
+	OwnerID    string
+	ExpiredIds string
+}
+
+func (q *Queries) ScrubRecoveredSendRevisions(ctx context.Context, arg ScrubRecoveredSendRevisionsParams) error {
+	_, err := q.db.ExecContext(ctx, scrubRecoveredSendRevisions, arg.OwnerID, arg.ExpiredIds)
+	return err
+}
+
 const summarizeBackup = `-- name: SummarizeBackup :one
 SELECT
   (SELECT COUNT(*) FROM accounts) AS accounts,
@@ -243,4 +377,29 @@ func (q *Queries) SummarizeBackup(ctx context.Context) (SummarizeBackupRow, erro
 		&i.RoomPasswords,
 	)
 	return i, err
+}
+
+const updateRecoveredSend = `-- name: UpdateRecoveredSend :exec
+UPDATE recovered_sends SET revision_id=?, original_state=?, attempt_count=?, scheduled_at=?, payload=? WHERE message_id=?
+`
+
+type UpdateRecoveredSendParams struct {
+	RevisionID    string
+	OriginalState string
+	AttemptCount  int64
+	ScheduledAt   string
+	Payload       string
+	MessageID     string
+}
+
+func (q *Queries) UpdateRecoveredSend(ctx context.Context, arg UpdateRecoveredSendParams) error {
+	_, err := q.db.ExecContext(ctx, updateRecoveredSend,
+		arg.RevisionID,
+		arg.OriginalState,
+		arg.AttemptCount,
+		arg.ScheduledAt,
+		arg.Payload,
+		arg.MessageID,
+	)
+	return err
 }

@@ -681,7 +681,8 @@ send and media counts.
 Quit Oiê or stop the hosted engine before restoring. The restore command
 verifies the archive, keeps the destination's identity and applies the changes
 in one transaction. Existing removals, retractions and retention rules remain
-in force. If the same XMPP address has separate account or conversation
+in force. The restore also keeps removals made through a device's download
+cleanup. If the same XMPP address has separate account or conversation
 identities, Oiê reports the conflict and leaves the profile data intact.
 
 ```sh
@@ -689,7 +690,9 @@ bin/oie backup restore --data-dir "/path/to/profile" "$HOME/oie-backup.zip"
 bin/oie backup pending --data-dir "/path/to/profile"
 ```
 
-Restored sends stay paused across restarts. Review the destination, message,
+Restored sends stay paused across restarts. If a later backup brings evidence
+of an attempt, cancellation or submission, Oiê preserves that evidence and
+does not dispatch the older intent. Review the destination, message,
 schedule and original send state in the pending list. To discard a recovered
 send, use the message and revision IDs from that list.
 

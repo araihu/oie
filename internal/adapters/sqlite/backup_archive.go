@@ -45,18 +45,15 @@ func VerifyBackup(ctx context.Context, filename string) (summary BackupSummary, 
 	if err != nil {
 		return summary, err
 	}
-	db, err := openBackupDatabase(filepath.Join(scratch, backupDatabaseName), "ro")
+	filename = filepath.Join(scratch, backupDatabaseName)
+	if err := checkRestoreDatabase(ctx, filename); err != nil {
+		return summary, err
+	}
+	db, err := openBackupDatabase(filename, "ro")
 	if err != nil {
 		return summary, err
 	}
 	defer func() { err = errors.Join(err, db.Close()) }()
-	var check string
-	if err := db.QueryRowContext(ctx, "PRAGMA quick_check(1)").Scan(&check); err != nil {
-		return summary, err
-	}
-	if check != "ok" {
-		return summary, errors.New("backup database failed integrity verification")
-	}
 	q := dbgen.New(db)
 	counts, err := q.SummarizeBackup(ctx)
 	if err != nil {

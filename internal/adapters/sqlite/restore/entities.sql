@@ -1,15 +1,18 @@
 INSERT INTO accounts SELECT a.* FROM backup.accounts a JOIN restore_accounts x ON x.id=a.id
-WHERE NOT EXISTS(SELECT 1 FROM accounts d WHERE d.id=a.id);
+WHERE x.is_new=1;
 INSERT INTO revisions SELECT r.* FROM backup.revisions r JOIN restore_accounts a ON a.id=r.entity_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
+INSERT INTO operations
+SELECT o.* FROM backup.operations o JOIN restore_accounts a ON a.id=o.resource_id
+WHERE o.kind='register_account' AND o.result<>'null'
+ON CONFLICT(id) DO NOTHING;
 
--- Imported activity uses local sequence values. Existing chat state and
--- ordering stay owned by the destination.
+-- Newly restored chats receive their local activity sequence when publishing
+-- conversation.created. Their final summary is computed from merged history.
 INSERT INTO conversations (id,revision_id,account_id,address,peer_id,payload,activity_sequence,unread_count,archived,favorite)
 SELECT c.id,c.revision_id,c.account_id,c.address,c.peer_id,
        json_set(c.payload,'$.LastMessage','','$.UnreadCount',0,'$.UnreadMention',json('false')),
-       (SELECT MIN(COALESCE(MIN(activity_sequence),0),0) FROM conversations) -
-          ROW_NUMBER() OVER(ORDER BY c.activity_sequence DESC,c.id),
+       0,
        0,c.archived,c.favorite
 FROM backup.conversations c JOIN restore_chats x ON x.id=c.id AND x.is_new=1;
 INSERT INTO conversation_revisions
@@ -32,7 +35,7 @@ INSERT INTO operations
 SELECT o.id,o.fingerprint,o.resource_id,
        o.result,o.created_at,o.kind
 FROM backup.operations o JOIN restore_messages x ON x.id=o.resource_id AND x.is_new=1
-WHERE o.kind IN ('send_message','cancel_message','update_pending_message','forward_message')
+WHERE o.kind IN ('send_message','cancel_message','update_pending_message','send_scheduled_message_now','forward_message')
 ON CONFLICT(id) DO NOTHING;
 
 INSERT INTO message_star_revisions SELECT r.* FROM backup.message_star_revisions r JOIN restore_messages x ON x.id=r.message_id

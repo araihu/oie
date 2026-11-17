@@ -157,6 +157,10 @@ type ConversationRevision struct {
 	CreatedAt string
 }
 
+type DeletedAccountID struct {
+	ID string
+}
+
 type DeviceDownload struct {
 	DeviceID          string
 	SourceID          string
@@ -501,6 +505,14 @@ type RecoveredSendOperation struct {
 	OperationID string
 	MessageID   string
 	Result      string
+}
+
+type RecoveredSendRevision struct {
+	ID        string
+	MessageID string
+	Parents   string
+	Payload   string
+	CreatedAt string
 }
 
 type RetainedMessageRetraction struct {

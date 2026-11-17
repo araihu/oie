@@ -110,6 +110,7 @@ type Querier interface {
 	GetVisibleMessage(ctx context.Context, id string) (Message, error)
 	HasAcceptedDirectHistory(ctx context.Context, conversationID string) (bool, error)
 	HasMessageRead(ctx context.Context, canonicalID string) (bool, error)
+	HasRecoveredSendReceipt(ctx context.Context, operationID string) (bool, error)
 	ImagePreviewStillUsesHash(ctx context.Context, hash string) (bool, error)
 	InsertAccount(ctx context.Context, arg InsertAccountParams) error
 	InsertAccountRevision(ctx context.Context, arg InsertAccountRevisionParams) error
@@ -188,6 +189,7 @@ type Querier interface {
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
+	ListRecoveredSendRevisions(ctx context.Context, messageID string) ([]RecoveredSendRevision, error)
 	ListRecoveredSends(ctx context.Context) ([]ListRecoveredSendsRow, error)
 	ListRetainedDownloadHashes(ctx context.Context) ([]string, error)
 	ListRetentionAccountScopes(ctx context.Context) ([]string, error)
@@ -217,6 +219,7 @@ type Querier interface {
 	PendingMessageReactionCommands(ctx context.Context, nextAttemptAt string) ([]MessageReactionCommand, error)
 	PendingMessages(ctx context.Context, nextAttemptAt string) ([]Message, error)
 	PendingMessagesByAttachments(ctx context.Context, arg PendingMessagesByAttachmentsParams) ([]PendingMessagesByAttachmentsRow, error)
+	PreserveResumedRevision(ctx context.Context, messageID string) error
 	PreviewJobs(ctx context.Context, arg PreviewJobsParams) ([]MessagePreview, error)
 	PutAccountCommunicationPreferences(ctx context.Context, arg PutAccountCommunicationPreferencesParams) error
 	PutArchiveCheckpoint(ctx context.Context, arg PutArchiveCheckpointParams) error
@@ -233,6 +236,7 @@ type Querier interface {
 	PutGuardedRoomArchiveProgress(ctx context.Context, arg PutGuardedRoomArchiveProgressParams) (int64, error)
 	PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error
 	PutMessageStar(ctx context.Context, arg PutMessageStarParams) error
+	PutRecoveredSendRevision(ctx context.Context, arg PutRecoveredSendRevisionParams) error
 	PutRoomArchiveMode(ctx context.Context, arg PutRoomArchiveModeParams) error
 	PutRoomArchiveProgress(ctx context.Context, arg PutRoomArchiveProgressParams) error
 	PutRoomBannedNickname(ctx context.Context, arg PutRoomBannedNicknameParams) error
@@ -270,6 +274,9 @@ type Querier interface {
 	ScrubMessageInboundQuote(ctx context.Context, arg ScrubMessageInboundQuoteParams) error
 	ScrubMessageOutboundQuotes(ctx context.Context, arg ScrubMessageOutboundQuotesParams) error
 	ScrubReceiptOutboundQuotes(ctx context.Context, arg ScrubReceiptOutboundQuotesParams) error
+	ScrubRecoveredSendPayloads(ctx context.Context, arg ScrubRecoveredSendPayloadsParams) error
+	ScrubRecoveredSendReceipts(ctx context.Context, arg ScrubRecoveredSendReceiptsParams) error
+	ScrubRecoveredSendRevisions(ctx context.Context, arg ScrubRecoveredSendRevisionsParams) error
 	ScrubRevisionInboundQuote(ctx context.Context, arg ScrubRevisionInboundQuoteParams) error
 	ScrubRevisionOutboundQuotes(ctx context.Context, arg ScrubRevisionOutboundQuotesParams) error
 	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]SearchContactsRow, error)
@@ -300,6 +307,7 @@ type Querier interface {
 	UpdateMessagePreview(ctx context.Context, arg UpdateMessagePreviewParams) (int64, error)
 	UpdateMessageReactionCommand(ctx context.Context, arg UpdateMessageReactionCommandParams) error
 	UpdateOutbox(ctx context.Context, arg UpdateOutboxParams) error
+	UpdateRecoveredSend(ctx context.Context, arg UpdateRecoveredSendParams) error
 	UpsertRoomInvitationCredential(ctx context.Context, arg UpsertRoomInvitationCredentialParams) error
 	VerifyIndexedMessages(ctx context.Context, arg VerifyIndexedMessagesParams) ([]VerifyIndexedMessagesRow, error)
 }

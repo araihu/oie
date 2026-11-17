@@ -139,6 +139,15 @@ func (s *Store) resumeRecoveredSend(ctx context.Context, q *dbgen.Queries, recov
 	if err := insertMessage(ctx, q, m); err != nil {
 		return err
 	}
+	if m.TimelineAt != nil {
+		ms := m.TimelineAt.UnixMilli()
+		if err := q.SetMessageTimelineAt(ctx, dbgen.SetMessageTimelineAtParams{ID: recovered.MessageID, TimelineAtMs: &ms}); err != nil {
+			return err
+		}
+	}
+	if err := q.PreserveResumedRevision(ctx, recovered.MessageID); err != nil {
+		return err
+	}
 	if err := q.InsertOutbox(ctx, dbgen.InsertOutboxParams{MessageID: recovered.MessageID, NextAttemptAt: eligibleAt(m, now), ScheduledAt: recovered.ScheduledAt}); err != nil {
 		return err
 	}
@@ -160,4 +169,14 @@ func validateRecoveredAttachment(ctx context.Context, q *dbgen.Queries, dir stri
 		return fmt.Errorf("attachment %q is unavailable: %w", file.FileName, err)
 	}
 	return nil
+}
+
+func scrubRecoveredSendQuotes(ctx context.Context, q *dbgen.Queries, conversation, excluded string) error {
+	if err := q.ScrubRecoveredSendPayloads(ctx, dbgen.ScrubRecoveredSendPayloadsParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	if err := q.ScrubRecoveredSendRevisions(ctx, dbgen.ScrubRecoveredSendRevisionsParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	return q.ScrubRecoveredSendReceipts(ctx, dbgen.ScrubRecoveredSendReceiptsParams{OwnerID: conversation, ExpiredIds: excluded})
 }

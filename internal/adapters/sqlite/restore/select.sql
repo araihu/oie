@@ -1,13 +1,14 @@
-CREATE TEMP TABLE restore_accounts (id TEXT PRIMARY KEY) WITHOUT ROWID;
+CREATE TEMP TABLE restore_accounts (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
 INSERT INTO restore_accounts
-SELECT a.id FROM backup.accounts a
-WHERE NOT EXISTS (
+SELECT a.id, NOT EXISTS(SELECT 1 FROM accounts d WHERE d.id=a.id) FROM backup.accounts a
+WHERE NOT EXISTS (SELECT 1 FROM deleted_account_ids d WHERE d.id=a.id)
+  AND NOT EXISTS (
   SELECT 1 FROM operations o
   WHERE o.resource_id=a.id AND o.kind='register_account' AND o.result='null'
 );
 
-CREATE TEMP TABLE restore_chats (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
-INSERT INTO restore_chats
+CREATE TEMP TABLE restore_chats (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL, history_changed INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+INSERT INTO restore_chats(id,is_new)
 SELECT c.id, NOT EXISTS(SELECT 1 FROM conversations d WHERE d.id=c.id)
 FROM backup.conversations c JOIN restore_accounts a ON a.id=c.account_id;
 
@@ -54,4 +55,36 @@ WHERE is_new=1 AND EXISTS (
   SELECT 1 FROM backup.message_canonical_aliases a WHERE a.alias_id=restore_messages.id
   AND NOT EXISTS(SELECT 1 FROM restore_messages root WHERE root.id=a.canonical_id)
   AND NOT EXISTS(SELECT 1 FROM messages root WHERE root.id=a.canonical_id)
+);
+
+-- Detect a history change before inserting any revision rows. Chats whose
+-- newest item and unread count stay the same still need a refresh when
+-- retained messages or edit history are added.
+UPDATE restore_chats SET history_changed=1
+WHERE id IN (
+  SELECT m.conversation_id FROM backup.messages m JOIN restore_messages r ON r.id=m.id AND r.is_new=1
+  UNION
+  SELECT m.conversation_id FROM backup.message_revisions b
+  JOIN restore_messages r ON r.id=b.entity_id AND r.is_new=0
+  JOIN messages m ON m.id=r.id
+  WHERE NOT EXISTS(SELECT 1 FROM message_revisions d WHERE d.id=b.id)
+  UNION
+  SELECT m.conversation_id FROM backup.message_star_revisions b
+  JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
+  JOIN messages m ON m.id=r.id
+  WHERE NOT EXISTS(SELECT 1 FROM message_star_revisions d WHERE d.id=b.id)
+  UNION
+  SELECT c.id FROM backup.message_retractions b
+  JOIN conversations c ON c.account_id=b.account_id AND c.address=b.address
+  WHERE NOT EXISTS(
+    SELECT 1 FROM message_retractions d WHERE d.account_id=b.account_id
+      AND d.kind=b.kind AND d.address=b.address AND d.scope=b.scope AND d.remote_id=b.remote_id
+  )
+  UNION
+  SELECT c.id FROM backup.room_message_moderation b
+  JOIN conversations c ON c.account_id=b.account_id AND c.address=b.room_address
+  WHERE NOT EXISTS(
+    SELECT 1 FROM room_message_moderation d
+    WHERE d.account_id=b.account_id AND d.room_address=b.room_address AND d.stanza_id=b.stanza_id
+  )
 );

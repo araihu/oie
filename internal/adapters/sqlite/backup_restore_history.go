@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -48,6 +49,9 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 			return err
 		}
 	}
+	if err := publishRestoredAccounts(ctx, tx, q, now); err != nil {
+		return err
+	}
 	rows, err := tx.QueryContext(ctx, restoreScript("summary"))
 	if err != nil {
 		return err
@@ -55,51 +59,86 @@ func restoreDerivedHistory(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, fa
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id string
-		var added bool
-		if err := rows.Scan(&id, &added); err != nil {
+		var added, historyChanged bool
+		if err := rows.Scan(&id, &added, &historyChanged); err != nil {
 			return err
 		}
-		if err := scrubRestoredQuotes(ctx, tx, q, id); err != nil {
+		scrubbed, err := scrubRestoredQuotes(ctx, tx, q, id)
+		if err != nil {
 			return err
 		}
 		if err := refreshRestoredConversation(ctx, q, id, added, now); err != nil {
+			return err
+		}
+		if !added && (historyChanged || scrubbed) {
+			if _, err := change(ctx, q, "conversation.history_pruned", domain.HistoryPruned{
+				ConversationID: domain.ID(id), MessageIDs: []domain.ID{},
+			}, now); err != nil {
+				return err
+			}
+		}
+	}
+	return rows.Err()
+}
+
+func publishRestoredAccounts(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, now time.Time) error {
+	rows, err := tx.QueryContext(ctx, restoreScript("new_accounts"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return err
+		}
+		var account domain.Account
+		if err := json.Unmarshal([]byte(payload), &account); err != nil {
+			return err
+		}
+		if _, err := change(ctx, q, "account.registered", account, now); err != nil {
 			return err
 		}
 	}
 	return rows.Err()
 }
 
-func scrubRestoredQuotes(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, id string) error {
+func scrubRestoredQuotes(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, id string) (bool, error) {
 	rows, err := tx.QueryContext(ctx, restoreScript("excluded_ids"), id)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = rows.Close() }()
 	var excluded []string
 	for rows.Next() {
 		var source string
 		if err := rows.Scan(&source); err != nil {
-			return err
+			return false, err
 		}
 		excluded = append(excluded, source)
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return false, err
 	}
 	if len(excluded) > 0 {
 		ids := jsonText(excluded)
 		if err := q.ScrubMessageOutboundQuotes(ctx, dbgen.ScrubMessageOutboundQuotesParams{ConversationID: id, ExpiredIds: ids}); err != nil {
-			return err
+			return false, err
 		}
 		if err := q.ScrubRevisionOutboundQuotes(ctx, dbgen.ScrubRevisionOutboundQuotesParams{OwnerID: id, ExpiredIds: ids}); err != nil {
-			return err
+			return false, err
+		}
+		if err := q.ScrubEventOutboundQuotes(ctx, dbgen.ScrubEventOutboundQuotesParams{OwnerID: id, ExpiredIds: ids}); err != nil {
+			return false, err
 		}
 		if err := q.ScrubReceiptOutboundQuotes(ctx, dbgen.ScrubReceiptOutboundQuotesParams{OwnerID: id, ExpiredIds: ids}); err != nil {
-			return err
+			return false, err
+		}
+		if err := scrubRecoveredSendQuotes(ctx, q, id, ids); err != nil {
+			return false, err
 		}
 	}
-	_, err = scrubInboundQuotes(ctx, q, id)
-	return err
+	return scrubInboundQuotes(ctx, q, id)
 }
 
 func refreshRestoredConversation(ctx context.Context, q *dbgen.Queries, id string, added bool, now time.Time) error {
@@ -118,16 +157,25 @@ func refreshRestoredConversation(ctx context.Context, q *dbgen.Queries, id strin
 	if err != nil {
 		return err
 	}
-	if c.UnreadCount != int(read.UnreadCount) || c.UnreadMention != (read.UnreadMention != 0) {
-		c.UnreadCount, c.UnreadMention = int(read.UnreadCount), read.UnreadMention != 0
-		if err := q.UpdateConversation(ctx, dbgen.UpdateConversationParams{ID: id, RevisionID: row.RevisionID, Payload: jsonText(c), ActivitySequence: row.ActivitySequence, UnreadCount: read.UnreadCount}); err != nil {
-			return err
-		}
-		_, err = change(ctx, q, "conversation.updated", c, now)
+	readChanged := c.UnreadCount != int(read.UnreadCount) || c.UnreadMention != (read.UnreadMention != 0)
+	repairCursor := c.ActivitySequence <= 0
+	if !added && !repairCursor && !readChanged {
+		return nil
+	}
+	c.UnreadCount, c.UnreadMention = int(read.UnreadCount), read.UnreadMention != 0
+	kind := "conversation.updated"
+	if added {
+		kind = "conversation.created"
+	}
+	sequence, err := change(ctx, q, kind, c, now)
+	if err != nil {
 		return err
 	}
-	if added {
-		_, err = change(ctx, q, "conversation.created", c, now)
+	if added || repairCursor {
+		c.ActivitySequence = sequence
 	}
-	return err
+	return q.UpdateConversation(ctx, dbgen.UpdateConversationParams{
+		ID: id, RevisionID: row.RevisionID, Payload: jsonText(c),
+		ActivitySequence: c.ActivitySequence, UnreadCount: read.UnreadCount,
+	})
 }

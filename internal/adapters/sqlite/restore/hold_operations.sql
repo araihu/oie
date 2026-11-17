@@ -2,7 +2,7 @@ INSERT INTO operations
 SELECT o.id,o.fingerprint,o.resource_id,'null',o.created_at,o.kind
 FROM backup.operations o JOIN recovered_sends s ON s.message_id=o.resource_id
 JOIN restore_chats c ON c.id=s.conversation_id
-WHERE o.kind IN ('send_message','forward_message','update_pending_message')
+WHERE o.kind IN ('send_message','forward_message','update_pending_message','send_scheduled_message_now')
   AND (o.result<>'null' OR EXISTS(SELECT 1 FROM archive_held_operations h WHERE h.id=o.id))
 ON CONFLICT(id) DO NOTHING;
 
@@ -13,7 +13,7 @@ AND o.resource_id=d.resource_id AND o.kind=d.kind
 JOIN recovered_sends s ON s.message_id=d.resource_id
 JOIN restore_chats c ON c.id=s.conversation_id
 LEFT JOIN archive_held_operations h ON h.id=o.id
-WHERE d.result='null' AND d.kind IN ('send_message','forward_message','update_pending_message')
+WHERE d.result='null' AND d.kind IN ('send_message','forward_message','update_pending_message','send_scheduled_message_now')
   AND COALESCE(h.result,o.result)<>'null'
 ON CONFLICT(operation_id) DO NOTHING;
 

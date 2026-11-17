@@ -322,6 +322,9 @@ func (s *Store) purgeConversationBatch(ctx context.Context, id, kind string, now
 	if err := q.ScrubReceiptOutboundQuotes(ctx, dbgen.ScrubReceiptOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
 		return 0, err
 	}
+	if err := scrubRecoveredSendQuotes(ctx, q, id, encoded); err != nil {
+		return 0, err
+	}
 	if _, err := scrubInboundQuotes(ctx, q, id); err != nil {
 		return 0, err
 	}

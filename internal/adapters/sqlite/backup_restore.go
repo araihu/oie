@@ -23,7 +23,7 @@ var restoreSQL embed.FS
 
 const (
 	firstRestoreSchema  = 36
-	newestRestoreSchema = 40
+	newestRestoreSchema = 41
 )
 
 type RestoreSummary struct {
@@ -125,6 +125,13 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if hasRecoveredRows && !recoveredSchemaValid {
 		return result, errors.New("backup has an invalid recovered sends schema")
 	}
+	var hasDeletedAccounts, hasRecoveredHistory, extendedSchemaValid bool
+	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&hasDeletedAccounts, &hasRecoveredHistory, &extendedSchemaValid); err != nil {
+		return result, err
+	}
+	if !extendedSchemaValid {
+		return result, errors.New("backup has an invalid restore evidence schema")
+	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return result, err
@@ -139,6 +146,11 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	}
 	if hasRecoveredRows {
 		if _, err := tx.ExecContext(ctx, restoreScript("recovered_markers")); err != nil {
+			return result, err
+		}
+	}
+	if hasDeletedAccounts {
+		if _, err := tx.ExecContext(ctx, restoreScript("deleted_accounts")); err != nil {
 			return result, err
 		}
 	}
@@ -168,6 +180,9 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if err := mergeRestoreRevisions(ctx, tx, q, now); err != nil {
 		return result, fmt.Errorf("merge backup revisions: %w", err)
 	}
+	if err := reconcileRestoredSendEvidence(ctx, tx, q, now); err != nil {
+		return result, fmt.Errorf("reconcile backup send evidence: %w", err)
+	}
 	if err := q.RemoveReconciledRecoveredSends(ctx); err != nil {
 		return result, err
 	}
@@ -175,13 +190,8 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if err != nil {
 		return result, err
 	}
-	if _, err := tx.ExecContext(ctx, restoreScript("pending"), sql.Named("source_engine", string(manifest.SourceEngine))); err != nil {
+	if err := mergeRestoredQueue(ctx, tx, q, manifest.SourceEngine, hasRecoveredRows, hasRecoveredHistory); err != nil {
 		return result, fmt.Errorf("quarantine recovered sends: %w", err)
-	}
-	if hasRecoveredRows {
-		if _, err := tx.ExecContext(ctx, restoreScript("recovered_pending")); err != nil {
-			return result, err
-		}
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("hold_operations")); err != nil {
 		return result, fmt.Errorf("preserve paused operation receipts: %w", err)
@@ -195,15 +205,14 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 		return result, err
 	}
 
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files)
 	committed := false
 	defer func() {
 		if !committed {
-			for _, name := range published {
-				_ = os.Remove(name)
-			}
+			_ = tx.Rollback()
+			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest.Files)
 	if err != nil {
 		return result, err
 	}
@@ -214,6 +223,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 		return result, err
 	}
 	committed = true
+	_ = s.clearRestoreMediaJournal() // Startup rechecks committed references if cleanup was interrupted.
 	result.MediaFiles = len(published)
 	return result, nil
 }

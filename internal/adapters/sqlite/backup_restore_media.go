@@ -10,34 +10,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 )
 
 func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, files []backupFile) ([]string, error) {
-	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata")); err != nil {
+	if _, err := tx.ExecContext(ctx, restoreScript("media_metadata"),
+		sql.Named("media_files", jsonText(files)), sql.Named("now_ms", time.Now().UnixMilli())); err != nil {
 		return nil, fmt.Errorf("restore media metadata: %w", err)
 	}
-	retained, err := dbgen.New(tx).ListBackupMedia(ctx)
+	references, err := restoredMediaReferences(ctx, tx, files)
 	if err != nil {
 		return nil, err
 	}
-	references := make(map[string]string, len(retained))
-	for _, r := range retained {
-		references["media/"+r.Subdir+"/"+r.Filename] = r.Hash
+	needed, err := s.preflightRestoreMedia(ctx, files, references)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.writeRestoreMediaJournal(needed); err != nil {
+		return nil, fmt.Errorf("record pending restore media: %w", err)
 	}
 	var published []string
-	for _, file := range files {
-		if references[file.Name] != file.SHA256 {
-			continue
-		}
+	for _, file := range needed {
 		name := filepath.FromSlash(file.Name)
-		parent := filepath.Dir(name)
-		for _, dir := range []string{filepath.Join(s.dir, "media"), filepath.Join(s.dir, parent)} {
-			if err := ensureBackupDirectory(dir); err != nil {
-				return published, err
-			}
-		}
 		target := filepath.Join(s.dir, name)
 		created, err := publishRestoredMedia(ctx, filepath.Join(scratch, name), target, file)
 		if created {
@@ -48,6 +44,47 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, fi
 		}
 	}
 	return published, nil
+}
+
+func (s *Store) preflightRestoreMedia(ctx context.Context, files []backupFile, references map[string]string) ([]backupFile, error) {
+	var needed []backupFile
+	for _, file := range files {
+		if references[file.Name] != file.SHA256 {
+			continue
+		}
+		name := filepath.FromSlash(file.Name)
+		for _, dir := range []string{filepath.Join(s.dir, "media"), filepath.Join(s.dir, filepath.Dir(name))} {
+			if err := ensureBackupDirectory(dir); err != nil {
+				return nil, err
+			}
+		}
+		target := filepath.Join(s.dir, name)
+		if _, err := os.Lstat(target); errors.Is(err, os.ErrNotExist) {
+			needed = append(needed, file)
+		} else if err != nil {
+			return nil, err
+		} else if err := checkRestoredMedia(ctx, target, file); err != nil {
+			return nil, err
+		}
+	}
+	return needed, nil
+}
+
+func restoredMediaReferences(ctx context.Context, db dbgen.DBTX, files []backupFile) (map[string]string, error) {
+	rows, err := db.QueryContext(ctx, restoreScript("media_references"), sql.Named("media_files", jsonText(files)))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	references := make(map[string]string)
+	for rows.Next() {
+		var name, hash string
+		if err := rows.Scan(&name, &hash); err != nil {
+			return nil, err
+		}
+		references[name] = hash
+	}
+	return references, rows.Err()
 }
 
 func publishRestoredMedia(ctx context.Context, source, target string, manifest backupFile) (bool, error) {
@@ -62,7 +99,7 @@ func publishRestoredMedia(ctx context.Context, source, target string, manifest b
 		return false, err
 	}
 	defer func() { _ = from.Close() }()
-	temp, err := os.CreateTemp(filepath.Dir(target), ".restore-")
+	temp, err := os.OpenFile(restoreMediaStagingPath(target), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return false, err
 	}
@@ -78,11 +115,7 @@ func publishRestoredMedia(ctx context.Context, source, target string, manifest b
 		return false, err
 	}
 	for _, dir := range []string{filepath.Dir(target), filepath.Dir(filepath.Dir(target))} {
-		parent, err := os.Open(dir)
-		if err != nil {
-			return true, err
-		}
-		if err := errors.Join(parent.Sync(), parent.Close()); err != nil {
+		if err := syncRestoreMediaDirectory(dir); err != nil {
 			return true, err
 		}
 	}
@@ -90,25 +123,32 @@ func publishRestoredMedia(ctx context.Context, source, target string, manifest b
 }
 
 func checkRestoredMedia(ctx context.Context, name string, manifest backupFile) error {
-	info, err := os.Lstat(name)
+	match, err := restoredMediaMatches(ctx, name, manifest)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Size() != manifest.Size {
-		return fmt.Errorf("destination media %q does not match the backup", manifest.Name)
-	}
-	file, err := os.Open(name)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = file.Close() }()
-	digest := sha256.New()
-	_, err = io.Copy(digest, backupReader{ctx, file})
-	if err != nil {
-		return err
-	}
-	if hex.EncodeToString(digest.Sum(nil)) != manifest.SHA256 {
+	if !match {
 		return fmt.Errorf("destination media %q does not match the backup", manifest.Name)
 	}
 	return nil
+}
+
+func restoredMediaMatches(ctx context.Context, name string, manifest backupFile) (bool, error) {
+	info, err := os.Lstat(name)
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() || info.Size() != manifest.Size {
+		return false, nil
+	}
+	file, err := os.Open(name)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = file.Close() }()
+	digest := sha256.New()
+	if _, err = io.Copy(digest, backupReader{ctx, file}); err != nil {
+		return false, err
+	}
+	return hex.EncodeToString(digest.Sum(nil)) == manifest.SHA256, nil
 }

@@ -71,6 +71,13 @@ func (s *Store) VerifyExpiredSend(ctx context.Context, key domain.ID, fingerprin
 		return application.ErrIdempotencyConflict
 	}
 	if row.Result == "null" {
+		held, err := q.HasRecoveredSendReceipt(ctx, string(key))
+		if err != nil {
+			return err
+		}
+		if held {
+			return application.ErrStateConflict
+		}
 		return tx.Commit()
 	}
 	accepted, err := decodeAcceptedSendSnapshot(row.Result, row.ResourceID)

@@ -145,3 +145,26 @@ func TestManualBackupHonorsCancellation(t *testing.T) {
 		t.Fatalf("cancelled backup wrote %d bytes and returned %v", dst.Len(), err)
 	}
 }
+
+func TestManualBackupUpgradesOnlyThePrivateSnapshot(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	ctx := t.Context()
+	replySeed(t, source, chat, "history from an older profile", time.Now().UTC(), nil, nil)
+	migrateFixtureToVersion(t, source, 35)
+	manifest, archive, scratch := backupRestoreFixture(t, source, false)
+	var version int
+	if err := source.readDB.QueryRowContext(ctx, "SELECT version FROM schema_migrations").Scan(&version); err != nil || version != 35 {
+		t.Fatalf("backup changed the live source schema: %d %v", version, err)
+	}
+	if err := checkRestoreDatabase(ctx, archive); err != nil {
+		t.Fatal(err)
+	}
+	destination, err := Open(ctx, t.TempDir(), migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = destination.Close() }()
+	if result, err := destination.mergeBackup(ctx, archive, scratch, manifest, time.Now().UTC()); err != nil || result.Messages != 1 {
+		t.Fatalf("the updated backup could not be restored: %+v %v", result, err)
+	}
+}

@@ -141,6 +141,17 @@ func copyBackupDatabase(ctx context.Context, source *sql.DB, filename string) (i
 		return "", err
 	}
 	defer func() { err = errors.Join(err, db.Close()) }()
+	var version int
+	var dirty bool
+	versionErr := db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty)
+	if versionErr != nil || version < firstRestoreSchema {
+		// Upgrade only the private snapshot. The selected profile remains as it was.
+		if err := migrateDatabase(ctx, db, filepath.Dir(filename)); err != nil {
+			return "", err
+		}
+	} else if dirty || version > newestRestoreSchema {
+		return "", fmt.Errorf("unsupported backup database version %d", version)
+	}
 	q := dbgen.New(db)
 	snapshot, err := q.Snapshot(ctx)
 	if err != nil {
