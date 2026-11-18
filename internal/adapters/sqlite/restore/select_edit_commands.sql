@@ -6,9 +6,20 @@ CREATE TEMP TABLE restore_local_edit_sources (
 INSERT INTO restore_local_edit_sources
 SELECT source.id,command.id FROM backup.message_edit_commands command
 JOIN restore_chats chat ON chat.id=command.conversation_id
-JOIN backup.messages source ON source.provider_id=command.id AND source.account_id=command.account_id
-  AND source.conversation_id=command.conversation_id AND source.is_own=1 AND source.state='submitted'
-WHERE command.state IN ('submitted','failed');
+JOIN backup.conversations conversation ON conversation.id=chat.id AND conversation.account_id=command.account_id
+JOIN backup.messages source ON source.account_id=command.account_id AND source.conversation_id=command.conversation_id
+  AND source.is_own=1 AND source.state='submitted'
+  AND source.provider_id IN (command.id,CASE
+    WHEN json_extract(conversation.payload,'$.Kind')='room'
+      AND instr(json_extract(command.payload,'$.Plan.Scope'),'xmpp:correct:room:'||conversation.address||':')=1
+      AND instr(json_extract(command.payload,'$.Plan.Author'),conversation.address||'/')=1
+    THEN oie_room_correction_provider_id(json_extract(command.payload,'$.Plan.Author'),command.id) END)
+WHERE command.state IN ('submitted','failed')
+  AND (source.provider_id=command.id OR NOT EXISTS (
+    SELECT 1 FROM backup.messages native WHERE native.account_id=command.account_id
+      AND native.conversation_id=command.conversation_id AND native.provider_id=command.id
+      AND native.is_own=1 AND native.state='submitted'
+  ));
 
 CREATE TEMP TABLE restore_local_edit_commands (id TEXT PRIMARY KEY, eligible INTEGER NOT NULL) WITHOUT ROWID;
 INSERT INTO restore_local_edit_commands
@@ -47,7 +58,7 @@ WITH RECURSIVE accepted AS MATERIALIZED (
 ), verified AS MATERIALIZED (
     SELECT edit.id,edit.source_id,edit.message_id,parent_message.id AS parent_id,
            (selected.id IS NOT NULL OR (edit.source_id IS NULL AND (
-                edit.state='failed' OR (edit.state='unknown' AND pending.id IS NOT NULL)
+                edit.state='failed' OR (edit.state IN ('unknown','dispatching') AND pending.id IS NOT NULL)
            )))
            AND original.id IS NOT NULL
            AND NOT EXISTS(SELECT 1 FROM expired_message_ids expired WHERE expired.id IN (edit.source_id,edit.message_id,parent_message.id))
@@ -133,7 +144,7 @@ WHERE is_new=1 AND EXISTS (
       AND NOT EXISTS(SELECT 1 FROM restore_local_edit_commands command WHERE command.id=source.command_id AND command.eligible=1)
 );
 
--- A direct archive can already have the exact correction under a different
+-- An archive can already have the exact correction under a different
 -- local row ID. The source can supply its root fact even when the destination
 -- has only a partial archive or retained the root under another local ID.
 CREATE TEMP TABLE restore_local_edit_witnesses (
@@ -149,10 +160,15 @@ JOIN backup.message_edit_commands command ON command.id=source.command_id AND co
 JOIN backup.messages root ON root.id=command.message_id AND root.provider_id=root.id AND root.is_own=1
   AND root.account_id=command.account_id AND root.conversation_id=command.conversation_id
 JOIN restore_messages root_selected ON root_selected.id=root.id
-JOIN backup.conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='direct'
+JOIN backup.conversations chat ON chat.id=root.conversation_id
 LEFT JOIN messages retained_root ON retained_root.id=root.id
 JOIN messages witness ON witness.account_id=root.account_id AND witness.conversation_id=root.conversation_id
-  AND witness.provider_id=command.id AND witness.id<>source.source_id AND witness.is_own=1 AND witness.state='submitted'
+  AND witness.id<>source.source_id AND witness.is_own=1 AND witness.state='submitted'
+  AND witness.provider_id IN (command.id,CASE
+    WHEN json_extract(chat.payload,'$.Kind')='room'
+      AND instr(json_extract(command.payload,'$.Plan.Scope'),'xmpp:correct:room:'||chat.address||':')=1
+      AND instr(json_extract(command.payload,'$.Plan.Author'),chat.address||'/')=1
+    THEN oie_room_correction_provider_id(json_extract(command.payload,'$.Plan.Author'),command.id) END)
 LEFT JOIN message_canonical_aliases alias ON alias.alias_id=witness.id
 LEFT JOIN restore_witness_echoes witnessed_root ON witnessed_root.echo_id=alias.canonical_id AND witnessed_root.original_id=root.id
 JOIN message_correction_facts local ON local.message_id=witness.id AND local.remote_id=command.id AND local.target_id=root.provider_id
@@ -186,4 +202,9 @@ WHERE admitted.eligible=1
         AND (other.scope<>local.scope OR other.author<>local.author OR other.remote_id<>local.remote_id
              OR other.target_id<>local.target_id OR other.source_hash<>local.source_hash)
   );
+INSERT INTO restore_suppressed_echoes
+SELECT w.source_id,w.witness_id FROM restore_local_edit_witnesses w
+JOIN messages witness ON witness.id=w.witness_id
+JOIN conversations chat ON chat.id=witness.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
+WHERE TRUE ON CONFLICT DO NOTHING;
 DELETE FROM restore_messages WHERE id IN (SELECT source_id FROM restore_local_edit_witnesses);

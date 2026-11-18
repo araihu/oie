@@ -3,13 +3,43 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"slices"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/domain"
+	sqlitedriver "modernc.org/sqlite"
 )
+
+func init() {
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_same_direct_echo", 4, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		var a, b domain.Message
+		aPayload, _ := args[0].(string)
+		bPayload, _ := args[2].(string)
+		if err := json.Unmarshal([]byte(aPayload), &a); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(bPayload), &b); err != nil {
+			return nil, err
+		}
+		if !sameObservedDirectWire(a, b) {
+			return int64(0), nil
+		}
+		aReply, _ := args[1].(string)
+		bReply, _ := args[3].(string)
+		ar, err := decodeObservedDirectReply(aReply)
+		if err != nil {
+			return nil, err
+		}
+		br, err := decodeObservedDirectReply(bReply)
+		if err != nil {
+			return nil, err
+		}
+		return number(sameObservedDirectReply(a, ar, b, br)), nil
+	})
+}
 
 // Live delivery has no provider key for a stanza without an ID, while MAM
 // assigns its archive key. The authenticated sender reference is shared.
@@ -46,19 +76,18 @@ func findDirectEchoWithoutStanzaID(ctx context.Context, q *dbgen.Queries, c doma
 		if err := json.Unmarshal([]byte(row.Payload), &previous); err != nil {
 			return "", err
 		}
-		if !previous.IsOwn || previous.SendState != "submitted" || previous.OwnOriginID != incoming.OwnOriginID ||
-			!withoutStanzaID(previous) || previous.SourceBodyHash() != hash ||
-			previous.WireMentions != incoming.WireMentions ||
-			!previous.MatchesWireMentions(domain.WireMentionProof{Evidence: incoming.WireMentions, Digest: incoming.WireMentionDigest}) ||
-			!slices.Equal(previous.FileReferences, incoming.FileReferences) || !slices.Equal(previous.AudioURLs, incoming.AudioURLs) ||
-			!slices.Equal(previous.FileDigests, incoming.FileDigests) || !slices.Equal(previous.MediaThumbnails, incoming.MediaThumbnails) {
+		if !sameObservedDirectWire(previous, incoming) {
 			continue
 		}
-		matches, err := sameObservedDirectReply(ctx, q, row.ID, hash, incoming.ReplyReference)
+		payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: row.ID, BodyHash: hash})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+		reply, err := decodeObservedDirectReply(payload)
 		if err != nil {
 			return "", err
 		}
-		if !matches {
+		if !sameObservedDirectReply(previous, reply, incoming, incoming.ReplyReference) {
 			continue
 		}
 		if match != "" && match != row.ID {
@@ -73,17 +102,43 @@ func withoutStanzaID(m domain.Message) bool {
 	return m.ProviderID == "" || (m.ArchiveID != "" && m.ProviderID == "archive:"+bodyHash(m.ArchiveScope+"\x00"+m.ArchiveID))
 }
 
-func sameObservedDirectReply(ctx context.Context, q *dbgen.Queries, id, hash string, incoming *domain.ReplyReference) (bool, error) {
-	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: id, BodyHash: hash})
-	if errors.Is(err, sql.ErrNoRows) {
-		return incoming == nil, nil
+func sameObservedDirectWire(a, b domain.Message) bool {
+	return a.IsOwn && b.IsOwn && a.SendState == "submitted" && b.SendState == "submitted" &&
+		a.OwnOriginID != "" && a.OwnOriginID == b.OwnOriginID && withoutStanzaID(a) && withoutStanzaID(b) &&
+		a.SourceBodyHash() == b.SourceBodyHash() && a.WireMentions != "" && a.WireMentions == b.WireMentions &&
+		a.MatchesWireMentions(domain.WireMentionProof{Evidence: b.WireMentions, Digest: b.WireMentionDigest}) &&
+		slices.Equal(a.FileReferences, b.FileReferences) && slices.Equal(a.AudioURLs, b.AudioURLs) &&
+		slices.Equal(a.FileDigests, b.FileDigests) && slices.Equal(a.MediaThumbnails, b.MediaThumbnails)
+}
+
+func decodeObservedDirectReply(payload string) (*domain.ReplyReference, error) {
+	if payload == "" {
+		return nil, nil
 	}
-	if err != nil || incoming == nil {
-		return false, err
+	var reply domain.ReplyReference
+	if err := json.Unmarshal([]byte(payload), &reply); err != nil {
+		return nil, err
 	}
-	var previous domain.ReplyReference
-	if err := json.Unmarshal([]byte(payload), &previous); err != nil {
-		return false, err
+	return &reply, nil
+}
+
+func sameObservedDirectReply(a domain.Message, ar *domain.ReplyReference, b domain.Message, br *domain.ReplyReference) bool {
+	if ar == nil || br == nil {
+		return ar == nil && br == nil && a.OriginalText == b.OriginalText
 	}
-	return previous.Target == incoming.Target && slices.Equal(previous.Fallback, incoming.Fallback), nil
+	if ar.Target != br.Target {
+		return false
+	}
+	if a.OriginalText == b.OriginalText && slices.Equal(ar.Fallback, br.Fallback) {
+		return true
+	}
+	// Retention drops a reply's quote spans but keeps the raw wire hash. Verify
+	// the original spans still produce exactly the retained, redacted answer.
+	return sameRedactedDirectReply(a, ar, b, br) || sameRedactedDirectReply(b, br, a, ar)
+}
+
+func sameRedactedDirectReply(redacted domain.Message, retained *domain.ReplyReference, raw domain.Message, observed *domain.ReplyReference) bool {
+	return redacted.WireBodySHA256 != "" && len(retained.Fallback) == 0 && redacted.OutboundReply == nil &&
+		stripInboundQuote(&raw, *observed) && raw.WireBodySHA256 == redacted.WireBodySHA256 &&
+		raw.OriginalText == redacted.OriginalText
 }

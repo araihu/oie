@@ -672,9 +672,9 @@ Add `--include-media` to copy available managed media and staged attachments.
 The ZIP contains account details, messages, and pending compositions. Keep it
 in a private location. Connection credentials, hosted credentials and room
 passwords are omitted. The command creates a private file and refuses to
-overwrite an existing backup. Verification checks the SQLite file and the
-SHA-256 of each entry and reports the account, conversation, message, pending
-send and media counts.
+overwrite an existing backup. Verification checks the SQLite schema, database
+integrity and each entry's SHA-256 checksum. It reports the account,
+conversation, message, pending send and media counts.
 
 ### Restore into an existing profile
 

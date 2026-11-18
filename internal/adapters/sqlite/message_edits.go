@@ -102,7 +102,19 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if err != nil {
 			return out, err
 		}
-		commandRow, err := q.GetMessageEditCommand(ctx, sourceRow.ProviderID)
+		source, err := decodeMessage(sourceRow)
+		if err != nil {
+			return out, err
+		}
+		fact, err := observedRoomEditFact(ctx, q, source)
+		if err != nil {
+			return out, err
+		}
+		commandID := source.ProviderID
+		if fact != nil {
+			commandID = fact.RemoteID
+		}
+		commandRow, err := q.GetMessageEditCommand(ctx, commandID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return deny("foreign_source")
 		}
@@ -113,11 +125,10 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if err != nil {
 			return out, err
 		}
-		source, err := decodeMessage(sourceRow)
-		if err != nil {
-			return out, err
-		}
 		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBodyHash() != source.SourceBodyHash() {
+			return deny("foreign_source")
+		}
+		if fact != nil && (p.Plan.Scope != fact.Scope || p.Plan.Author != fact.Author || p.Plan.OriginalWireID != fact.TargetID) {
 			return deny("foreign_source")
 		}
 		t.OriginalText = p.Command.OriginalText
@@ -422,10 +433,16 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 	if err != nil {
 		return false, err
 	}
-	if m.SourceBodyHash() != p.WireBodyHash() {
+	return verifiedEditSource(ctx, q, p, m)
+}
+
+func verifiedEditSource(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, m domain.Message) (bool, error) {
+	if !m.IsOwn || m.SendState != "submitted" || m.WireMentions == domain.WireMentionsPresent ||
+		m.AccountID != p.Command.AccountID || m.ConversationID != p.Command.ConversationID ||
+		!correctionProviderMatches(m.ProviderID, p.Plan.Scope, p.Plan.Author, string(p.Command.ID)) || m.SourceBodyHash() != p.WireBodyHash() {
 		return false, nil
 	}
-	facts, err := q.GetCorrectionFacts(ctx, row.ID)
+	facts, err := q.GetCorrectionFacts(ctx, string(m.ID))
 	if err != nil {
 		return false, err
 	}
@@ -473,14 +490,18 @@ func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provi
 	if p.Command.State == "failed" {
 		return tx.Commit()
 	}
-	p.Command.State = "submitted"
-	p.Command.RevisionID = revision
-	p.Command.UpdatedAt = at
-	p.Command.LastErrorCode = ""
-	if err = writeEdit(ctx, q, p, at, 0); err != nil {
+	if err = recordEditOutcome(ctx, q, p, "submitted", "", revision, at); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func recordEditOutcome(ctx context.Context, q *dbgen.Queries, edit domain.PendingMessageEdit, state, reason string, revision domain.ID, at time.Time) error {
+	edit.Command.State = state
+	edit.Command.LastErrorCode = reason
+	edit.Command.RevisionID = revision
+	edit.Command.UpdatedAt = at
+	return writeEdit(ctx, q, edit, at, 0)
 }
 func (s *Store) RejectMessageEdit(ctx context.Context, id, revision domain.ID, at time.Time) error {
 	tx, q, err := begin(ctx, s)
@@ -522,17 +543,22 @@ func (s *Store) RejectMessageEdit(ctx context.Context, id, revision domain.ID, a
 	}
 	return tx.Commit()
 }
-func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, at time.Time) error {
+func recordEditRoot(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit) (domain.Message, error) {
 	baseRow, err := q.GetMessage(ctx, string(p.Command.MessageID))
 	if err != nil {
-		return err
+		return domain.Message{}, err
 	}
 	base, err := decodeMessage(baseRow)
 	if err != nil {
-		return err
+		return base, err
 	}
 	base.Correction = &domain.MessageCorrection{Scope: p.Plan.Scope, Author: p.Plan.Author, ID: p.Plan.OriginalWireID}
-	if err = recordCorrectionMetadata(ctx, q, string(base.ID), base); err != nil {
+	return base, recordCorrectionMetadata(ctx, q, string(base.ID), base)
+}
+
+func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, at time.Time) error {
+	base, err := recordEditRoot(ctx, q, p)
+	if err != nil {
 		return err
 	}
 	existing, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: string(p.Command.ID), IsOwn: 1})
@@ -558,7 +584,7 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 // localCorrectionParent uses the immutable acceptance receipt to prove which
 // content was edited, independently from the original stanza named on the wire.
 func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.Message, scope, author, remote, target string) (domain.ID, domain.ID, bool, error) {
-	if !source.IsOwn || source.ProviderID != remote || target == "" {
+	if !source.IsOwn || !correctionProviderMatches(source.ProviderID, scope, author, remote) || target == "" {
 		return "", "", false, nil
 	}
 	row, err := q.GetMessageEditCommand(ctx, remote)

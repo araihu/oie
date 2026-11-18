@@ -118,7 +118,7 @@ WHERE operations.result='null' AND excluded.result<>'null' AND operations.finger
   AND operations.kind=excluded.kind AND operations.resource_id=excluded.resource_id;
 INSERT INTO message_edit_commands
 SELECT command.* FROM backup.message_edit_commands command JOIN restore_local_edit_commands edit ON edit.id=command.id
-WHERE edit.eligible=1 ON CONFLICT(id) DO UPDATE SET
+WHERE edit.eligible=1 AND command.state<>'dispatching' ON CONFLICT(id) DO UPDATE SET
   revision_id=excluded.revision_id,state=excluded.state,
   payload=json_set(message_edit_commands.payload,
        '$.Command.RevisionID',excluded.revision_id,'$.Command.State',excluded.state,

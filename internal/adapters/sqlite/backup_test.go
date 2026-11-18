@@ -136,6 +136,40 @@ func TestVerifyBackupRejectsCorruptionAndUnsafePaths(t *testing.T) {
 	}
 }
 
+func TestVerifyBackupAndRestoreRejectUnsupportedSchema(t *testing.T) {
+	for _, tc := range []struct{ name, sql string }{
+		{"required table", "ALTER TABLE message_correction_facts ADD COLUMN unexpected TEXT"},
+		{"optional table", "ALTER TABLE recovered_sends ADD COLUMN unexpected TEXT"},
+		{"multiple versions", "INSERT INTO schema_migrations(version, dirty) VALUES (36, 0)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source, _, _ := outboxFixture(t)
+			ctx := t.Context()
+			if _, err := source.db.ExecContext(ctx, tc.sql); err != nil {
+				t.Fatal(err)
+			}
+			var archive bytes.Buffer
+			if err := writeBackup(ctx, source.readDB, source.dir, &archive, false); err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Join(t.TempDir(), "unexpected-schema.zip")
+			if err := os.WriteFile(name, archive.Bytes(), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := VerifyBackup(ctx, name); err == nil {
+				t.Error("verification accepted an unsupported schema")
+			}
+			destination := filepath.Join(t.TempDir(), "profile")
+			if _, err := RestoreProfileBackup(ctx, destination, name, migrationID()); err == nil {
+				t.Error("restore accepted an unsupported schema")
+			}
+			if _, err := os.Stat(destination); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("restore initialized a destination for an unsupported archive: %v", err)
+			}
+		})
+	}
+}
+
 func TestManualBackupHonorsCancellation(t *testing.T) {
 	store, _, _ := outboxFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())

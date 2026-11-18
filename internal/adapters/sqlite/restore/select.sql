@@ -171,6 +171,50 @@ WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
 CREATE TEMP TABLE restore_suppressed_echoes (
   source_id TEXT PRIMARY KEY, retained_id TEXT NOT NULL
 ) WITHOUT ROWID;
+-- Independent live and archive observations of a direct stanza without an
+-- ID can use different row IDs. Require one exact, scoped wire match.
+INSERT INTO restore_suppressed_echoes
+WITH pairs AS (
+  SELECT m.id AS source_id,d.id AS retained_id,
+         COUNT(*) OVER (PARTITION BY m.id) AS retained_count,
+         COUNT(*) OVER (PARTITION BY d.id) AS source_count
+  FROM restore_message_candidates selected
+  JOIN backup.messages m ON m.id=selected.id
+  JOIN conversations chat ON chat.id=m.conversation_id AND chat.account_id=m.account_id
+  JOIN accounts a ON a.id=m.account_id
+  JOIN backup.message_references observed ON observed.message_id=m.id
+    AND observed.scope='sender:'||a.address AND observed.author=a.address
+    AND observed.remote_id=json_extract(m.payload,'$.OwnOriginID')
+    AND observed.source_hash=COALESCE(NULLIF(json_extract(m.payload,'$.WireBodySHA256'),''),
+                                     oie_source_hash(json_extract(m.payload,'$.OriginalText')))
+  JOIN message_references retained ON retained.scope=observed.scope AND retained.author=observed.author
+    AND retained.remote_id=observed.remote_id AND retained.source_hash=observed.source_hash
+  JOIN messages d ON d.id=retained.message_id AND d.conversation_id=m.conversation_id AND d.account_id=m.account_id
+  LEFT JOIN backup.message_replies observed_reply ON observed_reply.message_id=m.id AND observed_reply.body_hash=observed.source_hash
+  LEFT JOIN message_replies retained_reply ON retained_reply.message_id=d.id AND retained_reply.body_hash=retained.source_hash
+  WHERE selected.is_new=1 AND json_extract(chat.payload,'$.Kind')='direct'
+    AND m.is_own=1 AND d.is_own=1 AND m.state='submitted' AND d.state='submitted'
+    AND m.id<>m.provider_id AND d.id<>d.provider_id
+    AND (m.provider_id='' OR m.provider_id GLOB 'archive:*')
+    AND (d.provider_id='' OR d.provider_id GLOB 'archive:*')
+    AND observed.remote_id<>''
+    AND retained.source_hash=COALESCE(NULLIF(json_extract(d.payload,'$.WireBodySHA256'),''),
+                                     oie_source_hash(json_extract(d.payload,'$.OriginalText')))
+    AND NOT EXISTS (SELECT 1 FROM backup.message_canonical_aliases alias WHERE alias.alias_id=m.id)
+    AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases alias WHERE alias.alias_id=d.id)
+    AND NOT EXISTS (SELECT 1 FROM backup.message_correction_facts fact WHERE fact.message_id=m.id AND fact.target_id<>'')
+    AND NOT EXISTS (SELECT 1 FROM message_correction_facts fact WHERE fact.message_id=d.id AND fact.target_id<>'')
+    AND oie_same_direct_echo(m.payload,observed_reply.payload,d.payload,retained_reply.payload)=1
+)
+SELECT p.source_id,p.retained_id FROM pairs p
+WHERE p.retained_count=1 AND p.source_count=1
+  AND NOT EXISTS (
+    SELECT 1 FROM backup.archive_aliases incoming
+    JOIN archive_aliases local ON local.account_id=incoming.account_id
+      AND local.scope=incoming.scope AND local.archive_id=incoming.archive_id
+    WHERE incoming.message_id=p.source_id AND local.message_id<>p.retained_id
+  );
+
 -- The destination can retain its own original beyond the archive cutoff.
 -- The verified echo may still contribute metadata for that retained body.
 INSERT INTO restore_suppressed_echoes
@@ -180,6 +224,7 @@ JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
 LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
 LEFT JOIN backup.outbox o ON o.message_id=m.id
 WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
+  AND NOT EXISTS(SELECT 1 FROM restore_suppressed_echoes matched WHERE matched.source_id=m.id)
   AND oie_wire_mentions_match(d.payload,json_extract(m.payload,'$.WireMentions'),json_extract(m.payload,'$.WireMentionDigest'))=1
   -- A submitted correction can also use its native acceptance ID as the
   -- provider key. A conflicting body or correction target must stay visible

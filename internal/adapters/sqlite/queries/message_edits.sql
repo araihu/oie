@@ -38,7 +38,7 @@ AND r.rowid=(SELECT MIN(first.rowid) FROM message_revisions first WHERE first.en
 SELECT CAST(MIN(witness.id) AS TEXT) AS source_id
 FROM message_edit_commands command
 JOIN operations receipt ON receipt.id=command.id AND receipt.resource_id=command.id AND receipt.kind='edit_message'
-JOIN messages witness ON witness.provider_id=command.id AND witness.id<>command.id AND witness.is_own=1 AND witness.state='submitted'
+JOIN messages witness ON witness.id<>command.id AND witness.is_own=1 AND witness.state='submitted'
   AND witness.account_id=command.account_id AND witness.conversation_id=command.conversation_id
 JOIN messages root ON root.id=command.message_id AND root.provider_id=root.id AND root.is_own=1
   AND root.account_id=command.account_id AND root.conversation_id=command.conversation_id
@@ -49,6 +49,8 @@ JOIN message_correction_facts fact ON fact.message_id=witness.id AND fact.remote
 JOIN message_revisions content ON content.id=fact.source_revision_id AND content.entity_id=witness.id
 WHERE command.state IN ('submitted','failed') AND command.message_id=sqlc.arg(message_id)
   AND command.account_id=sqlc.arg(account_id) AND command.conversation_id=sqlc.arg(conversation_id)
+  AND (witness.provider_id=command.id OR (instr(fact.scope,'xmpp:correct:room:')=1
+    AND witness.provider_id=oie_room_correction_provider_id(fact.author,fact.remote_id)))
   AND (alias.alias_id IS NULL OR alias.canonical_id=command.message_id)
   AND json_extract(command.payload,'$.ContentRevisionID')=CAST(sqlc.arg(content_revision_id) AS TEXT)
   AND json_extract(receipt.result,'$.ID')=command.id AND json_extract(receipt.result,'$.MessageID')=command.message_id
