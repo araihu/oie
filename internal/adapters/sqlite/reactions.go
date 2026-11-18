@@ -122,25 +122,31 @@ func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c 
 		Unique bool   `json:"unique"`
 	}
 	safeRefs := []reference{}
-	unique := map[string]bool{}
-	for _, ref := range refs {
-		found, known := unique[ref.RemoteID]
-		if !known {
-			target, err := reactionTarget(ctx, q, m.AccountID, m.ConversationID, domain.MessageReference{ID: ref.RemoteID})
-			if err != nil {
-				return out, err
-			}
-			found = target == m.ID
-			unique[ref.RemoteID] = found
+	// Reuse the same scoped resolution for eligibility and for observations.
+	// All lookups are for this account and conversation in one transaction.
+	resolved := map[domain.MessageReference]domain.ID{}
+	resolve := func(ref domain.MessageReference) (domain.ID, error) {
+		if target, ok := resolved[ref]; ok {
+			return target, nil
 		}
-		safeRefs = append(safeRefs, reference{ref.RemoteID, ref.Scope, ref.Author, found})
+		target, err := reactionTarget(ctx, q, m.AccountID, m.ConversationID, ref)
+		if err == nil {
+			resolved[ref] = target
+		}
+		return target, err
+	}
+	for _, ref := range refs {
+		target, err := resolve(domain.MessageReference{ID: ref.RemoteID})
+		if err != nil {
+			return out, err
+		}
+		safeRefs = append(safeRefs, reference{ref.RemoteID, ref.Scope, ref.Author, target == m.ID})
 	}
 	observations, err := q.ReactionObservationsForTargets(ctx, dbgen.ReactionObservationsForTargetsParams{AccountID: string(m.AccountID), Address: c.Address, Kind: c.Kind, MessageID: string(m.ID), References: jsonText(safeRefs), RoomEpoch: privacy.Epoch})
 	if err != nil {
 		return out, err
 	}
 	heads := map[string]reactionHead{}
-	resolved := map[domain.MessageReference]domain.ID{}
 	for _, observation := range observations {
 		var in application.IncomingReaction
 		if err = json.Unmarshal([]byte(observation.Payload), &in); err != nil {
@@ -166,13 +172,9 @@ func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c 
 				linked = domain.ID(cmd.MessageID)
 			}
 		}
-		target, known := resolved[in.Target]
-		if !known {
-			target, err = reactionTarget(ctx, q, m.AccountID, m.ConversationID, in.Target)
-			if err != nil {
-				return out, err
-			}
-			resolved[in.Target] = target
+		target, err := resolve(in.Target)
+		if err != nil {
+			return out, err
 		}
 		if target != m.ID && linked != m.ID {
 			continue
