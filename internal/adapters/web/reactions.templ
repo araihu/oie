@@ -2,6 +2,7 @@ package web
 
 import (
  "strconv"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
  "github.com/araihu/goshtoso/components/avatar"
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/icon/heroicons"
@@ -11,10 +12,16 @@ import (
 )
 
 templ messageReactions(v view,m messageView){
-<div class="oie-reactions" data-reaction-source={m.Id} data-reaction-state={v.reactionStateJSON(m.Id)} role="group" aria-label={v.Text.Reactions}>
+<div class="oie-reactions" data-reaction-source={m.Id} data-reaction-state={v.reactionStateJSON(m.Id)} data-own={strconv.FormatBool(m.IsOwn)} role="group" aria-label={v.Text.Reactions}>
+if len(v.Reactions[m.Id].Items)>0 {
+@reactionControls(v,m)
+}
+</div>
+}
+
+templ reactionControls(v view,m messageView){
 @popover.Popover(popover.Config{ID:"message-reactions-"+m.Id,Trigger:reactionSummaryTrigger(v,m),Content:reactionDetails(v,m),Placement:reactionSummaryPlacement(m.IsOwn),Role:"dialog",Label:v.Text.Reactions,RootClass:"oie-reaction-summary-popover",PanelClass:"oie-reaction-details-panel",TrapFocus:true})
 <div data-reaction-pending></div>
-</div>
 }
 
 templ reactionSummaryTrigger(v view,m messageView){
@@ -47,7 +54,7 @@ templ reactionShortcutButton(v view,m messageView){
 }
 
 templ reactionPicker(v view){
-if v.Selected!=nil {
+if v.Section=="chats" || v.Section=="archived" {
 <section id="oie-reaction-quick" popover="manual" hidden role="dialog" aria-label={v.Text.ReactMessage}>
 <div class="oie-reaction-quick-row">
 for _, choice:=range reactionQuickChoices(v.Text) {
@@ -66,6 +73,10 @@ templ reactionMoreButton(v view){
 
 templ reactionPickerContent(v view){
 <div hidden data-reaction-picker data-unavailable={v.Text.ReactionUnavailable} data-unknown={v.Text.ReactionUnknown} data-failed={v.Text.ReactionFailed} data-pending={v.Text.ReactionPending} data-check={v.Text.ReactionCheck} data-remove={v.Text.ReactionRemove} data-retry={v.Text.Retry} data-react={v.Text.ReactMessage} data-all={v.Text.All} data-you={v.Text.You} data-react-summary={v.Text.Reactions}>
+<template data-message-template="edit">@editIndicators(v,"oie-message-placeholder")</template>
+for _,own:=range []bool{false,true} {
+<template data-message-template={"reaction-"+strconv.FormatBool(own)}>@reactionControls(v,messageView{Message:engineapi.Message{Id:"oie-message-placeholder",IsOwn:own}})</template>
+}
 <template data-reaction-chip-template>@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-reaction-chip"),button.WithAttrs(templ.Attributes{"data-reaction-emoji":""})){<span data-reaction-glyph aria-hidden="true"></span><small data-reaction-count></small><span data-reaction-busy hidden>@spinner.Spinner(spinner.Config{Size:spinner.SizeSM,RootClass:"oie-reaction-spinner"})</span>}</template>
 <template data-reaction-actor-template>
 <div class="oie-reaction-actor" data-reaction-actor>

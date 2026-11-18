@@ -198,13 +198,18 @@ type view struct {
 	ScheduleCursor        string
 	ScheduleUnavailable   bool
 
-	InboxOnly        bool
-	ReuseInbox       bool
-	CachedInboxFirst string
-	Role             engineapi.EngineRole
-	CanResetData     bool
-	CompactSource    bool
-	LatestEditTarget *engineapi.MessageEditTarget
+	InboxPageCursor, InboxNext string
+	InboxOnly                  bool
+	ReuseInbox                 bool
+	PagePresentationSupported  bool
+	RefreshUnchanged           bool
+	RefreshInbox               bool
+	RefreshRow                 string
+	CachedInboxFirst           string
+	Role                       engineapi.EngineRole
+	CanResetData               bool
+	CompactSource              bool
+	LatestEditTarget           *engineapi.MessageEditTarget
 
 	SenderInfo                                           *senderInfoView
 	GlobalMessageSearch                                  bool
@@ -682,6 +687,7 @@ type copy struct {
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string
 	MediaBody, SelectChat, SelectChatBody, AccountHelp                                                                                                                   string
+	OlderConversations, NewestConversations, NoArchivedChats                                                                                                             string
 	PreviewOnly, NoChats, NoChatsBody                                                                                                                                    string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
 	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                                                                                      string
@@ -1102,13 +1108,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/ui/refresh" {
+		w.Header().Set("Cache-Control", "no-store")
+		if v.RefreshUnchanged {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		component := liveRegions(v)
+		if v.RefreshInbox && !v.Unavailable {
+			component = liveInbox(v)
+		}
 		var buf bytes.Buffer
-		if err := liveRegions(v).Render(presentationContext(r.Context(), v), &buf); err != nil {
+		if err := component.Render(presentationContext(r.Context(), v), &buf); err != nil {
 			w.WriteHeader(503)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
+		buf = encodeFragment(w, r, buf)
 		_, _ = buf.WriteTo(w)
 		return
 	}
@@ -1188,6 +1203,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.EngineID = engine.JSON200.Id
 	v.ReadReceiptsSupported = supportsReadReceipts(engine.JSON200.ApiVersion)
+	v.PagePresentationSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 40)
 	v.EventCursor = engine.JSON200.EventCursor
 	if notificationEngine != "" && notificationEngine != v.EngineID {
 		v.NotFound = true
@@ -1197,6 +1213,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
 	v.Role = engine.JSON200.Role
+	if r.URL.Path == "/ui/refresh" && v.EventCursor != "" && (v.Section == "chats" || v.Section == "archived") {
+		if r.Header.Get("X-Oie-Refresh-Cursor") == v.EventCursor {
+			v.RefreshUnchanged = true
+			return
+		}
+		v.RefreshInbox = r.Header.Get("X-Oie-Inbox-Event") == v.EventCursor
+		v.RefreshRow = r.Header.Get("X-Oie-Inbox-Row")
+	}
 	if infoOnly && v.InfoView == "participants" {
 		s.loadConversation(ctx, r, v, true, false, true, editor)
 		return
@@ -1208,6 +1232,11 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.setAccounts(accounts.JSON200.Items)
+	if v.RefreshInbox {
+		v.AccountUnread = s.accountUnread(ctx)
+		s.loadInbox(ctx, v, editor)
+		return
+	}
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
 		return
@@ -1216,7 +1245,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		v.AccountUnread = s.accountUnread(ctx)
 	}
 	for _, a := range v.Accounts {
-		if !editorOnly && !scheduledOnly {
+		if !paneOnly && !scheduledOnly {
 			s.loadAvatars(ctx, v, a.Id)
 		}
 		if listOnly || paneOnly || scheduledOnly || favoritesOnly {
@@ -1290,6 +1319,9 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.Re
 	limit := 100
 	includeCount := true
 	params := &engineapi.ListConversationsParams{Limit: &limit, IncludeLatestMessagePageCount: &includeCount}
+	if v.InboxPageCursor != "" {
+		params.Cursor = &v.InboxPageCursor
+	}
 	archived := v.Section == "archived"
 	params.Archived = &archived
 	if v.AccountFilter != "" {
@@ -1322,6 +1354,9 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.Re
 		return false
 	}
 	v.Chats = chats.JSON200.Items
+	if chats.JSON200.NextCursor != nil {
+		v.InboxNext = *chats.JSON200.NextCursor
+	}
 	return true
 }
 
@@ -1369,6 +1404,15 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 	}
 	v.Selected = c
 	v.ChatID = selected
+	latestPane := paneOnly && r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "conversation" &&
+		v.PagePresentationSupported && !v.Preview && v.requestKind() == "" && c.UnreadCount == 0 &&
+		v.FocusMessage == "" && v.InfoView == "" && v.TimelineCursor == ""
+	if latestPane && s.loadLatestPane(ctx, v, editor) {
+		return
+	}
+	if paneOnly && !editorOnly {
+		s.loadAvatars(ctx, v, c.AccountId)
+	}
 	if v.requestKind() != "" {
 		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
 		if v.requestKind() == "room_invitation" {
@@ -1384,6 +1428,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		s.loadMessaging(ctx, v)
 		return
 	}
+
 	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
 	if paneOnly {
@@ -1619,8 +1664,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
-	if v.CompactSource {
-		buf = encodeSourceFragment(w, r, buf)
+	if v.CompactSource || r.Header.Get("HX-Request") == "true" && r.Header.Get("X-Oie-Fragment") == "conversation" {
+		buf = encodeFragment(w, r, buf)
 	}
 	if v.OfflineHistory && r.URL.Path == "/" {
 		if v.OfflineEngineStatus != "" {

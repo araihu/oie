@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.39.0",
+    "version": "0.40.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -5184,6 +5184,15 @@
         },
         "parameters": [
           {
+            "name": "includePresentation",
+            "in": "query",
+            "description": "Include conversation action state and display metadata scoped to the returned messages. Requires a limit of at most 50.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "description": "Retained message UUID anchoring this conversation-scoped page at its current position. A schedule can move to a new position at release. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.",
@@ -7597,7 +7606,8 @@
               "0.36.0",
               "0.37.0",
               "0.38.0",
-              "0.39.0"
+              "0.39.0",
+              "0.40.0"
             ]
           },
           "eventCursor": {
@@ -11151,6 +11161,68 @@
           "sendState": "received"
         }
       },
+      "MessagePresentation": {
+        "type": "object",
+        "description": "Optional display and action metadata for one page of up to 50 retained messages. An omitted field means that its state is unknown.",
+        "additionalProperties": false,
+        "properties": {
+          "avatarHashes": {
+            "type": "object",
+            "description": "Retained profile image hashes for the conversation and its owning account, keyed by address.",
+            "maxProperties": 2,
+            "additionalProperties": {
+              "type": "string"
+            },
+            "example": {}
+          },
+          "details": {
+            "$ref": "#/components/schemas/ConversationDetails"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "editTarget": {
+            "$ref": "#/components/schemas/MessageEditTarget"
+          },
+          "roomSession": {
+            "$ref": "#/components/schemas/RoomSession"
+          },
+          "roomArchive": {
+            "$ref": "#/components/schemas/RoomArchive"
+          },
+          "previews": {
+            "type": "array",
+            "example": [],
+            "items": {
+              "$ref": "#/components/schemas/MessagePreview"
+            }
+          },
+          "videos": {
+            "type": "array",
+            "maxItems": 150,
+            "example": [],
+            "items": {
+              "$ref": "#/components/schemas/SharedContentItem"
+            }
+          },
+          "stars": {
+            "type": "array",
+            "maxItems": 50,
+            "example": [],
+            "items": {
+              "$ref": "#/components/schemas/MessageStar"
+            }
+          },
+          "reactions": {
+            "type": "array",
+            "maxItems": 50,
+            "example": [],
+            "items": {
+              "$ref": "#/components/schemas/MessageReactions"
+            }
+          }
+        }
+      },
       "MessagePage": {
         "type": "object",
         "description": "Visible logical messages newest first by timelineAt or createdAt at UTC millisecond precision and UUID tie-break. Unreleased schedules and scheduled sends cancelled before dispatch are excluded. Validated correction sources are retained as revisions rather than additional timeline items. Use nextCursor for records in the requested direction; render each page in reverse for a chronological timeline. For newer pages, nextCursor is the newest returned UUID, while older pages use the oldest returned UUID.",
@@ -11159,6 +11231,9 @@
           "items"
         ],
         "properties": {
+          "presentation": {
+            "$ref": "#/components/schemas/MessagePresentation"
+          },
           "items": {
             "type": "array",
             "items": {

@@ -1157,6 +1157,9 @@ type SubmissionReceipt struct {
 
 // RenderWorkspaceParams defines parameters for RenderWorkspace.
 type RenderWorkspaceParams struct {
+	// InboxCursor Opaque cursor for the next page of the current conversation list.
+	InboxCursor *string `form:"inboxCursor,omitempty" json:"inboxCursor,omitempty"`
+
 	// Section Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
 	Section *string `form:"section,omitempty" json:"section,omitempty"`
 
@@ -1560,6 +1563,18 @@ type PutBrowserPushParams struct {
 
 // RefreshWorkspaceParams defines parameters for RefreshWorkspace.
 type RefreshWorkspaceParams struct {
+	// InboxCursor Opaque cursor for the next page of the current conversation list.
+	InboxCursor *string `form:"inboxCursor,omitempty" json:"inboxCursor,omitempty"`
+
+	// XOieRefreshCursor Cursor of the fully applied chat view. A matching engine cursor allows an empty response.
+	XOieRefreshCursor *string `json:"X-Oie-Refresh-Cursor,omitempty"`
+
+	// XOieInboxEvent Latest contiguous event affecting only other conversations. A matching cursor allows a list and unread count update.
+	XOieInboxEvent *string `json:"X-Oie-Inbox-Event,omitempty"`
+
+	// XOieInboxRow Changed conversation when all contiguous events affect the same row. Other rows may be represented by version checks.
+	XOieInboxRow *string `json:"X-Oie-Inbox-Row,omitempty"`
+
 	// XOieInboxScope Scope of the list mounted in the current tab.
 	XOieInboxScope *string `json:"X-Oie-Inbox-Scope,omitempty"`
 

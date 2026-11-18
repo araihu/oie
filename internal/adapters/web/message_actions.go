@@ -16,19 +16,15 @@ func (v view) imagePreviews(id string) []engineapi.MessagePreview {
 	}
 	return images
 }
-func messageActions(v view, id string) []dropdown.Section {
+func messageActions(v view, message messageView) []dropdown.Section {
+	id := message.Id
 	sections := []dropdown.Section{{Items: []dropdown.Item{
 		{ID: "copy-message-" + id, Icon: glyph(heroicons.Icon16SolidDocumentDuplicate), Label: v.Text.CopyOriginal, OnClick: "void 0"},
 		{ID: "star-message-" + id, Icon: glyph(heroicons.Icon16SolidStar), Label: v.starLabel(id), OnClick: "void 0", Disabled: !v.StarsKnown, Tooltip: v.Text.StarUnavailable},
 		{ID: "reply-message-" + id, Icon: glyph(heroicons.Icon16SolidArrowUturnLeft), Label: v.Text.ReplyMessage, OnClick: "void 0", Disabled: !v.replyAllowed(), Tooltip: v.Text.ReplyUnavailable},
 	}}}
-	if !v.Preview {
-		for _, message := range v.Messages {
-			if message.Id == id && message.SendState != "cancelled" {
-				sections[0].Items = append(sections[0].Items, forwardAction(v, "", id))
-				break
-			}
-		}
+	if !v.Preview && message.SendState != "cancelled" {
+		sections[0].Items = append(sections[0].Items, forwardAction(v, "", id))
 	}
 	if _, known := v.Reactions[id]; known {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "react-message-" + id, Icon: glyph(heroicons.Icon16SolidFaceSmile), Label: v.Text.ReactMessage, OnClick: "void 0", Disabled: !v.reactionAllowed(id), Tooltip: v.Text.ReactionUnavailable}}})
@@ -41,25 +37,19 @@ func messageActions(v view, id string) []dropdown.Section {
 			Href:  v.editTargetHref(id),
 		}}})
 	}
-	for _, message := range v.Messages {
-		if message.Id == id && !v.Preview && message.CanRetract != nil && *message.CanRetract {
-			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "retract-message-" + id, Icon: glyph(heroicons.Icon16SolidTrash), Label: v.Text.RetractMessage, OnClick: "void 0"}}})
-		}
-		if message.Id == id && v.Selected != nil && v.Selected.Kind == "room" && !v.Preview &&
-			!message.IsOwn && message.Moderation == nil && v.roomState() == "joined" &&
-			v.ConversationInfo != nil && v.ConversationInfo.CanModerateMessages != nil && *v.ConversationInfo.CanModerateMessages {
-			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "moderate-room-message-" + id, Icon: glyph(heroicons.Icon16SolidTrash), Label: v.Text.RoomModerateMessage, OnClick: "void 0"}}})
-		}
-		if message.Id == id && message.IsOwn && pendingSendMutable(message.Message) && !v.Preview {
-			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "cancel-message-" + id, Label: v.Text.CancelSend, Icon: glyph(heroicons.Icon16SolidXMark), OnClick: "$dispatch('oie:cancel-message', {id: '" + id + "'})"}}})
-			break
-		}
+	if !v.Preview && message.CanRetract != nil && *message.CanRetract {
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "retract-message-" + id, Icon: glyph(heroicons.Icon16SolidTrash), Label: v.Text.RetractMessage, OnClick: "void 0"}}})
 	}
-	for _, message := range v.Messages {
-		if message.Id == id && messageEdited(message) {
-			sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "history-message-" + id, Icon: historyIcon(), Label: v.Text.ViewEditHistory, Href: v.editHistoryHref(message)}}})
-			break
-		}
+	if v.Selected != nil && v.Selected.Kind == "room" && !v.Preview &&
+		!message.IsOwn && message.Moderation == nil && v.roomState() == "joined" &&
+		v.ConversationInfo != nil && v.ConversationInfo.CanModerateMessages != nil && *v.ConversationInfo.CanModerateMessages {
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "moderate-room-message-" + id, Icon: glyph(heroicons.Icon16SolidTrash), Label: v.Text.RoomModerateMessage, OnClick: "void 0"}}})
+	}
+	if message.IsOwn && pendingSendMutable(message.Message) && !v.Preview {
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "cancel-message-" + id, Label: v.Text.CancelSend, Icon: glyph(heroicons.Icon16SolidXMark), OnClick: "$dispatch('oie:cancel-message', {id: '" + id + "'})"}}})
+	}
+	if messageEdited(message) {
+		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "history-message-" + id, Icon: historyIcon(), Label: v.Text.ViewEditHistory, Href: v.editHistoryHref(message)}}})
 	}
 	if images := v.imagePreviews(id); len(images) == 1 {
 		sections = append(sections, imageActions(v, images[0])...)
@@ -75,28 +65,25 @@ func messageActions(v view, id string) []dropdown.Section {
 		}
 		sections = append(sections, dropdown.Section{Items: items})
 	}
-	if audio := audioDownloadActions(v, id); len(audio) > 0 {
+	if audio := audioDownloadActions(v, message); len(audio) > 0 {
 		sections = append(sections, dropdown.Section{Items: audio})
 	}
 	return sections
 }
 
-func audioDownloadActions(v view, messageID string) []dropdown.Item {
+func audioDownloadActions(v view, message messageView) []dropdown.Item {
 	var items []dropdown.Item
 	item := func(id, name string) dropdown.Item {
 		return dropdown.Item{ID: "save-audio-" + id, Label: name, Icon: glyph(heroicons.Icon16SolidArrowDownTray), OnClick: "void 0"}
 	}
-	for _, audio := range v.MessageAudio[messageID] {
+	for _, audio := range v.MessageAudio[message.Id] {
 		items = append(items, item(audio.Id, v.sharedTitle(audio)))
 	}
-	for _, message := range v.Messages {
-		if message.Id == messageID && message.Attachments != nil {
-			for _, audio := range *message.Attachments {
-				if audioMediaType(audio.MediaType) != "" {
-					items = append(items, item(audio.Id, audio.FileName))
-				}
+	if message.Attachments != nil {
+		for _, audio := range *message.Attachments {
+			if audioMediaType(audio.MediaType) != "" {
+				items = append(items, item(audio.Id, audio.FileName))
 			}
-			break
 		}
 	}
 	for i := range items {

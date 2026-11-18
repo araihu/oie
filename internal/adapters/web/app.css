@@ -84,6 +84,8 @@ html.dark .oie-brand-logo-dark{display:block}
 .oie-search{margin:0 14px 11px;position:relative;flex-shrink:0}
 .oie-search-icon{position:absolute;top:11px;left:13px;color:var(--oie-muted);z-index:1;pointer-events:none}
 .oie-search-icon .oie-icon{width:17px;height:17px}
+.oie-inbox-pagination{display:flex;justify-content:space-evenly;gap:.5rem;padding:.75rem;flex-wrap:wrap}
+.oie-inbox-pagination a{display:inline-flex;align-items:center;min-height:44px}
 .oie-filters{display:flex;gap:6px;padding:0 14px 12px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
 .oie-filters[hidden]{display:none}
 .oie-filter{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid var(--oie-border);border-radius:18px;color:var(--oie-muted);text-decoration:none;font-size:12px;line-height:1.35;white-space:nowrap;font-weight:600}

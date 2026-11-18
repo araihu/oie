@@ -50,6 +50,11 @@
     return parsed <= maxSequence ? parsed : null;
   }
 
+  function follows(previous, next) {
+    const a = sequence(previous), b = sequence(next);
+    return a !== null && b !== null && b === a + 1n;
+  }
+
   function connect() {
     if (source || retry !== undefined || suspended || replaced) return;
     const requested = sequence(cursor);
@@ -167,5 +172,5 @@
     wake();
   });
 
-  window.OieEvents = {target, sync, stop, wake, suspend, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
+  window.OieEvents = {target, sync, follows, stop, wake, suspend, latest, markReplaced, eventTypes, get connected() { return connected; }, get replaced() { return replaced; }};
 })();

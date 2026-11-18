@@ -153,6 +153,40 @@ func (v view) timelineUnread() int {
 	return v.Selected.UnreadCount
 }
 
+// loadLatestPane obtains action state and message decorations for this page in
+// one engine round trip. Source jumps and first-unread navigation use their own windows.
+func (s *Server) loadLatestPane(ctx context.Context, v *view, editor engineapi.RequestEditorFn) bool {
+	params := timelineInitialParams(*v)
+	include := true
+	params.IncludePresentation = &include
+	response, err := s.client.ListMessagesWithResponse(ctx, v.ChatID, params, editor)
+	if err != nil || response.JSON200 == nil || response.JSON200.Presentation == nil {
+		return false
+	}
+	page := response.JSON200
+	if !validTimelinePage(*page, v.Selected.AccountId, v.ChatID, "older", nil, timelinePageSize) {
+		v.Unavailable = true
+		return true
+	}
+	v.TimelineOlder = page.NextCursor != nil
+	v.applyConversationPresentation(page.Presentation)
+	if hashes := page.Presentation.AvatarHashes; hashes != nil {
+		for _, address := range []string{v.Selected.Address, v.account(v.Selected.AccountId).Address} {
+			if hash := (*hashes)[address]; address != "" && (hash == "" || validAvatarHash(hash)) {
+				v.Avatars[avatarIdentity{v.Selected.AccountId, address}] = hash
+			}
+		}
+	}
+	if v.ConversationInfo == nil {
+		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
+	}
+	v.setTimelineMessages(page.Items, nil)
+	v.applyTimelinePresentation(page.Presentation)
+	s.loadMessageAudio(ctx, v)
+	v.formatTimelineMessages(ctx)
+	return true
+}
+
 func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.Message, extras map[string]*mediaView) {
 	v.setTimelineMessages(items, extras)
 	// Each enrichment request stays within the public batch contract.

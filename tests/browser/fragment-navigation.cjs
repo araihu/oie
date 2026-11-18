@@ -10,6 +10,12 @@ const {once} = require('node:events');
 const {chromium} = require('playwright');
 const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function finishRefresh(pending) {
+  const response = await pending;
+  if (response.status() === 204) return;
+  assert.equal(response.status(), 200);
+  await response.finished();
+}
 async function until(check, label) {
   for (let n = 0; n < 600; n++) {if (await check()) return; await wait(50);}
   throw Error('Timed out: ' + label);
@@ -156,7 +162,7 @@ async function assertMobileControlOwnership(page) {
       try {
         const initialRefresh=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
         await inboxPage.goto(base+'/?section=chats&lang='+lang+'&theme='+theme);
-        await (await initialRefresh).finished();
+        await finishRefresh(initialRefresh);
         await until(()=>streams.size===1,'inbox event stream');
         const stream=[...streams][0];
         await inboxPage.evaluate(()=>{window.htmx.config.defaultSettleDelay=250;});
@@ -335,7 +341,7 @@ async function assertMobileControlOwnership(page) {
     });
     const scopedRefresh=scoped.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
     await scoped.goto(base+'/?chat='+chatA+'&lang=en&theme=dark',{waitUntil:'domcontentloaded'});
-    await (await scopedRefresh).finished();
+    await finishRefresh(scopedRefresh);
     await until(()=>streams.size===1&&subscriptions===1,'initial scoped stream connected');
     const streamBefore=[...streams][0],subscriptionsBefore=subscriptions;
     await scoped.locator('#message-composer').fill('Draft kept through scoped swaps');

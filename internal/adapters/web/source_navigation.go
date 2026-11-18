@@ -48,24 +48,11 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 	v.ReadReceiptsSupported = supportsReadReceipts(source.Engine.ApiVersion)
 	v.CanResetData = source.Engine.CanResetData != nil && *source.Engine.CanResetData
 	v.Selected = &owner
-	v.applyConversationDetails(source.Details)
-	if v.ConversationInfo != nil {
-		v.Connections[owner.AccountId] = connectionView{Known: true, Value: v.ConversationInfo.AccountConnection}
+	presentation := &engineapi.MessagePresentation{
+		Details: source.Details, Capabilities: source.Capabilities, EditTarget: source.EditTarget, RoomSession: source.RoomSession, RoomArchive: source.RoomArchive,
+		Previews: source.Previews, Videos: source.Videos, Stars: source.Stars, Reactions: source.Reactions,
 	}
-	if source.Capabilities != nil && source.Capabilities.AccountId == owner.AccountId {
-		v.MessagingCapabilities = source.Capabilities
-	}
-	if !v.conversationRemoved() && source.EditTarget != nil && validEditTarget(*source.EditTarget, owner.AccountId, owner.Id, "") {
-		v.LatestEditTarget = source.EditTarget
-	}
-	if owner.Kind == "room" {
-		if source.RoomSession != nil && validRoomSession(*source.RoomSession, owner.Id, owner.AccountId) {
-			v.RoomSession = source.RoomSession
-		}
-		if source.RoomArchive != nil && source.RoomArchive.ConversationId == owner.Id {
-			v.RoomArchive = source.RoomArchive
-		}
-	}
+	v.applyConversationPresentation(presentation)
 	v.ReuseInbox = !paneOnly && r.Header.Get("X-Oie-Inbox-Scope") == v.inboxCacheScope()
 
 	// The account list, inbox and avatars are independent reads. Keep them off
@@ -85,9 +72,9 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 		reads.Go(func() {
 			// loadInbox mutates Unavailable on failure. Keep that state local
 			// while the other reads are in flight.
-			inbox := view{AccountFilter: v.AccountFilter, Section: v.Section, Filter: v.Filter, Query: v.Query}
+			inbox := view{AccountFilter: v.AccountFilter, Section: v.Section, Filter: v.Filter, Query: v.Query, InboxPageCursor: v.InboxPageCursor}
 			inboxOK = s.loadInbox(ctx, &inbox)
-			v.Chats = inbox.Chats
+			v.Chats, v.InboxNext = inbox.Chats, inbox.InboxNext
 		})
 	} else {
 		inboxOK = true
@@ -110,14 +97,14 @@ func (s *Server) loadSourceNavigation(ctx context.Context, r *http.Request, v *v
 
 	v.TimelineOlder, v.TimelineNewer = v.ContextHasOlder, v.ContextHasNewer
 	v.setTimelineMessages(source.Context.Items, nil)
-	v.applySourceMessageMetadata(source)
+	v.applyTimelinePresentation(presentation)
 	s.loadMessageAudio(ctx, v)
 	v.formatTimelineMessages(ctx)
 	v.CompactSource = true
 	return true
 }
 
-func encodeSourceFragment(w http.ResponseWriter, r *http.Request, body bytes.Buffer) bytes.Buffer {
+func encodeFragment(w http.ResponseWriter, r *http.Request, body bytes.Buffer) bytes.Buffer {
 	w.Header().Add("Vary", "Accept-Encoding")
 	if !acceptsSourceGzip(r.Header.Values("Accept-Encoding")) {
 		return body
@@ -158,7 +145,29 @@ func acceptsSourceGzip(headers []string) bool {
 	return wildcard
 }
 
-func (v *view) applySourceMessageMetadata(source *engineapi.MessageSourceContext) {
+func (v *view) applyConversationPresentation(source *engineapi.MessagePresentation) {
+	owner := v.Selected
+	v.applyConversationDetails(source.Details)
+	if v.ConversationInfo != nil {
+		v.Connections[owner.AccountId] = connectionView{Known: true, Value: v.ConversationInfo.AccountConnection}
+	}
+	if source.Capabilities != nil && source.Capabilities.AccountId == owner.AccountId {
+		v.MessagingCapabilities = source.Capabilities
+	}
+	if !v.conversationRemoved() && source.EditTarget != nil && validEditTarget(*source.EditTarget, owner.AccountId, owner.Id, "") {
+		v.LatestEditTarget = source.EditTarget
+	}
+	if owner.Kind == "room" {
+		if source.RoomSession != nil && validRoomSession(*source.RoomSession, owner.Id, owner.AccountId) {
+			v.RoomSession = source.RoomSession
+		}
+		if source.RoomArchive != nil && source.RoomArchive.ConversationId == owner.Id {
+			v.RoomArchive = source.RoomArchive
+		}
+	}
+}
+
+func (v *view) applyTimelinePresentation(source *engineapi.MessagePresentation) {
 	if source.Previews != nil {
 		v.applyMessagePreviews(*source.Previews)
 	}

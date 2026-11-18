@@ -106,6 +106,13 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    const id=region.dataset.reactionSource,s=snapshots.get(id);if(!s)continue;restore(id);const pending=journals.get(id),selected=s.items.some(item=>item.emoji===filters.get(id))?filters.get(id):'',active=region.contains(document.activeElement)?document.activeElement:null;
    const activeEmoji=active?.dataset.reactionEmoji,activeFilter=active?.dataset.reactionFilter;
    const signature=JSON.stringify([s.items,s.actors,s.eligible,pending?.operationKey,pending?.command?.state,pending?.missingReceipt,busy.has(id),selected]);if(region.dataset.reactionRendered===signature)continue;
+   if(!region.querySelector('[data-reaction-summary]')){
+    if(!s.items.length&&!pending)continue;
+    const controls=window.OieRuntime.messageControls('reaction-'+region.dataset.own,id);
+    if(!controls)continue;
+    region.append(controls);
+    window.Alpine?.initTree(region);
+   }
    const summary=region.querySelector('[data-reaction-summary]'),total=s.items.reduce((sum,item)=>sum+item.count,0),details=region.querySelector('[data-reaction-details]');
    const waiting=!!pending&&(busy.has(id)||['queued','dispatching'].includes(pending.command?.state));
    const previewEmoji=total===0&&waiting?pending.emojis[0]:'';

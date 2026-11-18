@@ -276,7 +276,7 @@ for _,a:=range v.Accounts {
 if v.AccountFilter==a.Id {
 <span class="oie-account-selected" aria-label={v.Text.Active}>@glyph(heroicons.Icon16SolidCheckCircle)</span>
 }
-<span data-account-unread={a.Id} class="oie-unread-count" aria-label={v.Text.Unread+": "+strconv.Itoa(v.AccountUnread[a.Id])} hidden?={v.AccountUnread[a.Id]==0}>{strconv.Itoa(v.AccountUnread[a.Id])}</span>
+@accountUnreadBadge(v,a)
 </span>
 }
 }
@@ -343,6 +343,7 @@ if v.NativeMessageSearch {
 				@textinput.TextInput(textinput.Config{ID: "conversation-search", Name: "q", Value: searchValue, Type: textinput.TypeSearch, Placeholder: v.Text.SearchEverything, InputAttrs: templ.Attributes{"aria-label":v.Text.SearchEverything,"aria-keyshortcuts":"Control+K Meta+K","style": "padding-inline-end:2.5rem;border-radius:1.4rem;background:var(--oie-raised);border-color:var(--oie-border);color:var(--oie-text)"}})
 				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-global-search-cancel"),button.WithAttrs(templ.Attributes{"data-message-search-close":"","aria-label":v.Text.SearchCancel,"title":v.Text.SearchCancel,"hidden":!v.GlobalMessageSearch})){@glyph(heroicons.Icon16SolidXMark)}
 			</form>
+<template id="inbox-empty-chat">@emptyChat(v)</template>
 @messageSearchSlot(v)
 @inboxList(v)
 			<div class="oie-list-account" x-data="{}">
@@ -362,7 +363,7 @@ templ menuTrigger(label string) {
 }
 
 templ inboxList(v view) {
-<div id="conversation-list-default" class="oie-list-default" data-inbox-scope={v.conversationScope()} data-inbox-filter={v.Filter} hidden?={v.GlobalMessageSearch}>
+<div id="conversation-list-default" class="oie-list-default" data-inbox-scope={v.conversationScope()} data-inbox-filter={v.Filter} data-inbox-page={v.InboxPageCursor} hidden?={v.GlobalMessageSearch}>
 			<nav class="oie-filters" aria-label={ v.Text.Chats } hidden?={ v.Section == "archived" }>
 				@filterLink(v, "all", v.Text.All)
 				@filterLink(v, "unread", v.Text.Unread)
@@ -459,7 +460,7 @@ templ chatHeader(v view) {
 if v.requestKind()=="" {
 <noscript>@link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id)){ {v.Text.SearchMessages} }</noscript>
 }
-		@link.Link(v.href("chat", ""), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
+		@link.Link(v.href("chat", "", "inbox", "1", "open", "", "editSchedule", "", "lang", v.Locale, "theme", v.Theme), link.WithRootClass("oie-back-button"), link.WithAttrs(templ.Attributes{"aria-label": v.Text.Back})) {
 			@glyph(heroicons.Icon16SolidChevronLeft)
 		}
 		<div class="oie-chat-avatar">
@@ -943,6 +944,19 @@ templ liveCopy(v view){
 <div id="oie-preview-copy" hidden data-refresh-failed={v.Text.RefreshPreviewFailed} data-refresh-loading={v.Text.PreviewLoading} data-loading={v.Text.LoadingImage} data-image={v.Text.ImageView} data-not-downloaded={v.Text.ImageNotDownloaded} data-failed={v.Text.ImageDownloadFailed}></div>
 <div id="oie-live-copy" hidden data-reply-unavailable={v.Text.ReplyUnavailable} data-reply-preparing={v.Text.ReplyPreparing} data-reply-locked={v.Text.ReplyLocked} data-room-command-unknown={v.Text.RoomCommandUnknown} data-saving={v.Text.Saving} data-invalid-message={v.Text.InvalidMessage} data-pending={v.Text.PendingAcceptance} data-storage-unavailable={v.Text.DraftStorageUnavailable} data-locked={v.Text.DraftLocked} data-retry={v.Text.RetrySubmission} data-send={v.Text.Send} data-live-ready={v.Text.LiveReady} data-live-retry={v.Text.LiveRetry} data-live-connecting={v.Text.LiveConnecting} data-engine-changed={v.Text.EngineChanged} data-today={v.Text.Today}></div>
 }
+templ accountUnreadBadge(v view,a engineapi.Account){
+<span data-account-unread={a.Id} class="oie-unread-count" aria-label={v.Text.Unread+": "+strconv.Itoa(v.AccountUnread[a.Id])} hidden?={v.AccountUnread[a.Id]==0}>{strconv.Itoa(v.AccountUnread[a.Id])}</span>
+}
+
+templ liveInbox(v view){
+<div id="oie-live-inbox" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor}>
+<div id="live-list" data-version={v.conversationListVersion()}>@conversationList(v)</div>
+for _,a:=range v.Accounts {
+@accountUnreadBadge(v,a)
+}
+</div>
+}
+
 templ liveRegions(v view){
 <div id="oie-live-regions" data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
@@ -1009,6 +1023,8 @@ if v.Unavailable {
 <div class="oie-list-state">
 if v.Query!=""||v.Filter!="all" {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.NoResults,Description:v.Text.NoResultsBody})
+}else if v.Section=="archived" {
+@emptystate.EmptyState(emptystate.Config{Title:v.Text.NoArchivedChats})
 }else{
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.NoChats,Description:v.Text.NoChatsBody})
 }
@@ -1016,10 +1032,33 @@ if v.Query!=""||v.Filter!="all" {
 }else{
 <ul class="oie-conversations">
 for _,c:=range v.Chats {
+if v.RefreshInbox && validOperationKey(v.RefreshRow) && c.Id!=v.RefreshRow {
+<li data-conversation-stub={c.Id} data-version={v.conversationRowVersion(c)}
+if c.Request == nil && c.LatestMessagePageCount != nil && *c.LatestMessagePageCount >= 0 && *c.LatestMessagePageCount <= timelinePageSize {
+data-latest-message-page-count={strconv.Itoa(*c.LatestMessagePageCount)}
+}
+></li>
+}else{
 @conversationRow(v,c)
+}
 }
 </ul>
 }
+if v.InboxNext!="" || v.InboxPageCursor!="" {
+<nav data-inbox-pagination class="oie-inbox-pagination" aria-label={v.Text.Chats}>
+if v.InboxPageCursor!="" {
+@inboxPageLink(v,"",v.Text.NewestConversations)
+}
+if v.InboxNext!="" {
+@inboxPageLink(v,v.InboxNext,v.Text.OlderConversations)
+}
+</nav>
+}
+}
+
+templ inboxPageLink(v view,cursor,label string) {
+{{ attrs := navigationAttrs("conversation-list-default","inbox","outerHTML settle:0ms show:none"); attrs["data-inbox-page-link"]="" }}
+@link.Link(v.href("inboxCursor",cursor,"chat",v.ChatID,"inbox",inboxFlag(v),"lang",v.Locale,"theme",v.Theme), link.WithAttrs(attrs)){ {label} }
 }
 
 templ emptyAccountAction(v view) {
@@ -1092,8 +1131,8 @@ templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
 if m.Moderation==nil && m.Retraction==nil {
 @messageReactionShortcut(v,m)
-<div class="oie-message-menu-slot" data-message-menu-slot={m.Id} x-ignore?={v.CompactSource} data-source-menu-deferred?={v.CompactSource}>
-@dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m.Id)})
+<div class="oie-message-menu-slot" data-message-menu-slot={m.Id} x-ignore data-source-menu-deferred>
+@dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m)})
 </div>
 }
 <div class="oie-message-body-content">
@@ -1128,18 +1167,22 @@ if mentioned {
 <span class="oie-message-mention" data-message-mention role="img" aria-label={v.Text.MentionedYou} title={v.Text.MentionedYou}>{ "@" }</span>
 }
 if m.IsOwn {
-<span class="oie-message-edit-state" data-edit-state="editing">
-@tooltip.Tooltip("message-editing-tip-"+m.Id,v.Text.EditMode,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditMode,false)),tooltip.WithPortal(true))
-</span>
-<span class="oie-message-edit-state" data-edit-state="pending">
-@tooltip.Tooltip("message-edit-pending-tip-"+m.Id,v.Text.EditPending,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditPending,true)),tooltip.WithPortal(true))
-</span>
+<span data-edit-indicators></span>
 }
 if messageEdited(m) || (m.Retraction!=nil && m.Retraction.OriginalAvailable) {
 @messageHistoryIndicator(v,m)
 }
 </div>
 }
+}
+
+templ editIndicators(v view,id string){
+<span class="oie-message-edit-state" data-edit-state="editing">
+@tooltip.Tooltip("message-editing-tip-"+id,v.Text.EditMode,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditMode,false)),tooltip.WithPortal(true))
+</span>
+<span class="oie-message-edit-state" data-edit-state="pending">
+@tooltip.Tooltip("message-edit-pending-tip-"+id,v.Text.EditPending,tooltip.WithTrigger(messageEditStateIcon(v.Text.EditPending,true)),tooltip.WithPortal(true))
+</span>
 }
 
 templ messageSendIndicator(v view,m messageView){

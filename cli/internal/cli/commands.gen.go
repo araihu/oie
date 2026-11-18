@@ -424,6 +424,9 @@ func build32(server string, input cliruntime.Input) (*http.Request, error) {
 		return nil, err
 	}
 	var params api.ListMessagesParams
+	if err := input.Decode("query", "includePresentation", &params.IncludePresentation); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "cursor", &params.Cursor); err != nil {
 		return nil, err
 	}

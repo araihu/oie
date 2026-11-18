@@ -12,12 +12,18 @@ use the full application fragment.
 The BFF serves this region for a root GET with `HX-Request: true` and
 `X-Oie-Fragment: conversation`. It includes conversation-owned stars, avatar
 data and the details drawer. The response carries a scope hash covering the
-engine, inbox account/filter/query and presentation settings. No engine API
-operation or protocol adapter changes are needed.
+engine, inbox account/filter/query and presentation settings. API 0.40 can include presentation metadata in a bounded message page.
+For an ordinary latest-page switch, the BFF reads the engine, accounts, selected
+conversation and message page. The page carries action state, media previews,
+stars, reactions and avatar hashes for the account and conversation. Older
+engines use the individual reads. Source jumps and first-unread navigation keep
+their dedicated windows.
 
 The browser validates the requested conversation and scope before replacing
 the region. Failed or obsolete responses preserve the active conversation.
-Browser history and the mobile Back action use the same fragment lifecycle.
+Mobile Back records an explicit inbox URL, disposes the chat and focuses its
+row in the mounted list. A native link serves the same inbox URL. Browser
+history can reopen the chat and restore its draft.
 Previous listeners, reads, media and live subscriptions are disposed before the
 new conversation starts. Draft ownership remains tied to its engine, account
 and conversation.
@@ -27,6 +33,17 @@ instead of HTML changed by HTMX, avatar bindings or localized timestamps.
 Selection updates `aria-current` directly. A new conversation response does not
 mark the retained inbox data as current, so an intervening incoming message can
 still update its preview or unread count.
+
+On a connected, unchanged chat view, the recovery poll sends the applied engine
+cursor. The server can confirm it with HTTP 204. A contiguous sequence of
+message or conversation events affecting other chats can refresh just the inbox
+and account unread counts. The client verifies the versions of retained rows
+before applying the result. A gap, an unexpected row version or a change in the
+open conversation requests the full live regions.
+
+The inbox uses the engine cursor to browse pages of up to 100 conversations.
+Changing the page replaces only the list. Its cursor is part of the URL and the
+inbox cache scope, so history and reload restore the selected page.
 
 ## Returning from another sidebar section
 
