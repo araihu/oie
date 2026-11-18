@@ -21,6 +21,8 @@
         list.hidden = true;
       }
       title.textContent = recentTitle;
+      const full = document.getElementById('offline-full');
+      if (full) full.hidden = true;
       const empty = document.getElementById('offline-empty');
       if (new URLSearchParams(location.search).has('chat')) empty.textContent = body.dataset.conversationMissing;
       empty.hidden = false;
@@ -42,7 +44,7 @@
     return;
   }
 
-  if (location.pathname !== '/') return;
+  if (location.pathname !== '/' && location.pathname !== '/search') return;
   const worker = navigator.serviceWorker.register('/offline-worker.js', {updateViaCache: 'none'})
     .then(() => navigator.serviceWorker.ready)
     .catch(() => null);
@@ -50,15 +52,98 @@
     void worker.then(registration => registration?.active?.postMessage(data)).catch(() => {});
   };
 
+  function renderKeepStatus(control, result) {
+    control.checked = result.kept;
+    const status = document.getElementById('keep-offline-status');
+    if (!status) return;
+    const message = result.full ? control.dataset.refreshFull :
+      result.kept && result.available === false ? control.dataset.awaitingCopy : '';
+    status.textContent = message;
+    status.hidden = !message;
+  }
+
+  const keepControl = () => document.querySelector('[data-keep-chat-offline]');
+  const keepScope = ({dataset}) => ({engine: dataset.engine, account: dataset.account, chat: dataset.keepChatOffline});
+  const changingKeep = new WeakSet();
+  let keepRead = 0;
+
+  async function refreshKeep(control = keepControl(), retry = true) {
+    if (!control || changingKeep.has(control)) return;
+    const turn = ++keepRead;
+    const result = await keepRequest('oie:offline-keep-status', keepScope(control));
+    if (turn !== keepRead || !control.isConnected || changingKeep.has(control)) return;
+    if (result && !result.error) {
+      renderKeepStatus(control, result);
+      control.disabled = false;
+      return;
+    }
+    control.disabled = true;
+    if (retry) setTimeout(() => {
+      if (turn === keepRead && control.isConnected && control.getClientRects().length) {
+        void refreshKeep(control, false);
+      }
+    }, 500);
+  }
+
+  async function keepRequest(type, scope) {
+    try {
+      return await request((await worker)?.active, {type, ...scope});
+    } catch {
+      return null;
+    }
+  }
+
+  window.addEventListener('drawer:open', event => {
+    if (event.detail?.id === 'details') void refreshKeep();
+  });
+  document.addEventListener('oie:info-content', () => {
+    const control = keepControl();
+    if (control?.getClientRects().length) void refreshKeep(control);
+  });
+  navigator.serviceWorker.addEventListener('message', ({data}) => {
+    const control = keepControl();
+    if (data?.type !== 'oie:offline-keep-changed' || !control) return;
+    const {engine, account, chat} = keepScope(control);
+    if (data.engine !== engine || data.account !== account || data.chat !== chat) return;
+    if (control.getClientRects().length) void refreshKeep(control);
+    else if (data.full) window.dispatchEvent(new CustomEvent('notify', {
+      detail: {kind: 'toast', tone: 'danger', message: control.dataset.refreshFull},
+    }));
+  });
+  document.addEventListener('change', async ({target: control}) => {
+    if (control !== keepControl() || !control) return;
+    const keep = control.checked;
+    control.checked = !keep;
+    if (changingKeep.has(control)) return;
+    changingKeep.add(control);
+    ++keepRead;
+    control.setAttribute('aria-disabled', 'true');
+    const scope = keepScope(control);
+    const pane = keep && document.getElementById('conversation-pane');
+    const snapshot = pane ? capture(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline')) : undefined;
+    const result = await keepRequest('oie:offline-keep-chat', {...scope, keep, snapshot: snapshot?.entry ? snapshot : undefined});
+    changingKeep.delete(control);
+    if (control.isConnected) {
+      control.removeAttribute('aria-disabled');
+      if (result) control.checked = result.kept;
+      if (control.getClientRects().length && (!result || result.error)) {
+        const message = result?.error === 'full' ? control.dataset.full : control.dataset.unavailable;
+        window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
+      }
+    }
+    const current = keepControl();
+    if (current?.getClientRects().length) void refreshKeep(current);
+  });
+
   window.OieOfflineHistory = {
     observe(action, response) {
       const url = new URL(action, location.href);
       const engine = document.body.dataset.engineId;
-      if (url.origin !== location.origin || url.pathname !== '/' || !uuid(engine)) return;
+      if (url.origin !== location.origin || !['/', '/search'].includes(url.pathname) || !uuid(engine)) return;
       const identity = response.headers.get('X-Oie-Offline-History');
       if (identity === 'denied') {
         publish({type: 'oie:offline-history-clear', engine, blocked: true});
-      } else if (response.status === 404 && identity === engine && !url.searchParams.has('notificationEngine')) {
+      } else if (url.pathname === '/' && response.status === 404 && identity === engine && !url.searchParams.has('notificationEngine')) {
         const chat = url.searchParams.get('chat');
         const account = url.searchParams.get('account');
         if (uuid(chat) && (account === null || uuid(account))) publish({
@@ -73,10 +158,11 @@
       const query = url.searchParams;
       if (url.origin !== location.origin || url.pathname !== '/' ||
           !['chats', 'archived'].includes(query.get('section') || 'chats') ||
-          query.has('open') || query.has('searchQuery')) return false;
+          (query.has('open') && !(query.get('open') === 'details' && uuid(query.get('chat')))) ||
+          query.has('searchQuery')) return false;
       void read().catch(() => null).then(state => {
         if (!current()) return;
-        if (!state || state.engine !== document.body.dataset.engineId || !state.entries.length) {
+        if (!state || state.engine !== document.body.dataset.engineId || !(state.entries.length || state.kept?.some(item => item.full))) {
           onFailure();
           return;
         }
@@ -86,7 +172,7 @@
     },
   };
 
-  function snapshot(scope, header, timeline) {
+  function capture(scope, header, timeline) {
     const {engineId, accountId, conversationId, eventCursor, contextMissing} = scope.dataset;
     if (!uuid(engineId) || window.OieEvents?.replaced || window.OieRuntime?.memory.get('device-reset')) return;
     const {lang} = document.documentElement;
@@ -114,7 +200,12 @@
         ? document.querySelector(`[data-switch-account="${accountId}"] .oie-profile-identity strong`)?.textContent : '';
       if (title) data.entry = {account: accountId, chat: conversationId, title, label, messages};
     }
-    publish(data);
+    return data;
+  }
+
+  function snapshot(scope, header, timeline) {
+    const data = capture(scope, header, timeline);
+    if (data) publish(data);
   }
 
   document.addEventListener('oie:route-ready', () => {
@@ -124,6 +215,10 @@
   document.addEventListener('oie:shared-refresh', ({detail: page}) => {
     const regions = page.querySelector('#oie-live-regions');
     if (regions?.dataset.unavailable === 'false') snapshot(regions, page.querySelector('#live-header #chat-header'), page.querySelector('#live-timeline'));
+  });
+  document.addEventListener('oie:timeline-latest', () => {
+    const pane = document.getElementById('conversation-pane');
+    if (pane) snapshot(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline'));
   });
   document.addEventListener('oie:appearance-changed', () => {
     const root = document.getElementById('oie-app');
@@ -136,9 +231,9 @@
   const events = window.OieEvents?.target;
   if (events) {
     const findScope = {
-      'account.removed': value => ({account: value.removedAccountId}),
+      'account.removed': value => ({account: value.removedAccountId, removeKeep: true}),
       'conversation.updated': ({conversation}) => (conversation?.removedFromChats || conversation?.request)
-        ? {account: conversation.accountId, chat: conversation.id} : null,
+        ? {account: conversation.accountId, chat: conversation.id, removeKeep: true} : null,
       'conversation.history_pruned': ({historyPruned}) => historyPruned
         ? {account: historyPruned.accountId, chat: historyPruned.conversationId} : null,
       'message.updated': ({message}) => message ? {account: message.accountId, chat: message.conversationId} : null,
@@ -165,13 +260,17 @@
 
   async function read() {
     const registration = await navigator.serviceWorker.getRegistration('/');
-    if (!registration?.active) return null;
+    return request(registration?.active, {type: 'oie:offline-history-read'});
+  }
+
+  function request(active, data) {
+    if (!active) return null;
     return new Promise(resolve => {
       const {port1, port2} = new MessageChannel();
       const finish = result => { clearTimeout(timeout); port1.close(); resolve(result); };
       const timeout = setTimeout(() => finish(null), 2000);
       port1.onmessage = ({data}) => finish(data);
-      try { registration.active.postMessage({type: 'oie:offline-history-read'}, [port2]); }
+      try { active.postMessage(data, [port2]); }
       catch { finish(null); }
     });
   }
@@ -218,6 +317,10 @@
     }
 
     back.hidden = false;
+    const inScope = !revokedEngines.has(displayedEngine) && (!expectedEngine || expectedEngine === displayedEngine);
+    const full = document.getElementById('offline-full');
+    if (full) full.hidden = !(inScope && state?.kept?.some(item =>
+      item.full && item.chat === chat && (!account || item.account === account)));
     const entry = entries.find(entry => entry.chat === chat);
     if (!entry) {
       empty.textContent = body.dataset.conversationMissing;
