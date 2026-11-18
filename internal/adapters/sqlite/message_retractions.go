@@ -3,12 +3,14 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/google/uuid"
 )
 
 func (s *Store) RecordMessageRetraction(ctx context.Context, account domain.ID, kind, address string, in application.IncomingRetraction) error {
@@ -21,6 +23,9 @@ func (s *Store) RecordMessageRetraction(ctx context.Context, account domain.ID, 
 		AccountID: string(account), Kind: kind, Address: address, Scope: in.Scope, RemoteID: in.RemoteID, RetractedAt: stamp(in.At),
 	})
 	if err != nil || n == 0 {
+		return err
+	}
+	if err := reconcileOwnRetractionBeforeWire(ctx, q, domain.Conversation{AccountID: account, Kind: kind, Address: address}, in); err != nil {
 		return err
 	}
 	sources, err := retractionSources(ctx, q, account, kind, address, in)
@@ -44,6 +49,34 @@ func (s *Store) RecordMessageRetraction(ctx context.Context, account domain.ID, 
 		}
 	}
 	return tx.Commit()
+}
+
+func reconcileOwnRetractionBeforeWire(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, in application.IncomingRetraction) error {
+	id, err := domain.ParseID(in.RemoteID)
+	if err != nil || chat.Kind != "direct" {
+		return nil
+	}
+	message, err := ownMessageBeforeWire(ctx, q, chat, id)
+	if err != nil || message.ID == "" {
+		return err
+	}
+	payload, err := q.GetAccount(ctx, string(chat.AccountID))
+	if err != nil {
+		return err
+	}
+	var account domain.Account
+	if err := json.Unmarshal([]byte(payload), &account); err != nil {
+		return err
+	}
+	if in.Scope != "xmpp:correct:sender:"+account.Address {
+		return nil
+	}
+	revision, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	_, err = updateMessage(ctx, q, message, "unknown", domain.ID(revision.String()), in.At, in.At, false)
+	return err
 }
 
 func retractionSources(ctx context.Context, q *dbgen.Queries, account domain.ID, kind, address string, in application.IncomingRetraction) (map[domain.ID]bool, error) {

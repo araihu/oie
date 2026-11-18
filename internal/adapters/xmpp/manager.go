@@ -798,6 +798,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		return application.Failed
 	}
 	e.mu.Unlock()
+	mentions := outgoingMentionProof(nil)
 	if out.Kind == "room" && out.Reaction == nil {
 		e.mu.Lock()
 		slot := e.rooms[out.Address]
@@ -809,6 +810,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			return application.NotSent
 		}
 		payload.Mentions = roomMentionReferences(slot, payload.Mentions)
+		mentions = outgoingMentionProof(payload.Mentions)
 		if e.ownRoomMessages == nil {
 			e.ownRoomMessages = map[string]ownRoomMessage{}
 		}
@@ -818,7 +820,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 				break
 			}
 		}
-		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText}
+		e.ownRoomMessages[string(out.ID)] = ownRoomMessage{address: out.Address, body: out.OriginalText, mentionDigest: mentions.Digest}
 		e.mu.Unlock()
 	}
 
@@ -828,7 +830,7 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if out.Reaction != nil {
 		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
 	}
-	if out.RecordWireAttempt != nil && out.RecordWireAttempt(ctx, attachmentBody) != nil {
+	if out.RecordWireAttempt != nil && out.RecordWireAttempt(ctx, attachmentBody, mentions) != nil {
 		return application.NotSent
 	}
 	if _, ok := ctx.Deadline(); !ok {
@@ -1036,7 +1038,23 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		_, requestsEnabled := m.host.(application.ConversationRequestHost)
 		own, _ := jid.Parse(e.account.Address)
-		err := m.host.Receive(ctx, application.Incoming{CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable), MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata), FileDigests: decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata), FileReferences: decodeFileReferences(msg.fileSharingMetadata), AccountID: e.account.ID, Address: msg.From.Bare().String(), ProviderID: msg.ID, OriginalText: msg.Body, CreatedAt: created, IsOwn: msg.From.Bare().String() == e.account.Address, References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false)})
+		address := msg.From.Bare().String()
+		isOwn := msg.From.Bare().Equal(own.Bare())
+		var canonical domain.ID
+		if isOwn {
+			canonical, _ = domain.ParseID(msg.originID())
+		}
+		mentions := msg.wireMentionProof(msg.From.Bare().String(), msg.Body)
+		err := m.host.Receive(ctx, application.Incoming{
+			AccountID: e.account.ID, Kind: "direct", Address: address, ProviderID: msg.ID, CanonicalID: canonical,
+			OriginalText: msg.Body, CreatedAt: created, IsOwn: isOwn,
+			CheckDirectHistory: requestsEnabled, ReadReceiptID: readReceiptID, DirectArchiveID: roomStanzaID(own, msg.Stable),
+			References: refs, Reply: reply, Correction: decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, false, false),
+			WireMentions: mentions.Evidence, WireMentionDigest: mentions.Digest,
+			MediaThumbnails: decodeFileThumbnails(msg.fileSharingMetadata),
+			FileDigests:     decodeFileDigests(msg.fileSharingMetadata), AudioURLs: decodeAudioURLs(msg.fileSharingMetadata),
+			FileReferences: decodeFileReferences(msg.fileSharingMetadata),
+		})
 		if errors.Is(err, application.ErrInvalid) {
 			return nil
 		}

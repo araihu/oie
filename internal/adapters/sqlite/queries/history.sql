@@ -22,3 +22,25 @@ WHERE (SELECT g.archive_revision+COALESCE(a.revision,0)
  FROM global_retention g LEFT JOIN account_archive_retention a ON a.account_id=sqlc.arg(account_id)
  WHERE g.singleton=1)=sqlc.arg(retention_revision)
 ON CONFLICT(account_id,scope) DO UPDATE SET after_id=excluded.after_id;
+
+-- name: FindVerifiedRoomOccurrence :many
+SELECT DISTINCT r.message_id FROM message_references r
+JOIN messages m ON m.id=r.message_id
+JOIN conversations c ON c.id=m.conversation_id AND c.account_id=m.account_id
+WHERE m.account_id=sqlc.arg(account_id) AND c.address=sqlc.arg(room_address)
+  AND json_extract(c.payload,'$.Kind')='room' AND r.scope='room:'||c.address
+  AND r.remote_id=sqlc.arg(remote_id) AND instr(r.author,c.address||'/')=1
+LIMIT 2;
+
+-- name: IsExcludedXMPPOccurrence :one
+SELECT EXISTS (
+ SELECT 1 FROM xmpp_message_exclusions e JOIN accounts a ON a.address=e.account AND a.protocol='xmpp'
+ WHERE a.id=sqlc.arg(account_id) AND e.chat=sqlc.arg(chat) AND e.kind=sqlc.arg(kind)
+ AND ((e.key_type='mam' AND e.authority=sqlc.arg(archive_scope) AND e.remote_id=sqlc.arg(archive_id))
+   OR (e.key_type='stanza-id' AND e.authority=e.chat AND e.remote_id=sqlc.arg(stanza_id)))
+);
+
+-- name: RememberExcludedXMPPKey :exec
+INSERT OR IGNORE INTO xmpp_message_exclusions(account,chat,kind,key_type,authority,remote_id)
+SELECT a.address,sqlc.arg(chat),sqlc.arg(kind),sqlc.arg(key_type),sqlc.arg(authority),sqlc.arg(remote_id)
+FROM accounts a WHERE a.id=sqlc.arg(account_id) AND a.protocol='xmpp';

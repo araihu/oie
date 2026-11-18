@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -102,7 +103,19 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if err != nil {
 			return out, err
 		}
-		commandRow, err := q.GetMessageEditCommand(ctx, sourceRow.ProviderID)
+		source, err := decodeMessage(sourceRow)
+		if err != nil {
+			return out, err
+		}
+		fact, err := observedRoomEditFact(ctx, q, source)
+		if err != nil {
+			return out, err
+		}
+		commandID := source.ProviderID
+		if fact != nil {
+			commandID = fact.RemoteID
+		}
+		commandRow, err := q.GetMessageEditCommand(ctx, commandID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return deny("foreign_source")
 		}
@@ -113,7 +126,17 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if err != nil {
 			return out, err
 		}
-		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBody() != t.OriginalText {
+		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBodyHash() != source.SourceBodyHash() {
+			return deny("foreign_source")
+		}
+		exact, err := readExactEditWire(ctx, q, p, source)
+		if err != nil {
+			return out, err
+		}
+		if !exact {
+			return deny("foreign_source")
+		}
+		if fact != nil && (p.Plan.Scope != fact.Scope || p.Plan.Author != fact.Author || p.Plan.OriginalWireID != fact.TargetID) {
 			return deny("foreign_source")
 		}
 		t.OriginalText = p.Command.OriginalText
@@ -407,7 +430,29 @@ func (s *Store) FinishMessageEdit(ctx context.Context, id domain.ID, state strin
 }
 
 func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit) (bool, error) {
-	row, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: string(p.Command.ID), IsOwn: 1})
+	matched, err := hasVerifiedEditProvider(ctx, q, p, string(p.Command.ID))
+	if err != nil || matched {
+		return matched, err
+	}
+	return hasVerifiedRoomEditWitness(ctx, q, p)
+}
+
+func hasVerifiedRoomEditWitness(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit) (bool, error) {
+	if !strings.HasPrefix(p.Plan.Scope, "xmpp:correct:room:") {
+		return false, nil
+	}
+	remote := string(p.Command.ID)
+	matched, err := hasVerifiedEditProvider(ctx, q, p, scopedRoomCorrectionProviderID(p.Plan.Scope, p.Plan.Author, remote))
+	if err != nil || matched {
+		return matched, err
+	}
+	return hasVerifiedEditProvider(ctx, q, p, roomCorrectionProviderID(p.Plan.Author, remote))
+}
+
+func hasVerifiedEditProvider(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, provider string) (bool, error) {
+	row, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{
+		AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: provider, IsOwn: 1,
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -418,10 +463,20 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 	if err != nil {
 		return false, err
 	}
-	if m.OriginalText != p.WireBody() {
+	return verifiedEditSource(ctx, q, p, m)
+}
+
+func verifiedEditSource(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, m domain.Message) (bool, error) {
+	if !m.IsOwn || m.SendState != "submitted" ||
+		m.AccountID != p.Command.AccountID || m.ConversationID != p.Command.ConversationID ||
+		!correctionProviderMatches(m.ProviderID, p.Plan.Scope, p.Plan.Author, string(p.Command.ID)) || m.SourceBodyHash() != p.WireBodyHash() {
 		return false, nil
 	}
-	facts, err := q.GetCorrectionFacts(ctx, row.ID)
+	exact, err := readExactEditWire(ctx, q, p, m)
+	if err != nil || !exact {
+		return false, err
+	}
+	facts, err := q.GetCorrectionFacts(ctx, string(m.ID))
 	if err != nil {
 		return false, err
 	}
@@ -429,12 +484,12 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 		return false, nil
 	}
 	f := facts[0]
-	return f.Scope == p.Plan.Scope && f.Author == p.Plan.Author && f.RemoteID == string(p.Command.ID) && f.TargetID == p.Plan.OriginalWireID && f.SourceHash == bodyHash(p.WireBody()), nil
+	return f.Scope == p.Plan.Scope && f.Author == p.Plan.Author && f.RemoteID == string(p.Command.ID) && f.TargetID == p.Plan.OriginalWireID && f.SourceHash == p.WireBodyHash(), nil
 }
 
 func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provider string, proof domain.MessageCorrection, text string, revision domain.ID, at time.Time) error {
-	id, err := domain.ParseID(provider)
-	if err != nil {
+	id, err := domain.ParseID(proof.ID)
+	if err != nil || !correctionProviderMatches(provider, proof.Scope, proof.Author, proof.ID) {
 		return nil
 	}
 	tx, q, err := begin(ctx, s)
@@ -456,7 +511,7 @@ func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provi
 	if err != nil {
 		return err
 	}
-	if p.Command.AccountID != account || p.WireBody() != text || p.Command.State == "submitted" || proof.Scope != p.Plan.Scope || proof.Author != p.Plan.Author || proof.ID != string(id) || proof.TargetID != p.Plan.OriginalWireID {
+	if p.Command.AccountID != account || !p.MatchesWireBody(text) || p.Command.State == "submitted" || proof.Scope != p.Plan.Scope || proof.Author != p.Plan.Author || proof.ID != string(id) || proof.TargetID != p.Plan.OriginalWireID {
 		return nil
 	}
 	observed, err := hasVerifiedEditEcho(ctx, q, p)
@@ -469,14 +524,18 @@ func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provi
 	if p.Command.State == "failed" {
 		return tx.Commit()
 	}
-	p.Command.State = "submitted"
-	p.Command.RevisionID = revision
-	p.Command.UpdatedAt = at
-	p.Command.LastErrorCode = ""
-	if err = writeEdit(ctx, q, p, at, 0); err != nil {
+	if err = recordEditOutcome(ctx, q, p, "submitted", "", revision, at); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func recordEditOutcome(ctx context.Context, q *dbgen.Queries, edit domain.PendingMessageEdit, state, reason string, revision domain.ID, at time.Time) error {
+	edit.Command.State = state
+	edit.Command.LastErrorCode = reason
+	edit.Command.RevisionID = revision
+	edit.Command.UpdatedAt = at
+	return writeEdit(ctx, q, edit, at, 0)
 }
 func (s *Store) RejectMessageEdit(ctx context.Context, id, revision domain.ID, at time.Time) error {
 	tx, q, err := begin(ctx, s)
@@ -518,17 +577,28 @@ func (s *Store) RejectMessageEdit(ctx context.Context, id, revision domain.ID, a
 	}
 	return tx.Commit()
 }
-func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, at time.Time) error {
+func recordEditRoot(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit) (domain.Message, error) {
 	baseRow, err := q.GetMessage(ctx, string(p.Command.MessageID))
 	if err != nil {
-		return err
+		return domain.Message{}, err
 	}
 	base, err := decodeMessage(baseRow)
 	if err != nil {
-		return err
+		return base, err
 	}
 	base.Correction = &domain.MessageCorrection{Scope: p.Plan.Scope, Author: p.Plan.Author, ID: p.Plan.OriginalWireID}
-	if err = recordCorrectionMetadata(ctx, q, string(base.ID), base); err != nil {
+	return base, recordCorrectionMetadata(ctx, q, string(base.ID), base)
+}
+
+func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, at time.Time) error {
+	base, err := recordEditRoot(ctx, q, p)
+	if err != nil {
+		return err
+	}
+	// An authenticated archive may already own the exact correction under
+	// its occupant-scoped key. Its source and revision remain authoritative.
+	observed, err := hasVerifiedRoomEditWitness(ctx, q, p)
+	if err != nil || observed {
 		return err
 	}
 	existing, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: string(p.Command.ID), IsOwn: 1})
@@ -538,7 +608,11 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 		if err != nil {
 			return err
 		}
-		if source.OriginalText != p.WireBody() || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
+		exact, err := readExactEditWire(ctx, q, p, source)
+		if err != nil {
+			return err
+		}
+		if !exact || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
 			return application.ErrStateConflict
 		}
 		source.Correction = proof
@@ -547,14 +621,14 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	source := domain.Message{ID: p.Command.ID, RevisionID: p.ContentRevisionID, AccountID: p.Command.AccountID, ConversationID: p.Command.ConversationID, Sender: base.Sender, OriginalText: p.WireBody(), OutboundReply: p.Reply, CreatedAt: at, IsOwn: true, SendState: "submitted", ProviderID: string(p.Command.ID), Correction: proof}
+	source := domain.Message{ID: p.Command.ID, RevisionID: p.ContentRevisionID, AccountID: p.Command.AccountID, ConversationID: p.Command.ConversationID, Sender: base.Sender, OriginalText: p.WireBody(), WireBodySHA256: p.WireBodySHA256, OutboundReply: p.Reply, CreatedAt: at, IsOwn: true, SendState: "submitted", ProviderID: string(p.Command.ID), Correction: proof}
 	return insertMessage(ctx, q, source)
 }
 
 // localCorrectionParent uses the immutable acceptance receipt to prove which
 // content was edited, independently from the original stanza named on the wire.
 func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.Message, scope, author, remote, target string) (domain.ID, domain.ID, bool, error) {
-	if !source.IsOwn || source.ProviderID != remote || target == "" {
+	if !source.IsOwn || !correctionProviderMatches(source.ProviderID, scope, author, remote) || target == "" {
 		return "", "", false, nil
 	}
 	row, err := q.GetMessageEditCommand(ctx, remote)
@@ -568,8 +642,12 @@ func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.
 	if err != nil {
 		return "", "", false, err
 	}
-	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.WireBody() != source.OriginalText || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
+	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.WireBodyHash() != source.SourceBodyHash() || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
 		return "", "", false, nil
+	}
+	exact, err := readExactEditWire(ctx, q, p, source)
+	if err != nil || !exact {
+		return "", "", false, err
 	}
 	op, err := q.GetOperation(ctx, remote)
 	if err != nil {
@@ -580,6 +658,12 @@ func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.
 		return "", "", false, application.ErrProtocolUnavailable
 	}
 	parent, err := q.FirstContentRevisionSource(ctx, string(accepted.ExpectedRevisionID))
+	if errors.Is(err, sql.ErrNoRows) {
+		parent, err = q.WitnessedEditContentSource(ctx, dbgen.WitnessedEditContentSourceParams{
+			MessageID: string(accepted.MessageID), AccountID: string(accepted.AccountID),
+			ConversationID: string(accepted.ConversationID), ContentRevisionID: string(accepted.ExpectedRevisionID),
+		})
+	}
 	if err != nil {
 		return "", "", false, application.ErrProtocolUnavailable
 	}

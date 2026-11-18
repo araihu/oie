@@ -23,6 +23,32 @@ func init() {
 		text, _ := args[0].(string)
 		return bodyHash(text), nil
 	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_attachment_wire_matches", 4, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		var m domain.Message
+		m.OriginalText, _ = args[0].(string)
+		m.AttachmentWireText, _ = args[1].(string)
+		m.WireBodySHA256, _ = args[2].(string)
+		body, _ := args[3].(string)
+		return number(m.MatchesAttachmentWireBody(body)), nil
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_wire_mentions_match", 3, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		observed, _ := args[1].(string)
+		digest, _ := args[2].(string)
+		payload, _ := args[0].(string)
+		var m domain.Message
+		if err := json.Unmarshal([]byte(payload), &m); err != nil {
+			return nil, err
+		}
+		return number(m.MatchesWireMentions(domain.WireMentionProof{Evidence: domain.WireMentionEvidence(observed), Digest: digest})), nil
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_direct_mention_echo_provider_id", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var m domain.Message
+		if err := json.Unmarshal([]byte(payload), &m); err != nil {
+			return nil, err
+		}
+		return directMentionEchoProviderID(m), nil
+	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_outbound_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		payload, _ := args[0].(string)
 		var m domain.Message
@@ -30,7 +56,8 @@ func init() {
 			return nil, err
 		}
 		plan := m.OutboundReply
-		if plan == nil || plan.Excerpt == "" && plan.Reference == nil {
+		if plan == nil || (m.OriginalText == plan.BodyText && plan.SenderName == "" && plan.Excerpt == "" &&
+			plan.Reference == nil && len(plan.Fallback) == 0) {
 			return payload, nil
 		}
 		if m.OriginalText != plan.BodyText {
@@ -40,8 +67,35 @@ func init() {
 			}
 			m.OriginalText = plan.BodyText
 		}
-		plan.Excerpt, plan.SenderName, plan.Reference, plan.Fallback = "", "", nil, nil
+		clearOutboundQuote(plan)
 		data, err := json.Marshal(m)
+		return string(data), err
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_edit_wire_hash", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var edit domain.PendingMessageEdit
+		if err := json.Unmarshal([]byte(payload), &edit); err != nil {
+			return nil, err
+		}
+		return edit.WireBodyHash(), nil
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_edit_quote", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		payload, _ := args[0].(string)
+		var edit domain.PendingMessageEdit
+		if err := json.Unmarshal([]byte(payload), &edit); err != nil {
+			return nil, err
+		}
+		plan := edit.Reply
+		if plan == nil || (edit.WireText == "" && plan.SenderName == "" && plan.Excerpt == "" && plan.Reference == nil && len(plan.Fallback) == 0) {
+			return payload, nil
+		}
+		if edit.WireBody() != edit.Command.OriginalText {
+			edit.WireBodySHA256 = edit.WireBodyHash()
+		}
+		edit.ReplyWireSHA256 = edit.ReplyWireDigest()
+		edit.WireText = ""
+		clearOutboundQuote(plan)
+		data, err := json.Marshal(edit)
 		return string(data), err
 	})
 	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_strip_expired_inbound_quote", 2, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
@@ -61,6 +115,20 @@ func init() {
 		data, err := json.Marshal(m)
 		return string(data), err
 	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_scrub_inbound_fallback", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		var ref domain.ReplyReference
+		payload, _ := args[0].(string)
+		if err := json.Unmarshal([]byte(payload), &ref); err != nil {
+			return nil, err
+		}
+		scrubInboundFallback(&ref)
+		data, err := json.Marshal(ref)
+		return string(data), err
+	})
+}
+
+func clearOutboundQuote(plan *domain.OutboundReply) {
+	plan.Excerpt, plan.SenderName, plan.Reference, plan.Fallback = "", "", nil, nil
 }
 
 func correctionValid(c *domain.MessageCorrection) bool {
@@ -150,11 +218,38 @@ func recordCorrectionMetadata(ctx context.Context, q *dbgen.Queries, id string, 
 		return nil
 	}
 	c := in.Correction
-	n, err := q.InsertCorrectionFact(ctx, dbgen.InsertCorrectionFactParams{MessageID: id, Scope: c.Scope, Author: c.Author, RemoteID: c.ID, TargetID: c.TargetID, SourceHash: in.SourceBodyHash(), SourceRevisionID: string(raw.RevisionID)})
+	fact := dbgen.InsertCorrectionFactParams{MessageID: id, Scope: c.Scope, Author: c.Author, RemoteID: c.ID, TargetID: c.TargetID, SourceHash: in.SourceBodyHash(), SourceRevisionID: string(raw.RevisionID)}
+	n, err := q.InsertCorrectionFact(ctx, fact)
+	if err != nil {
+		return err
+	}
+	mirrored, err := mirrorOwnEchoCorrectionFact(ctx, q, raw, fact)
+	n += mirrored
 	if err != nil || n == 0 {
 		return err
 	}
 	return reconcileCorrections(ctx, q, raw, c)
+}
+
+func mirrorOwnEchoCorrectionFact(ctx context.Context, q *dbgen.Queries, echo domain.Message, fact dbgen.InsertCorrectionFactParams) (int64, error) {
+	if !echo.IsOwn || echo.SendState != "submitted" || echo.OwnOriginID == "" || fact.TargetID != "" || fact.SourceHash != echo.SourceBodyHash() {
+		return 0, nil
+	}
+	originalID, err := resolveMessageAlias(ctx, q, echo.ID)
+	if err != nil || originalID == echo.ID || originalID != echo.OwnOriginID {
+		return 0, err
+	}
+	row, err := q.GetMessage(ctx, string(originalID))
+	if err != nil {
+		return 0, err
+	}
+	original, err := decodeMessage(row)
+	if err != nil || !original.IsOwn || original.ProviderID != string(originalID) || original.SourceBodyHash() != fact.SourceHash ||
+		original.AccountID != echo.AccountID || original.ConversationID != echo.ConversationID {
+		return 0, err
+	}
+	fact.MessageID, fact.SourceRevisionID = string(original.ID), string(original.RevisionID)
+	return q.InsertCorrectionFact(ctx, fact)
 }
 
 type correctionNode struct {

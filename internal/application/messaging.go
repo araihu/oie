@@ -37,6 +37,8 @@ type Incoming struct {
 	AudioURLs                                 []string
 	FileDigests                               []domain.FileDigest
 	MediaThumbnails                           []domain.MediaThumbnail
+	WireMentions                              domain.WireMentionEvidence
+	WireMentionDigest                         string
 	AccountID                                 domain.ID
 	Address, ProviderID, OriginalText         string
 	CreatedAt                                 time.Time
@@ -67,7 +69,7 @@ type Outgoing struct {
 	Mentions              []domain.MessageMention
 	Correction            *domain.OutgoingCorrection
 	Attachments           []OutgoingAttachment
-	RecordWireAttempt     func(context.Context, string) error
+	RecordWireAttempt     func(context.Context, string, ...domain.WireMentionProof) error
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -559,11 +561,8 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 		if lookupErr != nil && !errors.Is(lookupErr, ErrNotFound) {
 			return lookupErr
 		}
-		matchesBody := existing.OriginalText == in.OriginalText || existing.AttachmentWireText != "" && existing.AttachmentWireText == in.OriginalText
-		if existing.WireBodySHA256 != "" {
-			matchesBody = matchesBody || existing.WireBodySHA256 == (domain.Message{OriginalText: in.OriginalText}).SourceBodyHash()
-		}
-		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && matchesBody {
+		if lookupErr == nil && existing.IsOwn && existing.AccountID == a.ID && existing.MatchesWireBody(in.OriginalText) &&
+			existing.MatchesWireMentions(domain.WireMentionProof{Evidence: in.WireMentions, Digest: in.WireMentionDigest}) {
 			chat, err := r.Conversation(ctx, existing.ConversationID)
 			if err != nil {
 				return err
@@ -578,7 +577,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 				if editErr != nil && !errors.Is(editErr, ErrNotFound) {
 					return editErr
 				}
-				if editErr == nil && pending.Command.AccountID == a.ID && pending.WireBody() == in.OriginalText {
+				if editErr == nil && pending.Command.AccountID == a.ID && pending.MatchesWireBody(in.OriginalText) && in.WireMentions != domain.WireMentionsPresent {
 					chat, err := r.Conversation(ctx, pending.Command.ConversationID)
 					if err != nil {
 						return err
@@ -643,6 +642,18 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 	if in.IsOwn {
 		m.Sender.ID = a.ID
 		m.SendState = "submitted"
+		if in.Correction != nil && in.Correction.TargetID != "" {
+			m.WireMentions, m.WireMentionDigest = in.WireMentions, in.WireMentionDigest
+		}
+		if in.Correction == nil || in.Correction.TargetID == "" {
+			m.OwnOriginID, _ = domain.ParseID(string(in.CanonicalID))
+			if m.OwnOriginID == "" && in.Kind == "direct" {
+				m.OwnOriginID, _ = domain.ParseID(in.ProviderID)
+			}
+			if m.OwnOriginID != "" {
+				m.WireMentions, m.WireMentionDigest = in.WireMentions, in.WireMentionDigest
+			}
+		}
 	}
 	if err = r.ReceiveMessage(ctx, c, m, ids[5]); err != nil {
 		return err

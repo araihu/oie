@@ -169,10 +169,16 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 	if !in.IsOwn || in.Kind != "room" || in.CanonicalID != outID || in.Address != slot.conversation.Address || len(in.References) != 1 || in.References[0].Scope != "room:"+slot.conversation.Address || in.References[0].ID != "server-room-id" {
 		t.Fatal("self echo lost canonical scope", in)
 	}
+	ownFrom, err := jid.Parse(slot.conversation.Address + "/" + slot.snapshot.Nickname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider := roomProviderID(ownFrom, "wire-client", in.References); in.ProviderID != provider {
+		t.Fatalf("untracked own echo replaced its room provider identity: got %q, want %q", in.ProviderID, provider)
+	}
 	// Another occupant cannot nominate an own-message UUID even if it copies origin-id.
 	from, _ := jid.Parse(slot.conversation.Address + "/Other")
-	err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", "", fileSharingMetadata{}, false)
-	if err != nil {
+	if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), replyMetadata{Origins: []wireID{{ID: string(outID)}}}, "my text", "", "", fileSharingMetadata{}, false); err != nil {
 		t.Fatal(err)
 	}
 	if host.received[1].CanonicalID != "" || host.received[1].IsOwn {
@@ -186,6 +192,48 @@ func TestRoomOwnEchoHintsCanonicalSourceAndUsesRoomSID(t *testing.T) {
 		t.Fatal("unjoined room accepted live traffic")
 	}
 	var _ application.Protocols = m
+}
+
+func TestDelayedRoomOwnEchoRequiresTrackedOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		name, trackedBody  string
+		differentRoom, own bool
+	}{
+		{name: "nickname alone"},
+		{name: "tracked different body", trackedBody: "different body"},
+		{name: "tracked different room", trackedBody: "historical body", differentRoom: true},
+		{name: "tracked own message", trackedBody: "historical body", own: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, e, slot, host := roomFixture(t)
+			slot.snapshot.State = "joined"
+			from, err := jid.Parse(slot.conversation.Address + "/" + slot.snapshot.Nickname)
+			if err != nil {
+				t.Fatal(err)
+			}
+			const origin = "019a5df0-0000-7000-8000-000000000005"
+			if tc.trackedBody != "" {
+				trackedAddress := slot.conversation.Address
+				if tc.differentRoom {
+					trackedAddress = "unrelated@conference.example.test"
+				}
+				e.ownRoomMessages = map[string]ownRoomMessage{origin: {address: trackedAddress, body: tc.trackedBody}}
+			}
+			meta := replyMetadata{Origins: []wireID{{ID: origin}}}
+			stamp := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339Nano)
+			if err := m.receiveRoomMessage(t.Context(), e, structMessage(from), meta, "historical body",
+				stamp, slot.conversation.Address, fileSharingMetadata{}, false); err != nil {
+				t.Fatal(err)
+			}
+			if len(host.received) != 1 {
+				t.Fatalf("historical message was lost: %+v", host.received)
+			}
+			in := host.received[0]
+			if !in.Historical || in.IsOwn != tc.own || (in.CanonicalID == domain.ID(origin)) != tc.own || (in.ProviderID == origin) != tc.own {
+				t.Fatalf("unexpected proof for the delayed room message: %+v", in)
+			}
+		})
+	}
 }
 
 func structMessage(from jid.JID) stanza.Message {

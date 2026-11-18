@@ -70,13 +70,27 @@ func (s *Store) SaveDownload(ctx context.Context, download domain.Download) erro
 			}
 		}
 	}
-	err = q.InsertDeviceDownload(ctx, dbgen.InsertDeviceDownloadParams{
+	saved, err := q.InsertDeviceDownload(ctx, dbgen.InsertDeviceDownloadParams{
 		DeviceID: string(download.DeviceID), SourceID: string(download.SourceID), SourceRevision: string(download.SourceRevision),
 		Kind: download.Kind, Hash: download.Hash, MimeType: download.MimeType,
 		Size: download.Size, VerifiedAlgorithm: download.VerifiedAlgorithm, DownloadedAtMs: download.DownloadedAt.UnixMilli(),
 	})
 	if err != nil {
 		return err
+	}
+	if saved > 0 {
+		if err := q.PutDownloadMembershipCleanupRevision(ctx, dbgen.PutDownloadMembershipCleanupRevisionParams{
+			DeviceID: string(download.DeviceID), SourceID: string(download.SourceID),
+			SourceRevision: string(download.SourceRevision), Kind: download.Kind,
+		}); err != nil {
+			return err
+		}
+		if err := q.KeepLegacyDownloadMembership(ctx, dbgen.KeepLegacyDownloadMembershipParams{
+			DeviceID: string(download.DeviceID), SourceID: string(download.SourceID),
+			SourceRevision: string(download.SourceRevision), Kind: download.Kind,
+		}); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -92,6 +106,9 @@ func (s *Store) SaveDownloadedPreview(ctx context.Context, p domain.MessagePrevi
 	}
 	switch p.DownloadState {
 	case "ready":
+		if err := q.KeepLegacyImageCompletions(ctx, string(p.ID)); err != nil {
+			return err
+		}
 		err = q.FinishImageDownloads(ctx, dbgen.FinishImageDownloadsParams{
 			Hash: p.FileHash, MimeType: p.FileMimeType, Size: p.FileSize, VerifiedAlgorithm: p.VerifiedAlgorithm,
 			DownloadedAtMs: downloadedAt.UnixMilli(), SourceID: string(p.ID),
@@ -118,7 +135,21 @@ func (s *Store) PurgeDownloads(ctx context.Context, device domain.ID, now time.T
 	}
 	var removed []dbgen.DeviceDownload
 	if device != "" {
+		revision, revisionErr := newID()
+		if revisionErr != nil {
+			return revisionErr
+		}
 		if err = q.AdvanceDownloadGeneration(ctx, string(device)); err != nil {
+			return err
+		}
+		if err := q.PutDownloadCleanupParent(ctx, dbgen.PutDownloadCleanupParentParams{
+			DeviceID: string(device), RevisionID: string(revision),
+		}); err != nil {
+			return err
+		}
+		if err = q.PutDownloadCleanupRevision(ctx, dbgen.PutDownloadCleanupRevisionParams{
+			DeviceID: string(device), RevisionID: string(revision),
+		}); err != nil {
 			return err
 		}
 		removed, err = q.DropDeviceDownloads(ctx, string(device))
@@ -130,11 +161,20 @@ func (s *Store) PurgeDownloads(ctx context.Context, device domain.ID, now time.T
 	}
 	images := map[string]bool{}
 	for _, row := range removed {
-		if row.Kind == "image" && !images[row.SourceID] {
-			if err = detachDownloadedImage(ctx, q, row.SourceID, now, newID); err != nil {
-				return err
+		if row.Kind == "image" {
+			if row.DeviceID != "" && row.DeviceID != "legacy" && row.Hash != "" {
+				if err := q.RecordRetiredImageMembership(ctx, dbgen.RecordRetiredImageMembershipParams{
+					SourceID: row.SourceID, SourceRevision: row.SourceRevision, Hash: row.Hash, Size: row.Size,
+				}); err != nil {
+					return err
+				}
 			}
-			images[row.SourceID] = true
+			if !images[row.SourceID] {
+				if err = detachDownloadedImage(ctx, q, row.SourceID, now, newID); err != nil {
+					return err
+				}
+				images[row.SourceID] = true
+			}
 		}
 		if row.Hash != "" {
 			if err = q.QueueDownloadGarbage(ctx, dbgen.QueueDownloadGarbageParams{Kind: row.Kind, Hash: row.Hash}); err != nil {
@@ -218,7 +258,19 @@ func (s *Store) ClaimLegacyImageDownloads(ctx context.Context, device domain.ID)
 	if err = q.EnsureDownloadDevice(ctx, string(device)); err != nil {
 		return err
 	}
-	if err = q.CopyLegacyImageDownloads(ctx, string(device)); err != nil {
+	claimed, err := q.CopyLegacyImageDownloads(ctx, string(device))
+	if err != nil {
+		return err
+	}
+	for _, download := range claimed {
+		if err := q.KeepLegacyDownloadMembership(ctx, dbgen.KeepLegacyDownloadMembershipParams{
+			DeviceID: string(device), SourceID: download.SourceID,
+			SourceRevision: download.SourceRevision, Kind: download.Kind, ClaimedLegacy: 1,
+		}); err != nil {
+			return err
+		}
+	}
+	if err := q.RecordClaimedLegacyImages(ctx, string(device)); err != nil {
 		return err
 	}
 	if _, err = q.DropDeviceDownloads(ctx, "legacy"); err != nil {

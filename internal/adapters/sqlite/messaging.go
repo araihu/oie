@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -467,6 +468,34 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	// Existing chats can retain own transmission evidence independently of
+	// the message, including when the retention cutoff discards its body.
+	if err := rememberOwnOrigin(ctx, q, c, m); err != nil {
+		return err
+	}
+	if err := reconcileOwnEchoBeforeWire(ctx, q, c, &m, revision); err != nil {
+		return err
+	}
+	stanzaID, excluded, err := checkXMPPOccurrence(ctx, q, c, m)
+	if err != nil {
+		return err
+	}
+	if excluded {
+		return tx.Commit()
+	}
+	var stanzaOwner string
+	if stanzaID != "" && !m.IsOwn {
+		owners, err := q.FindVerifiedRoomOccurrence(ctx, dbgen.FindVerifiedRoomOccurrenceParams{AccountID: string(c.AccountID), RoomAddress: c.Address, RemoteID: stanzaID})
+		if err != nil {
+			return err
+		}
+		if len(owners) > 1 {
+			return application.ErrInvalid
+		}
+		if len(owners) == 1 {
+			stanzaOwner = owners[0]
+		}
+	}
 	if !m.ReceivedAt.IsZero() {
 		days, err := retentionDays(ctx, q, c.AccountID, c.Address, c.Kind)
 		if err != nil {
@@ -492,10 +521,14 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 	}
 	incomingKind := c.Kind
+	archiveAlreadyBound := false
 	if m.ArchiveID != "" {
 		var existingID string
 		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
 		if err == nil {
+			if stanzaOwner != "" && stanzaOwner != existingID {
+				return application.ErrInvalid
+			}
 			retained, err := q.GetMessage(ctx, existingID)
 			if err != nil {
 				return err
@@ -507,18 +540,51 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			if chat.AccountID != string(c.AccountID) || chat.Address != c.Address {
 				return application.ErrInvalid
 			}
-			if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+			allowed, err := allowsEditReplay(ctx, q, retained, m)
+			if err != nil {
 				return err
 			}
-			if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
-				return err
+			if !allowed {
+				return tx.Commit()
 			}
-			if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
-				return err
+			var distinct bool
+			nativeRoomSend := c.Kind == "room" && retained.IsOwn == 1 && retained.ID == retained.ProviderID && retained.ID == string(m.OwnOriginID)
+			if ownStructuredMentionEcho(m) && (c.Kind == "direct" || nativeRoomSend) {
+				previous, err := decodeMessage(retained)
+				if err != nil {
+					return err
+				}
+				distinct = distinctMentionEcho(previous, m)
+				if distinct && nativeRoomSend && len(m.References) > 0 {
+					// Old profiles could already have given the native row a reply
+					// target from this archive key. Preserve that retained owner.
+					references, err := q.GetMessageReferences(ctx, dbgen.GetMessageReferencesParams{
+						MessageID: retained.ID, SourceHash: previous.SourceBodyHash(),
+					})
+					if err != nil {
+						return err
+					}
+					m.References = slices.DeleteFunc(slices.Clone(m.References), func(ref domain.MessageReference) bool {
+						return ref.Scope == "room:"+c.Address && slices.ContainsFunc(references, func(known dbgen.GetMessageReferencesRow) bool {
+							return ref.Scope == known.Scope && ref.ID == known.RemoteID
+						})
+					})
+				}
 			}
-			return tx.Commit()
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+			if !distinct {
+				if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+					return err
+				}
+				if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
+					return err
+				}
+				if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
+					return err
+				}
+				return tx.Commit()
+			}
+			archiveAlreadyBound = true
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 	}
@@ -549,6 +615,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			c.Request = domain.MessageRequest
 		}
 		c, err = insertConversation(ctx, q, c)
+		if err == nil {
+			err = rememberOwnOrigin(ctx, q, c, m)
+		}
 	}
 	if err != nil {
 		return err
@@ -561,24 +630,71 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if !m.IsOwn {
 		m.Sender.ID = c.PeerID
 	}
-	if m.ProviderID != "" {
-		var existing dbgen.Message
-		existing, err = q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
-		if err == nil {
-			if err = archiveAlias(ctx, q, m, existing.ID); err != nil {
-				return err
-			}
-			if err = recordCorrectionMetadata(ctx, q, existing.ID, m); err != nil {
-				return err
-			}
-			if err = recordReplyMetadata(ctx, q, existing.ID, m, true); err != nil {
-				return err
-			}
-			return tx.Commit()
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+	if err = normalizeDirectMentionEchoProvider(ctx, q, c, &m); err != nil {
+		return err
+	}
+	if err = matchArchivedAttachmentWireBody(ctx, q, c, &m); err != nil {
+		return err
+	}
+	allowed, err := routeScopedRoomCorrection(ctx, q, c, &m)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return tx.Commit()
+	}
+	existingID, err := findDirectEchoWithoutStanzaID(ctx, q, c, m)
+	if err != nil {
+		return err
+	}
+	if existingID == "" && m.ProviderID != "" {
+		existing, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
+		if err == nil {
+			allowed, err := allowsEditReplay(ctx, q, existing, m)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return tx.Commit()
+			}
+		}
+		existingID = existing.ID
+	}
+	if stanzaOwner != "" {
+		if existingID != "" && existingID != stanzaOwner {
+			return application.ErrInvalid
+		}
+		if existingID == "" {
+			row, err := q.GetMessage(ctx, stanzaOwner)
+			if err != nil {
+				return err
+			}
+			allowed, err := allowsEditReplay(ctx, q, row, m)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return tx.Commit()
+			}
+			existingID = stanzaOwner
+		}
+	}
+	if existingID != "" {
+		if !archiveAlreadyBound {
+			if err = archiveAlias(ctx, q, m, existingID); err != nil {
+				return err
+			}
+		}
+		if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+			return err
+		}
+		if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 	if m.ReplyReference != nil && referenceValid(m.ReplyReference.Target) {
 		expired, err := unavailableExpiredQuote(ctx, q, m.AccountID, m.ConversationID, m.ReplyReference.Target)
@@ -587,15 +703,17 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 		if expired && stripInboundQuote(&m, *m.ReplyReference) {
 			ref := *m.ReplyReference
-			ref.Fallback = nil
+			scrubInboundFallback(&ref)
 			m.ReplyReference = &ref
 		}
 	}
 	if err = insertMessage(ctx, q, m); err != nil {
 		return err
 	}
-	if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
-		return err
+	if !archiveAlreadyBound {
+		if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
+			return err
+		}
 	}
 	if !correctionValid(m.Correction) || m.Correction.TargetID == "" {
 		fresh, err := q.GetConversation(ctx, string(c.ID))
@@ -618,7 +736,150 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	}
 	return tx.Commit()
 }
+
+func matchArchivedAttachmentWireBody(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, echo *domain.Message) error {
+	origin := string(echo.OwnOriginID)
+	if chat.Kind != "room" || !echo.Historical || echo.ArchiveID == "" || !echo.IsOwn || origin == "" || echo.ProviderID == origin {
+		return nil
+	}
+	// A retained local upload attempt can have a different URL from the same
+	// send on another copy of the data. Match its prior wire body under the
+	// ingress write lock while keeping the current message and revision intact.
+	matched, err := q.HasArchivedAttachmentWireBody(ctx, dbgen.HasArchivedAttachmentWireBodyParams{
+		MessageID: origin, AccountID: string(chat.AccountID), ConversationID: string(chat.ID), WireBody: echo.OriginalText,
+		ObservedMentions: string(echo.WireMentions), ObservedMentionDigest: echo.WireMentionDigest,
+	})
+	if matched {
+		echo.ProviderID = origin
+	}
+	return err
+}
+
+func ownStructuredMentionEcho(m domain.Message) bool {
+	return m.IsOwn && m.OwnOriginID != "" && m.WireMentions == domain.WireMentionsPresent
+}
+
+func directMentionEchoProviderID(m domain.Message) string {
+	identity := string(m.OwnOriginID) + "\x00" + m.SourceBodyHash() + "\x00" + m.WireMentionDigest
+	if m.WireMentionDigest == "" {
+		identity += "\x00" + m.ArchiveScope + "\x00" + m.ArchiveID
+	}
+	return "direct-echo:" + bodyHash(identity)
+}
+
+func distinctMentionEcho(retained, echo domain.Message) bool {
+	return !retained.IsOwn || !retained.MatchesWireBody(echo.OriginalText) ||
+		!retained.MatchesWireMentions(domain.WireMentionProof{Evidence: echo.WireMentions, Digest: echo.WireMentionDigest})
+}
+
+func normalizeDirectMentionEchoProvider(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, echo *domain.Message) error {
+	if chat.Kind != "direct" || !ownStructuredMentionEcho(*echo) || echo.ProviderID != string(echo.OwnOriginID) {
+		return nil
+	}
+	retained, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{
+		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: echo.ProviderID, IsOwn: 1,
+	})
+	if err == nil {
+		previous, err := decodeMessage(retained)
+		if err != nil || !distinctMentionEcho(previous, *echo) {
+			return err
+		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	// Direct stanzas reuse the origin as the provider key. Hold the distinct
+	// packet separately without ceding the original send's key or retry proof.
+	echo.ProviderID = directMentionEchoProviderID(*echo)
+	return nil
+}
+
+func reconcileOwnEchoBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, echo *domain.Message, revision domain.ID) error {
+	if !echo.IsOwn || echo.OwnOriginID == "" {
+		return nil
+	}
+	queued, err := ownMessageBeforeWire(ctx, q, incoming, echo.OwnOriginID)
+	if err != nil || queued.ID == "" {
+		return err
+	}
+	state := "unknown"
+	if echoesPlainSend(queued, *echo, incoming.Kind == "room") {
+		state = "submitted"
+	}
+	observed := echo.ReceivedAt
+	if echo.Historical && !echo.CreatedAt.IsZero() {
+		observed = echo.CreatedAt
+	}
+	if observed.IsZero() {
+		observed = incoming.UpdatedAt
+	}
+	if _, err := updateMessage(ctx, q, queued, state, revision, observed, observed, false); err != nil {
+		return err
+	}
+	// An observed origin stops replay, but only the uploaded body identifies
+	// a room attachment's message and structured reply target.
+	if incoming.Kind == "room" && (len(queued.Attachments) != 0 || queued.AttachmentWireText != "") &&
+		!queued.MatchesAttachmentWireBody(echo.OriginalText) {
+		return nil
+	}
+	if !queued.MatchesWireMentions(domain.WireMentionProof{Evidence: echo.WireMentions, Digest: echo.WireMentionDigest}) {
+		return nil
+	}
+	echo.ProviderID = queued.ProviderID
+	return nil
+}
+
+func echoesPlainSend(sent, echo domain.Message, room bool) bool {
+	if sent.OriginalText != echo.OriginalText || sent.OutboundReply != nil || echo.ReplyReference != nil ||
+		len(sent.Attachments) != 0 || len(sent.Mentions) != 0 || len(echo.FileReferences) != 0 || len(echo.AudioURLs) != 0 ||
+		!echo.ConfirmsNoWireMentions(room) {
+		return false
+	}
+	composition := sent.Composition
+	return composition == nil || (composition.ReplyTo == "" && len(composition.Mentions) == 0 && len(composition.AttachmentIDs) == 0)
+}
+
+// An authenticated observation can arrive after explicit resume. Resolve the
+// original pending row under the same write lock as the claim and wire marker.
+func ownMessageBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain.Conversation, id domain.ID) (domain.Message, error) {
+	row, err := q.GetMessage(ctx, string(id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Message{}, nil
+	}
+	if err != nil {
+		return domain.Message{}, err
+	}
+	if (row.State != "queued" && row.State != "dispatching") || row.ProviderID != row.ID || row.IsOwn != 1 || row.AccountID != string(incoming.AccountID) {
+		return domain.Message{}, nil
+	}
+	chatRow, err := q.GetConversation(ctx, row.ConversationID)
+	if err != nil {
+		return domain.Message{}, err
+	}
+	chat, err := decodeConversation(chatRow)
+	if err != nil || chat.Kind != incoming.Kind || chat.Address != incoming.Address {
+		return domain.Message{}, err
+	}
+	if row.State == "dispatching" {
+		outbox, err := q.GetOutbox(ctx, row.ID)
+		if err != nil || outbox.WireStage != "awaiting" {
+			return domain.Message{}, err
+		}
+	}
+	return decodeMessage(row)
+}
+
 func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time, guardWire bool) (domain.Message, error) {
+	if m.SendState == "dispatching" && state == "queued" {
+		observed, err := hasOwnTransmissionEvidence(ctx, q, m)
+		if err != nil {
+			return m, err
+		}
+		// A NotSent result applies only to this attempt. A separate device
+		// may already have transmitted a copy of the original send.
+		if observed {
+			state = "unknown"
+		}
+	}
 	if state == "dispatching" {
 		outbox, err := q.GetOutbox(ctx, string(m.ID))
 		if err != nil {
@@ -820,6 +1081,9 @@ func (s *Store) reconcileArchivedAuthor(ctx context.Context, q *dbgen.Queries, i
 	old.IsOwn = true
 	old.Sender.ID = in.AccountID
 	old.SendState = "submitted"
+	if old.SourceBodyHash() == in.SourceBodyHash() {
+		old.OwnOriginID, old.WireMentions, old.WireMentionDigest = in.OwnOriginID, in.WireMentions, in.WireMentionDigest
+	}
 	old.RevisionID = revision
 	at := time.Now().UTC()
 	if err = q.ReconcileMessageAuthor(ctx, dbgen.ReconcileMessageAuthorParams{RevisionID: string(revision), Payload: jsonText(old), ID: id}); err != nil {

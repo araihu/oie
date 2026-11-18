@@ -78,21 +78,24 @@ func (s *Store) EnsurePreview(ctx context.Context, p domain.MessagePreview) (dom
 		return p, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	n, err := q.InsertMessagePreview(ctx, dbgen.InsertMessagePreviewParams{ID: string(p.ID), RevisionID: string(p.RevisionID), AccountID: string(p.AccountID), ConversationID: string(p.ConversationID), MessageID: string(p.MessageID), Url: p.URL, State: p.State, DownloadState: p.DownloadState, UpdatedAt: stamp(p.UpdatedAt), Payload: jsonText(p)})
+	created, err := insertPreview(ctx, q, p)
 	if err != nil {
 		return p, err
 	}
-	if n == 0 {
+	if !created {
 		p, err = decodePreview(q.FindMessagePreview(ctx, params))
 		if err != nil {
 			return p, err
 		}
-	} else {
-		if err = previewRevision(ctx, q, p, "[]"); err != nil {
-			return p, err
-		}
 	}
 	return p, tx.Commit()
+}
+func insertPreview(ctx context.Context, q *dbgen.Queries, p domain.MessagePreview) (bool, error) {
+	n, err := q.InsertMessagePreview(ctx, dbgen.InsertMessagePreviewParams{ID: string(p.ID), RevisionID: string(p.RevisionID), AccountID: string(p.AccountID), ConversationID: string(p.ConversationID), MessageID: string(p.MessageID), Url: p.URL, State: p.State, DownloadState: p.DownloadState, UpdatedAt: stamp(p.UpdatedAt), Payload: jsonText(p)})
+	if err != nil || n == 0 {
+		return false, err
+	}
+	return true, previewRevision(ctx, q, p, "[]")
 }
 func previewRevision(ctx context.Context, q *dbgen.Queries, p domain.MessagePreview, parents string) error {
 	if err := q.InsertPreviewRevision(ctx, dbgen.InsertPreviewRevisionParams{ID: string(p.RevisionID), EntityID: string(p.ID), Parents: parents, Payload: jsonText(p), CreatedAt: stamp(p.UpdatedAt)}); err != nil {

@@ -61,6 +61,8 @@ type Message struct {
 	Composition                               *OutgoingComposition `json:",omitempty"`
 	Attachments                               []StagedAttachment   `json:",omitempty"`
 	Mentions                                  []MessageMention     `json:",omitempty"`
+	WireMentions                              WireMentionEvidence  `json:",omitempty"`
+	WireMentionDigest                         string               `json:",omitempty"`
 	MentionsYou                               bool                 `json:",omitempty"`
 	FileReferences                            []SharedReference    `json:",omitempty"`
 	AudioURLs                                 []string             `json:",omitempty"`
@@ -75,6 +77,7 @@ type Message struct {
 	IsOwn                                     bool
 	SendState                                 string
 	ProviderID                                string
+	OwnOriginID                               ID     `json:",omitempty"` // Verified original wire ID from an own echo.
 	ReadReceiptID                             string `json:",omitempty"`
 	ArchiveScope, ArchiveID                   string
 	Historical                                bool

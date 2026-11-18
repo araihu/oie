@@ -1,0 +1,86 @@
+INSERT INTO media_files SELECT f.* FROM backup.media_files f
+JOIN restore_media_files bytes ON bytes.name='media/images/'||f.hash AND bytes.size=f.size
+WHERE EXISTS (SELECT 1 FROM message_previews p
+    WHERE f.hash IN (json_extract(p.payload,'$.FileHash'), json_extract(p.payload,'$.ImageHash'), json_extract(p.payload,'$.FaviconHash'))
+    AND (EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=p.message_id)
+         OR EXISTS (SELECT 1 FROM restore_media_targets target WHERE target.message_id=p.message_id)))
+ON CONFLICT(hash) DO NOTHING;
+
+DELETE FROM restore_downloads
+WHERE kind='image' AND NOT EXISTS(
+    SELECT 1 FROM message_previews p WHERE p.id=restore_downloads.source_id
+    AND json_extract(p.payload,'$.FileHash')=restore_downloads.hash
+);
+-- Advance an untouched device or one with a proven ancestor of the new head.
+INSERT INTO download_devices
+SELECT d.device_id,d.days,d.generation FROM restore_download_devices d
+WHERE d.generation>0 OR EXISTS (SELECT 1 FROM restore_downloads f WHERE f.device_id=d.device_id)
+ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation
+WHERE excluded.generation>download_devices.generation AND EXISTS(
+    SELECT 1 FROM restore_download_devices d WHERE d.device_id=excluded.device_id AND d.adopt_cleanup=1
+);
+
+INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
+SELECT device_id,generation,cleanup_revision FROM restore_download_devices
+WHERE adopt_cleanup=1 AND cleanup_revision<>''
+ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation,revision_id=excluded.revision_id
+WHERE excluded.generation>download_cleanup_revisions.generation;
+
+INSERT INTO download_cleanup_parents
+SELECT p.* FROM restore_download_cleanup_parents p JOIN restore_download_devices d ON d.device_id=p.device_id
+JOIN download_cleanup_revisions r ON r.device_id=d.device_id AND r.generation=d.generation AND r.revision_id=d.cleanup_revision
+WHERE p.parent_revision_id<>'' ON CONFLICT DO NOTHING;
+
+-- A conflicting local membership keeps both its bytes and its original proof.
+DELETE FROM restore_downloads AS f WHERE EXISTS (
+    SELECT 1 FROM device_downloads d WHERE d.device_id=f.device_id AND d.source_id=f.source_id
+      AND d.source_revision=f.source_revision AND d.kind=f.kind
+);
+
+-- Several archived observations of one image can bind to the same target.
+DELETE FROM restore_downloads WHERE rowid IN (
+    SELECT id FROM (SELECT rowid AS id,row_number() OVER (
+        PARTITION BY device_id,source_id,source_revision,kind ORDER BY downloaded_at_ms DESC,rowid
+    ) AS priority FROM restore_downloads) WHERE priority>1
+);
+
+INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
+SELECT device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms
+FROM restore_downloads;
+
+INSERT INTO download_membership_cleanup_revisions(device_id,source_id,source_revision,kind,cleanup_revision_id)
+SELECT device_id,source_id,source_revision,kind,cleanup_revision_id FROM restore_downloads WHERE cleanup_revision_id<>'';
+
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT device_id,source_id,source_revision,kind FROM restore_downloads WHERE cleanup_revision_id='';
+
+INSERT INTO legacy_download_restore_admissions
+SELECT * FROM restore_pending_legacy_downloads WHERE generation>0 ON CONFLICT DO NOTHING;
+
+INSERT INTO unclaimed_legacy_download_restore_admissions
+SELECT source_engine_id,source_id,source_revision,hash,size,downloaded_at_ms FROM restore_pending_legacy_downloads
+WHERE device_id='legacy' AND kind='image' AND generation=0 ON CONFLICT DO NOTHING;
+
+-- After completion, the live membership owns the bytes. The admission cannot
+-- reopen the placeholder if Settings later claims the image for a real device.
+DELETE FROM unclaimed_legacy_download_restore_admissions AS a WHERE EXISTS (
+    SELECT 1 FROM restore_eligible_downloads f
+    JOIN backup.message_previews b ON b.id=f.source_id
+    JOIN restore_media_targets target ON target.id=b.message_id
+    JOIN message_previews p ON p.message_id=target.message_id AND p.url=b.url
+    JOIN device_downloads d ON d.device_id=f.device_id AND d.kind=f.kind AND d.source_id=p.id
+        AND d.source_revision=f.source_revision AND d.hash=f.hash AND d.size=f.size
+    WHERE f.device_id='legacy' AND f.kind='image' AND f.has_bytes=1
+      AND f.source_engine_id=a.source_engine_id AND f.source_id=a.source_id AND f.source_revision=a.source_revision
+      AND f.hash=a.hash AND f.size=a.size AND f.downloaded_at_ms=a.downloaded_at_ms
+);
+
+DROP TABLE restore_eligible_downloads;
+DROP VIEW restore_media_targets;
+DROP VIEW restore_matching_media_messages;
+DROP TABLE restore_downloads;
+DROP TABLE restore_pending_legacy_downloads;
+DROP TABLE restore_download_devices;
+DROP TABLE restore_download_cleanup_parents;
+DROP TABLE restore_download_membership_proofs;
+DROP TABLE restore_media_files;

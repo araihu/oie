@@ -35,15 +35,34 @@ type wireFallback struct {
 	Subjects []struct{} `xml:"urn:xmpp:fallback:0 subject"`
 	Others   []struct{} `xml:",any"`
 }
+type wireMentionReference struct {
+	Type  string `xml:"type,attr"`
+	URI   string `xml:"uri,attr"`
+	Begin string `xml:"begin,attr"`
+	End   string `xml:"end,attr"`
+}
+
 type replyMetadata struct {
-	Origins  []wireID       `xml:"urn:xmpp:sid:0 origin-id"`
-	Stable   []wireID       `xml:"urn:xmpp:sid:0 stanza-id"`
-	Replies  []wireReply    `xml:"urn:xmpp:reply:0 reply"`
-	Fallback []wireFallback `xml:"urn:xmpp:fallback:0 fallback"`
+	Origins           []wireID               `xml:"urn:xmpp:sid:0 origin-id"`
+	Stable            []wireID               `xml:"urn:xmpp:sid:0 stanza-id"`
+	Replies           []wireReply            `xml:"urn:xmpp:reply:0 reply"`
+	Fallback          []wireFallback         `xml:"urn:xmpp:fallback:0 fallback"`
+	MentionReferences []wireMentionReference `xml:"urn:xmpp:reference:0 reference"`
 }
 
 func usableID(id string) bool {
 	return id != "" && len(id) <= 4096 && utf8.ValidString(id) && !strings.ContainsRune(id, 0)
+}
+
+func (m replyMetadata) originID() string {
+	if len(m.Origins) != 1 {
+		return ""
+	}
+	origin := m.Origins[0]
+	if !usableID(origin.ID) || origin.Text != "" || len(origin.Children) != 0 {
+		return ""
+	}
+	return origin.ID
 }
 
 func roomStanzaID(from jid.JID, ids []wireID) string {
@@ -78,11 +97,8 @@ func decodeReplyMetadata(meta replyMetadata, body string, from jid.JID, account,
 			refs = append(refs, domain.MessageReference{Scope: scope, ID: id, Author: author})
 		}
 	} else if !room {
-		if len(meta.Origins) == 1 {
-			id := meta.Origins[0]
-			if usableID(id.ID) && id.Text == "" && len(id.Children) == 0 {
-				refs = append(refs, domain.MessageReference{Scope: scope, ID: id.ID, Author: author})
-			}
+		if id := meta.originID(); id != "" {
+			refs = append(refs, domain.MessageReference{Scope: scope, ID: id, Author: author})
 		}
 	}
 	if len(meta.Replies) != 1 {

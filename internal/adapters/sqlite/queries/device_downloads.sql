@@ -12,16 +12,53 @@ ON CONFLICT(device_id) DO UPDATE SET days=excluded.days;
 INSERT INTO download_devices(device_id,generation) VALUES(?,1)
 ON CONFLICT(device_id) DO UPDATE SET generation=generation+1;
 
+-- name: PutDownloadCleanupRevision :exec
+INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
+SELECT d.device_id,d.generation,sqlc.arg(revision_id) FROM download_devices d WHERE d.device_id=sqlc.arg(device_id)
+ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation,revision_id=excluded.revision_id;
+
+-- name: PutDownloadCleanupParent :exec
+INSERT INTO download_cleanup_parents(device_id,generation,revision_id,parent_revision_id)
+SELECT d.device_id,d.generation,sqlc.arg(revision_id),r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id
+WHERE d.device_id=sqlc.arg(device_id) AND d.generation=r.generation+1;
+
 -- name: GetDeviceDownload :one
 SELECT * FROM device_downloads WHERE device_id=? AND source_id=? AND source_revision=? AND kind='file';
 
--- name: InsertDeviceDownload :exec
+-- name: InsertDeviceDownload :execrows
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 VALUES(?,?,?,?,?,?,?,?,?)
 ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE
 SET hash=excluded.hash,mime_type=excluded.mime_type,size=excluded.size,
     verified_algorithm=excluded.verified_algorithm,downloaded_at_ms=excluded.downloaded_at_ms
 WHERE excluded.kind='file';
+
+-- name: PutDownloadMembershipCleanupRevision :exec
+INSERT INTO download_membership_cleanup_revisions(device_id,source_id,source_revision,kind,cleanup_revision_id)
+SELECT d.device_id,sqlc.arg(source_id),sqlc.arg(source_revision),sqlc.arg(kind),r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id AND r.generation=d.generation
+WHERE d.device_id=sqlc.arg(device_id)
+ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE SET cleanup_revision_id=excluded.cleanup_revision_id;
+
+-- name: KeepLegacyDownloadMembership :exec
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT d.device_id,sqlc.arg(source_id),sqlc.arg(source_revision),sqlc.arg(kind) FROM download_devices d
+WHERE d.device_id=sqlc.arg(device_id) AND d.generation>0 AND (
+  CAST(sqlc.arg(claimed_legacy) AS INTEGER)=1 OR NOT EXISTS (
+    SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+  )
+)
+ON CONFLICT DO NOTHING;
+
+-- name: KeepLegacyImageCompletions :exec
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT f.device_id,f.source_id,f.source_revision,f.kind
+FROM device_downloads f JOIN download_devices d ON d.device_id=f.device_id
+WHERE f.kind='image' AND f.source_id=sqlc.arg(source_id) AND f.hash='' AND d.generation>0 AND NOT EXISTS (
+  SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+)
+ON CONFLICT DO NOTHING;
 
 -- name: FinishImageDownloads :exec
 UPDATE device_downloads SET hash=?,mime_type=?,size=?,verified_algorithm=?,downloaded_at_ms=?
@@ -68,10 +105,33 @@ SELECT EXISTS(SELECT 1 FROM message_previews WHERE
 -- name: DeleteDownloadImageFile :exec
 DELETE FROM media_files WHERE hash=?;
 
--- name: CopyLegacyImageDownloads :exec
+-- name: CopyLegacyImageDownloads :many
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 SELECT sqlc.arg(device_id),source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms
 FROM device_downloads WHERE device_id='legacy'
+ON CONFLICT DO NOTHING
+RETURNING source_id,source_revision,kind;
+
+-- name: RecordClaimedLegacyImages :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,legacy.source_revision,legacy.hash,legacy.size
+FROM device_downloads legacy JOIN message_previews p ON p.id=legacy.source_id
+JOIN device_downloads assigned ON assigned.device_id=sqlc.arg(device_id) AND assigned.source_id=legacy.source_id
+    AND assigned.source_revision=legacy.source_revision AND assigned.kind=legacy.kind
+WHERE legacy.device_id='legacy' AND legacy.kind='image' AND legacy.hash<>'' AND legacy.size>=0
+ON CONFLICT DO NOTHING;
+
+-- name: RecordRetiredImageMembership :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,sqlc.arg(source_revision),sqlc.arg(hash),sqlc.arg(size)
+FROM message_previews p
+WHERE p.id=sqlc.arg(source_id) AND json_extract(p.payload,'$.Kind')='image' AND sqlc.arg(size)>0
+  AND length(sqlc.arg(hash))=64 AND sqlc.arg(hash) NOT GLOB '*[^0-9a-f]*'
+  AND NOT EXISTS (
+    SELECT 1 FROM device_downloads legacy WHERE legacy.device_id='legacy' AND legacy.kind='image'
+      AND legacy.source_id=p.id AND legacy.source_revision=sqlc.arg(source_revision)
+      AND legacy.hash=sqlc.arg(hash) AND legacy.size=sqlc.arg(size)
+  )
 ON CONFLICT DO NOTHING;
 
 -- name: RemoveLegacyDownloadDevice :exec

@@ -30,6 +30,14 @@ type AccountCommunicationPreference struct {
 	SendReadReceipts int64
 }
 
+type ActiveLegacyImageClaim struct {
+	MessageID      string
+	Url            string
+	SourceRevision string
+	Hash           string
+	Size           int64
+}
+
 type ArchiveAlias struct {
 	AccountID string
 	Scope     string
@@ -157,6 +165,10 @@ type ConversationRevision struct {
 	CreatedAt string
 }
 
+type DeletedAccountID struct {
+	ID string
+}
+
 type DeviceDownload struct {
 	DeviceID          string
 	SourceID          string
@@ -197,6 +209,23 @@ type DiscardedMessageReference struct {
 	AgeMs     int64
 }
 
+type DiscardedRecoveredSend struct {
+	MessageID string
+}
+
+type DownloadCleanupParent struct {
+	DeviceID         string
+	Generation       int64
+	RevisionID       string
+	ParentRevisionID string
+}
+
+type DownloadCleanupRevision struct {
+	DeviceID   string
+	Generation int64
+	RevisionID string
+}
+
 type DownloadDevice struct {
 	DeviceID   string
 	Days       int64
@@ -206,6 +235,14 @@ type DownloadDevice struct {
 type DownloadGarbage struct {
 	Kind string
 	Hash string
+}
+
+type DownloadMembershipCleanupRevision struct {
+	DeviceID          string
+	SourceID          string
+	SourceRevision    string
+	Kind              string
+	CleanupRevisionID string
 }
 
 type EffectiveRetention struct {
@@ -255,6 +292,34 @@ type HiddenScheduledMessage struct {
 type HistoryStatus struct {
 	AccountID string
 	Payload   string
+}
+
+type LegacyDownloadMembership struct {
+	DeviceID       string
+	SourceID       string
+	SourceRevision string
+	Kind           string
+}
+
+type LegacyDownloadRestoreAdmission struct {
+	DeviceID        string
+	SourceEngineID  string
+	SourceID        string
+	SourceRevision  string
+	Kind            string
+	Hash            string
+	Size            int64
+	DownloadedAtMs  int64
+	Generation      int64
+	CleanupRevision string
+}
+
+type LegacyImageClaim struct {
+	MessageID      string
+	Url            string
+	SourceRevision string
+	Hash           string
+	Size           int64
 }
 
 type MediaFile struct {
@@ -481,9 +546,47 @@ type PreviewRevision struct {
 	CreatedAt string
 }
 
+type RecoveredSend struct {
+	MessageID      string
+	ConversationID string
+	SourceEngineID string
+	RevisionID     string
+	OriginalState  string
+	AttemptCount   int64
+	ScheduledAt    string
+	Payload        string
+	CreatedAtMs    int64
+}
+
+type RecoveredSendOperation struct {
+	OperationID string
+	MessageID   string
+	Result      string
+}
+
+type RecoveredSendRevision struct {
+	ID        string
+	MessageID string
+	Parents   string
+	Payload   string
+	CreatedAt string
+}
+
+type RestoredOwnEcho struct {
+	AccountID      string
+	ConversationID string
+	MessageID      string
+}
+
 type RetainedMessageRetraction struct {
 	SourceID    string
 	RetractedAt string
+}
+
+type RetiredRecoveredSend struct {
+	AccountID      string
+	ConversationID string
+	MessageID      string
 }
 
 type Revision struct {
@@ -617,4 +720,45 @@ type StagedAttachment struct {
 	MediaType      string
 	Size           int64
 	Sha256         string
+}
+
+type UnclaimedLegacyDownloadRestoreAdmission struct {
+	SourceEngineID string
+	SourceID       string
+	SourceRevision string
+	Hash           string
+	Size           int64
+	DownloadedAtMs int64
+}
+
+type XmppMessageExclusion struct {
+	Account   string
+	Chat      string
+	Kind      string
+	KeyType   string
+	Authority string
+	RemoteID  string
+}
+
+type XmppMessageKey struct {
+	MessageID string
+	Account   string
+	Chat      string
+	Kind      interface{}
+	KeyType   string
+	Authority string
+	RemoteID  string
+}
+
+type XmppRemovedAccount struct {
+	ID          string
+	AddressHash string
+}
+
+type XmppUnidentifiedRemoval struct {
+	Account   string
+	Chat      string
+	Kind      string
+	CreatedMs int64
+	LocalID   string
 }

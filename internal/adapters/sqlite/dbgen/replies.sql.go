@@ -9,6 +9,32 @@ import (
 	"context"
 )
 
+const deleteMessageReference = `-- name: DeleteMessageReference :execrows
+DELETE FROM message_references WHERE message_id=? AND scope=? AND remote_id=? AND author=? AND source_hash=?
+`
+
+type DeleteMessageReferenceParams struct {
+	MessageID  string
+	Scope      string
+	RemoteID   string
+	Author     string
+	SourceHash string
+}
+
+func (q *Queries) DeleteMessageReference(ctx context.Context, arg DeleteMessageReferenceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteMessageReference,
+		arg.MessageID,
+		arg.Scope,
+		arg.RemoteID,
+		arg.Author,
+		arg.SourceHash,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const findReplyTargets = `-- name: FindReplyTargets :many
 SELECT DISTINCT m.id,m.payload,r.source_hash
 FROM message_references r CROSS JOIN messages m ON m.id=r.message_id

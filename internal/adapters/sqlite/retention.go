@@ -310,16 +310,7 @@ func (s *Store) purgeConversationBatch(ctx context.Context, id, kind string, now
 	if err := q.DeleteExpiredMessages(ctx, encoded); err != nil {
 		return 0, err
 	}
-	if err := q.ScrubMessageOutboundQuotes(ctx, dbgen.ScrubMessageOutboundQuotesParams{ConversationID: id, ExpiredIds: encoded}); err != nil {
-		return 0, err
-	}
-	if err := q.ScrubRevisionOutboundQuotes(ctx, dbgen.ScrubRevisionOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
-		return 0, err
-	}
-	if err := q.ScrubEventOutboundQuotes(ctx, dbgen.ScrubEventOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
-		return 0, err
-	}
-	if err := q.ScrubReceiptOutboundQuotes(ctx, dbgen.ScrubReceiptOutboundQuotesParams{OwnerID: id, ExpiredIds: encoded}); err != nil {
+	if err := scrubOutboundQuotes(ctx, q, id, encoded); err != nil {
 		return 0, err
 	}
 	if _, err := scrubInboundQuotes(ctx, q, id); err != nil {
@@ -350,6 +341,28 @@ func (s *Store) purgeConversationBatch(ctx context.Context, id, kind string, now
 	return len(ids), nil
 }
 
+func scrubOutboundQuotes(ctx context.Context, q *dbgen.Queries, conversation, excluded string) error {
+	if err := q.ScrubMessageOutboundQuotes(ctx, dbgen.ScrubMessageOutboundQuotesParams{ConversationID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	if err := q.ScrubRevisionOutboundQuotes(ctx, dbgen.ScrubRevisionOutboundQuotesParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	if err := q.ScrubEventOutboundQuotes(ctx, dbgen.ScrubEventOutboundQuotesParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	if err := q.ScrubReceiptOutboundQuotes(ctx, dbgen.ScrubReceiptOutboundQuotesParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	if err := q.ScrubContentHeadOutboundQuotes(ctx, dbgen.ScrubContentHeadOutboundQuotesParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	if err := q.ScrubMessageEditOutboundQuotes(ctx, dbgen.ScrubMessageEditOutboundQuotesParams{OwnerID: conversation, ExpiredIds: excluded}); err != nil {
+		return err
+	}
+	return scrubRecoveredSendQuotes(ctx, q, conversation, excluded)
+}
+
 func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool, error) {
 	quotes, err := q.ListInboundQuotesInConversation(ctx, id)
 	if err != nil || len(quotes) == 0 {
@@ -360,6 +373,7 @@ func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool,
 		return false, err
 	}
 	scrubbed := false
+	removedURLs := make(redactedQuoteURLs)
 	for _, quote := range quotes {
 		var ref domain.ReplyReference
 		if err := json.Unmarshal([]byte(quote.Payload), &ref); err != nil {
@@ -371,6 +385,14 @@ func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool,
 		}
 		if !expired {
 			continue
+		}
+		bodies, err := q.UnredactedQuoteBodies(ctx, dbgen.UnredactedQuoteBodiesParams{MessageID: quote.MessageID, BodyHash: quote.BodyHash})
+		if err != nil {
+			return false, err
+		}
+		for _, before := range bodies {
+			after, _ := domain.ReplyBody(before, ref.Fallback)
+			removedURLs.add(domain.ID(quote.MessageID), domain.ID(quote.CanonicalID), before, after)
 		}
 		if err := q.ScrubMessageInboundQuote(ctx, dbgen.ScrubMessageInboundQuoteParams{SourceID: quote.MessageID, ReplyMetadata: quote.Payload, BodyHash: quote.BodyHash}); err != nil {
 			return false, err
@@ -389,7 +411,7 @@ func scrubInboundQuotes(ctx context.Context, q *dbgen.Queries, id string) (bool,
 		}
 		scrubbed = true
 	}
-	return scrubbed, nil
+	return scrubbed, removedURLs.prune(ctx, q)
 }
 
 func repairExpiredConversation(ctx context.Context, q *dbgen.Queries, id, kind string, now time.Time, newID application.NewID) error {

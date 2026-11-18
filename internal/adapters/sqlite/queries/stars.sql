@@ -31,6 +31,31 @@ LEFT JOIN message_stars AS s ON s.message_id=(
 INSERT INTO message_stars(message_id,revision_id,starred,payload,updated_at) VALUES(?,?,?,?,?)
 ON CONFLICT(message_id) DO UPDATE SET revision_id=excluded.revision_id,starred=excluded.starred,payload=excluded.payload,updated_at=excluded.updated_at;
 
+-- name: RetireInheritedIdlessStarHeads :exec
+-- A local star decision supersedes inherited heads without erasing their
+-- immutable revisions, even when the inherited clock was ahead.
+DELETE FROM message_stars WHERE message_id IN (
+ SELECT alias.id FROM message_canonical_aliases link
+ JOIN messages root ON root.id=link.canonical_id AND root.is_own=1 AND root.state='submitted'
+ JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_id
+  AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
+ JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='direct'
+ WHERE root.id=sqlc.arg(message_id)
+  AND root.id<>json_extract(root.payload,'$.OwnOriginID')
+  AND json_extract(root.payload,'$.OwnOriginID')<>''
+  AND json_extract(alias.payload,'$.OwnOriginID')=json_extract(root.payload,'$.OwnOriginID')
+ UNION ALL
+ SELECT alias.id FROM message_canonical_aliases link
+ JOIN messages root ON root.id=link.canonical_id AND root.is_own=1 AND root.state='submitted'
+ JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_id
+  AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
+ JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
+ JOIN message_revisions original ON original.id=alias.revision_id AND original.entity_id=alias.id
+ WHERE root.id=sqlc.arg(message_id) AND root.provider_id LIKE 'room:%'
+   AND json_extract(original.payload,'$.ProviderID')=root.provider_id
+   AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=alias.id)
+);
+
 -- name: InsertMessageStarRevision :exec
 INSERT INTO message_star_revisions(id,message_id,parents,payload,created_at) VALUES(?,?,?,?,?);
 

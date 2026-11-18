@@ -19,16 +19,41 @@ func (q *Queries) AdvanceDownloadGeneration(ctx context.Context, deviceID string
 	return err
 }
 
-const copyLegacyImageDownloads = `-- name: CopyLegacyImageDownloads :exec
+const copyLegacyImageDownloads = `-- name: CopyLegacyImageDownloads :many
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 SELECT ?1,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms
 FROM device_downloads WHERE device_id='legacy'
 ON CONFLICT DO NOTHING
+RETURNING source_id,source_revision,kind
 `
 
-func (q *Queries) CopyLegacyImageDownloads(ctx context.Context, deviceID string) error {
-	_, err := q.db.ExecContext(ctx, copyLegacyImageDownloads, deviceID)
-	return err
+type CopyLegacyImageDownloadsRow struct {
+	SourceID       string
+	SourceRevision string
+	Kind           string
+}
+
+func (q *Queries) CopyLegacyImageDownloads(ctx context.Context, deviceID string) ([]CopyLegacyImageDownloadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, copyLegacyImageDownloads, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CopyLegacyImageDownloadsRow{}
+	for rows.Next() {
+		var i CopyLegacyImageDownloadsRow
+		if err := rows.Scan(&i.SourceID, &i.SourceRevision, &i.Kind); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countDeviceDownloads = `-- name: CountDeviceDownloads :one
@@ -258,7 +283,7 @@ func (q *Queries) ImagePreviewStillUsesHash(ctx context.Context, hash string) (b
 	return exists, err
 }
 
-const insertDeviceDownload = `-- name: InsertDeviceDownload :exec
+const insertDeviceDownload = `-- name: InsertDeviceDownload :execrows
 INSERT INTO device_downloads(device_id,source_id,source_revision,kind,hash,mime_type,size,verified_algorithm,downloaded_at_ms)
 VALUES(?,?,?,?,?,?,?,?,?)
 ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE
@@ -279,8 +304,8 @@ type InsertDeviceDownloadParams struct {
 	DownloadedAtMs    int64
 }
 
-func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) error {
-	_, err := q.db.ExecContext(ctx, insertDeviceDownload,
+func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDownloadParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertDeviceDownload,
 		arg.DeviceID,
 		arg.SourceID,
 		arg.SourceRevision,
@@ -291,6 +316,54 @@ func (q *Queries) InsertDeviceDownload(ctx context.Context, arg InsertDeviceDown
 		arg.VerifiedAlgorithm,
 		arg.DownloadedAtMs,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const keepLegacyDownloadMembership = `-- name: KeepLegacyDownloadMembership :exec
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT d.device_id,?1,?2,?3 FROM download_devices d
+WHERE d.device_id=?4 AND d.generation>0 AND (
+  CAST(?5 AS INTEGER)=1 OR NOT EXISTS (
+    SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+  )
+)
+ON CONFLICT DO NOTHING
+`
+
+type KeepLegacyDownloadMembershipParams struct {
+	SourceID       string
+	SourceRevision string
+	Kind           string
+	DeviceID       string
+	ClaimedLegacy  int64
+}
+
+func (q *Queries) KeepLegacyDownloadMembership(ctx context.Context, arg KeepLegacyDownloadMembershipParams) error {
+	_, err := q.db.ExecContext(ctx, keepLegacyDownloadMembership,
+		arg.SourceID,
+		arg.SourceRevision,
+		arg.Kind,
+		arg.DeviceID,
+		arg.ClaimedLegacy,
+	)
+	return err
+}
+
+const keepLegacyImageCompletions = `-- name: KeepLegacyImageCompletions :exec
+INSERT INTO legacy_download_memberships(device_id,source_id,source_revision,kind)
+SELECT f.device_id,f.source_id,f.source_revision,f.kind
+FROM device_downloads f JOIN download_devices d ON d.device_id=f.device_id
+WHERE f.kind='image' AND f.source_id=?1 AND f.hash='' AND d.generation>0 AND NOT EXISTS (
+  SELECT 1 FROM download_cleanup_revisions r WHERE r.device_id=d.device_id AND r.generation=d.generation
+)
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) KeepLegacyImageCompletions(ctx context.Context, sourceID string) error {
+	_, err := q.db.ExecContext(ctx, keepLegacyImageCompletions, sourceID)
 	return err
 }
 
@@ -348,6 +421,64 @@ func (q *Queries) ListRetainedDownloadHashes(ctx context.Context) ([]string, err
 	return items, nil
 }
 
+const putDownloadCleanupParent = `-- name: PutDownloadCleanupParent :exec
+INSERT INTO download_cleanup_parents(device_id,generation,revision_id,parent_revision_id)
+SELECT d.device_id,d.generation,?1,r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id
+WHERE d.device_id=?2 AND d.generation=r.generation+1
+`
+
+type PutDownloadCleanupParentParams struct {
+	RevisionID string
+	DeviceID   string
+}
+
+func (q *Queries) PutDownloadCleanupParent(ctx context.Context, arg PutDownloadCleanupParentParams) error {
+	_, err := q.db.ExecContext(ctx, putDownloadCleanupParent, arg.RevisionID, arg.DeviceID)
+	return err
+}
+
+const putDownloadCleanupRevision = `-- name: PutDownloadCleanupRevision :exec
+INSERT INTO download_cleanup_revisions(device_id,generation,revision_id)
+SELECT d.device_id,d.generation,?1 FROM download_devices d WHERE d.device_id=?2
+ON CONFLICT(device_id) DO UPDATE SET generation=excluded.generation,revision_id=excluded.revision_id
+`
+
+type PutDownloadCleanupRevisionParams struct {
+	RevisionID string
+	DeviceID   string
+}
+
+func (q *Queries) PutDownloadCleanupRevision(ctx context.Context, arg PutDownloadCleanupRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, putDownloadCleanupRevision, arg.RevisionID, arg.DeviceID)
+	return err
+}
+
+const putDownloadMembershipCleanupRevision = `-- name: PutDownloadMembershipCleanupRevision :exec
+INSERT INTO download_membership_cleanup_revisions(device_id,source_id,source_revision,kind,cleanup_revision_id)
+SELECT d.device_id,?1,?2,?3,r.revision_id
+FROM download_devices d JOIN download_cleanup_revisions r ON r.device_id=d.device_id AND r.generation=d.generation
+WHERE d.device_id=?4
+ON CONFLICT(device_id,source_id,source_revision,kind) DO UPDATE SET cleanup_revision_id=excluded.cleanup_revision_id
+`
+
+type PutDownloadMembershipCleanupRevisionParams struct {
+	SourceID       string
+	SourceRevision string
+	Kind           string
+	DeviceID       string
+}
+
+func (q *Queries) PutDownloadMembershipCleanupRevision(ctx context.Context, arg PutDownloadMembershipCleanupRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, putDownloadMembershipCleanupRevision,
+		arg.SourceID,
+		arg.SourceRevision,
+		arg.Kind,
+		arg.DeviceID,
+	)
+	return err
+}
+
 const queueDownloadGarbage = `-- name: QueueDownloadGarbage :exec
 INSERT INTO download_garbage(kind,hash) VALUES(?,?) ON CONFLICT DO NOTHING
 `
@@ -359,6 +490,52 @@ type QueueDownloadGarbageParams struct {
 
 func (q *Queries) QueueDownloadGarbage(ctx context.Context, arg QueueDownloadGarbageParams) error {
 	_, err := q.db.ExecContext(ctx, queueDownloadGarbage, arg.Kind, arg.Hash)
+	return err
+}
+
+const recordClaimedLegacyImages = `-- name: RecordClaimedLegacyImages :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,legacy.source_revision,legacy.hash,legacy.size
+FROM device_downloads legacy JOIN message_previews p ON p.id=legacy.source_id
+JOIN device_downloads assigned ON assigned.device_id=?1 AND assigned.source_id=legacy.source_id
+    AND assigned.source_revision=legacy.source_revision AND assigned.kind=legacy.kind
+WHERE legacy.device_id='legacy' AND legacy.kind='image' AND legacy.hash<>'' AND legacy.size>=0
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) RecordClaimedLegacyImages(ctx context.Context, deviceID string) error {
+	_, err := q.db.ExecContext(ctx, recordClaimedLegacyImages, deviceID)
+	return err
+}
+
+const recordRetiredImageMembership = `-- name: RecordRetiredImageMembership :exec
+INSERT INTO legacy_image_claims(message_id,url,source_revision,hash,size)
+SELECT p.message_id,p.url,?1,?2,?3
+FROM message_previews p
+WHERE p.id=?4 AND json_extract(p.payload,'$.Kind')='image' AND ?3>0
+  AND length(?2)=64 AND ?2 NOT GLOB '*[^0-9a-f]*'
+  AND NOT EXISTS (
+    SELECT 1 FROM device_downloads legacy WHERE legacy.device_id='legacy' AND legacy.kind='image'
+      AND legacy.source_id=p.id AND legacy.source_revision=?1
+      AND legacy.hash=?2 AND legacy.size=?3
+  )
+ON CONFLICT DO NOTHING
+`
+
+type RecordRetiredImageMembershipParams struct {
+	SourceRevision string
+	Hash           string
+	Size           int64
+	SourceID       string
+}
+
+func (q *Queries) RecordRetiredImageMembership(ctx context.Context, arg RecordRetiredImageMembershipParams) error {
+	_, err := q.db.ExecContext(ctx, recordRetiredImageMembership,
+		arg.SourceRevision,
+		arg.Hash,
+		arg.Size,
+		arg.SourceID,
+	)
 	return err
 }
 

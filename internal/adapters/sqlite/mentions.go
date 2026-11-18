@@ -31,45 +31,10 @@ func mentionWithStoredReply(ctx context.Context, q *dbgen.Queries, source domain
 
 // A later reply fact can move the only occurrence into a quote. Update
 // derived metadata without creating a new content revision or read receipt.
-func refreshMentionAfterReply(ctx context.Context, q *dbgen.Queries, source *domain.Message, fallback []domain.TextRange) error {
-	if source.IsOwn || len(fallback) == 0 {
-		return nil
-	}
-	changed := false
-	if source.ObservedRoomNickname != "" {
-		mentioned := domain.RoomNicknameMention(source.ObservedRoomNickname, source.OriginalText, fallback)
-		if mentioned != source.MentionsYou {
-			source.MentionsYou = mentioned
-			if err := q.UpdateMessage(ctx, dbgen.UpdateMessageParams{ID: string(source.ID), RevisionID: string(source.RevisionID), State: source.SendState, Payload: jsonText(source)}); err != nil {
-				return err
-			}
-			changed = true
-		}
-	}
-	canonical, err := resolveMessageAlias(ctx, q, source.ID)
-	if err != nil {
+func refreshMentionAfterReply(ctx context.Context, q *dbgen.Queries, source *domain.Message) error {
+	changed, err := refreshMessageMention(ctx, q, source)
+	if err != nil || !changed {
 		return err
-	}
-	head, err := q.GetContentHead(ctx, string(canonical))
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if err == nil && head.SourceID == string(source.ID) {
-		var m domain.Message
-		if err := json.Unmarshal([]byte(head.Payload), &m); err != nil {
-			return err
-		}
-		mentioned := domain.RoomNicknameMention(m.ObservedRoomNickname, m.OriginalText, fallback)
-		if m.ObservedRoomNickname != "" && mentioned != m.MentionsYou {
-			m.MentionsYou = mentioned
-			if err := q.PutContentHead(ctx, dbgen.PutContentHeadParams{CanonicalID: head.CanonicalID, SourceID: head.SourceID, RevisionID: head.RevisionID, Payload: jsonText(m), EditedAt: head.EditedAt}); err != nil {
-				return err
-			}
-			changed = true
-		}
-	}
-	if !changed {
-		return nil
 	}
 	row, err := q.GetConversation(ctx, string(source.ConversationID))
 	if err != nil {
@@ -93,4 +58,54 @@ func refreshMentionAfterReply(ctx context.Context, q *dbgen.Queries, source *dom
 	}
 	_, err = change(ctx, q, "conversation.updated", c, time.Now().UTC())
 	return err
+}
+
+// Match fallback ranges to each stored body, including the active correction.
+func refreshMessageMention(ctx context.Context, q *dbgen.Queries, source *domain.Message) (bool, error) {
+	if source.IsOwn {
+		return false, nil
+	}
+	changed := false
+	if source.ObservedRoomNickname != "" {
+		mentioned, err := mentionWithStoredReply(ctx, q, source.ID, *source)
+		if err != nil {
+			return false, err
+		}
+		if mentioned != source.MentionsYou {
+			source.MentionsYou = mentioned
+			if err := q.UpdateMessage(ctx, dbgen.UpdateMessageParams{ID: string(source.ID), RevisionID: string(source.RevisionID), State: source.SendState, Payload: jsonText(source)}); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	canonical, err := resolveMessageAlias(ctx, q, source.ID)
+	if err != nil {
+		return false, err
+	}
+	head, err := q.GetContentHead(ctx, string(canonical))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	if err == nil && head.SourceID == string(source.ID) {
+		var m domain.Message
+		if err := json.Unmarshal([]byte(head.Payload), &m); err != nil {
+			return false, err
+		}
+		if m.ObservedRoomNickname == "" {
+			return changed, nil
+		}
+		mentioned, err := mentionWithStoredReply(ctx, q, source.ID, m)
+		if err != nil {
+			return false, err
+		}
+		if mentioned != m.MentionsYou {
+			m.MentionsYou = mentioned
+			if err := q.PutContentHead(ctx, dbgen.PutContentHeadParams{CanonicalID: head.CanonicalID, SourceID: head.SourceID, RevisionID: head.RevisionID, Payload: jsonText(m), EditedAt: head.EditedAt}); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	return changed, nil
 }

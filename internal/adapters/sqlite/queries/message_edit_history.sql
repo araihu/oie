@@ -1,7 +1,9 @@
 -- name: ListMessageHistorySources :many
 WITH source_ids AS (
  SELECT CAST(sqlc.arg(canonical_id) AS TEXT) AS id
- UNION SELECT alias_id AS id FROM message_canonical_aliases WHERE canonical_id=sqlc.arg(canonical_id)
+ UNION SELECT a.alias_id AS id FROM message_canonical_aliases a JOIN messages m ON m.id=a.alias_id
+ WHERE a.canonical_id=sqlc.arg(canonical_id)
+ AND NOT (m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID') IS a.canonical_id)
  LIMIT 129
 )
 SELECT m.id AS source_id,r.id AS revision_id,r.payload,r.created_at
@@ -15,7 +17,9 @@ ORDER BY m.id LIMIT 129;
 -- name: ListMessageHistoryProofs :many
 WITH source_ids AS (
  SELECT CAST(sqlc.arg(canonical_id) AS TEXT) AS id
- UNION SELECT alias_id AS id FROM message_canonical_aliases WHERE canonical_id=sqlc.arg(canonical_id)
+ UNION SELECT a.alias_id AS id FROM message_canonical_aliases a JOIN messages m ON m.id=a.alias_id
+ WHERE a.canonical_id=sqlc.arg(canonical_id)
+ AND NOT (m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID') IS a.canonical_id)
  LIMIT 129
 )
 SELECT f.*,r.payload AS proof_payload

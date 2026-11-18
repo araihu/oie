@@ -245,3 +245,56 @@ func (q *Queries) UpdateMessageEditCommand(ctx context.Context, arg UpdateMessag
 	)
 	return err
 }
+
+const witnessedEditContentSource = `-- name: WitnessedEditContentSource :one
+SELECT CAST(MIN(witness.id) AS TEXT) AS source_id
+FROM message_edit_commands command
+JOIN operations receipt ON receipt.id=command.id AND receipt.resource_id=command.id AND receipt.kind='edit_message'
+JOIN messages witness ON witness.id<>command.id AND witness.is_own=1 AND witness.state='submitted'
+  AND witness.account_id=command.account_id AND witness.conversation_id=command.conversation_id
+JOIN messages root ON root.id=command.message_id AND root.provider_id=root.id AND root.is_own=1
+  AND root.account_id=command.account_id AND root.conversation_id=command.conversation_id
+LEFT JOIN message_canonical_aliases alias ON alias.alias_id=witness.id
+JOIN message_correction_facts fact ON fact.message_id=witness.id AND fact.remote_id=command.id
+  AND fact.scope=json_extract(command.payload,'$.Plan.Scope') AND fact.author=json_extract(command.payload,'$.Plan.Author')
+  AND fact.target_id=root.provider_id AND fact.target_id=json_extract(command.payload,'$.Plan.OriginalWireID')
+JOIN message_revisions content ON content.id=fact.source_revision_id AND content.entity_id=witness.id
+LEFT JOIN message_replies reply ON reply.message_id=witness.id AND reply.body_hash=fact.source_hash
+WHERE command.state IN ('submitted','failed') AND command.message_id=?1
+  AND command.account_id=?2 AND command.conversation_id=?3
+  AND (witness.provider_id=command.id OR (instr(fact.scope,'xmpp:correct:room:')=1
+    AND witness.provider_id IN (oie_room_correction_provider_id(fact.author,fact.remote_id),
+                                oie_scoped_room_correction_provider_id(fact.scope,fact.author,fact.remote_id))))
+  AND (alias.alias_id IS NULL OR alias.canonical_id=command.message_id)
+  AND json_extract(command.payload,'$.ContentRevisionID')=CAST(?4 AS TEXT)
+  AND json_extract(receipt.result,'$.ID')=command.id AND json_extract(receipt.result,'$.MessageID')=command.message_id
+  AND json_extract(receipt.result,'$.AccountID')=command.account_id AND json_extract(receipt.result,'$.ConversationID')=command.conversation_id
+  AND json_extract(receipt.result,'$.ExpectedRevisionID')=json_extract(command.payload,'$.Command.ExpectedRevisionID')
+  AND json_extract(receipt.result,'$.OriginalText')=json_extract(command.payload,'$.Command.OriginalText')
+  AND json_extract(receipt.result,'$.CreatedAt')=json_extract(command.payload,'$.Command.CreatedAt')
+  AND fact.source_hash=oie_edit_wire_hash(command.payload)
+  AND oie_edit_wire_matches(command.payload,witness.payload,reply.payload)=1
+  AND oie_edit_wire_matches(command.payload,content.payload,reply.payload)=1
+  AND fact.source_hash=COALESCE(NULLIF(json_extract(witness.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(witness.payload,'$.OriginalText')))
+  AND fact.source_hash=COALESCE(NULLIF(json_extract(content.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(content.payload,'$.OriginalText')))
+GROUP BY command.message_id HAVING COUNT(DISTINCT witness.id)=1
+`
+
+type WitnessedEditContentSourceParams struct {
+	MessageID         string
+	AccountID         string
+	ConversationID    string
+	ContentRevisionID string
+}
+
+func (q *Queries) WitnessedEditContentSource(ctx context.Context, arg WitnessedEditContentSourceParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, witnessedEditContentSource,
+		arg.MessageID,
+		arg.AccountID,
+		arg.ConversationID,
+		arg.ContentRevisionID,
+	)
+	var source_id string
+	err := row.Scan(&source_id)
+	return source_id, err
+}

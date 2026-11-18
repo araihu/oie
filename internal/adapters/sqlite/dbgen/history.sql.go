@@ -9,6 +9,45 @@ import (
 	"context"
 )
 
+const findVerifiedRoomOccurrence = `-- name: FindVerifiedRoomOccurrence :many
+SELECT DISTINCT r.message_id FROM message_references r
+JOIN messages m ON m.id=r.message_id
+JOIN conversations c ON c.id=m.conversation_id AND c.account_id=m.account_id
+WHERE m.account_id=?1 AND c.address=?2
+  AND json_extract(c.payload,'$.Kind')='room' AND r.scope='room:'||c.address
+  AND r.remote_id=?3 AND instr(r.author,c.address||'/')=1
+LIMIT 2
+`
+
+type FindVerifiedRoomOccurrenceParams struct {
+	AccountID   string
+	RoomAddress string
+	RemoteID    string
+}
+
+func (q *Queries) FindVerifiedRoomOccurrence(ctx context.Context, arg FindVerifiedRoomOccurrenceParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, findVerifiedRoomOccurrence, arg.AccountID, arg.RoomAddress, arg.RemoteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var message_id string
+		if err := rows.Scan(&message_id); err != nil {
+			return nil, err
+		}
+		items = append(items, message_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getArchiveAlias = `-- name: GetArchiveAlias :one
 SELECT message_id FROM archive_aliases WHERE account_id=? AND scope=? AND archive_id=?
 `
@@ -91,6 +130,38 @@ func (q *Queries) InsertArchiveAlias(ctx context.Context, arg InsertArchiveAlias
 	return err
 }
 
+const isExcludedXMPPOccurrence = `-- name: IsExcludedXMPPOccurrence :one
+SELECT EXISTS (
+ SELECT 1 FROM xmpp_message_exclusions e JOIN accounts a ON a.address=e.account AND a.protocol='xmpp'
+ WHERE a.id=?1 AND e.chat=?2 AND e.kind=?3
+ AND ((e.key_type='mam' AND e.authority=?4 AND e.remote_id=?5)
+   OR (e.key_type='stanza-id' AND e.authority=e.chat AND e.remote_id=?6))
+)
+`
+
+type IsExcludedXMPPOccurrenceParams struct {
+	AccountID    string
+	Chat         string
+	Kind         string
+	ArchiveScope string
+	ArchiveID    string
+	StanzaID     string
+}
+
+func (q *Queries) IsExcludedXMPPOccurrence(ctx context.Context, arg IsExcludedXMPPOccurrenceParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isExcludedXMPPOccurrence,
+		arg.AccountID,
+		arg.Chat,
+		arg.Kind,
+		arg.ArchiveScope,
+		arg.ArchiveID,
+		arg.StanzaID,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const putArchiveCheckpoint = `-- name: PutArchiveCheckpoint :exec
 INSERT INTO archive_checkpoints(account_id,scope,after_id) VALUES(?,?,?)
 ON CONFLICT(account_id,scope) DO UPDATE SET after_id=excluded.after_id
@@ -147,5 +218,32 @@ type PutHistoryStatusParams struct {
 
 func (q *Queries) PutHistoryStatus(ctx context.Context, arg PutHistoryStatusParams) error {
 	_, err := q.db.ExecContext(ctx, putHistoryStatus, arg.AccountID, arg.Payload)
+	return err
+}
+
+const rememberExcludedXMPPKey = `-- name: RememberExcludedXMPPKey :exec
+INSERT OR IGNORE INTO xmpp_message_exclusions(account,chat,kind,key_type,authority,remote_id)
+SELECT a.address,?1,?2,?3,?4,?5
+FROM accounts a WHERE a.id=?6 AND a.protocol='xmpp'
+`
+
+type RememberExcludedXMPPKeyParams struct {
+	Chat      string
+	Kind      string
+	KeyType   string
+	Authority string
+	RemoteID  string
+	AccountID string
+}
+
+func (q *Queries) RememberExcludedXMPPKey(ctx context.Context, arg RememberExcludedXMPPKeyParams) error {
+	_, err := q.db.ExecContext(ctx, rememberExcludedXMPPKey,
+		arg.Chat,
+		arg.Kind,
+		arg.KeyType,
+		arg.Authority,
+		arg.RemoteID,
+		arg.AccountID,
+	)
 	return err
 }

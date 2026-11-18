@@ -256,7 +256,7 @@ func TestInterruptedAttachmentDispatchRecoversAtWireBoundary(t *testing.T) {
 			if _, err = restarted.UpdatePendingMessage(ctx, migrationID(), id, current.RevisionID, nil, nil, true); !errors.Is(err, application.ErrStateConflict) {
 				t.Fatalf("recovery reopened Send now cutoff: %v", err)
 			}
-			if err = reopened.RecordOriginalWireAttempt(ctx, id, claimed.RevisionID, "late marker"); !errors.Is(err, application.ErrStateConflict) {
+			if err = reopened.RecordOriginalWireAttempt(ctx, id, claimed.RevisionID, application.Outgoing{OriginalText: claimed.OriginalText}, "late marker"); !errors.Is(err, application.ErrStateConflict) {
 				t.Fatalf("marker from pre-restart claim unexpectedly accepted: %v", err)
 			}
 			pending, _, err := reopened.PendingMessagesByAttachments(ctx, clock(), true, application.PendingMessageCursor{})

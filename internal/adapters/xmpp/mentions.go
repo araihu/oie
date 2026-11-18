@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -17,6 +18,41 @@ import (
 )
 
 const mentionNS = "urn:xmpp:reference:0"
+
+func (m replyMetadata) wireMentionProof(address, body string) domain.WireMentionProof {
+	if len(m.MentionReferences) == 0 {
+		return domain.WireMentionProof{Evidence: domain.WireMentionsAbsent}
+	}
+	var mentions []domain.WireMentionRange
+	length := utf8.RuneCountInString(body)
+	for _, reference := range m.MentionReferences {
+		if reference.Type != "mention" {
+			continue
+		}
+		uri, valid := mentionTargetURI(reference.URI, address)
+		begin, beginErr := strconv.Atoi(reference.Begin)
+		end, endErr := strconv.Atoi(reference.End)
+		if !valid || beginErr != nil || endErr != nil || begin < 0 || end <= begin || end > length || len(mentions) >= 32 {
+			return domain.WireMentionProof{Evidence: domain.WireMentionsPresent}
+		}
+		mentions = append(mentions, domain.WireMentionRange{URI: uri, Begin: begin, End: end})
+	}
+	if len(mentions) == 0 {
+		return domain.WireMentionProof{Evidence: domain.WireMentionsAbsent}
+	}
+	return domain.WireMentionProof{Evidence: domain.WireMentionsPresent, Digest: domain.WireMentionDigest(mentions)}
+}
+
+func outgoingMentionProof(elements []outboundMentionElement) domain.WireMentionProof {
+	if len(elements) == 0 {
+		return domain.WireMentionProof{Evidence: domain.WireMentionsAbsent}
+	}
+	mentions := make([]domain.WireMentionRange, 0, len(elements))
+	for _, element := range elements {
+		mentions = append(mentions, domain.WireMentionRange{URI: element.URI, Begin: element.Begin, End: element.End})
+	}
+	return domain.WireMentionProof{Evidence: domain.WireMentionsPresent, Digest: domain.WireMentionDigest(mentions)}
+}
 
 type observedMention struct {
 	present bool

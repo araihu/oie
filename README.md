@@ -43,8 +43,10 @@ affiliation controls according to current permissions. Moderated messages
 show a removal notice when the room supports XEP-0425. See
 [room management](docs/room-management.md).
 The composer schedules messages with supported attachments. The Scheduled view
-and each conversation's drawer let you manage pending sends. Device sync,
-PWA/offline queues and backup/restore remain later work.
+and each conversation's drawer let you manage pending sends. The engine CLI can
+[create, verify, and merge backups](docs/installation.md#create-and-verify-a-manual-backup)
+of stopped profiles. Recovered sends stay paused for explicit review. Device
+sync remains later work.
 See [history recovery scope](docs/milestone-three-history.md). See [engine milestone notes](docs/milestone-two-engine.md) and
 [foundation notes](docs/milestone-one.md) for scope and invariants.
 

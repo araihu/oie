@@ -656,6 +656,61 @@ database, and the media files stay in the profile. Backups are retained across
 updates and are deleted when you use **Delete all data** under **Settings →
 General → Destructive actions**.
 
+### Create and verify a manual backup
+
+From a checkout that includes the backup commands, build the engine binary with
+`make build`. Quit Oiê or stop the hosted engine before exporting that profile.
+The export acquires the same profile lock as the engine and reads the database
+without migrating it.
+
+```sh
+bin/oie backup create --data-dir "/path/to/profile" --output "$HOME/oie-backup.zip"
+bin/oie backup verify "$HOME/oie-backup.zip"
+```
+
+Add `--include-media` to copy available managed media and staged attachments.
+The ZIP contains account details, messages, and pending compositions. Keep it
+in a private location. Connection credentials, hosted credentials and room
+passwords are omitted. The command creates a private file and refuses to
+overwrite an existing backup. Verification checks the SQLite schema, database
+integrity and each entry's SHA-256 checksum. It reports the account,
+conversation, message, pending send and media counts.
+
+### Restore into an existing profile
+
+Quit Oiê or stop the hosted engine before restoring. The restore command
+verifies the archive, keeps the destination's identity and applies the changes
+in one transaction. Existing removals, retractions and retention rules remain
+in force. The restore also keeps removals made through a device's download
+cleanup. Two profiles of the same XMPP account can recognize a shared message by a verified room stanza ID or a matching ID from the same server archive. Oiê retains both references when available. A possible duplicate without a shared verified reference, or a conflict between references, stops the restore. The error identifies the affected records when available. You can inspect the ZIP in a separate empty profile with the same restore command.
+
+```sh
+bin/oie backup restore --data-dir "/path/to/profile" "$HOME/oie-backup.zip"
+bin/oie backup pending --data-dir "/path/to/profile"
+```
+
+Restored sends stay paused across restarts. If a later backup brings evidence
+of an attempt, cancellation or submission, Oiê preserves that evidence and
+does not dispatch the older intent. Review the destination, message,
+schedule and original send state in the pending list. To discard a recovered
+send, use the message and revision IDs from that list.
+
+```sh
+bin/oie backup discard --data-dir "/path/to/profile" --message-id ID --revision-id REVISION
+```
+
+When you have confirmed that a recovered send was never transmitted, resume it
+from its original engine. A different engine, an earlier attempt, local
+delivery or cancellation evidence, or an unavailable attachment prevents
+resuming. Opening a room on the destination restores access to its composer.
+
+```sh
+bin/oie backup resume --data-dir "/path/to/profile" --message-id ID --revision-id REVISION --confirm-not-sent
+```
+
+An overdue schedule becomes eligible when the original engine next runs and
+can send. See [merge semantics](oie-spec.md#12-backup-and-merge-restore).
+
 If the desktop window does not open after an update, start Oiê from a
 terminal to see the error. For the default macOS app, run
 `~/Applications/Oie.app/Contents/MacOS/oie-desktop`. On Linux, run

@@ -7,6 +7,13 @@ WHERE m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversat
 AND f.scope=sqlc.arg(scope) AND f.author=sqlc.arg(author)
 AND (f.remote_id IN (SELECT value FROM json_each(CAST(sqlc.arg(remote_ids) AS TEXT)))
 OR f.target_id IN (SELECT value FROM json_each(CAST(sqlc.arg(remote_ids) AS TEXT))))
+AND NOT EXISTS (
+  SELECT 1 FROM message_canonical_aliases a
+  JOIN message_correction_facts native ON native.message_id=a.canonical_id
+    AND native.scope=f.scope AND native.author=f.author AND native.remote_id=f.remote_id
+    AND native.target_id=f.target_id AND native.source_hash=f.source_hash
+  WHERE a.alias_id=m.id AND m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID')=a.canonical_id
+)
 ORDER BY f.message_id LIMIT 129;
 
 -- name: GetCorrectionFacts :many
@@ -26,7 +33,24 @@ ON CONFLICT(canonical_id) DO UPDATE SET source_id=excluded.source_id,revision_id
 INSERT INTO message_canonical_aliases(alias_id,canonical_id) VALUES(?,?) ON CONFLICT(alias_id) DO UPDATE SET canonical_id=excluded.canonical_id;
 
 -- name: ClearCanonicalAliases :exec
-DELETE FROM message_canonical_aliases WHERE alias_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT))) OR canonical_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)));
+DELETE FROM message_canonical_aliases AS a
+WHERE (alias_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)))
+   OR canonical_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT))))
+AND NOT EXISTS (
+  SELECT 1 FROM messages e JOIN messages m ON m.id=a.canonical_id AND m.id=m.provider_id AND m.is_own=1
+    AND m.account_id=e.account_id AND m.conversation_id=e.conversation_id
+  WHERE e.id=a.alias_id AND e.is_own=1 AND e.state='submitted' AND json_extract(e.payload,'$.OwnOriginID')=m.id
+  UNION ALL
+  -- A verified room original retains its physical observation for star
+  -- ancestry. Only its canonical row owns the correction fact.
+  SELECT 1 FROM messages e JOIN messages m ON m.id=a.canonical_id AND m.is_own=1 AND m.state='submitted'
+    AND m.account_id=e.account_id AND m.conversation_id=e.conversation_id
+  JOIN conversations chat ON chat.id=m.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
+  JOIN message_revisions original ON original.id=e.revision_id AND original.entity_id=e.id
+  WHERE e.id=a.alias_id AND e.is_own=1 AND e.state='submitted' AND e.provider_id=''
+    AND m.provider_id LIKE 'room:%' AND json_extract(original.payload,'$.ProviderID')=m.provider_id
+    AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=e.id)
+);
 
 -- name: ClearContentHeads :exec
 DELETE FROM message_content_heads WHERE canonical_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)));

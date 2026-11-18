@@ -1,0 +1,1 @@
+CREATE TEMP TABLE archive_held_operations (id TEXT PRIMARY KEY, result TEXT NOT NULL) WITHOUT ROWID;

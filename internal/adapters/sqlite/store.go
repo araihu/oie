@@ -79,6 +79,9 @@ func Open(ctx context.Context, dir string, initialID domain.ID, options ...Optio
 	if err = store.openDatabase(ctx, initialID); err != nil {
 		return nil, err
 	}
+	if err = store.recoverRestoreMedia(ctx); err != nil {
+		return nil, errors.Join(err, store.closeDatabase())
+	}
 	return store, nil
 }
 

@@ -1,0 +1,3 @@
+DROP TRIGGER clear_unclaimed_legacy_download_admissions_on_update;
+DROP TRIGGER clear_unclaimed_legacy_download_admissions_on_insert;
+DROP TABLE unclaimed_legacy_download_restore_admissions;
