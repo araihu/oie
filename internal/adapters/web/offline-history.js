@@ -81,7 +81,7 @@
   async function refreshKeep(control = keepControl(), retry = true) {
     if (!control || changingKeep.has(control)) return;
     const turn = ++keepRead;
-    const result = await keepRequest('oie:offline-keep-status', keepScope(control));
+    const result = await workerRequest('oie:offline-keep-status', keepScope(control));
     if (turn !== keepRead || !control.isConnected || changingKeep.has(control)) return;
     if (result && !result.error) {
       renderKeepStatus(control, result);
@@ -96,13 +96,72 @@
     }, 500);
   }
 
-  async function keepRequest(type, scope) {
+  async function workerRequest(type, scope) {
     try {
       return await request((await worker)?.active, {type, ...scope});
     } catch {
       return null;
     }
   }
+
+  window.OieRuntime.register('offline-storage', life => {
+    const section = document.querySelector('[data-offline-storage]');
+    if (!section) return;
+    const select = section.querySelector('select');
+    const usage = section.querySelector('#offline-storage-used');
+    const status = section.querySelector('[role="status"]');
+    const {engine} = section.dataset;
+    const numbers = new Intl.NumberFormat(document.documentElement.lang);
+    const size = bytes => bytes < 1024 ? numbers.format(bytes) + ' B' : numbers.format(Math.ceil(bytes / 1024)) + ' KiB';
+    let confirmed, saving = false, turn = 0, visible = false, refreshPending = false;
+
+    async function update(limit) {
+      const version = ++turn;
+      const result = await workerRequest('oie:offline-storage', {engine, limit});
+      if (life.signal.aborted || version !== turn) return;
+      if (!result) {
+        select.disabled = true;
+        usage.textContent = '';
+        status.textContent = section.dataset.failed;
+        return;
+      }
+      if (limit !== undefined || confirmed !== result.limit || select.disabled) status.textContent = '';
+      confirmed = result.limit;
+      select.value = String(confirmed);
+      select.disabled = false;
+      usage.textContent = section.dataset.usage.replace('{size}', size(result.used));
+      if (result.excess) status.textContent = section.dataset.excess.replace('{size}', size(result.excess));
+    }
+
+    function refresh() {
+      if (saving) refreshPending = true;
+      else if (visible) void update();
+    }
+    select.disabled = true;
+    section.hidden = false;
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible) refresh();
+    });
+    observer.observe(section);
+    life.cleanup(() => observer.disconnect());
+    life.on(navigator.serviceWorker, 'controllerchange', refresh);
+    life.on(navigator.serviceWorker, 'message', ({data}) => {
+      if (data?.type === 'oie:offline-history-changed' && (!data.engine || data.engine === engine)) refresh();
+    });
+    life.on(select, 'change', async () => {
+      const limit = Number(select.value);
+      select.value = String(confirmed);
+      if (saving) return;
+      saving = true;
+      select.setAttribute('aria-disabled', 'true');
+      await update(limit);
+      if (life.signal.aborted) return;
+      saving = false;
+      select.removeAttribute('aria-disabled');
+      if (refreshPending) { refreshPending = false; refresh(); }
+    });
+  });
 
   window.addEventListener('drawer:open', event => {
     if (event.detail?.id === 'details') void refreshKeep();
@@ -132,7 +191,7 @@
     const scope = keepScope(control);
     const pane = keep && document.getElementById('conversation-pane');
     const snapshot = pane ? capture(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline')) : undefined;
-    const result = await keepRequest('oie:offline-keep-chat', {...scope, keep, snapshot: snapshot?.entry ? snapshot : undefined});
+    const result = await workerRequest('oie:offline-keep-chat', {...scope, keep, snapshot: snapshot?.entry ? snapshot : undefined});
     changingKeep.delete(control);
     if (control.isConnected) {
       control.removeAttribute('aria-disabled');

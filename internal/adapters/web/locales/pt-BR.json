@@ -1,5 +1,11 @@
 {
   "OfflineSearchTooLong": "Digite até 200 caracteres.",
+  "OfflineStorageTitle": "Armazenamento sem conexão",
+  "OfflineStorageLimit": "Limite para conversas salvas",
+  "OfflineStorageHelp": "Ao reduzir o limite, as cópias mais antigas sem proteção são removidas primeiro.",
+  "OfflineStorageUsage": "Texto das conversas salvas: {size}",
+  "OfflineStorageExcess": "Libere pelo menos {size} desativando Manter disponível sem conexão em outras conversas e tente novamente.",
+  "OfflineStorageFailed": "O armazenamento sem conexão está indisponível. Reabra as configurações para tentar novamente.",
   "OfflineSearchAll": "Pesquisar mensagens salvas neste dispositivo",
   "OfflineSearchChat": "Pesquisar mensagens salvas nesta conversa",
   "OfflineSearchEmpty": "Nenhum resultado nas mensagens salvas.",

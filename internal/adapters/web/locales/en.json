@@ -1,5 +1,11 @@
 {
   "OfflineSearchTooLong": "Enter up to 200 characters.",
+  "OfflineStorageTitle": "Offline storage",
+  "OfflineStorageLimit": "Saved chat limit",
+  "OfflineStorageHelp": "Lowering the limit removes the oldest unprotected copies first.",
+  "OfflineStorageUsage": "Saved chat text: {size}",
+  "OfflineStorageExcess": "Free at least {size} by turning off Keep available offline in other chats, then try again.",
+  "OfflineStorageFailed": "Offline storage is unavailable. Reopen settings to try again.",
   "OfflineSearchAll": "Search messages saved on this device",
   "OfflineSearchChat": "Search saved messages in this chat",
   "OfflineSearchEmpty": "No matches in saved messages.",

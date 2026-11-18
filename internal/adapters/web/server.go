@@ -277,10 +277,11 @@ type view struct {
 }
 
 type copy struct {
-	OfflineSearchAll, OfflineSearchChat, OfflineSearchEmpty, OfflineSearchCount, OfflineSearchTooLong                   string
-	OfflineHistoryFull, OfflineHistoryPending                                                                           string
-	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing string
-	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                    string
+	OfflineStorageTitle, OfflineStorageLimit, OfflineStorageHelp, OfflineStorageUsage, OfflineStorageExcess, OfflineStorageFailed string
+	OfflineSearchAll, OfflineSearchChat, OfflineSearchEmpty, OfflineSearchCount, OfflineSearchTooLong                             string
+	OfflineHistoryFull, OfflineHistoryPending                                                                                     string
+	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing           string
+	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                              string
 
 	ConversationRemoved string
 

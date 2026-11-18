@@ -973,14 +973,17 @@ Device preferences remain meaningful with a hosted engine. Browser/site-data rem
 **IMPLEMENTED (initial increment):** in the standalone web app on HTTPS or
 localhost, a browser can reopen recently viewed conversations in a read-only
 view when it loses access to Oiê. It saves up to 50 messages from a conversation's
-loaded latest page, up to 12 conversations and 1 MiB of text snapshots, with a
-seven-day maximum age. The cache belongs to that browser profile and follows the
+loaded latest page. The browser keeps up to 12 conversations within a default
+1 MiB budget and a seven-day maximum age. The cache belongs to that browser profile and follows the
 engine and owning account. **Keep available offline** in conversation details
 protects saved text from age and space eviction within those shared limits.
 Verified removals and history invalidation still apply. Drafts and queued sends
 use their existing storage. The offline reader searches saved message text across
 its chat list or within one chat. Each result opens the matching message.
-Authenticated hosted sessions, configurable limits and offline media remain pending. See
+Device settings show saved chat text usage and offer 256 KiB, 512 KiB, 1 MiB
+and 2 MiB limits. Lowering the limit evicts the oldest unprotected copies first.
+A limit below protected usage is refused with the amount to free.
+Authenticated hosted sessions and offline media remain pending. See
 [offline history](offline-history.md).
 
 ### 11.5 Language and timestamps

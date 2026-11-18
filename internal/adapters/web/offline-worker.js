@@ -7,7 +7,8 @@ const assets = [shell + '?lang=en', shell + '?lang=pt-BR', ...scripts];
 const database = 'oie.offline-history';
 const id = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const maxConversations = 12;
-const maxBytes = 1024 * 1024;
+const defaultByteLimit = 1024 * 1024;
+const byteLimits = [256, 512, 1024, 2048].map(kib => kib * 1024);
 const maxConversationBytes = 192 * 1024;
 const maxAge = 7 * 24 * 60 * 60 * 1000;
 const encoder = new TextEncoder();
@@ -38,14 +39,14 @@ function state(update) {
         const next = update?.(current);
         if (next) {
           store.put(next, 'current');
-          if (next.engine !== current.engine || next.entries.length !== current.entries.length ||
+          if (next.byteLimit !== current.byteLimit || next.engine !== current.engine || next.entries.length !== current.entries.length ||
               next.entries.some((entry, index) => entry !== current.entries[index])) changedEngine = current.engine;
         }
         value = next ?? current;
       };
       tx.oncomplete = async () => {
         db.close();
-        if (changedEngine) await notifyReaders('oie:offline-history-changed', changedEngine).catch(() => {});
+        if (changedEngine !== undefined) await notifyReaders('oie:offline-history-changed', changedEngine).catch(() => {});
         resolve(value);
       };
       tx.onabort = () => { db.close(); reject(tx.error); };
@@ -155,10 +156,37 @@ function snapshotEntry(current, data) {
   return {...entry, messages, bytes, savedAt: Date.now(), cursor: data.cursor};
 }
 
+function totalBytes(entries) {
+  return entries.reduce((sum, entry) => sum + entry.bytes, 0);
+}
+
+function storageLimit(current) {
+  return current.byteLimit ?? defaultByteLimit;
+}
+
+function resizeStorage(current, limit) {
+  const entries = recent(current);
+  let used = totalBytes(entries);
+  const ordinary = entries.filter(entry => !isKept(current, entry));
+  const excess = used - totalBytes(ordinary) - limit;
+  if (excess > 0) return {excess};
+
+  // At equal timestamps keep the earlier entry in the cache's newest-first list.
+  ordinary.sort((left, right) => right.savedAt - left.savedAt);
+  const evicted = new Set();
+  while (used > limit) {
+    const oldest = ordinary.pop();
+    used -= oldest.bytes;
+    evicted.add(oldest);
+  }
+  return {next: {...current, byteLimit: limit, entries: entries.filter(entry => !evicted.has(entry))}};
+}
+
 function fitSnapshot(current, entry) {
+  const maxBytes = storageLimit(current);
   const others = recent(current).filter(item => !sameChat(item, entry));
   const entries = [entry, ...others.filter(item => isKept(current, item))];
-  let total = entries.reduce((bytes, item) => bytes + item.bytes, 0);
+  let total = totalBytes(entries);
   if (entries.length > maxConversations || total > maxBytes) return;
   for (const item of others) {
     if (entries.length === maxConversations) break;
@@ -264,8 +292,8 @@ function invalidate(current, {engine, account, chat, through, confirmedMissing =
 
 function verify(current, engine, through) {
   const sequence = cursor(engine, through);
-  if (sequence < 0n) return {engine: '', blocked: true, entries: []};
-  if (current.engine !== engine || current.blocked) return {engine, checkpoint: through, entries: []};
+  if (sequence < 0n) return {engine: '', blocked: true, entries: [], byteLimit: current.byteLimit};
+  if (current.engine !== engine || current.blocked) return {engine, checkpoint: through, entries: [], byteLimit: current.byteLimit};
   if (sequence <= cursor(engine, current.checkpoint)) return current;
   // A fresh document starts its stream at this cursor. Changes in the gap
   // were not seen by a page that could invalidate the older snapshots.
@@ -287,6 +315,26 @@ self.addEventListener('message', event => {
     return;
   }
   if (!workspacePath) return;
+  if (port && data?.type === 'oie:offline-storage' && id.test(data.engine)) {
+    let excess = 0;
+    event.waitUntil(state(current => {
+      if (current.blocked || current.engine && current.engine !== data.engine) return;
+      if (data.limit === undefined) {
+        const entries = recent(current);
+        if (entries.length !== current.entries.length) return {...current, entries};
+        return;
+      }
+      if (!byteLimits.includes(data.limit)) return;
+      const result = resizeStorage(current, data.limit);
+      excess = result.excess ?? 0;
+      return result.next;
+    }).then(current => {
+      if (current.blocked || current.engine && current.engine !== data.engine ||
+          data.limit !== undefined && !byteLimits.includes(data.limit)) return port.postMessage(null);
+      port.postMessage({limit: storageLimit(current), used: totalBytes(recent(current)), excess});
+    }, () => port.postMessage(null)).finally(() => port.close()));
+    return;
+  }
   if (port && data && ['oie:offline-keep-status', 'oie:offline-keep-chat'].includes(data.type) &&
       [data.engine, data.account, data.chat].every(value => typeof value === 'string' && id.test(value))) {
     const write = data.type === 'oie:offline-keep-chat' && typeof data.keep === 'boolean';
@@ -431,10 +479,10 @@ async function workspace(request, url) {
     return offlineResponse(url, response);
   } else if ([200, 401, 403, 503].includes(response.status) || response.type === 'opaqueredirect' || response.redirected) {
     // The origin may have been reconfigured to require authentication.
-    await state(() => {
+    await state(current => {
       if (turn < verifiedNavigation) return;
       verifiedNavigation = turn;
-      return {engine: '', blocked: true, entries: []};
+      return {engine: '', blocked: true, entries: [], byteLimit: current.byteLimit};
     }).catch(() => {});
   }
   return response;
@@ -452,7 +500,7 @@ self.addEventListener('fetch', event => {
         await state(current => {
           if (current.engine !== engine) return;
           verifiedNavigation = ++navigation;
-          return {...current, blocked: true, entries: [], kept: []};
+          return {...current, byteLimit: defaultByteLimit, blocked: true, entries: [], kept: []};
         }).then(() => notifyReaders('oie:offline-history-reset', engine)).catch(() => {});
       }
       return response;
