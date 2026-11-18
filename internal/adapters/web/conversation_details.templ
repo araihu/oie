@@ -93,8 +93,10 @@ if v.OfflineHistory && !v.conversationRemoved() {
 	InputAttrs:templ.Attributes{
 		"data-keep-chat-offline":v.Selected.Id,"data-engine":v.EngineID,"data-account":v.Selected.AccountId,
 		"data-full":v.Text.KeepChatOfflineFull,"data-unavailable":v.Text.KeepChatOfflineUnavailable,
+		"aria-describedby":"keep-offline-status","data-refresh-full":v.Text.OfflineHistoryFull,"data-awaiting-copy":v.Text.OfflineHistoryPending,
 	},
 })
+<p id="keep-offline-status" role="status" hidden></p>
 }
 }
 if v.RoomArchive != nil {

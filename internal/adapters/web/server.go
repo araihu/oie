@@ -277,6 +277,7 @@ type view struct {
 }
 
 type copy struct {
+	OfflineHistoryFull, OfflineHistoryPending                                                                           string
 	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing string
 	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                    string
 
@@ -1623,7 +1624,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	if v.CompactSource {
 		buf = encodeSourceFragment(w, r, buf)
 	}
-	if v.OfflineHistory && r.URL.Path == "/" {
+	if v.OfflineHistory && (r.URL.Path == "/" || r.URL.Path == "/search") {
 		if v.OfflineEngineStatus != "" {
 			w.Header().Set("X-Oie-Offline-History", v.OfflineEngineStatus)
 		} else if validOperationKey(v.EngineID) {

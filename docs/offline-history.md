@@ -10,10 +10,15 @@ the normal composer.
 In conversation details, **Keep available offline** protects that chat’s
 saved messages from the seven-day expiration and automatic cache eviction.
 The setting applies to this browser profile. Turn it off to return the chat
-to ordinary cache behavior. The 12-conversation and 1 MiB limits still apply.
+to ordinary cache behavior. The cache holds up to 12 saved conversations
+within a combined 1 MiB. A preference whose snapshot was invalidated does
+not occupy a snapshot slot.
 If the space already used by protected chats leaves too little room, the
 setting stays off and Oiê asks you to free space. Open the chat online to
-refresh its saved messages. Offline reading covers the saved text only.
+refresh its saved messages. If a protected chat grows beyond the available
+space, Oiê reports that the latest messages could not be saved. Free space
+and reopen the chat online to refresh the offline copy. Offline reading
+covers the saved text only.
 
 ## Storage
 

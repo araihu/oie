@@ -5,6 +5,8 @@
   "OfflineHistoryMissing": "Esta conversa está indisponível sem conexão.",
   "OfflineHistoryMessageMissing": "Esta mensagem está indisponível sem conexão.",
   "KeepChatOffline": "Manter disponível sem conexão",
+  "OfflineHistoryFull": "Não há espaço para salvar as mensagens mais recentes. Libere espaço e reabra esta conversa com conexão.",
+  "OfflineHistoryPending": "Abra as mensagens mais recentes com conexão para salvar uma cópia.",
   "KeepChatOfflineFull": "Não há espaço para esta conversa. Desative a disponibilidade sem conexão em outra conversa e tente novamente.",
   "KeepChatOfflineUnavailable": "Não foi possível alterar a disponibilidade sem conexão. Tente novamente.",
   "RetractMessage": "Retrair mensagem",

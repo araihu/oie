@@ -128,11 +128,80 @@ async function checkNavigationAuthority(id) {
     assert.equal(sandbox.save(current, snapshot(account, chat, size)).entries.length, count);
     return current;
   };
-  full(0);
+  const twelve = full(0);
+  const afterMissedRemovals = sandbox.verify(twelve, engine, engine + ':3');
+  assert.equal(afterMissedRemovals.entries.length, 0);
+  const newSnapshot = {...snapshot(otherAccount, chat), cursor: engine + ':3'};
+  const newKeep = sandbox.keepChat(afterMissedRemovals, {engine, account: otherAccount, chat, keep: true, snapshot: newSnapshot});
+  assert(newKeep.next.entries.some(item => item.chat === chat), 'preferences lacking snapshots do not consume cache slots');
   const fullBytes = full(190 * 1024);
+  const visibleSmall = sandbox.save(fullBytes, snapshot(account, chat, 0));
+  const newerLarge = {...snapshot(account, chat, 190 * 1024), cursor: engine + ':4'};
+  const enable = (cache, snapshot) => sandbox.keepChat(cache, {engine, account, chat, keep: true, snapshot});
+  const declined = enable(visibleSmall, newerLarge);
+  assert.equal(declined.error, 'full', 'a small cached copy does not mask an oversized visible page');
+  assert(!sandbox.isKept(declined.next, {account, chat}));
+  const staleOrdinary = sandbox.save(visibleSmall, newerLarge);
+  assert.equal(enable(staleOrdinary).error, 'full', 'a history-only view cannot protect a known stale snapshot');
+  assert.equal(enable(staleOrdinary, snapshot(account, chat, 0)).error, 'full', 'an older mounted page cannot mask the failed refresh');
+  const afterStaleSave = sandbox.save(staleOrdinary, snapshot(account, chat, 0));
+  assert.equal(enable(afterStaleSave).error, 'full', 'a delayed automatic save preserves the failed refresh cursor');
+  const freed = sandbox.keepChat(staleOrdinary, {engine, account, chat: id(70), keep: false}).next;
+  const savedNew = enable(freed, newerLarge).next;
+  assert.equal(savedNew.entries.find(entry => entry.chat === chat).cursor, newerLarge.cursor);
+  const newerCached = sandbox.save({engine, entries: []}, {...snapshot(account, chat, 31), cursor: engine + ':6'});
+  const pinFromOldTab = enable(newerCached, snapshot(account, chat, 0)).next;
+  assert.equal(pinFromOldTab.entries[0].messages[0].text.length, 31, 'pinning from another tab preserves the newer saved message');
+
   const small = keep(fullBytes, account, chat, 0).next;
   const oversized = sandbox.save(small, snapshot(account, chat, 190 * 1024));
   assert.equal(oversized.entries.find(entry => entry.chat === chat).messages[0].text, '', 'a growing snapshot preserves the earlier copy when it cannot fit');
+  const scope = {account, chat};
+  const status = cache => ({...sandbox.keepStatus(cache, scope)});
+  assert.deepEqual(status(oversized), {kept: true, available: true, full: true});
+  const invalidatedFull = sandbox.invalidate(oversized, {...scope, engine, through: engine + ':3'});
+  const grown = {...snapshot(account, chat, 190 * 1024), cursor: engine + ':3'};
+  const skipped = sandbox.save(invalidatedFull, grown);
+  assert.deepEqual(status(skipped), {kept: true, available: false, full: true});
+  const released = sandbox.keepChat(skipped, {engine, account, chat: id(70), keep: false}).next;
+  const recovered = sandbox.save(released, grown);
+  assert.deepEqual(status(recovered), {kept: true, available: true, full: false});
+
+  current = small;
+  const automatic = {...snapshot(account, chat, 190 * 1024), type: 'oie:offline-history-save'};
+  const dispatch = async (data, port) => {
+    let work;
+    handlers.get('message')({source: {type: 'window', url: 'http://test/', id: 'tab'}, data,
+      ports: port ? [port] : [], waitUntil: promise => { work = promise; }});
+    await work;
+  };
+  const noticeCount = notices.length;
+  await dispatch(automatic);
+  assert.equal(notices.length, noticeCount + 1);
+  assert.equal(notices.at(-1).full, true, 'the first failed refresh tells the active chat');
+  await dispatch(automatic);
+  assert.equal(notices.length, noticeCount + 1, 'repeated failures do not repeat notifications');
+  await dispatch({...snapshot(account, chat), type: 'oie:offline-history-save'});
+  assert.equal(notices.at(-1).full, false, 'a later refresh clears the capacity warning');
+
+  const actualState = sandbox.state;
+  const failNextWrite = () => {
+    sandbox.state = async update => {
+      if (!update) return actualState();
+      sandbox.state = actualState;
+      throw Object.assign(new Error('device full'), {name: 'QuotaExceededError'});
+    };
+  };
+  failNextWrite();
+  await dispatch(automatic);
+  assert.deepEqual(status(current), {kept: true, available: true, full: true}, 'device quota preserves the previous protected copy and marks refresh failure');
+  failNextWrite();
+  let refusal;
+  await dispatch({type: 'oie:offline-keep-chat', engine, account, chat: id(99), keep: true}, {
+    postMessage: value => { refusal = value; }, close() {},
+  });
+  assert.equal(refusal.error, 'full', 'an IndexedDB quota abort reports the device capacity failure');
+  assert.equal(refusal.kept, false, 'a rolled-back keep is not reported as saved');
 }
 
 async function changeKeep(page, control, until, desired, refused = false) {
@@ -188,7 +257,11 @@ function editSavedHistory({age, kept} = {}) {
       read.onsuccess = () => {
         const value = read.result;
         if (age) for (const entry of value.entries) entry.savedAt = 0;
-        if (kept) value.kept = kept;
+        if (kept) {
+          const template = value.entries[0];
+          value.kept = kept.map(scope => ({...scope, cursor: value.checkpoint}));
+          value.entries = value.kept.map(scope => ({...template, ...scope}));
+        }
         store.put(value, 'current');
       };
       tx.oncomplete = () => { open.result.close(); resolve(); };
@@ -232,7 +305,15 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
     const status = lang === 'pt-BR' ? 'Sem conexão' : 'Offline';
     try {
       let page = await newPage();
-      await page.goto(route);
+      if (width === 1440) {
+        await page.goto(base + '/search?' + new URLSearchParams({lang, theme}));
+        await page.evaluate(() => { window.openedFromSearch = true; });
+        await page.locator('a[data-oie-navigation-item]').filter({hasText: 'Chats'}).filter({visible: true}).click();
+        await page.locator('#chat-header h2').getByText('Bob', {exact: true}).waitFor();
+        assert(await page.evaluate(() => window.openedFromSearch), 'returning to chats uses fragment navigation');
+      } else {
+        await page.goto(route);
+      }
       await page.locator('#message-composer').fill(draft);
       await until(async () => (await page.evaluate(savedHistory))?.entries.some(entry =>
         entry.messages.some(message => message.text === latest)), 'message cached for offline use');
@@ -253,6 +334,23 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await page.evaluate(editSavedHistory, {kept: []});
       await changeKeep(page, keepControl, until, true);
       await until(() => observerControl.isChecked(), 'offline preference updates across tabs');
+      await observer.addInitScript(() => {
+        const post = ServiceWorker.prototype.postMessage;
+        let first = 0;
+        ServiceWorker.prototype.postMessage = function (data, transfer) {
+          if (data.type === 'oie:offline-keep-status') {
+            if (!first) first = performance.now();
+            if (performance.now() - first < 2000) return;
+            window.disabledBeforeKeepRetry = document.querySelector('[data-keep-chat-offline]')?.disabled;
+            ServiceWorker.prototype.postMessage = post;
+          }
+          return post.call(this, data, transfer);
+        };
+      });
+      await observer.bringToFront();
+      await observer.reload();
+      await until(async () => await observerControl.isEnabled() && await observerControl.isChecked(), 'timed-out status read retries');
+      assert(await observer.evaluate(() => window.disabledBeforeKeepRetry), 'chat stays disabled until its saved preference is confirmed');
       await observer.close();
       await page.evaluate(editSavedHistory, {age: true});
 
@@ -278,6 +376,18 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       await page.screenshot({path: path.join(artifacts, 'offline-history-' + lang + '.png')});
 
+      if (lang === 'en') await page.evaluate(async () => {
+        const cache = await caches.open('oie-offline-shell-v1');
+        const key = '/ui/offline-history?lang=en';
+        const response = await cache.match(key);
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        doc.getElementById('offline-full').remove();
+        await cache.put(key, new Response('<!doctype html>' + doc.documentElement.outerHTML, {headers: response.headers}));
+      });
+      await page.goto(route + '&open=details');
+      await timeline.getByText(latest, {exact: true}).waitFor();
+      assert.equal(await page.locator('[data-keep-chat-offline]').count(), 0, 'offline details URL opens the read-only chat');
+      if (lang === 'en') assert.equal(await page.locator('#offline-full').count(), 0, 'older cached shell still renders the saved messages');
       await page.goto(root + '&chat=' + missing);
       await page.locator('#offline-empty').waitFor();
       assert.equal(await timeline.locator('li').count(), 0, 'a cache miss cannot show a different chat');
@@ -343,7 +453,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await page.goto(route);
       await until(async () => (await page.evaluate(savedHistory))?.entries.length === 1, 'cached before denied response');
       state.engineDenied = true;
-      const denied = await page.reload();
+      const denied = width === 1440 ? await page.goto(base + '/search?lang=en') : await page.reload();
       assert.equal(denied.status(), 503);
       assert.equal(denied.headers()['x-oie-offline-history'], 'denied');
       await page.locator('#oie-route[data-engine-unavailable]').waitFor();

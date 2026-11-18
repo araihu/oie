@@ -59,6 +59,25 @@ function isKept(current, entry) {
   return current.kept?.some(chat => sameChat(chat, entry)) ?? false;
 }
 
+function keepStatus(current, scope) {
+  const kept = current.kept?.find(item => sameChat(item, scope));
+  return {
+    kept: Boolean(kept),
+    full: kept?.full === true,
+    available: current.entries.some(entry => sameChat(entry, scope) &&
+      (kept || Date.now() - entry.savedAt < maxAge)),
+  };
+}
+
+async function notifyKeep(engine, scope, status, exceptID) {
+  const {account, chat} = scope;
+  for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true})) {
+    if ((!exceptID || client.id !== exceptID) && ['/', '/search'].includes(new URL(client.url).pathname)) {
+      client.postMessage({type: 'oie:offline-keep-changed', engine, account, chat, ...status});
+    }
+  }
+}
+
 function recent(current) {
   const cutoff = Date.now() - maxAge;
   return current.entries.filter(entry => entry.savedAt > cutoff || isKept(current, entry));
@@ -113,6 +132,20 @@ function fitSnapshot(current, entry) {
   return entries;
 }
 
+function recordCapacity(current, entry, full) {
+  const pin = current.kept?.find(item => sameChat(item, entry));
+  const previous = current.entries.find(item => sameChat(item, entry));
+  const sequence = cursor(current.engine, entry.cursor);
+  if (cursor(current.engine, pin?.cursor) > sequence || cursor(current.engine, previous?.refreshBlockedAt) > sequence) {
+    return current;
+  }
+  if (full && previous && previous.refreshBlockedAt !== entry.cursor) {
+    current = {...current, entries: current.entries.map(item => item === previous ? {...item, refreshBlockedAt: entry.cursor} : item)};
+  }
+  if (!pin) return current;
+  return {...current, kept: current.kept.map(item => item === pin ? {...pin, cursor: entry.cursor, full} : item)};
+}
+
 function save(current, data) {
   if (!canSave(current, data)) return;
   const next = {...current, engine: data.engine, lang: data.lang, theme: data.theme, entries: recent(current)};
@@ -120,10 +153,13 @@ function save(current, data) {
   const entry = snapshotEntry(current, data);
   if (!entry) return next;
   const previous = next.entries.find(item => sameChat(item, entry));
-  if (!previous || cursor(data.engine, previous.cursor) <= cursor(data.engine, entry.cursor)) {
-    next.entries = fitSnapshot(next, entry) ?? next.entries;
-  }
-  return next;
+  const pin = next.kept?.find(item => sameChat(item, entry));
+  const sequence = cursor(data.engine, entry.cursor);
+  if (cursor(data.engine, previous?.cursor) > sequence || cursor(data.engine, previous?.refreshBlockedAt) > sequence ||
+      cursor(data.engine, pin?.cursor) > sequence) return next;
+  const entries = fitSnapshot(next, entry);
+  if (entries) next.entries = entries;
+  return recordCapacity(next, entry, !entries);
 }
 
 function keepChat(current, data) {
@@ -135,21 +171,30 @@ function keepChat(current, data) {
     return {next: {...next, entries: recent(next)}};
   }
   if (isKept(current, data)) return {};
-  if (kept.length >= maxConversations) return {error: 'full'};
   let next = current;
   let entry = recent(current).find(item => sameChat(item, data));
-  if (!entry) {
-    if (!snapshot) return {error: 'missing'};
-    if (snapshot.engine !== engine || !snapshot.entry || !sameChat(snapshot.entry, data) || !canSave(current, snapshot)) {
-      return {error: 'unavailable'};
+  if (snapshot && (snapshot.engine !== engine || !snapshot.entry || !sameChat(snapshot.entry, data))) return {error: 'unavailable'};
+  const incoming = cursor(engine, snapshot?.cursor);
+  const blocked = cursor(engine, entry?.refreshBlockedAt);
+  if (blocked >= 0n && incoming < blocked) return {error: 'full'};
+
+  // Prefer a more recent copy already saved by another tab over the mounted page.
+  if (snapshot && incoming >= cursor(engine, entry?.cursor) && canSave(current, snapshot)) {
+    const candidate = snapshotEntry(current, snapshot);
+    if (!candidate) return {error: 'unavailable'};
+    const entries = fitSnapshot(current, candidate);
+    if (!entries) {
+      // Remember this refusal even when the automatic save has not arrived yet.
+      return {error: 'full', next: recordCapacity(current, candidate, true)};
     }
-    entry = snapshotEntry(current, snapshot);
-    if (!entry) return {error: 'unavailable'};
-    const entries = fitSnapshot(current, entry);
-    if (!entries) return {error: 'full'};
+    entry = candidate;
     next = {...current, engine, checkpoint: current.checkpoint ?? snapshot.cursor, lang: snapshot.lang, theme: snapshot.theme, entries};
+  } else if (blocked >= 0n) {
+    return {error: 'full'};
+  } else if (!entry) {
+    return {error: snapshot ? 'unavailable' : 'missing'};
   }
-  return {next: {...next, kept: [...kept, {account, chat, cursor: entry.cursor}]}};
+  return {next: {...next, kept: [...kept, {account, chat, cursor: entry.cursor, full: false}]}};
 }
 
 function progress(current, {engine, through}) {
@@ -196,13 +241,14 @@ self.addEventListener('message', event => {
   const path = new URL(event.source.url).pathname;
   const data = event.data;
   const port = event.ports[0];
-  if ((path === '/' || path === shell) && data?.type === 'oie:offline-history-read' && port) {
+  const workspacePath = path === '/' || path === '/search';
+  if ((workspacePath || path === shell) && data?.type === 'oie:offline-history-read' && port) {
     event.waitUntil(read().then(value => {
       port.postMessage(value);
     }, () => port.postMessage(null)).finally(() => port.close()));
     return;
   }
-  if (path !== '/') return;
+  if (!workspacePath) return;
   if (port && data && ['oie:offline-keep-status', 'oie:offline-keep-chat'].includes(data.type) &&
       [data.engine, data.account, data.chat].every(value => typeof value === 'string' && id.test(value))) {
     const write = data.type === 'oie:offline-keep-chat' && typeof data.keep === 'boolean';
@@ -211,21 +257,23 @@ self.addEventListener('message', event => {
     const update = write ? current => {
       const result = keepChat(current, data);
       error = result.error;
-      changed = Boolean(result.next);
+      changed = Boolean(result.next && !result.error);
       return result.next;
     } : undefined;
-    event.waitUntil(state(update).then(async current => {
-      if (current.blocked || current.engine && current.engine !== data.engine) error = 'unavailable';
-      port.postMessage({kept: current.engine === data.engine && isKept(current, data), error});
-      if (changed) {
-        const {engine, account, chat} = data;
-        for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true})) {
-          if (client.id !== event.source.id && new URL(client.url).pathname === '/') {
-            client.postMessage({type: 'oie:offline-keep-changed', engine, account, chat});
-          }
-        }
-      }
-    }, () => port.postMessage(null)).finally(() => port.close()));
+    const reply = async current => {
+      const matches = !current.blocked && current.engine === data.engine;
+      const status = matches ? keepStatus(current, data) : {kept: false, available: false, full: false};
+      if (!matches && (current.engine || current.blocked)) error = 'unavailable';
+      port.postMessage({...status, error});
+      if (changed) await notifyKeep(data.engine, data, status, event.source.id);
+    };
+    event.waitUntil(state(update).then(reply, async cause => {
+      if (cause?.name !== 'QuotaExceededError') return port.postMessage(null);
+      changed = false;
+      error = 'full';
+      // The transaction rolled back. Report the previously committed setting.
+      return state().then(reply, () => port.postMessage(null));
+    }).finally(() => port.close()));
     return;
   }
   const updates = {
@@ -244,18 +292,57 @@ self.addEventListener('message', event => {
       return {...current, minimum, checkpoint, entries};
     },
   };
-  if (Object.hasOwn(updates, data?.type)) event.waitUntil(state(updates[data.type]).catch(() => {}));
+  if (!Object.hasOwn(updates, data?.type)) return;
+  if (data.type === 'oie:offline-history-progress') {
+    event.waitUntil(state(updates[data.type]).catch(() => {}));
+    return;
+  }
+  event.waitUntil(updateOfflineState(data, updates[data.type]).catch(() => {}));
 });
+
+// Notify only after the transaction commits. Snapshots can be updated by any tab.
+async function updateOfflineState(data, update) {
+  let changes = [];
+  const apply = mutation => state(current => {
+    const next = mutation(current);
+    changes = [];
+    if (!next) return;
+    const affected = data.entry ? [data.entry] : current.kept ?? [];
+    for (const pin of affected) {
+      const before = keepStatus(current, pin);
+      if (!before.kept) continue;
+      const after = keepStatus(next, pin);
+      if (before.kept !== after.kept || before.full !== after.full || before.available !== after.available) {
+        changes.push({pin, after});
+      }
+    }
+    return next;
+  });
+  try {
+    await apply(update);
+  } catch (cause) {
+    if (cause?.name !== 'QuotaExceededError' || !data.entry) throw cause;
+    // Recording a boolean on the existing pin does not require the larger snapshot.
+    await apply(current => {
+      if (!canSave(current, data)) return;
+      const cached = current.entries.find(item => sameChat(item, data.entry));
+      if (cursor(data.engine, cached?.cursor) > cursor(data.engine, data.cursor)) return;
+      return recordCapacity(current, {...data.entry, cursor: data.cursor}, true);
+    });
+  }
+  await Promise.all(changes.map(({pin, after}) => notifyKeep(data.engine, pin, after)));
+}
 
 function conversationURL(url) {
   return url.pathname === '/' && ['chats', 'archived'].includes(url.searchParams.get('section') || 'chats') &&
-    !url.searchParams.has('open') && !url.searchParams.has('searchQuery');
+    (!url.searchParams.has('open') || url.searchParams.get('open') === 'details' && id.test(url.searchParams.get('chat'))) &&
+    !url.searchParams.has('searchQuery');
 }
 
 async function offlineResponse(url, fallback) {
   if (!conversationURL(url)) return fallback ?? Response.error();
   const data = await read().catch(() => null);
-  if (fallback && !data?.entries.length) return fallback;
+  if (fallback && !data?.entries.length && !data?.kept?.some(item => item.full)) return fallback;
   const lang = url.searchParams.get('lang') || data?.lang;
   const page = await caches.match(shell + '?lang=' + (lang === 'pt-BR' ? 'pt-BR' : 'en'), {cacheName: shellCache});
   if (!page) return fallback ?? Response.error();
@@ -286,7 +373,7 @@ async function workspace(request, url) {
     const through = response.headers.get('X-Oie-Offline-Cursor');
     const chat = url.searchParams.get('chat');
     const account = url.searchParams.get('account');
-    const missingChat = response.status === 404 && id.test(chat) &&
+    const missingChat = url.pathname === '/' && response.status === 404 && id.test(chat) &&
       (account === null || id.test(account)) && !url.searchParams.has('notificationEngine');
     const removal = {engine, account, chat, through, confirmedMissing: true};
     await state(current => {
@@ -330,7 +417,7 @@ self.addEventListener('fetch', event => {
       }
       return response;
     })());
-  } else if (request.method === 'GET' && request.mode === 'navigate' && url.pathname === '/') {
+  } else if (request.method === 'GET' && request.mode === 'navigate' && ['/', '/search'].includes(url.pathname)) {
     event.respondWith(workspace(request, url));
   } else if (request.method === 'GET' && scripts.includes(url.pathname)) {
     event.respondWith(fetch(request).catch(async () => (await caches.match(request, {cacheName: shellCache})) ?? Response.error()));

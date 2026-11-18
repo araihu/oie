@@ -19,6 +19,7 @@ templ offlineHistoryPage(lang string, text copy) {
 			</header>
 			<main>
 				<h1 id="offline-title">{ text.OfflineHistoryTitle }</h1>
+				<p id="offline-full" role="status" hidden>{ text.OfflineHistoryFull }</p>
 				<ul id="offline-conversations" role="list" hidden></ul>
 				<ol id="offline-messages" role="list" aria-labelledby="offline-title" tabindex="0" hidden></ol>
 				<p id="offline-empty" role="status" hidden>{ text.OfflineHistoryEmpty }</p>
