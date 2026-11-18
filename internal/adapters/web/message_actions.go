@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/araihu/goshtoso/components/dropdown"
@@ -106,25 +107,8 @@ func (s *Server) serveMessageMenu(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 		return
 	}
-	if owner.JSON200.Kind == "room" {
-		s.loadConversationDetails(ctx, &v)
-	}
-	if !v.Preview {
-		a, err := s.client.GetAccountWithResponse(ctx, account)
-		if err == nil && a.JSON200 != nil && a.JSON200.Id == account {
-			v.Accounts = []engineapi.Account{*a.JSON200}
-		}
-	}
-	s.loadMessaging(ctx, &v)
-	if m.IsOwn {
-		s.latestEditTarget(ctx, &v)
-	}
 	v.setTimelineMessages([]engineapi.Message{*m}, nil)
-	s.loadMessagePreviews(ctx, &v)
-	s.loadMessageVideos(ctx, &v)
-	s.loadMessageAudio(ctx, &v)
-	s.loadMessageStars(ctx, &v)
-	s.loadReactions(ctx, &v)
+	s.loadMessageMenuState(ctx, &v, m.IsOwn)
 	menu := dropdown.Dropdown(dropdown.Config{ID: "message-menu-" + id, Label: v.Text.MessageActions, Trigger: messageMenuTrigger(v, id), MenuAlign: dropdown.AlignEnd, Sections: messageActions(v, v.Messages[0])})
 	var body bytes.Buffer
 	if err := menu.Render(presentationContext(ctx, v), &body); err != nil {
@@ -134,6 +118,52 @@ func (s *Server) serveMessageMenu(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	body = encodeFragment(w, r, body)
 	_, _ = body.WriteTo(w)
+}
+
+// The caller has validated the engine, conversation and retained message. Each
+// loader owns its result fields until Wait returns. Optional reads can fail
+// independently, leaving the corresponding actions unavailable.
+func (s *Server) loadMessageMenuState(ctx context.Context, v *view, own bool) {
+	var reads sync.WaitGroup
+	if v.Selected.Kind == "room" {
+		reads.Go(func() { s.loadConversationDetails(ctx, v) })
+	}
+	if v.Preview {
+		reads.Wait()
+		return
+	}
+
+	account := v.Selected.AccountId
+	reads.Go(func() {
+		a, err := s.client.GetAccountWithResponse(ctx, account)
+		if err == nil && a.JSON200 != nil && a.JSON200.Id == account {
+			v.Accounts = []engineapi.Account{*a.JSON200}
+		}
+	})
+
+	// The edit-target eligibility check reads its view by value and depends on
+	// the capabilities response. Give this branch its own view.
+	messaging := view{Selected: v.Selected}
+	reads.Go(func() {
+		s.loadMessaging(ctx, &messaging)
+		if own {
+			s.latestEditTarget(ctx, &messaging)
+		}
+	})
+	reads.Go(func() { s.loadMessagePreviews(ctx, v) })
+	var videos map[string][]engineapi.SharedContentItem
+	reads.Go(func() { videos = s.readMessageVideos(ctx, v) })
+	reads.Go(func() { s.loadMessageAudio(ctx, v) })
+	reads.Go(func() { s.loadMessageStars(ctx, v) })
+	reads.Go(func() { s.loadReactions(ctx, v) })
+	reads.Wait()
+
+	v.MessagingCapabilities, v.RoomSession = messaging.MessagingCapabilities, messaging.RoomSession
+	v.LatestEditTarget = messaging.LatestEditTarget
+	// Video links take precedence over image previews for the same URL.
+	if videos != nil {
+		v.applyMessageVideos(videos)
+	}
 }
 
 func messageActions(v view, message messageView) []dropdown.Section {

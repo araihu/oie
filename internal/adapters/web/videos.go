@@ -267,8 +267,14 @@ func hasMediaReference(body, address string) bool {
 }
 
 func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
+	if items := s.readMessageVideos(ctx, v); items != nil {
+		v.applyMessageVideos(items)
+	}
+}
+
+func (s *Server) readMessageVideos(ctx context.Context, v *view) map[string][]engineapi.SharedContentItem {
 	if v.Selected == nil || v.Preview || len(v.Messages) == 0 {
-		return
+		return nil
 	}
 	ids := make([]engineapi.ID, 0, len(v.Messages))
 	visible := make(map[string]messageView, len(v.Messages))
@@ -288,12 +294,12 @@ func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
 	for page := 0; page < 3; page++ {
 		response, err := s.client.ListSharedContentWithResponse(ctx, params)
 		if err != nil || response.JSON200 == nil {
-			return
+			return nil
 		}
 		for _, item := range response.JSON200.Items {
 			message, found := visible[item.Message.Id]
 			if !found || !validMessageVideo(item, message, v.Selected) {
-				return
+				return nil
 			}
 			if !seen[item.Id] && len(items[item.Message.Id]) < 3 {
 				items[item.Message.Id] = append(items[item.Message.Id], item)
@@ -305,7 +311,7 @@ func (s *Server) loadMessageVideos(ctx context.Context, v *view) {
 		}
 		params.Cursor = response.JSON200.NextCursor
 	}
-	v.applyMessageVideos(items)
+	return items
 }
 
 func validMessageVideo(item engineapi.SharedContentItem, message messageView, owner *engineapi.Conversation) bool {
