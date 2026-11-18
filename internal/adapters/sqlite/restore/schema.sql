@@ -7,7 +7,8 @@ WITH required(name) AS (
     ('expired_message_references'), ('discarded_message_references'), ('staged_attachments'), ('avatars'), ('avatar_revisions'), ('contacts'),
     ('contact_revisions'), ('account_communication_preferences'), ('conversation_read_revisions'),
     ('conversation_read_states'), ('message_reads'), ('message_previews'), ('preview_revisions'), ('media_files'),
-    ('device_downloads'), ('download_devices'), ('shared_content'), ('shared_content_state')
+    ('device_downloads'), ('download_devices'), ('shared_content'), ('shared_content_state'),
+    ('room_invitation_credentials')
 )
 SELECT NOT EXISTS (
     SELECT 1 FROM required r LEFT JOIN main.sqlite_schema d ON d.name=r.name AND d.type='table'

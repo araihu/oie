@@ -64,7 +64,7 @@ WHERE c.kind IN ('message.created','message.updated')
   AND json_extract(c.payload,'$.RevisionID')=r.revision_id
   AND oie_source_hash(json_extract(c.payload,'$.OriginalText'))=r.wire_hash;
 
-UPDATE message_replies AS d SET payload=json_set(d.payload,'$.Fallback',json('[]'))
+UPDATE message_replies AS d SET payload=oie_scrub_inbound_fallback(d.payload)
 FROM restore_redacted_quotes r WHERE d.message_id=r.message_id AND d.body_hash=r.wire_hash;
 
 DELETE FROM shared_content_state WHERE message_id IN (

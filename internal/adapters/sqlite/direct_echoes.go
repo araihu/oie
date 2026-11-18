@@ -2,10 +2,8 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"slices"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -29,11 +27,11 @@ func init() {
 		}
 		aReply, _ := args[1].(string)
 		bReply, _ := args[3].(string)
-		ar, err := decodeObservedDirectReply(aReply)
+		ar, err := decodeReplyReference(aReply)
 		if err != nil {
 			return nil, err
 		}
-		br, err := decodeObservedDirectReply(bReply)
+		br, err := decodeReplyReference(bReply)
 		if err != nil {
 			return nil, err
 		}
@@ -79,11 +77,14 @@ func findDirectEchoWithoutStanzaID(ctx context.Context, q *dbgen.Queries, c doma
 		if !sameObservedDirectWire(previous, incoming) {
 			continue
 		}
-		payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: row.ID, BodyHash: hash})
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		canonical, err := resolveMessageAlias(ctx, q, domain.ID(row.ID))
+		if err != nil {
 			return "", err
 		}
-		reply, err := decodeObservedDirectReply(payload)
+		if canonical != domain.ID(row.ID) {
+			continue
+		}
+		reply, err := readMessageWireReply(ctx, q, row.ID, hash)
 		if err != nil {
 			return "", err
 		}
@@ -109,17 +110,6 @@ func sameObservedDirectWire(a, b domain.Message) bool {
 		a.MatchesWireMentions(domain.WireMentionProof{Evidence: b.WireMentions, Digest: b.WireMentionDigest}) &&
 		slices.Equal(a.FileReferences, b.FileReferences) && slices.Equal(a.AudioURLs, b.AudioURLs) &&
 		slices.Equal(a.FileDigests, b.FileDigests) && slices.Equal(a.MediaThumbnails, b.MediaThumbnails)
-}
-
-func decodeObservedDirectReply(payload string) (*domain.ReplyReference, error) {
-	if payload == "" {
-		return nil, nil
-	}
-	var reply domain.ReplyReference
-	if err := json.Unmarshal([]byte(payload), &reply); err != nil {
-		return nil, err
-	}
-	return &reply, nil
 }
 
 func sameObservedDirectReply(a domain.Message, ar *domain.ReplyReference, b domain.Message, br *domain.ReplyReference) bool {

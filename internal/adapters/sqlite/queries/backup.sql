@@ -20,8 +20,10 @@ SELECT
   (SELECT COUNT(*) FROM conversations) AS conversations,
   (SELECT COUNT(*) FROM messages WHERE NOT EXISTS
     (SELECT 1 FROM message_canonical_aliases WHERE alias_id=messages.id)) AS messages,
-  (SELECT COUNT(*) FROM outbox WHERE state IN ('queued','dispatching','unknown')) AS pending_sends,
-  (SELECT COUNT(*) FROM room_invitation_credentials) AS room_passwords;
+  (SELECT COUNT(*) FROM outbox WHERE state IN ('queued','dispatching','unknown')) AS pending_sends;
+
+-- name: BackupHasRoomPasswords :one
+SELECT CAST(EXISTS(SELECT 1 FROM room_invitation_credentials) AS INTEGER);
 
 -- name: CountRecoveredSends :one
 SELECT COUNT(*) FROM recovered_sends;

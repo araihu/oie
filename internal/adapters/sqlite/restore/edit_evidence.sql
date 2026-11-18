@@ -15,9 +15,14 @@ WITH interrupted AS (
     AND original.account_id=pending.account_id AND original.conversation_id=pending.conversation_id
     AND original.is_own=1 AND original.state='submitted'
   LEFT JOIN message_canonical_aliases linked ON linked.alias_id=witness.id
+  LEFT JOIN backup.message_replies archived_reply ON archived_reply.message_id=archived.id AND archived_reply.body_hash=fact.source_hash
+  LEFT JOIN message_replies witness_reply ON witness_reply.message_id=witness.id AND witness_reply.body_hash=fact.source_hash
   WHERE (linked.alias_id IS NULL OR linked.canonical_id=original.id)
     AND fact.target_id=original.provider_id AND fact.scope=json_extract(pending.payload,'$.Plan.Scope')
     AND fact.author=json_extract(pending.payload,'$.Plan.Author') AND fact.source_hash=oie_edit_wire_hash(pending.payload)
+    AND oie_edit_wire_matches(pending.payload,archived.payload,archived_reply.payload)=1
+    AND oie_edit_wire_matches(pending.payload,proof.payload,archived_reply.payload)=1
+    AND oie_edit_wire_matches(pending.payload,witness.payload,witness_reply.payload)=1
     AND fact.source_hash=COALESCE(NULLIF(json_extract(archived.payload,'$.WireBodySHA256'),''),
                                    oie_source_hash(json_extract(archived.payload,'$.OriginalText')))
     AND fact.source_hash=COALESCE(NULLIF(json_extract(proof.payload,'$.WireBodySHA256'),''),

@@ -56,7 +56,9 @@ WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND c
   -- destination device expires its claimed bytes later.
   AND (f.device_id<>'legacy' OR f.kind<>'image' OR NOT EXISTS (
       SELECT 1 FROM backup.message_previews archived
-      JOIN legacy_image_claims claim ON claim.message_id=archived.message_id AND claim.url=archived.url
+      LEFT JOIN restore_idless_direct_echoes e ON e.source_id=archived.message_id
+      JOIN legacy_image_claims claim ON claim.message_id IN (archived.message_id,COALESCE(e.retained_id,archived.message_id))
+        AND claim.url=archived.url
         AND claim.source_revision=f.source_revision AND claim.hash=f.hash AND claim.size=f.size
       WHERE archived.id=f.source_id
   ))
@@ -64,15 +66,18 @@ WHERE (source.adopt_cleanup=1 OR (destination.generation=source.generation AND c
   -- companion already admitted here before that evidence arrived.
   AND (f.device_id<>'legacy' OR f.kind<>'image' OR unclaimed.source_engine_id IS NOT NULL OR NOT EXISTS (
       SELECT 1 FROM backup.message_previews archived
+      LEFT JOIN restore_idless_direct_echoes e ON e.source_id=archived.message_id
       WHERE archived.id=f.source_id AND (
           EXISTS (
-              SELECT 1 FROM active_legacy_image_claims seen WHERE seen.message_id=archived.message_id AND seen.url=archived.url
+              SELECT 1 FROM active_legacy_image_claims seen
+              WHERE seen.message_id IN (archived.message_id,COALESCE(e.retained_id,archived.message_id)) AND seen.url=archived.url
                 AND seen.source_revision=f.source_revision AND seen.hash=f.hash AND seen.size=f.size
           ) OR EXISTS (
               SELECT 1 FROM message_previews local
               JOIN device_downloads assigned ON assigned.source_id=local.id AND assigned.kind=f.kind
                   AND assigned.source_revision=f.source_revision AND assigned.hash=f.hash AND assigned.size=f.size
-              WHERE local.message_id=archived.message_id AND local.url=archived.url AND assigned.device_id NOT IN ('','legacy')
+              WHERE local.message_id IN (archived.message_id,COALESCE(e.retained_id,archived.message_id))
+                AND local.url=archived.url AND assigned.device_id NOT IN ('','legacy')
           )
       )
   ))
@@ -119,64 +124,11 @@ WHERE f.kind='file' AND f.has_bytes=1 AND oie_quote_preview_allowed(m.payload,so
   AND NOT EXISTS (SELECT 1 FROM shared_content_state s WHERE s.message_id=source.message_id)
 ON CONFLICT DO NOTHING;
 
-CREATE TEMP TABLE restore_downloads AS
-WITH resolved_links AS MATERIALIZED (
-    SELECT DISTINCT entity_id FROM preview_revisions
-    WHERE json_extract(payload,'$.Kind')='link' AND json_extract(payload,'$.State')='ready'
-)
-SELECT f.device_id, local.id AS source_id, f.source_revision, f.kind, f.hash, f.mime_type,
-       f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
-FROM restore_eligible_downloads f
-JOIN backup.shared_content source ON source.id=f.source_id
-JOIN restore_matching_media_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
-JOIN shared_content local ON local.message_id=source.message_id AND local.url=source.url AND local.kind=source.kind
-WHERE f.kind='file' AND f.has_bytes=1 AND oie_quote_preview_allowed(m.payload,source.url)
-UNION ALL
-SELECT f.device_id, COALESCE(local.id,source.id), f.source_revision, f.kind, f.hash, f.mime_type,
-       f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
-FROM restore_eligible_downloads f
-JOIN backup.message_previews source ON source.id=f.source_id
-JOIN restore_matching_media_messages m ON m.id=source.message_id
-LEFT JOIN message_previews local ON local.message_id=source.message_id AND local.url=source.url
-LEFT JOIN resolved_links resolved ON resolved.entity_id=local.id
-WHERE f.kind='image' AND f.has_bytes=1 AND source.download_state='ready' AND json_extract(source.payload,'$.Kind')='image'
-  AND oie_quote_preview_allowed(m.payload,source.url)
-  AND json_extract(source.payload,'$.FileHash')=f.hash
-  AND (local.id IS NULL OR (
-      json_extract(local.payload,'$.Kind')='image'
-      AND local.download_state='ready' AND json_extract(local.payload,'$.FileHash')=f.hash
-  ) OR (
-      local.download_state IN ('not_downloaded','failed') AND COALESCE(json_extract(local.payload,'$.FileHash'),'')=''
-      AND (json_extract(local.payload,'$.Kind')='image' OR (
-          json_extract(local.payload,'$.Kind')='link' AND local.state IN ('queued','unavailable') AND resolved.entity_id IS NULL
-      ))
-  ));
-DROP VIEW restore_matching_media_messages;
-
--- A verified original can be used without its derived thumbnail or favicon.
--- For other incomplete previews, let the engine derive a fresh cache entry.
-INSERT INTO message_previews
-SELECT p.id,p.revision_id,p.account_id,p.conversation_id,p.message_id,p.url,p.state,p.download_state,p.updated_at,
-       CASE WHEN p.download_state='ready' THEN json_set(p.payload,
-           '$.ImageHash',COALESCE(thumbnail.hash,''),'$.FaviconHash',COALESCE(favicon.hash,'')) ELSE p.payload END
-FROM backup.message_previews p JOIN restore_messages x ON x.id=p.message_id
-JOIN messages retained ON retained.id=x.id
-LEFT JOIN message_content_heads head ON head.canonical_id=retained.id
-LEFT JOIN restore_media_files thumbnail ON thumbnail.name='media/images/'||json_extract(p.payload,'$.ImageHash')
-LEFT JOIN restore_media_files favicon ON favicon.name='media/images/'||json_extract(p.payload,'$.FaviconHash')
-WHERE oie_quote_preview_allowed(COALESCE(head.payload,retained.payload),p.url) AND (
-    (p.download_state='ready' AND EXISTS (
-        SELECT 1 FROM restore_downloads f WHERE f.kind='image' AND f.source_id=p.id
-          AND f.hash=json_extract(p.payload,'$.FileHash')
-    )) OR (
-        p.download_state NOT IN ('ready','queued','downloading') AND COALESCE(json_extract(p.payload,'$.FileHash'),'')=''
-        AND (thumbnail.hash IS NOT NULL OR COALESCE(json_extract(p.payload,'$.ImageHash'),'')='')
-        AND (favicon.hash IS NOT NULL OR COALESCE(json_extract(p.payload,'$.FaviconHash'),'')='')
-    )
-)
-ON CONFLICT DO NOTHING;
-INSERT INTO preview_revisions
-SELECT r.* FROM backup.preview_revisions r JOIN backup.message_previews b ON b.id=r.entity_id
-JOIN message_previews p ON p.id=b.id AND p.message_id=b.message_id
-JOIN restore_messages x ON x.id=b.message_id
-WHERE TRUE ON CONFLICT(id) DO NOTHING;
+-- Match the immutable archival source to its visible local message. Each
+-- side was independently verified before an idless direct alias was admitted.
+CREATE TEMP VIEW restore_image_messages AS
+SELECT m.id,root.id AS message_id,root.account_id,root.conversation_id,COALESCE(head.payload,root.payload) AS payload
+FROM restore_matching_media_messages m
+LEFT JOIN restore_idless_direct_echoes e ON e.source_id=m.id
+JOIN messages root ON root.id=COALESCE(e.retained_id,m.id)
+LEFT JOIN message_content_heads head ON head.canonical_id=root.id;

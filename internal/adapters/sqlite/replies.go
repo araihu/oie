@@ -149,6 +149,32 @@ func stripInboundQuote(m *domain.Message, ref domain.ReplyReference) bool {
 	return true
 }
 
+func scrubInboundFallback(ref *domain.ReplyReference) {
+	if len(ref.Fallback) > 0 {
+		ref.WireSHA256 = ref.WireDigest()
+	}
+	ref.Fallback = []domain.TextRange{}
+}
+
+func readMessageWireReply(ctx context.Context, q *dbgen.Queries, id, hash string) (*domain.ReplyReference, error) {
+	payload, err := q.GetMessageReply(ctx, dbgen.GetMessageReplyParams{MessageID: id, BodyHash: hash})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	return decodeReplyReference(payload)
+}
+
+func decodeReplyReference(payload string) (*domain.ReplyReference, error) {
+	if payload == "" {
+		return nil, nil
+	}
+	var reply domain.ReplyReference
+	if err := json.Unmarshal([]byte(payload), &reply); err != nil {
+		return nil, err
+	}
+	return &reply, nil
+}
+
 func expiredReplyReference(ctx context.Context, q *dbgen.Queries, conversation domain.ID, ref domain.MessageReference) (bool, error) {
 	expired, err := q.IsExpiredReplyReference(ctx, dbgen.IsExpiredReplyReferenceParams{
 		ConversationID: string(conversation), RemoteID: ref.ID, Scope: ref.Scope, Author: ref.Author,

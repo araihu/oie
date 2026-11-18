@@ -35,6 +35,8 @@ WHERE old.wire_id='' AND old.provider_id GLOB '????????-????-7???-[89ab]???-????
 CREATE TEMP VIEW restore_own_echo_aliases AS
 SELECT echo_id,original_id FROM restore_witness_echoes
 UNION
+SELECT source_id,retained_id FROM restore_idless_direct_echoes
+UNION
 SELECT a.alias_id,a.canonical_id FROM message_canonical_aliases a
 JOIN messages e ON e.id=a.alias_id AND e.is_own=1 AND e.state='submitted'
 JOIN messages d ON d.id=a.canonical_id AND d.id=d.provider_id AND d.is_own=1
@@ -55,7 +57,8 @@ WITH conflicts AS (
   JOIN restore_messages selected ON selected.id=pair.echo_id
   JOIN backup.messages echo ON echo.id=pair.echo_id
   JOIN backup.message_references r ON r.message_id=pair.echo_id
-  WHERE EXISTS (
+  WHERE NOT EXISTS (SELECT 1 FROM restore_idless_direct_echoes idless WHERE idless.source_id=pair.echo_id)
+  AND EXISTS (
     SELECT 1 FROM message_references local
     JOIN messages owner ON owner.id=local.message_id AND owner.account_id=echo.account_id
       AND owner.conversation_id=echo.conversation_id

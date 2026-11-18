@@ -718,7 +718,7 @@ func (q *Queries) ScrubEventOutboundQuotes(ctx context.Context, arg ScrubEventOu
 }
 
 const scrubInboundQuoteMetadata = `-- name: ScrubInboundQuoteMetadata :exec
-UPDATE message_replies SET payload=json_set(payload,'$.Fallback',json('[]'))
+UPDATE message_replies SET payload=oie_scrub_inbound_fallback(payload)
 WHERE message_id=?1 AND body_hash=?2
 `
 

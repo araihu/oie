@@ -46,17 +46,23 @@ UPDATE messages AS d SET provider_id=e.provider_id,
 FROM restore_direct_mention_echo_keys e WHERE d.id=e.id AND e.is_local=1;
 
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms,timeline_at_ms,submitted_at_ms)
-SELECT m.id,m.revision_id,m.account_id,m.conversation_id,COALESCE(e.provider_id,m.provider_id),m.is_own,m.state,
-       CASE WHEN e.id IS NULL THEN m.payload
+SELECT m.id,m.revision_id,m.account_id,m.conversation_id,
+       CASE WHEN idless.source_id IS NOT NULL THEN '' ELSE COALESCE(e.provider_id,m.provider_id) END,m.is_own,m.state,
+       CASE WHEN idless.source_id IS NOT NULL THEN json_set(m.payload,'$.ProviderID','')
+            WHEN e.id IS NULL THEN m.payload
             WHEN e.ambiguous_origin=1 THEN json_remove(json_set(m.payload,'$.ProviderID',e.provider_id),'$.OwnOriginID')
             ELSE json_set(m.payload,'$.ProviderID',e.provider_id) END,
        m.created_at_ms,m.timeline_at_ms,m.submitted_at_ms
 FROM backup.messages m JOIN restore_messages x ON x.id=m.id AND x.is_new=1
-LEFT JOIN restore_direct_mention_echo_keys e ON e.id=m.id AND e.is_local=0;
+LEFT JOIN restore_direct_mention_echo_keys e ON e.id=m.id AND e.is_local=0
+LEFT JOIN restore_idless_direct_echoes idless ON idless.source_id=m.id;
 INSERT INTO message_revisions SELECT r.* FROM backup.message_revisions r JOIN restore_messages x ON x.id=r.entity_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_canonical_aliases(alias_id,canonical_id)
 SELECT echo_id,original_id FROM restore_witness_echoes WHERE TRUE ON CONFLICT(alias_id) DO NOTHING;
+INSERT INTO message_canonical_aliases(alias_id,canonical_id)
+SELECT e.source_id,e.retained_id FROM restore_idless_direct_echoes e
+JOIN restore_messages selected ON selected.id=e.source_id WHERE TRUE ON CONFLICT(alias_id) DO NOTHING;
 
 -- A witness may already have an authenticated correction family. Keep its
 -- revisions and proof, while placing the content projection on the native ID.
@@ -83,9 +89,27 @@ ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_star_revisions SELECT r.* FROM backup.message_star_revisions r JOIN restore_messages x ON x.id=r.message_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_stars SELECT s.* FROM backup.message_stars s JOIN restore_messages x ON x.id=s.message_id
-WHERE TRUE ON CONFLICT(message_id) DO NOTHING;
+WHERE NOT EXISTS (SELECT 1 FROM restore_idless_direct_echoes e WHERE e.source_id=s.message_id)
+ON CONFLICT(message_id) DO NOTHING;
+-- A source star may become the effective choice only when the retained
+-- message and its aliases have no explicit destination choice.
+INSERT INTO message_stars(message_id,revision_id,starred,payload,updated_at)
+WITH candidates AS (
+  SELECT s.*,row_number() OVER (PARTITION BY e.retained_id ORDER BY s.updated_at DESC,s.revision_id DESC) AS preferred
+  FROM backup.message_stars s JOIN restore_messages x ON x.id=s.message_id
+  JOIN restore_idless_direct_echoes e ON e.source_id=s.message_id
+  WHERE NOT EXISTS (
+    SELECT 1 FROM message_stars local LEFT JOIN message_canonical_aliases a ON a.alias_id=local.message_id
+    WHERE COALESCE(a.canonical_id,local.message_id)=e.retained_id
+  )
+)
+SELECT message_id,revision_id,starred,payload,updated_at FROM candidates WHERE preferred=1
+ON CONFLICT(message_id) DO NOTHING;
 
-INSERT INTO archive_aliases SELECT a.* FROM backup.archive_aliases a JOIN restore_messages x ON x.id=a.message_id
+INSERT INTO archive_aliases(account_id,scope,archive_id,message_id)
+SELECT a.account_id,a.scope,a.archive_id,COALESCE(idless.retained_id,a.message_id)
+FROM backup.archive_aliases a JOIN restore_messages x ON x.id=a.message_id
+LEFT JOIN restore_idless_direct_echoes idless ON idless.source_id=a.message_id
 WHERE NOT EXISTS (
   SELECT 1 FROM restore_conflicting_relayed_echo_aliases d
   WHERE d.account_id=a.account_id AND d.scope=a.scope AND d.archive_id=a.archive_id

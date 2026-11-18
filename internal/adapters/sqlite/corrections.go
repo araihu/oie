@@ -92,6 +92,7 @@ func init() {
 		if edit.WireBody() != edit.Command.OriginalText {
 			edit.WireBodySHA256 = edit.WireBodyHash()
 		}
+		edit.ReplyWireSHA256 = edit.ReplyWireDigest()
 		edit.WireText = ""
 		clearOutboundQuote(plan)
 		data, err := json.Marshal(edit)
@@ -112,6 +113,16 @@ func init() {
 			return payload, nil
 		}
 		data, err := json.Marshal(m)
+		return string(data), err
+	})
+	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_scrub_inbound_fallback", 1, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+		var ref domain.ReplyReference
+		payload, _ := args[0].(string)
+		if err := json.Unmarshal([]byte(payload), &ref); err != nil {
+			return nil, err
+		}
+		scrubInboundFallback(&ref)
+		data, err := json.Marshal(ref)
 		return string(data), err
 	})
 }

@@ -289,7 +289,11 @@ func assertDirectEchoArchiveOwner(t *testing.T, dir string, account domain.Accou
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	var got domain.ID
 	err = db.QueryRowContext(t.Context(), `SELECT message_id FROM archive_aliases WHERE account_id=? AND scope=? AND archive_id=?`,
 		account.ID, account.Address, archiveKey).Scan(&got)

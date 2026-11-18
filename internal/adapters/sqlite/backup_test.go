@@ -136,32 +136,64 @@ func TestVerifyBackupRejectsCorruptionAndUnsafePaths(t *testing.T) {
 	}
 }
 
-func TestVerifyBackupAndRestoreRejectUnsupportedSchema(t *testing.T) {
-	for _, tc := range []struct{ name, sql string }{
-		{"required table", "ALTER TABLE message_correction_facts ADD COLUMN unexpected TEXT"},
-		{"optional table", "ALTER TABLE recovered_sends ADD COLUMN unexpected TEXT"},
-		{"multiple versions", "INSERT INTO schema_migrations(version, dirty) VALUES (36, 0)"},
+func TestVerifyBackupAndRestoreRejectInvalidDatabase(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	room := domain.Conversation{
+		ID: migrationID(), RevisionID: migrationID(), PeerID: migrationID(),
+		AccountID: chat.AccountID, Address: "validation@conference.localhost",
+		Title: "Validation", Kind: "room", Request: "room_invitation", UpdatedAt: time.Now().UTC(),
+	}
+	if err := source.StoreRoomInvitation(t.Context(), room, "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, sql string
+		args      []any
+	}{
+		{name: "required table", sql: "ALTER TABLE message_correction_facts ADD COLUMN unexpected TEXT"},
+		{name: "optional table", sql: "ALTER TABLE recovered_sends ADD COLUMN unexpected TEXT"},
+		{name: "multiple versions", sql: "INSERT INTO schema_migrations(version, dirty) VALUES (36, 0)"},
+		{name: "missing credentials table", sql: "DROP TABLE room_invitation_credentials"},
+		{name: "stored room password", sql: "INSERT INTO room_invitation_credentials(conversation_id,password) VALUES (?,'fixture')", args: []any{room.ID}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			source, _, _ := outboxFixture(t)
 			ctx := t.Context()
-			if _, err := source.db.ExecContext(ctx, tc.sql); err != nil {
+			manifest, database, _ := backupRestoreFixture(t, source, false)
+			db, err := openBackupDatabase(database, "rw")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = db.ExecContext(ctx, tc.sql, tc.args...)
+			if err := errors.Join(err, db.Close()); err != nil {
 				t.Fatal(err)
 			}
 			var archive bytes.Buffer
-			if err := writeBackup(ctx, source.readDB, source.dir, &archive, false); err != nil {
+			zipFile := zip.NewWriter(&archive)
+			entry, err := appendBackupFile(ctx, zipFile, backupDatabaseName, database, "", -1)
+			if err != nil {
 				t.Fatal(err)
 			}
-			name := filepath.Join(t.TempDir(), "unexpected-schema.zip")
+			manifest.Files = []backupFile{entry}
+			header, err := zipFile.Create(backupManifestName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.NewEncoder(header).Encode(manifest); err != nil {
+				t.Fatal(err)
+			}
+			if err := zipFile.Close(); err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Join(t.TempDir(), "invalid-database.zip")
 			if err := os.WriteFile(name, archive.Bytes(), 0600); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := VerifyBackup(ctx, name); err == nil {
-				t.Error("verification accepted an unsupported schema")
+				t.Error("verification accepted an invalid database")
 			}
 			destination := filepath.Join(t.TempDir(), "profile")
 			if _, err := RestoreProfileBackup(ctx, destination, name, migrationID()); err == nil {
-				t.Error("restore accepted an unsupported schema")
+				t.Error("restore accepted an invalid database")
 			}
 			if _, err := os.Stat(destination); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("restore initialized a destination for an unsupported archive: %v", err)

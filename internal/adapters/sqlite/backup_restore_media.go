@@ -63,6 +63,12 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 		sql.Named("source_engine", string(manifest.SourceEngine))); err != nil {
 		return nil, fmt.Errorf("restore media metadata: %w", err)
 	}
+	if err := prepareRestoredAliasImagePreviews(ctx, tx, now); err != nil {
+		return nil, fmt.Errorf("prepare restored image previews: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_bindings")); err != nil {
+		return nil, fmt.Errorf("bind restored media: %w", err)
+	}
 	if schema.admissions {
 		if _, err := tx.ExecContext(ctx, restoreScript("media_download_admissions")); err != nil {
 			return nil, fmt.Errorf("restore pending legacy download admissions: %w", err)
@@ -103,6 +109,49 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 		}
 	}
 	return published, nil
+}
+
+func prepareRestoredAliasImagePreviews(ctx context.Context, tx *sql.Tx, now time.Time) error {
+	rows, err := tx.QueryContext(ctx, restoreScript("media_idless_image_previews"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var previews []domain.MessagePreview
+	for rows.Next() {
+		var messageID, accountID, chatID domain.ID
+		var payload, sourceURL string
+		if err := rows.Scan(&messageID, &accountID, &chatID, &sourceURL, &payload); err != nil {
+			return err
+		}
+		var preview domain.MessagePreview
+		if err := json.Unmarshal([]byte(payload), &preview); err != nil {
+			return err
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		revision, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		preview.ID, preview.RevisionID, preview.MessageID = domain.ID(id.String()), domain.ID(revision.String()), messageID
+		preview.AccountID, preview.ConversationID = accountID, chatID
+		preview.URL, preview.UpdatedAt = sourceURL, now
+		preview.SharedContentID, preview.ImageHash, preview.FaviconHash = "", "", ""
+		previews = append(previews, preview)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	q := dbgen.New(tx)
+	for _, preview := range previews {
+		if _, err := insertPreview(ctx, q, preview); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func updateRestoredImageDownloads(ctx context.Context, tx *sql.Tx, now time.Time) error {

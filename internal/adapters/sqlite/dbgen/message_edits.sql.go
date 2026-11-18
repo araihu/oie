@@ -259,6 +259,7 @@ JOIN message_correction_facts fact ON fact.message_id=witness.id AND fact.remote
   AND fact.scope=json_extract(command.payload,'$.Plan.Scope') AND fact.author=json_extract(command.payload,'$.Plan.Author')
   AND fact.target_id=root.provider_id AND fact.target_id=json_extract(command.payload,'$.Plan.OriginalWireID')
 JOIN message_revisions content ON content.id=fact.source_revision_id AND content.entity_id=witness.id
+LEFT JOIN message_replies reply ON reply.message_id=witness.id AND reply.body_hash=fact.source_hash
 WHERE command.state IN ('submitted','failed') AND command.message_id=?1
   AND command.account_id=?2 AND command.conversation_id=?3
   AND (witness.provider_id=command.id OR (instr(fact.scope,'xmpp:correct:room:')=1
@@ -271,6 +272,8 @@ WHERE command.state IN ('submitted','failed') AND command.message_id=?1
   AND json_extract(receipt.result,'$.OriginalText')=json_extract(command.payload,'$.Command.OriginalText')
   AND json_extract(receipt.result,'$.CreatedAt')=json_extract(command.payload,'$.Command.CreatedAt')
   AND fact.source_hash=oie_edit_wire_hash(command.payload)
+  AND oie_edit_wire_matches(command.payload,witness.payload,reply.payload)=1
+  AND oie_edit_wire_matches(command.payload,content.payload,reply.payload)=1
   AND fact.source_hash=COALESCE(NULLIF(json_extract(witness.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(witness.payload,'$.OriginalText')))
   AND fact.source_hash=COALESCE(NULLIF(json_extract(content.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(content.payload,'$.OriginalText')))
 GROUP BY command.message_id HAVING COUNT(DISTINCT witness.id)=1

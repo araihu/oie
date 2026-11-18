@@ -194,7 +194,7 @@ WHERE m.conversation_id=sqlc.arg(owner_id)
 AND json_array_length(json_extract(r.payload,'$.Fallback'))>0;
 
 -- name: ScrubInboundQuoteMetadata :exec
-UPDATE message_replies SET payload=json_set(payload,'$.Fallback',json('[]'))
+UPDATE message_replies SET payload=oie_scrub_inbound_fallback(payload)
 WHERE message_id=sqlc.arg(source_id) AND body_hash=sqlc.arg(body_hash);
 
 -- name: ScrubMessageInboundQuote :exec

@@ -55,7 +55,11 @@ func TestBackupRestoreInterruptedEditMakesExactQueuedHTTPReplayUncertain(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer restored.Close()
+	defer func() {
+		if err := restored.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if receiptAfter, err := restored.queries.GetOperation(ctx, string(accepted.Command.ID)); err != nil || receiptAfter != receipt {
 		t.Fatalf("restore changed the immutable acceptance receipt: %+v, %v", receiptAfter, err)
 	}

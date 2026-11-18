@@ -171,13 +171,21 @@ WHERE m.is_own=1 AND m.state='submitted' AND m.id<>m.provider_id
 CREATE TEMP TABLE restore_suppressed_echoes (
   source_id TEXT PRIMARY KEY, retained_id TEXT NOT NULL
 ) WITHOUT ROWID;
--- Independent live and archive observations of a direct stanza without an
--- ID can use different row IDs. Require one exact, scoped wire match.
-INSERT INTO restore_suppressed_echoes
-WITH pairs AS (
+-- Keep both immutable source rows for one verified idless direct stanza.
+CREATE TEMP TABLE restore_idless_direct_echoes (
+  source_id TEXT PRIMARY KEY, retained_id TEXT NOT NULL
+) WITHOUT ROWID;
+INSERT INTO restore_idless_direct_echoes
+WITH pairs AS MATERIALIZED (
   SELECT m.id AS source_id,d.id AS retained_id,
-         COUNT(*) OVER (PARTITION BY m.id) AS retained_count,
-         COUNT(*) OVER (PARTITION BY d.id) AS source_count
+         local_alias.canonical_id IS NOT NULL OR EXISTS (
+           SELECT 1 FROM backup.archive_aliases incoming
+           JOIN archive_aliases local ON local.account_id=incoming.account_id
+             AND local.scope=incoming.scope AND local.archive_id=incoming.archive_id
+           LEFT JOIN message_canonical_aliases owner ON owner.alias_id=local.message_id
+           WHERE incoming.message_id=m.id AND incoming.account_id=m.account_id AND incoming.scope=a.address
+             AND COALESCE(owner.canonical_id,local.message_id)=d.id
+         ) AS established
   FROM restore_message_candidates selected
   JOIN backup.messages m ON m.id=selected.id
   JOIN conversations chat ON chat.id=m.conversation_id AND chat.account_id=m.account_id
@@ -189,15 +197,16 @@ WITH pairs AS (
                                      oie_source_hash(json_extract(m.payload,'$.OriginalText')))
   JOIN message_references retained ON retained.scope=observed.scope AND retained.author=observed.author
     AND retained.remote_id=observed.remote_id AND retained.source_hash=observed.source_hash
-  JOIN messages d ON d.id=retained.message_id AND d.conversation_id=m.conversation_id AND d.account_id=m.account_id
+  JOIN messages d ON d.id=retained.message_id AND d.id<>m.id
+    AND d.conversation_id=m.conversation_id AND d.account_id=m.account_id
+  LEFT JOIN message_canonical_aliases local_alias ON local_alias.alias_id=m.id
   LEFT JOIN backup.message_replies observed_reply ON observed_reply.message_id=m.id AND observed_reply.body_hash=observed.source_hash
   LEFT JOIN message_replies retained_reply ON retained_reply.message_id=d.id AND retained_reply.body_hash=retained.source_hash
-  WHERE selected.is_new=1 AND json_extract(chat.payload,'$.Kind')='direct'
+  WHERE (selected.is_new=1 OR local_alias.canonical_id=d.id)
+    AND json_extract(chat.payload,'$.Kind')='direct'
     AND m.is_own=1 AND d.is_own=1 AND m.state='submitted' AND d.state='submitted'
-    AND m.id<>m.provider_id AND d.id<>d.provider_id
     AND (m.provider_id='' OR m.provider_id GLOB 'archive:*')
     AND (d.provider_id='' OR d.provider_id GLOB 'archive:*')
-    AND observed.remote_id<>''
     AND retained.source_hash=COALESCE(NULLIF(json_extract(d.payload,'$.WireBodySHA256'),''),
                                      oie_source_hash(json_extract(d.payload,'$.OriginalText')))
     AND NOT EXISTS (SELECT 1 FROM backup.message_canonical_aliases alias WHERE alias.alias_id=m.id)
@@ -205,15 +214,62 @@ WITH pairs AS (
     AND NOT EXISTS (SELECT 1 FROM backup.message_correction_facts fact WHERE fact.message_id=m.id AND fact.target_id<>'')
     AND NOT EXISTS (SELECT 1 FROM message_correction_facts fact WHERE fact.message_id=d.id AND fact.target_id<>'')
     AND oie_same_direct_echo(m.payload,observed_reply.payload,d.payload,retained_reply.payload)=1
+    AND NOT EXISTS (
+      SELECT 1 FROM backup.archive_aliases incoming
+      JOIN archive_aliases local ON local.account_id=incoming.account_id
+        AND local.scope=incoming.scope AND local.archive_id=incoming.archive_id
+      LEFT JOIN message_canonical_aliases owner ON owner.alias_id=local.message_id
+      WHERE incoming.message_id=m.id AND COALESCE(owner.canonical_id,local.message_id)<>d.id
+    )
+), preferred AS (
+  SELECT p.* FROM pairs p
+  WHERE p.established OR NOT EXISTS (
+    SELECT 1 FROM pairs known WHERE known.established
+      AND (known.source_id=p.source_id OR known.retained_id=p.retained_id)
+  )
+), counted AS (
+  SELECT p.*,COUNT(*) OVER (PARTITION BY p.source_id) AS retained_count,
+         COUNT(*) OVER (PARTITION BY p.retained_id) AS source_count
+  FROM preferred p
 )
-SELECT p.source_id,p.retained_id FROM pairs p
-WHERE p.retained_count=1 AND p.source_count=1
-  AND NOT EXISTS (
-    SELECT 1 FROM backup.archive_aliases incoming
-    JOIN archive_aliases local ON local.account_id=incoming.account_id
-      AND local.scope=incoming.scope AND local.archive_id=incoming.archive_id
-    WHERE incoming.message_id=p.source_id AND local.message_id<>p.retained_id
-  );
+SELECT source_id,retained_id FROM counted
+WHERE retained_count=1 AND (established OR source_count=1);
+
+-- An older exact observation may add archive metadata to a retained message
+-- without enrolling a second copy of its history outside the age window.
+INSERT INTO restore_suppressed_echoes
+SELECT source_id,retained_id FROM restore_idless_direct_echoes e
+WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=e.source_id);
+
+-- A re-export preserves each source and the verified alias. When the
+-- canonical source already maps to a retained row, keep the aliases flat.
+INSERT INTO restore_idless_direct_echoes
+SELECT source.id,COALESCE(mapped.retained_id,root.id)
+FROM backup.message_canonical_aliases edge
+JOIN backup.messages source ON source.id=edge.alias_id AND source.is_own=1 AND source.state='submitted'
+JOIN restore_messages selected ON selected.id=source.id
+JOIN backup.messages root ON root.id=edge.canonical_id AND root.is_own=1 AND root.state='submitted'
+  AND root.account_id=source.account_id AND root.conversation_id=source.conversation_id
+JOIN restore_messages selected_root ON selected_root.id=root.id
+JOIN backup.conversations chat ON chat.id=root.conversation_id AND chat.account_id=root.account_id
+JOIN backup.accounts account ON account.id=root.account_id
+JOIN backup.message_references sr ON sr.message_id=source.id AND sr.scope='sender:'||account.address AND sr.author=account.address
+  AND sr.remote_id=json_extract(source.payload,'$.OwnOriginID')
+  AND sr.source_hash=COALESCE(NULLIF(json_extract(source.payload,'$.WireBodySHA256'),''),
+                             oie_source_hash(json_extract(source.payload,'$.OriginalText')))
+JOIN backup.message_references rr ON rr.message_id=root.id AND rr.scope=sr.scope AND rr.author=sr.author
+  AND rr.remote_id=sr.remote_id AND rr.source_hash=sr.source_hash
+LEFT JOIN backup.message_replies sp ON sp.message_id=source.id AND sp.body_hash=sr.source_hash
+LEFT JOIN backup.message_replies rp ON rp.message_id=root.id AND rp.body_hash=rr.source_hash
+LEFT JOIN restore_idless_direct_echoes mapped ON mapped.source_id=root.id
+LEFT JOIN message_canonical_aliases known ON known.alias_id=source.id
+WHERE json_extract(chat.payload,'$.Kind')='direct'
+  AND (selected.is_new=1 OR known.canonical_id=COALESCE(mapped.retained_id,root.id))
+  AND COALESCE(mapped.retained_id,root.id)<>source.id
+  AND NOT EXISTS (SELECT 1 FROM backup.message_canonical_aliases edge WHERE edge.alias_id=root.id)
+  AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases edge WHERE edge.alias_id=COALESCE(mapped.retained_id,root.id))
+  AND NOT EXISTS (SELECT 1 FROM backup.message_correction_facts fact WHERE fact.message_id IN (source.id,root.id) AND fact.target_id<>'')
+  AND oie_same_direct_echo(source.payload,sp.payload,root.payload,rp.payload)=1;
 
 -- The destination can retain its own original beyond the archive cutoff.
 -- The verified echo may still contribute metadata for that retained body.
@@ -224,7 +280,7 @@ JOIN messages d ON d.id=m.wire_id AND d.id=d.provider_id
 LEFT JOIN backup.message_canonical_aliases a ON a.alias_id=m.id
 LEFT JOIN backup.outbox o ON o.message_id=m.id
 WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
-  AND NOT EXISTS(SELECT 1 FROM restore_suppressed_echoes matched WHERE matched.source_id=m.id)
+  AND NOT EXISTS(SELECT 1 FROM restore_idless_direct_echoes matched WHERE matched.source_id=m.id)
   AND oie_wire_mentions_match(d.payload,json_extract(m.payload,'$.WireMentions'),json_extract(m.payload,'$.WireMentionDigest'))=1
   -- A submitted correction can also use its native acceptance ID as the
   -- provider key. A conflicting body or correction target must stay visible
@@ -235,6 +291,9 @@ WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
         SELECT 1 FROM message_correction_facts retained
         JOIN message_revisions local_proof ON local_proof.id=retained.source_revision_id AND local_proof.entity_id=d.id
         JOIN backup.message_revisions backup_proof ON backup_proof.id=observed.source_revision_id AND backup_proof.entity_id=m.id
+        LEFT JOIN message_edit_commands local_edit ON local_edit.id=d.id AND local_edit.message_id=retained.target_id
+          AND local_edit.account_id=d.account_id AND local_edit.conversation_id=d.conversation_id
+        LEFT JOIN backup.message_replies observed_reply ON observed_reply.message_id=m.id AND observed_reply.body_hash=observed.source_hash
         WHERE retained.message_id=d.id AND retained.scope=observed.scope AND retained.author=observed.author
           AND retained.remote_id=observed.remote_id AND retained.target_id=observed.target_id
           AND retained.source_hash=observed.source_hash
@@ -246,6 +305,7 @@ WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
                                            oie_source_hash(json_extract(m.payload,'$.OriginalText')))
           AND observed.source_hash=COALESCE(NULLIF(json_extract(backup_proof.payload,'$.WireBodySHA256'),''),
                                            oie_source_hash(json_extract(backup_proof.payload,'$.OriginalText')))
+          AND (local_edit.id IS NULL OR oie_edit_wire_matches(local_edit.payload,m.payload,observed_reply.payload)=1)
       )
   )
   AND NOT EXISTS (

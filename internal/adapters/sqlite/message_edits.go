@@ -128,6 +128,13 @@ func readEditCandidate(ctx context.Context, q *dbgen.Queries, id domain.ID, conv
 		if p.Command.MessageID != m.ID || p.Command.AccountID != m.AccountID || p.Command.ConversationID != m.ConversationID || p.WireBodyHash() != source.SourceBodyHash() {
 			return deny("foreign_source")
 		}
+		exact, err := readExactEditWire(ctx, q, p, source)
+		if err != nil {
+			return out, err
+		}
+		if !exact {
+			return deny("foreign_source")
+		}
 		if fact != nil && (p.Plan.Scope != fact.Scope || p.Plan.Author != fact.Author || p.Plan.OriginalWireID != fact.TargetID) {
 			return deny("foreign_source")
 		}
@@ -437,10 +444,14 @@ func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.Pending
 }
 
 func verifiedEditSource(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, m domain.Message) (bool, error) {
-	if !m.IsOwn || m.SendState != "submitted" || m.WireMentions == domain.WireMentionsPresent ||
+	if !m.IsOwn || m.SendState != "submitted" ||
 		m.AccountID != p.Command.AccountID || m.ConversationID != p.Command.ConversationID ||
 		!correctionProviderMatches(m.ProviderID, p.Plan.Scope, p.Plan.Author, string(p.Command.ID)) || m.SourceBodyHash() != p.WireBodyHash() {
 		return false, nil
+	}
+	exact, err := readExactEditWire(ctx, q, p, m)
+	if err != nil || !exact {
+		return false, err
 	}
 	facts, err := q.GetCorrectionFacts(ctx, string(m.ID))
 	if err != nil {
@@ -568,7 +579,11 @@ func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMess
 		if err != nil {
 			return err
 		}
-		if source.SourceBodyHash() != p.WireBodyHash() || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
+		exact, err := readExactEditWire(ctx, q, p, source)
+		if err != nil {
+			return err
+		}
+		if !exact || source.AccountID != p.Command.AccountID || source.ConversationID != p.Command.ConversationID {
 			return application.ErrStateConflict
 		}
 		source.Correction = proof
@@ -600,6 +615,10 @@ func localCorrectionParent(ctx context.Context, q *dbgen.Queries, source domain.
 	}
 	if p.Command.AccountID != source.AccountID || p.Command.ConversationID != source.ConversationID || p.WireBodyHash() != source.SourceBodyHash() || p.Plan.Scope != scope || p.Plan.Author != author || p.Plan.OriginalWireID != target || p.Plan.TargetMessageID != p.Command.MessageID {
 		return "", "", false, nil
+	}
+	exact, err := readExactEditWire(ctx, q, p, source)
+	if err != nil || !exact {
+		return "", "", false, err
 	}
 	op, err := q.GetOperation(ctx, remote)
 	if err != nil {

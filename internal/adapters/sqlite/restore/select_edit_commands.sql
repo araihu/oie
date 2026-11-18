@@ -31,6 +31,7 @@ WITH RECURSIVE accepted AS MATERIALIZED (
            json_extract(command.payload,'$.Plan.OriginalWireID') AS wire_target,
            json_extract(command.payload,'$.Plan.Scope') AS scope,
            json_extract(command.payload,'$.Plan.Author') AS author,
+           command.payload AS edit_payload,
            oie_edit_wire_hash(command.payload) AS wire_hash,
            receipt.fingerprint,receipt.result
     FROM backup.message_edit_commands command
@@ -101,10 +102,13 @@ WITH RECURSIVE accepted AS MATERIALIZED (
           JOIN backup.message_correction_facts fact ON fact.message_id=source.id AND fact.remote_id=edit.id
             AND fact.scope=edit.scope AND fact.author=edit.author AND fact.target_id=edit.wire_target
           JOIN backup.message_revisions content ON content.id=fact.source_revision_id AND content.entity_id=source.id
+          LEFT JOIN backup.message_replies reply ON reply.message_id=source.id AND reply.body_hash=fact.source_hash
           WHERE source.id=edit.source_id
             AND COALESCE(NULLIF(json_extract(source.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(source.payload,'$.OriginalText')))=edit.wire_hash
             AND COALESCE(NULLIF(json_extract(content.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(content.payload,'$.OriginalText')))=edit.wire_hash
             AND fact.source_hash=edit.wire_hash
+            AND oie_edit_wire_matches(edit.edit_payload,source.payload,reply.payload)=1
+            AND oie_edit_wire_matches(edit.edit_payload,content.payload,reply.payload)=1
       ))
       AND NOT EXISTS (
           SELECT 1 FROM operations local WHERE local.id=edit.id AND (
@@ -174,6 +178,7 @@ LEFT JOIN restore_witness_echoes witnessed_root ON witnessed_root.echo_id=alias.
 JOIN message_correction_facts local ON local.message_id=witness.id AND local.remote_id=command.id AND local.target_id=root.provider_id
   AND local.scope=json_extract(command.payload,'$.Plan.Scope') AND local.author=json_extract(command.payload,'$.Plan.Author')
 JOIN message_revisions retained ON retained.id=local.source_revision_id AND retained.entity_id=witness.id
+LEFT JOIN message_replies witnessed_reply ON witnessed_reply.message_id=witness.id AND witnessed_reply.body_hash=local.source_hash
 JOIN backup.message_correction_facts root_fact ON root_fact.message_id=root.id AND root_fact.target_id=''
   AND root_fact.remote_id=root.provider_id AND root_fact.scope=local.scope AND root_fact.author=local.author
 JOIN backup.message_revisions root_proof ON root_proof.id=root_fact.source_revision_id AND root_proof.entity_id=root.id
@@ -188,6 +193,8 @@ WHERE admitted.eligible=1
       AND root_fact.source_hash=COALESCE(NULLIF(json_extract(retained_root.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(retained_root.payload,'$.OriginalText')))
   ))
   AND local.source_hash=oie_edit_wire_hash(command.payload)
+  AND oie_edit_wire_matches(command.payload,witness.payload,witnessed_reply.payload)=1
+  AND oie_edit_wire_matches(command.payload,retained.payload,witnessed_reply.payload)=1
   AND local.source_hash=COALESCE(NULLIF(json_extract(witness.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(witness.payload,'$.OriginalText')))
   AND local.source_hash=COALESCE(NULLIF(json_extract(retained.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(retained.payload,'$.OriginalText')))
   AND NOT EXISTS (

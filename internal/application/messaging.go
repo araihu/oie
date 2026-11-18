@@ -642,6 +642,9 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 	if in.IsOwn {
 		m.Sender.ID = a.ID
 		m.SendState = "submitted"
+		if in.Correction != nil && in.Correction.TargetID != "" {
+			m.WireMentions, m.WireMentionDigest = in.WireMentions, in.WireMentionDigest
+		}
 		if in.Correction == nil || in.Correction.TargetID == "" {
 			m.OwnOriginID, _ = domain.ParseID(string(in.CanonicalID))
 			if m.OwnOriginID == "" && in.Kind == "direct" {

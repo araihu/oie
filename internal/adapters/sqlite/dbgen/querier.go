@@ -15,6 +15,7 @@ type Querier interface {
 	AdvanceDownloadGeneration(ctx context.Context, deviceID string) error
 	AdvanceMessageSearchIndex(ctx context.Context, arg AdvanceMessageSearchIndexParams) (int64, error)
 	ArchivedReactionNeighbors(ctx context.Context, arg ArchivedReactionNeighborsParams) (ArchivedReactionNeighborsRow, error)
+	BackupHasRoomPasswords(ctx context.Context) (int64, error)
 	BumpAccountArchiveRetentionRevision(ctx context.Context, accountID string) error
 	BumpArchiveRetentionRevision(ctx context.Context) error
 	CanPromoteRoomPlaceholder(ctx context.Context, roomID string) (*bool, error)

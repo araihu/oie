@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -13,9 +14,25 @@ import (
 type MessageReference struct{ Scope, ID, Author string }
 type TextRange struct{ Start, End int }
 type ReplyReference struct {
-	Target   MessageReference
-	Fallback []TextRange
+	Target     MessageReference
+	Fallback   []TextRange
+	WireSHA256 string `json:",omitempty"`
 }
+
+// WireDigest keeps the exact target and fallback geometry verifiable after
+// retention erases the quoted text and ranges.
+func (r ReplyReference) WireDigest() string {
+	if r.WireSHA256 != "" {
+		return r.WireSHA256
+	}
+	if len(r.Fallback) == 0 {
+		r.Fallback = nil
+	}
+	data, _ := json.Marshal(r)
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
 type MessageReply struct {
 	MessageID                     ID
 	Available                     bool

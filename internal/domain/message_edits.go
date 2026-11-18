@@ -31,6 +31,17 @@ type PendingMessageEdit struct {
 	Reply             *OutboundReply `json:",omitempty"`
 	WireText          string         `json:",omitempty"`
 	WireBodySHA256    string         `json:",omitempty"`
+	ReplyWireSHA256   string         `json:",omitempty"`
+}
+
+func (p PendingMessageEdit) ReplyWireDigest() string {
+	if p.ReplyWireSHA256 != "" {
+		return p.ReplyWireSHA256
+	}
+	if p.Reply == nil || p.Reply.Reference == nil {
+		return ""
+	}
+	return (ReplyReference{Target: *p.Reply.Reference, Fallback: p.Reply.Fallback}).WireDigest()
 }
 
 func (p PendingMessageEdit) WireBody() string {

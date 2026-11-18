@@ -106,7 +106,17 @@ FROM schema_migrations LIMIT 1`).Scan(&version, &dirty, &versions); err != nil {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	return checkRestoreArchiveSchema(ctx, filename)
+	if err := checkRestoreArchiveSchema(ctx, filename); err != nil {
+		return err
+	}
+	passwords, err := dbgen.New(source).BackupHasRoomPasswords(ctx)
+	if err != nil {
+		return err
+	}
+	if passwords != 0 {
+		return errors.New("backup database contains room passwords")
+	}
+	return nil
 }
 
 func checkRestoreArchiveSchema(ctx context.Context, filename string) (err error) {

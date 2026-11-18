@@ -638,7 +638,7 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 		if expired && stripInboundQuote(&m, *m.ReplyReference) {
 			ref := *m.ReplyReference
-			ref.Fallback = nil
+			scrubInboundFallback(&ref)
 			m.ReplyReference = &ref
 		}
 	}

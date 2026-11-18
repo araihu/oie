@@ -59,9 +59,6 @@ func VerifyBackup(ctx context.Context, filename string) (summary BackupSummary, 
 	if err != nil {
 		return summary, err
 	}
-	if counts.RoomPasswords != 0 {
-		return summary, errors.New("backup database contains room passwords")
-	}
 	paused := int64(0)
 	var hasRecovered bool
 	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name='recovered_sends' AND type='table')").Scan(&hasRecovered); err != nil {
