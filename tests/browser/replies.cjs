@@ -21,7 +21,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname.endsWith('/previews'))return send(200,{items:u.searchParams.getAll('messageId').includes(messages[65].id)?[{id:id(900),revisionId:revision,accountId:account,conversationId:chat,messageId:messages[65].id,url:imageURL,kind:'image',state:'ready',downloadState:'ready',imageHash,fileHash:imageHash,fileMimeType:'image/png',fileSize:image.length,updatedAt:'2026-11-08T12:00:00Z'}]:[]});
   if(u.pathname==='/api/v1/media/'+imageHash){res.setHeader('Content-Type','image/png');res.end(image);return}
   const context=u.pathname.match(/^\/api\/v1\/conversations\/([^/]+)\/messages\/([^/]+)\/context$/);
-  if(context){state.contexts.push(context[2]);assert.equal(u.searchParams.get('limit'),'50');const index=messages.findIndex(m=>m.id===context[2]);if(context[1]!==chat||index<0)return send(404,{code:'not_found',status:404});const start=Math.max(0,index-24),end=Math.min(messages.length,start+50);return send(200,{targetId:context[2],items:messages.slice(start,end).map(project).reverse(),hasOlder:start>0,hasNewer:end<messages.length})}
+  if(context){
+   const target=context[2],index=messages.findIndex(m=>m.id===target);
+   if(context[1]!==chat||index<0)return send(404,{code:'not_found',status:404});
+   const limit=u.searchParams.get('limit');
+   if(limit==='1')return send(200,{targetId:target,items:[project(messages[index])],hasOlder:index>0,hasNewer:index+1<messages.length});
+   assert.equal(limit,'50');state.contexts.push(target);
+   const start=Math.max(0,index-24),end=Math.min(messages.length,start+50);
+   return send(200,{targetId:target,items:messages.slice(start,end).map(project).reverse(),hasOlder:start>0,hasNewer:end<messages.length});
+  }
   const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const message=messages.find(m=>m.id===retained[1]);return message?send(200,project(message)):send(404,{status:404,code:'not_found'});}
   if(u.pathname===`/api/v1/conversations/${chat}/messages`){
    const compare=(a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt)||a.id.localeCompare(b.id),all=[...messages].sort(compare),limit=Number(u.searchParams.get('limit')||50),cursor=u.searchParams.get('cursor'),direction=u.searchParams.get('direction')||'older';
