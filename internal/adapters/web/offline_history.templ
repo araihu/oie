@@ -19,6 +19,12 @@ templ offlineHistoryPage(lang string, text copy) {
 			</header>
 			<main>
 				<h1 id="offline-title">{ text.OfflineHistoryTitle }</h1>
+				<search id="offline-search" hidden data-chat-label={ text.OfflineSearchChat } data-count={ text.OfflineSearchCount } data-empty={ text.OfflineSearchEmpty } data-failed={ text.SearchResultsFailed }>
+					<label for="offline-query">{ text.OfflineSearchAll }</label>
+					<input type="search" id="offline-query" maxlength="256" autocomplete="off"/>
+				</search>
+				<p id="offline-search-status" role="status"></p>
+				<ul id="offline-results" aria-labelledby="offline-search-status" hidden></ul>
 				<p id="offline-full" role="status" hidden>{ text.OfflineHistoryFull }</p>
 				<ul id="offline-conversations" role="list" hidden></ul>
 				<ol id="offline-messages" role="list" aria-labelledby="offline-title" tabindex="0" hidden></ol>

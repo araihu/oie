@@ -32,14 +32,22 @@ function state(update) {
       const tx = db.transaction('history', update ? 'readwrite' : 'readonly');
       const store = tx.objectStore('history');
       const query = store.get('current');
-      let value;
+      let value, changedEngine;
       query.onsuccess = () => {
         const current = query.result ?? {engine: '', entries: []};
         const next = update?.(current);
-        if (next) store.put(next, 'current');
+        if (next) {
+          store.put(next, 'current');
+          if (next.engine !== current.engine || next.entries.length !== current.entries.length ||
+              next.entries.some((entry, index) => entry !== current.entries[index])) changedEngine = current.engine;
+        }
         value = next ?? current;
       };
-      tx.oncomplete = () => { db.close(); resolve(value); };
+      tx.oncomplete = async () => {
+        db.close();
+        if (changedEngine) await notifyReaders('oie:offline-history-changed', changedEngine).catch(() => {});
+        resolve(value);
+      };
       tx.onabort = () => { db.close(); reject(tx.error); };
     };
   });
@@ -88,6 +96,35 @@ function read() {
     const entries = recent(current);
     if (entries.length !== current.entries.length) return {...current, entries};
   });
+}
+
+// Search the same verified, age-pruned snapshot used by the offline reader.
+function searchSaved(current, {engine, account, accounts = [], chat, query}) {
+  const hits = [];
+  if (current.blocked || current.engine !== engine || !id.test(engine) ||
+      (account !== null && !id.test(account)) || !Array.isArray(accounts) || accounts.length > 100 ||
+      accounts.some(value => !id.test(value)) || (chat !== null && !id.test(chat)) ||
+      typeof query !== 'string' || query.length > 256 || !query.trim()) return hits;
+
+  const pattern = new RegExp(query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
+  for (const entry of current.entries) {
+    if ((account && entry.account !== account) || (accounts.length && !accounts.includes(entry.account)) ||
+        (chat && entry.chat !== chat)) continue;
+    for (const message of entry.messages) {
+      if (message.withdrawn || !id.test(message.id) || typeof message.text !== 'string') continue;
+      const match = pattern.exec(message.text);
+      if (!match) continue;
+      const start = Math.max(0, match.index - 48);
+      const end = match.index + match[0].length;
+      hits.push({
+        account: entry.account, chat: entry.chat, title: entry.title, label: entry.label,
+        message: message.id, sender: message.sender, date: message.date,
+        before: (start ? '…' : '') + message.text.slice(start, match.index), match: match[0],
+        after: message.text.slice(end, end + 96) + (end + 96 < message.text.length ? '…' : ''),
+      });
+    }
+  }
+  return hits.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 
 function newest(engine, previous, incoming) {
@@ -242,9 +279,10 @@ self.addEventListener('message', event => {
   const data = event.data;
   const port = event.ports[0];
   const workspacePath = path === '/' || path === '/search';
-  if ((workspacePath || path === shell) && data?.type === 'oie:offline-history-read' && port) {
+  const searching = data?.type === 'oie:offline-history-search';
+  if ((workspacePath || path === shell) && port && (searching || data?.type === 'oie:offline-history-read')) {
     event.waitUntil(read().then(value => {
-      port.postMessage(value);
+      port.postMessage(searching ? searchSaved(value, data) : value);
     }, () => port.postMessage(null)).finally(() => port.close()));
     return;
   }
@@ -334,9 +372,11 @@ async function updateOfflineState(data, update) {
 }
 
 function conversationURL(url) {
+  if (url.pathname === '/search') return ['', 'messages'].includes(url.searchParams.get('searchType') || '');
   return url.pathname === '/' && ['chats', 'archived'].includes(url.searchParams.get('section') || 'chats') &&
     (!url.searchParams.has('open') || url.searchParams.get('open') === 'details' && id.test(url.searchParams.get('chat'))) &&
-    !url.searchParams.has('searchQuery');
+    (!url.searchParams.has('searchQuery') || (url.searchParams.get('searchMode') === 'messages' &&
+      ['', 'messages'].includes(url.searchParams.get('searchType') || '')));
 }
 
 async function offlineResponse(url, fallback) {
@@ -349,12 +389,12 @@ async function offlineResponse(url, fallback) {
   return new Response(page.body, {status: fallback?.status ?? 200, headers: page.headers});
 }
 
-async function notifyReset(engine) {
+async function notifyReaders(type, engine) {
   const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
   for (const client of windows) {
     const url = new URL(client.url);
-    if (url.origin === self.location.origin && (url.pathname === '/' || url.pathname === shell)) {
-      client.postMessage({type: 'oie:offline-history-reset', engine});
+    if (url.origin === self.location.origin && ['/', '/search', shell].includes(url.pathname)) {
+      client.postMessage({type, engine});
     }
   }
 }
@@ -413,7 +453,7 @@ self.addEventListener('fetch', event => {
           if (current.engine !== engine) return;
           verifiedNavigation = ++navigation;
           return {...current, blocked: true, entries: [], kept: []};
-        }).then(() => notifyReset(engine)).catch(() => {});
+        }).then(() => notifyReaders('oie:offline-history-reset', engine)).catch(() => {});
       }
       return response;
     })());
