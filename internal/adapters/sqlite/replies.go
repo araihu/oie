@@ -425,9 +425,16 @@ func hydrateReferences(ctx context.Context, q *dbgen.Queries, m *domain.Message)
 	return applyMessageReferences(m, rows)
 }
 
+const maxMessageReferences = 8
+
+func appendMessageReference(m *domain.Message, ref domain.MessageReference) {
+	if !slices.Contains(m.References, ref) {
+		m.References = append(m.References, ref)
+	}
+}
+
 func applyMessageReferences(m *domain.Message, rows []dbgen.ListCanonicalMessageReferencesRow) error {
 	m.References = nil
-	seen := map[domain.MessageReference]bool{}
 	for _, row := range rows {
 		var source domain.Message
 		if err := json.Unmarshal([]byte(row.MessagePayload), &source); err != nil {
@@ -437,11 +444,8 @@ func applyMessageReferences(m *domain.Message, rows []dbgen.ListCanonicalMessage
 			continue
 		}
 		ref := domain.MessageReference{Scope: row.Scope, ID: row.RemoteID, Author: row.Author}
-		if !seen[ref] {
-			m.References = append(m.References, ref)
-			seen[ref] = true
-		}
-		if len(m.References) == 8 {
+		appendMessageReference(m, ref)
+		if len(m.References) == maxMessageReferences {
 			break
 		}
 	}

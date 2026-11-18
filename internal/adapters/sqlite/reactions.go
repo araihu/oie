@@ -68,6 +68,10 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 	return readScopedReactions(ctx, q, id, domain.Conversation{})
 }
 
+func emptyReactionState(m domain.Message) domain.MessageReactions {
+	return domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
+}
+
 func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c domain.Conversation) (application.MessageReactionCandidate, error) {
 	var out application.MessageReactionCandidate
 	canonical, err := resolveMessageAlias(ctx, q, id)
@@ -110,7 +114,7 @@ func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c 
 		return out, err
 	}
 	out.Source = m
-	state := domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
+	state := emptyReactionState(m)
 	type reference struct {
 		ID     string `json:"id"`
 		Scope  string `json:"scope"`
@@ -321,12 +325,25 @@ func (s *Store) ReadConversationReactions(ctx context.Context, conversation doma
 	if err != nil {
 		return nil, err
 	}
+	plain, err := plainReactionPage(ctx, q, c, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]application.MessageReactionCandidate, 0, len(ids))
 	seen := make(map[domain.ID]bool, len(ids))
 	for _, id := range ids {
-		candidate, err := readScopedReactions(ctx, q, id, c)
-		if err != nil {
-			return nil, err
+		if seen[id] {
+			continue
+		}
+		m, ok := plain[id]
+		var candidate application.MessageReactionCandidate
+		if ok {
+			candidate = application.MessageReactionCandidate{Source: *m, Snapshot: emptyReactionState(*m)}
+		} else {
+			candidate, err = readScopedReactions(ctx, q, id, c)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if !seen[candidate.Source.ID] {
 			seen[candidate.Source.ID] = true
