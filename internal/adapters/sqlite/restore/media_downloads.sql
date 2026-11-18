@@ -3,7 +3,7 @@ JOIN restore_media_files bytes ON bytes.name='media/images/'||f.hash AND bytes.s
 WHERE EXISTS (SELECT 1 FROM message_previews p
     WHERE f.hash IN (json_extract(p.payload,'$.FileHash'), json_extract(p.payload,'$.ImageHash'), json_extract(p.payload,'$.FaviconHash'))
     AND (EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=p.message_id)
-         OR EXISTS (SELECT 1 FROM restore_image_messages target WHERE target.message_id=p.message_id)))
+         OR EXISTS (SELECT 1 FROM restore_media_targets target WHERE target.message_id=p.message_id)))
 ON CONFLICT(hash) DO NOTHING;
 
 DELETE FROM restore_downloads
@@ -66,7 +66,7 @@ WHERE device_id='legacy' AND kind='image' AND generation=0 ON CONFLICT DO NOTHIN
 DELETE FROM unclaimed_legacy_download_restore_admissions AS a WHERE EXISTS (
     SELECT 1 FROM restore_eligible_downloads f
     JOIN backup.message_previews b ON b.id=f.source_id
-    JOIN restore_image_messages target ON target.id=b.message_id
+    JOIN restore_media_targets target ON target.id=b.message_id
     JOIN message_previews p ON p.message_id=target.message_id AND p.url=b.url
     JOIN device_downloads d ON d.device_id=f.device_id AND d.kind=f.kind AND d.source_id=p.id
         AND d.source_revision=f.source_revision AND d.hash=f.hash AND d.size=f.size
@@ -76,7 +76,7 @@ DELETE FROM unclaimed_legacy_download_restore_admissions AS a WHERE EXISTS (
 );
 
 DROP TABLE restore_eligible_downloads;
-DROP VIEW restore_image_messages;
+DROP VIEW restore_media_targets;
 DROP VIEW restore_matching_media_messages;
 DROP TABLE restore_downloads;
 DROP TABLE restore_pending_legacy_downloads;

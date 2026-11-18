@@ -119,12 +119,30 @@ func sameObservedDirectReply(a domain.Message, ar *domain.ReplyReference, b doma
 	if ar.Target != br.Target {
 		return false
 	}
+	digest := observedDirectReplyDigest(a, *ar)
+	if digest == "" || digest != observedDirectReplyDigest(b, *br) {
+		return false
+	}
 	if a.OriginalText == b.OriginalText && slices.Equal(ar.Fallback, br.Fallback) {
 		return true
 	}
 	// Retention drops a reply's quote spans but keeps the raw wire hash. Verify
 	// the original spans still produce exactly the retained, redacted answer.
 	return sameRedactedDirectReply(a, ar, b, br) || sameRedactedDirectReply(b, br, a, ar)
+}
+
+func observedDirectReplyDigest(message domain.Message, reply domain.ReplyReference) string {
+	if message.WireBodySHA256 != "" && len(reply.Fallback) == 0 {
+		// Older redactions did not preserve the erased fallback's identity.
+		return reply.WireSHA256
+	}
+	saved := reply.WireSHA256
+	reply.WireSHA256 = ""
+	digest := reply.WireDigest()
+	if saved != "" && saved != digest {
+		return ""
+	}
+	return digest
 }
 
 func sameRedactedDirectReply(redacted domain.Message, retained *domain.ReplyReference, raw domain.Message, observed *domain.ReplyReference) bool {

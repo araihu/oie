@@ -3,7 +3,7 @@
 WITH candidates AS (
   SELECT target.message_id,target.account_id,target.conversation_id,p.payload,p.url,
          row_number() OVER (PARTITION BY target.message_id,p.url ORDER BY p.updated_at DESC,p.id DESC) AS priority
-  FROM backup.message_previews p JOIN restore_image_messages target ON target.id=p.message_id
+  FROM backup.message_previews p JOIN restore_media_targets target ON target.id=p.message_id
   WHERE target.message_id<>p.message_id AND p.account_id=target.account_id AND p.conversation_id=target.conversation_id
     AND p.download_state='ready' AND json_extract(p.payload,'$.Kind')='image'
     AND oie_quote_preview_allowed(target.payload,p.url)

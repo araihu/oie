@@ -94,6 +94,17 @@ JOIN messages local ON local.id=x.id
 LEFT JOIN message_content_heads local_head ON local_head.canonical_id=x.id
 WHERE COALESCE(source_head.revision_id,source.revision_id)=COALESCE(local_head.revision_id,local.revision_id);
 
+-- The archive revision proves its membership. A separately observed
+-- equivalent alias must bind it to the retained message and its revision.
+CREATE TEMP VIEW restore_media_targets AS
+SELECT m.id,m.revision_id AS source_revision,root.id AS message_id,root.account_id,root.conversation_id,
+       COALESCE(head.revision_id,root.revision_id) AS revision_id,COALESCE(head.payload,root.payload) AS payload,
+       (e.source_id IS NULL OR head.canonical_id IS NULL) AS accepts_files
+FROM restore_matching_media_messages m
+LEFT JOIN restore_idless_direct_echoes e ON e.source_id=m.id
+JOIN messages root ON root.id=COALESCE(e.retained_id,m.id)
+LEFT JOIN message_content_heads head ON head.canonical_id=root.id;
+
 -- Remember legacy media that an untouched device could import already.
 -- Only a later snapshot with the same source and membership can fill it.
 CREATE TEMP TABLE restore_pending_legacy_downloads AS
@@ -104,7 +115,7 @@ WHERE f.defer_legacy=1 AND f.has_bytes=0 AND length(f.hash)=64 AND f.hash NOT GL
   AND (
       f.kind='file' AND EXISTS (
           SELECT 1 FROM backup.shared_content ref
-          JOIN restore_matching_media_messages m ON m.id=ref.message_id AND m.revision_id=f.source_revision
+          JOIN restore_media_targets m ON m.id=ref.message_id AND m.source_revision=f.source_revision AND m.accepts_files=1
           WHERE ref.id=f.source_id AND oie_quote_preview_allowed(m.payload,ref.url)
       ) OR f.kind='image' AND EXISTS (
           SELECT 1 FROM backup.message_previews p JOIN restore_matching_media_messages m ON m.id=p.message_id
@@ -119,16 +130,7 @@ INSERT INTO shared_content
 SELECT DISTINCT source.*
 FROM restore_eligible_downloads f
 JOIN backup.shared_content source ON source.id=f.source_id
-JOIN restore_matching_media_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
+JOIN restore_media_targets m ON m.id=source.message_id AND m.message_id=source.message_id AND m.source_revision=f.source_revision
 WHERE f.kind='file' AND f.has_bytes=1 AND oie_quote_preview_allowed(m.payload,source.url)
   AND NOT EXISTS (SELECT 1 FROM shared_content_state s WHERE s.message_id=source.message_id)
 ON CONFLICT DO NOTHING;
-
--- Match the immutable archival source to its visible local message. Each
--- side was independently verified before an idless direct alias was admitted.
-CREATE TEMP VIEW restore_image_messages AS
-SELECT m.id,root.id AS message_id,root.account_id,root.conversation_id,COALESCE(head.payload,root.payload) AS payload
-FROM restore_matching_media_messages m
-LEFT JOIN restore_idless_direct_echoes e ON e.source_id=m.id
-JOIN messages root ON root.id=COALESCE(e.retained_id,m.id)
-LEFT JOIN message_content_heads head ON head.canonical_id=root.id;

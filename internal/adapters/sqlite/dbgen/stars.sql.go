@@ -224,3 +224,24 @@ func (q *Queries) PutMessageStar(ctx context.Context, arg PutMessageStarParams) 
 	)
 	return err
 }
+
+const retireInheritedIdlessStarHeads = `-- name: RetireInheritedIdlessStarHeads :exec
+DELETE FROM message_stars WHERE message_id IN (
+ SELECT alias.id FROM message_canonical_aliases link
+ JOIN messages root ON root.id=link.canonical_id AND root.is_own=1 AND root.state='submitted'
+ JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_id
+  AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
+ JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='direct'
+ WHERE root.id=?1
+  AND root.id<>json_extract(root.payload,'$.OwnOriginID')
+  AND json_extract(root.payload,'$.OwnOriginID')<>''
+  AND json_extract(alias.payload,'$.OwnOriginID')=json_extract(root.payload,'$.OwnOriginID')
+)
+`
+
+// A local star decision supersedes inherited heads without erasing their
+// immutable revisions, even when the inherited clock was ahead.
+func (q *Queries) RetireInheritedIdlessStarHeads(ctx context.Context, messageID string) error {
+	_, err := q.db.ExecContext(ctx, retireInheritedIdlessStarHeads, messageID)
+	return err
+}

@@ -281,6 +281,9 @@ type Querier interface {
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	RestoreReviewedSendReceipts(ctx context.Context, messageID string) error
+	// A local star decision supersedes inherited heads without erasing their
+	// immutable revisions, even when the inherited clock was ahead.
+	RetireInheritedIdlessStarHeads(ctx context.Context, messageID string) error
 	ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubContentHeadInboundQuoteParams) error
 	ScrubContentHeadOutboundQuotes(ctx context.Context, arg ScrubContentHeadOutboundQuotesParams) error
 	ScrubConversationEventPreviews(ctx context.Context, payload string) error

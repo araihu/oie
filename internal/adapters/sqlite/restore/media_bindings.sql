@@ -3,19 +3,19 @@ WITH resolved_links AS MATERIALIZED (
     SELECT DISTINCT entity_id FROM preview_revisions
     WHERE json_extract(payload,'$.Kind')='link' AND json_extract(payload,'$.State')='ready'
 )
-SELECT f.device_id, local.id AS source_id, f.source_revision, f.kind, f.hash, f.mime_type,
+SELECT f.device_id, local.id AS source_id, m.revision_id AS source_revision, f.kind, f.hash, f.mime_type,
        f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
 FROM restore_eligible_downloads f
 JOIN backup.shared_content source ON source.id=f.source_id
-JOIN restore_matching_media_messages m ON m.id=source.message_id AND m.revision_id=f.source_revision
-JOIN shared_content local ON local.message_id=source.message_id AND local.url=source.url AND local.kind=source.kind
+JOIN restore_media_targets m ON m.id=source.message_id AND m.source_revision=f.source_revision AND m.accepts_files=1
+JOIN shared_content local ON local.message_id=m.message_id AND local.url=source.url AND local.kind=source.kind
 WHERE f.kind='file' AND f.has_bytes=1 AND oie_quote_preview_allowed(m.payload,source.url)
 UNION ALL
 SELECT f.device_id, COALESCE(local.id,source.id), f.source_revision, f.kind, f.hash, f.mime_type,
        f.size, f.verified_algorithm, f.downloaded_at_ms, f.cleanup_revision_id
 FROM restore_eligible_downloads f
 JOIN backup.message_previews source ON source.id=f.source_id
-JOIN restore_image_messages m ON m.id=source.message_id AND m.account_id=source.account_id AND m.conversation_id=source.conversation_id
+JOIN restore_media_targets m ON m.id=source.message_id AND m.account_id=source.account_id AND m.conversation_id=source.conversation_id
 LEFT JOIN message_previews local ON local.message_id=m.message_id AND local.url=source.url
 LEFT JOIN resolved_links resolved ON resolved.entity_id=local.id
 WHERE f.kind='image' AND f.has_bytes=1 AND source.download_state='ready' AND json_extract(source.payload,'$.Kind')='image'

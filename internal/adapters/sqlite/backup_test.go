@@ -155,6 +155,9 @@ func TestVerifyBackupAndRestoreRejectInvalidDatabase(t *testing.T) {
 		{name: "multiple versions", sql: "INSERT INTO schema_migrations(version, dirty) VALUES (36, 0)"},
 		{name: "missing credentials table", sql: "DROP TABLE room_invitation_credentials"},
 		{name: "stored room password", sql: "INSERT INTO room_invitation_credentials(conversation_id,password) VALUES (?,'fixture')", args: []any{room.ID}},
+		{name: "missing account deletions", sql: "DROP TABLE deleted_account_ids"},
+		{name: "missing retired sends", sql: "DROP TABLE retired_recovered_sends"},
+		{name: "missing recovered queue", sql: "DROP TABLE recovered_send_operations; DROP TABLE discarded_recovered_sends; DROP TABLE recovered_sends"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := t.Context()

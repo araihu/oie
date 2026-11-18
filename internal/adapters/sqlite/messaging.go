@@ -517,6 +517,13 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			if chat.AccountID != string(c.AccountID) || chat.Address != c.Address {
 				return application.ErrInvalid
 			}
+			allowed, err := allowsEditReplay(ctx, q, retained, m)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return tx.Commit()
+			}
 			var distinct bool
 			nativeRoomSend := c.Kind == "room" && retained.IsOwn == 1 && retained.ID == retained.ProviderID && retained.ID == string(m.OwnOriginID)
 			if ownStructuredMentionEcho(m) && (c.Kind == "direct" || nativeRoomSend) {
@@ -606,6 +613,13 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = matchArchivedAttachmentWireBody(ctx, q, c, &m); err != nil {
 		return err
 	}
+	allowed, err := matchNativeRoomEditReplay(ctx, q, c, &m)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return tx.Commit()
+	}
 	existingID, err := findDirectEchoWithoutStanzaID(ctx, q, c, m)
 	if err != nil {
 		return err
@@ -614,6 +628,15 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		existing, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(m.AccountID), ConversationID: string(c.ID), ProviderID: m.ProviderID, IsOwn: number(m.IsOwn)})
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
+		}
+		if err == nil {
+			allowed, err := allowsEditReplay(ctx, q, existing, m)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return tx.Commit()
+			}
 		}
 		existingID = existing.ID
 	}

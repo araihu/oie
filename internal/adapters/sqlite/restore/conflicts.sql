@@ -21,17 +21,18 @@ UNION ALL
       WHERE (e.echo_id=m.id AND e.original_id=b.id) OR (e.echo_id=b.id AND e.original_id=m.id)
     ) AND NOT EXISTS (SELECT 1 FROM restore_direct_mention_echo_keys local WHERE local.id=m.id AND local.is_local=1))
 UNION ALL
-    -- One retained correction cannot carry incompatible facts for the same
-    -- scoped wire ID. A room's native and archived forms use different keys.
-    -- Equivalent witnesses have already been paired before this check.
+    -- A retained correction's local ID binds its authenticated wire identity.
+    -- A room's native and archived forms can also share that wire identity.
     SELECT 1 FROM restore_messages selected
     JOIN backup.messages incoming ON incoming.id=selected.id AND incoming.is_own=1 AND incoming.state='submitted'
     JOIN conversations chat ON chat.id=incoming.conversation_id AND chat.account_id=incoming.account_id
     JOIN accounts account ON account.id=incoming.account_id
     JOIN backup.message_correction_facts observed ON observed.message_id=incoming.id AND observed.target_id<>''
     JOIN backup.message_revisions observed_proof ON observed_proof.id=observed.source_revision_id AND observed_proof.entity_id=incoming.id
-    JOIN message_correction_facts known ON known.scope=observed.scope AND known.author=observed.author
-      AND known.remote_id=observed.remote_id AND known.target_id<>''
+    JOIN message_correction_facts known ON known.target_id<>''
+      AND (known.message_id=incoming.id OR (
+        known.scope=observed.scope AND known.author=observed.author AND known.remote_id=observed.remote_id
+      ))
     JOIN messages retained ON retained.id=known.message_id
       AND retained.account_id=incoming.account_id AND retained.conversation_id=incoming.conversation_id
       AND retained.is_own=1 AND retained.state='submitted'
@@ -39,15 +40,24 @@ UNION ALL
     WHERE (
         json_extract(chat.payload,'$.Kind')='direct'
           AND observed.scope='xmpp:correct:sender:'||account.address AND observed.author=account.address
+          AND known.scope=observed.scope AND known.author=observed.author
         OR json_extract(chat.payload,'$.Kind')='room'
           AND instr(observed.scope,'xmpp:correct:room:'||chat.address||':')=1 AND instr(observed.author,chat.address||'/')=1
+          AND instr(known.scope,'xmpp:correct:room:'||chat.address||':')=1 AND instr(known.author,chat.address||'/')=1
       )
       AND (
-        retained.id=incoming.id AND (known.target_id<>observed.target_id OR known.source_hash<>observed.source_hash)
-          AND ((incoming.provider_id=observed.remote_id AND retained.provider_id=known.remote_id)
-               OR (json_extract(chat.payload,'$.Kind')='room'
-                   AND incoming.provider_id=oie_room_correction_provider_id(observed.author,observed.remote_id)
-                   AND retained.provider_id=incoming.provider_id))
+        retained.id=incoming.id AND (
+          known.scope<>observed.scope OR known.author<>observed.author OR known.remote_id<>observed.remote_id
+          OR known.target_id<>observed.target_id OR known.source_hash<>observed.source_hash
+        )
+          AND (incoming.provider_id=observed.remote_id OR (
+            json_extract(chat.payload,'$.Kind')='room'
+            AND incoming.provider_id=oie_room_correction_provider_id(observed.author,observed.remote_id)
+          ))
+          AND (retained.provider_id=known.remote_id OR (
+            json_extract(chat.payload,'$.Kind')='room'
+            AND retained.provider_id=oie_room_correction_provider_id(known.author,known.remote_id)
+          ))
         OR selected.is_new=1 AND retained.id<>incoming.id AND json_extract(chat.payload,'$.Kind')='room'
           AND ((incoming.id=incoming.provider_id AND incoming.provider_id=observed.remote_id
                 AND retained.provider_id=oie_room_correction_provider_id(known.author,known.remote_id))

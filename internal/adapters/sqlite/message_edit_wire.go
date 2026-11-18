@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/domain"
@@ -37,6 +39,89 @@ func readExactEditWire(ctx context.Context, q *dbgen.Queries, p domain.PendingMe
 		return false, err
 	}
 	return matchesEditWire(p, m, reply), nil
+}
+
+// An existing, locally accepted correction owns its original body and wire
+// shape. An observation can add metadata only if it matches that acceptance.
+func knownEditReplay(ctx context.Context, q *dbgen.Queries, retained dbgen.Message) (*domain.PendingMessageEdit, error) {
+	if retained.IsOwn != 1 || retained.State != "submitted" {
+		return nil, nil
+	}
+	previous, err := decodeMessage(retained)
+	if err != nil {
+		return nil, err
+	}
+	key := previous.ProviderID
+	roomFact, err := observedRoomEditFact(ctx, q, previous)
+	if err != nil {
+		return nil, err
+	}
+	if roomFact != nil {
+		key = roomFact.RemoteID
+	}
+	if _, err := domain.ParseID(key); err != nil {
+		return nil, nil
+	}
+	row, err := q.GetMessageEditCommand(ctx, key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	edit, err := decodeEdit(row)
+	if err != nil {
+		return nil, err
+	}
+	verified, err := verifiedEditSource(ctx, q, edit, previous)
+	if err != nil || !verified {
+		return nil, err
+	}
+	return &edit, nil
+}
+
+func matchesEditReplay(edit domain.PendingMessageEdit, incoming domain.Message) bool {
+	fact := incoming.Correction
+	return incoming.IsOwn && correctionValid(fact) && fact.ID == string(edit.Command.ID) && fact.TargetID == edit.Plan.OriginalWireID &&
+		fact.Scope == edit.Plan.Scope && fact.Author == edit.Plan.Author && matchesEditWire(edit, incoming, incoming.ReplyReference)
+}
+
+func allowsEditReplay(ctx context.Context, q *dbgen.Queries, retained dbgen.Message, incoming domain.Message) (bool, error) {
+	edit, err := knownEditReplay(ctx, q, retained)
+	return edit == nil || matchesEditReplay(*edit, incoming), err
+}
+
+// Unlike direct stanzas, an archived room correction can use an occupant-
+// scoped provider key while its local acceptance uses the original client ID.
+func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, incoming *domain.Message) (bool, error) {
+	if chat.Kind != "room" || !incoming.IsOwn || !correctionValid(incoming.Correction) || incoming.Correction.TargetID == "" ||
+		incoming.ProviderID == incoming.Correction.ID {
+		return true, nil
+	}
+	key := incoming.Correction.ID
+	retained, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{
+		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: key, IsOwn: 1,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	// A different verified occupant is a separate wire authority, even if it
+	// uses the same client ID. Only intercept the retained occupant's packet.
+	edit, err := knownEditReplay(ctx, q, retained)
+	if err != nil {
+		return false, err
+	}
+	if edit == nil || edit.Plan.Scope != incoming.Correction.Scope || edit.Plan.Author != incoming.Correction.Author {
+		return true, nil
+	}
+	if !matchesEditReplay(*edit, *incoming) {
+		return false, nil
+	}
+	incoming.ProviderID = retained.ProviderID
+	return true, nil
 }
 
 func matchesEditWire(p domain.PendingMessageEdit, m domain.Message, observed *domain.ReplyReference) bool {

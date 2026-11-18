@@ -3,7 +3,7 @@ SELECT local.id, source.payload, COALESCE(thumbnail.hash,'') AS thumbnail, COALE
        row_number() OVER (PARTITION BY local.id ORDER BY (thumbnail.hash IS NOT NULL)+(favicon.hash IS NOT NULL) DESC,
                           source.updated_at DESC,source.id DESC) AS priority
 FROM message_previews local
-JOIN restore_image_messages target ON target.message_id=local.message_id
+JOIN restore_media_targets target ON target.message_id=local.message_id
 JOIN backup.message_previews source ON source.message_id=target.id AND source.url=local.url
 LEFT JOIN restore_media_files thumbnail ON thumbnail.name='media/images/'||json_extract(source.payload,'$.ImageHash')
 LEFT JOIN restore_media_files favicon ON favicon.name='media/images/'||json_extract(source.payload,'$.FaviconHash')

@@ -102,6 +102,9 @@ func (s *Store) SetMessageStar(ctx context.Context, in application.StarMutation)
 		}); err != nil {
 			return application.StarResult{}, err
 		}
+		if err = q.RetireInheritedIdlessStarHeads(ctx, string(state.MessageID)); err != nil {
+			return application.StarResult{}, err
+		}
 		if _, err = change(ctx, q, "message.star_changed", state, state.UpdatedAt); err != nil {
 			return application.StarResult{}, err
 		}

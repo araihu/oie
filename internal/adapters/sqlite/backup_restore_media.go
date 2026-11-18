@@ -66,6 +66,9 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 	if err := prepareRestoredAliasImagePreviews(ctx, tx, now); err != nil {
 		return nil, fmt.Errorf("prepare restored image previews: %w", err)
 	}
+	if err := prepareRestoredAliasFileReferences(ctx, tx); err != nil {
+		return nil, fmt.Errorf("prepare restored file references: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_bindings")); err != nil {
 		return nil, fmt.Errorf("bind restored media: %w", err)
 	}
@@ -148,6 +151,41 @@ func prepareRestoredAliasImagePreviews(ctx context.Context, tx *sql.Tx, now time
 	q := dbgen.New(tx)
 	for _, preview := range previews {
 		if _, err := insertPreview(ctx, q, preview); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func prepareRestoredAliasFileReferences(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, restoreScript("media_idless_files"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var refs []dbgen.PutSharedContentParams
+	for rows.Next() {
+		var ref dbgen.PutSharedContentParams
+		if err := rows.Scan(&ref.MessageID, &ref.Url, &ref.Kind, &ref.FileName); err != nil {
+			return err
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		revision, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		ref.ID, ref.RevisionID = id.String(), revision.String()
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	q := dbgen.New(tx)
+	for _, ref := range refs {
+		if err := q.PutSharedContent(ctx, ref); err != nil {
 			return err
 		}
 	}
