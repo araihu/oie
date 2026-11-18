@@ -143,22 +143,18 @@ func matchesUncertainNativeComposition(current, submitted domain.Message) bool {
 			current.MatchesWireMentions(domain.WireMentionProof{Evidence: submitted.WireMentions, Digest: submitted.WireMentionDigest}))
 }
 
-func mergeRestoredQueue(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, engine domain.ID, hasRecovered, hasHistory bool) error {
+func mergeRestoredQueue(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, engine domain.ID) error {
 	if _, err := tx.ExecContext(ctx, restoreScript("pending"), sql.Named("source_engine", string(engine))); err != nil {
 		return err
 	}
-	if hasRecovered {
-		if _, err := tx.ExecContext(ctx, restoreScript("recovered_pending")); err != nil {
-			return err
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("recovered_pending")); err != nil {
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("merge_pending")); err != nil {
 		return err
 	}
-	if hasHistory {
-		if _, err := tx.ExecContext(ctx, restoreScript("recovered_revisions")); err != nil {
-			return err
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("recovered_revisions")); err != nil {
+		return err
 	}
 	rows, err := tx.QueryContext(ctx, restoreScript("pending_updates"))
 	if err != nil {

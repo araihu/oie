@@ -68,6 +68,7 @@ type Querier interface {
 	FindReactionObservation(ctx context.Context, arg FindReactionObservationParams) ([]MessageReactionObservation, error)
 	// Look up the remote reference before checking its conversation.
 	FindReplyTargets(ctx context.Context, arg FindReplyTargetsParams) ([]FindReplyTargetsRow, error)
+	FindVerifiedRoomOccurrence(ctx context.Context, arg FindVerifiedRoomOccurrenceParams) ([]string, error)
 	FinishImageDownloads(ctx context.Context, arg FinishImageDownloadsParams) error
 	FirstContentRevisionSource(ctx context.Context, id string) (string, error)
 	FirstUnreadMessage(ctx context.Context, conversationID string) (string, error)
@@ -161,6 +162,7 @@ type Querier interface {
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
 	IsDiscardedReplyReference(ctx context.Context, arg IsDiscardedReplyReferenceParams) (bool, error)
+	IsExcludedXMPPOccurrence(ctx context.Context, arg IsExcludedXMPPOccurrenceParams) (bool, error)
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
 	IsExpiredReplyReference(ctx context.Context, arg IsExpiredReplyReferenceParams) (bool, error)
@@ -268,6 +270,7 @@ type Querier interface {
 	RecordRetiredImageMembership(ctx context.Context, arg RecordRetiredImageMembershipParams) error
 	RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error)
 	RedactedQuotePreviewIDs(ctx context.Context, arg RedactedQuotePreviewIDsParams) ([]string, error)
+	RememberExcludedXMPPKey(ctx context.Context, arg RememberExcludedXMPPKeyParams) error
 	RememberOwnOrigin(ctx context.Context, arg RememberOwnOriginParams) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
 	RemoveBackupRoomPasswords(ctx context.Context) error

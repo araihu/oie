@@ -476,6 +476,26 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err := reconcileOwnEchoBeforeWire(ctx, q, c, &m, revision); err != nil {
 		return err
 	}
+	stanzaID, excluded, err := checkXMPPOccurrence(ctx, q, c, m)
+	if err != nil {
+		return err
+	}
+	if excluded {
+		return tx.Commit()
+	}
+	var stanzaOwner string
+	if stanzaID != "" && !m.IsOwn {
+		owners, err := q.FindVerifiedRoomOccurrence(ctx, dbgen.FindVerifiedRoomOccurrenceParams{AccountID: string(c.AccountID), RoomAddress: c.Address, RemoteID: stanzaID})
+		if err != nil {
+			return err
+		}
+		if len(owners) > 1 {
+			return application.ErrInvalid
+		}
+		if len(owners) == 1 {
+			stanzaOwner = owners[0]
+		}
+	}
 	if !m.ReceivedAt.IsZero() {
 		days, err := retentionDays(ctx, q, c.AccountID, c.Address, c.Kind)
 		if err != nil {
@@ -506,6 +526,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		var existingID string
 		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
 		if err == nil {
+			if stanzaOwner != "" && stanzaOwner != existingID {
+				return application.ErrInvalid
+			}
 			retained, err := q.GetMessage(ctx, existingID)
 			if err != nil {
 				return err
@@ -613,7 +636,7 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = matchArchivedAttachmentWireBody(ctx, q, c, &m); err != nil {
 		return err
 	}
-	allowed, err := matchNativeRoomEditReplay(ctx, q, c, &m)
+	allowed, err := routeScopedRoomCorrection(ctx, q, c, &m)
 	if err != nil {
 		return err
 	}
@@ -639,6 +662,25 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			}
 		}
 		existingID = existing.ID
+	}
+	if stanzaOwner != "" {
+		if existingID != "" && existingID != stanzaOwner {
+			return application.ErrInvalid
+		}
+		if existingID == "" {
+			row, err := q.GetMessage(ctx, stanzaOwner)
+			if err != nil {
+				return err
+			}
+			allowed, err := allowsEditReplay(ctx, q, row, m)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return tx.Commit()
+			}
+			existingID = stanzaOwner
+		}
 	}
 	if existingID != "" {
 		if !archiveAlreadyBound {

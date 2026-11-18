@@ -352,33 +352,23 @@ func TestBackupRestoreMediaAndPausedSendsSurviveAnotherBackup(t *testing.T) {
 	}
 }
 
-func TestBackupRestoreSupportsOriginalArchiveSchemaAndRollsBackConflict(t *testing.T) {
+func TestBackupV1MatchesIndependentAccountsAndChats(t *testing.T) {
 	t.Parallel()
 	source, _, chat := outboxFixture(t)
-	ctx := t.Context()
+	destination, _, other := outboxFixture(t)
 	now := time.Now().UTC()
-	restored := replySeed(t, source, chat, "v36 source", now, nil, nil)
-	migrateFixtureToVersion(t, source, 36)
+	restored := replySeed(t, source, chat, "source history", now, nil, nil)
+	local := replySeed(t, destination, other, "destination history", now, nil, nil)
 	manifest, archive, scratch := backupRestoreFixture(t, source, false)
-	if err := checkRestoreDatabase(ctx, archive); err != nil {
-		t.Fatal(err)
+	result, err := destination.mergeBackup(t.Context(), archive, scratch, manifest, now)
+	if err != nil || result.Accounts != 0 || result.Conversations != 0 || result.Messages != 1 {
+		t.Fatalf("merge: %+v %v", result, err)
 	}
-	destination, _, otherChat := outboxFixture(t)
-	local := replySeed(t, destination, otherChat, "existing destination", now, nil, nil)
-	if _, err := destination.mergeBackup(ctx, archive, scratch, manifest, now); err == nil {
-		t.Fatal("combined accounts with different canonical IDs")
-	}
-	if m, err := destination.Message(ctx, local.ID); err != nil || m.OriginalText != local.OriginalText {
-		t.Fatalf("conflict changed the destination: %+v %v", m, err)
-	}
-	if _, err := destination.RemoveAccount(ctx, otherChat.AccountID, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := destination.mergeBackup(ctx, archive, scratch, manifest, now); err != nil {
-		t.Fatal(err)
-	}
-	if m, err := destination.Message(ctx, restored.ID); err != nil || m.OriginalText != restored.OriginalText {
-		t.Fatalf("v36 source was not restored: %+v %v", m, err)
+	for _, id := range []domain.ID{restored.ID, local.ID} {
+		m, err := destination.Message(t.Context(), id)
+		if err != nil || m.AccountID != other.AccountID || m.ConversationID != other.ID || m.Sender.ID != other.PeerID {
+			t.Fatalf("cross-profile links: %+v %v", m, err)
+		}
 	}
 }
 

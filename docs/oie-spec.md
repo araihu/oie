@@ -320,7 +320,7 @@ account’s chat lists and retains saved history. See [room management](room-man
 
 ## 4. Identity, revisions, and merge semantics
 
-Application entities and revisions use **UUIDv7** identifiers, preserved through sync and backup/restore. Protocol identifiers remain separate, scoped external references. UTC is used internally; timezone conversion belongs to presentation.
+Application entities and revisions use **UUIDv7** identifiers, preserved through sync and backup/restore. Independently received XMPP messages are matched across profiles by verified external references scoped to the account and conversation. UUIDs identify local rows and preserve the ancestry of shared revisions. UTC is used internally; timezone conversion belongs to presentation.
 
 Persistent content revisions are immutable and have their own revision UUIDs and parent revision references. Message edit history consists of the versions Oiê actually received/stored. A conversation references the stable logical message UUID and displays its derived current revision.
 
@@ -339,7 +339,7 @@ Sync and backup merge use the same type-specific conflict/deletion policies. A m
 
 **RECOMMENDED R05:** a common revision envelope with entity ID, revision ID, parent IDs, originating engine/device, authored UTC time, schema/profile version, and source/protocol provenance, with type-specific payloads.
 
-**OPEN O04:** canonical identity when independent engines observe the same provider message before syncing. UUIDs alone do not make two independently created local records the same message. Provider-ID matching, revision deduplication, aliases, and missing provider ancestry require a concrete design.
+**OPEN O04:** applying the backup identity rules to active sync and handling missing provider ancestry during synchronization.
 
 ## 5. Outgoing messages and scheduling
 
@@ -1017,7 +1017,7 @@ data held by that engine for all its clients.
 
 ## 12. Backup and merge restore
 
-Include manual engine-data backup and restore, with media files optionally included. Restore **merges into existing data** using stable entity/revision UUIDv7 IDs. Fresh-directory-only restore with merging deferred was explicitly rejected.
+Include manual engine-data backup and restore, with media files optionally included. Restore **merges into existing data**. Backup v1 resolves an XMPP account by protocol and bare JID and a conversation by account, address and kind. A verified room stanza ID is scoped to its issuing room, and a MAM result ID is scoped to its archive. A retained occurrence may carry both references. A unique compatible match preserves the destination message ID and revision graph and adds the other verified references. A deletion retains the known references without the message body. Ambiguous matches require review and abort the transaction. Text, time and unverified sender IDs can identify a possible duplicate for review. Own sends keep their original operation and wire identity across retries.
 
 Apply the same type-specific revision/conflict/deletion rules as sync. Preserve newer descendant revisions, resolve concurrent revisions deterministically, retain alternatives, and honor known deletion markers. Import time is not a new edit.
 
@@ -1038,8 +1038,7 @@ Explicit resume still requires reconciliation of unknown outcomes and current ow
 with optional media. `oie backup restore` merges the verified archive into a
 stopped profile. Existing conversation preferences, removal decisions and
 retention apply at the destination. Account, message and star revision graphs
-retain alternatives and use the existing ancestry rules. The merge refuses
-identity collisions that require the mapping in O04. Connection credentials,
+retain alternatives and use the existing ancestry rules. The merge reports conflicting identities before committing any changes. Connection credentials,
 room passwords and hosted authentication state are omitted.
 
 Newly recovered sends stay in a separate review list across restarts and
@@ -1127,7 +1126,7 @@ These are design tasks, not another mandatory interview checklist. They should b
 | **O01** | Role commands/configuration, packaging, process supervision, upgrade behavior, exact data-directory layout. | R01; one executable and SQLite/separate media are already agreed. |
 | **O02** | XMPP client library, tested servers/clients, supported extension versions, runtime capability schema and fallbacks. | R04 candidate matrix; do not promise all extensions from a server-level flag. |
 | **O03** | Room creation defaults, available participant/membership data, cross-engine leave/rejoin effects, unsupported invite/decline mapping. | WhatsApp-like basic details/invites; provider permissions and explicit leave decisions govern. |
-| **O04** | Canonical account/message/revision identity across independently ingesting engines; provider aliases; incomplete ancestry; exact per-field revision metadata. | UUIDv7 plus R05; no raw-date-only whole-entity merge. |
+| **O04** | Active sync of independently observed messages, incomplete ancestry, and exact per-field revision metadata. | UUIDv7 plus R05; no raw-date-only whole-entity merge. |
 | **O05** | Full OpenAPI schemas/paths/versioning, operation lookup, error codes, idempotency lifetime, revision preconditions, SSE recovery/expiry contract. | R03; HTTP/SSE and vacuum/oapi-codegen are agreed. |
 | **O06** | Ambiguous acceptance, terminal failures and safe retry UI, send ordering, attachment dispatch barrier, engine migration/takeover, future centralized send control. | R06; preserve actual evidence and one executing owner. Recurrence is not selected. |
 | **O07** | Margo semantic API/chat profile, unsupported syntax/newline treatment, Markdown toggle scope, provider formatting conversion, correction/retraction limits. | R07 and R18; preserve existing syntax and accepted visible revision/retraction behavior. |

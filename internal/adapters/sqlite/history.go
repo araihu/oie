@@ -8,6 +8,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"strings"
 )
 
 func (s *Store) History(ctx context.Context, id domain.ID) (domain.HistoryStatus, error) {
@@ -96,4 +97,39 @@ func archiveAlias(ctx context.Context, q *dbgen.Queries, m domain.Message, id st
 		return nil
 	}
 	return q.InsertArchiveAlias(ctx, dbgen.InsertArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID, MessageID: id})
+}
+
+// Check portable exclusions before materializing a conversation or message.
+// A verified replay can supply a second key for already removed content.
+func checkXMPPOccurrence(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message) (stanzaID string, excluded bool, err error) {
+	if c.Kind == "room" {
+		for _, ref := range m.References {
+			if ref.Scope == "room:"+c.Address && strings.HasPrefix(ref.Author, c.Address+"/") && referenceValid(ref) {
+				if stanzaID != "" && ref.ID != stanzaID {
+					return "", false, application.ErrInvalid
+				}
+				stanzaID = ref.ID
+			}
+		}
+	}
+	if stanzaID == "" && m.ArchiveID == "" {
+		return "", false, nil
+	}
+	excluded, err = q.IsExcludedXMPPOccurrence(ctx, dbgen.IsExcludedXMPPOccurrenceParams{
+		AccountID: string(c.AccountID), Chat: c.Address, Kind: c.Kind, ArchiveScope: m.ArchiveScope, ArchiveID: m.ArchiveID, StanzaID: stanzaID,
+	})
+	if err != nil || !excluded {
+		return stanzaID, excluded, err
+	}
+	for _, key := range []struct{ kind, authority, id string }{{"stanza-id", c.Address, stanzaID}, {"mam", m.ArchiveScope, m.ArchiveID}} {
+		if key.id == "" {
+			continue
+		}
+		if err := q.RememberExcludedXMPPKey(ctx, dbgen.RememberExcludedXMPPKeyParams{
+			AccountID: string(c.AccountID), Chat: c.Address, Kind: c.Kind, KeyType: key.kind, Authority: key.authority, RemoteID: key.id,
+		}); err != nil {
+			return "", false, err
+		}
+	}
+	return stanzaID, true, nil
 }

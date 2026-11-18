@@ -144,12 +144,30 @@ func copyBackupDatabase(ctx context.Context, source *sql.DB, filename string) (i
 	var version int
 	var dirty bool
 	versionErr := db.QueryRowContext(ctx, "SELECT version,dirty FROM schema_migrations").Scan(&version, &dirty)
-	if versionErr != nil || version < firstRestoreSchema {
+	if versionErr != nil || version < backupV1Schema {
+		// Migration 45 establishes a new local cleanup lineage. During export
+		// only pre-existing cleanup revisions can certify the archived bytes.
+		mintsCleanup := version >= 35 && version < 45
+		if mintsCleanup {
+			if _, err := db.ExecContext(ctx, "CREATE TEMP TABLE export_existing_cleanups(device_id TEXT,revision_id TEXT,PRIMARY KEY(device_id,revision_id)) WITHOUT ROWID"); err != nil {
+				return "", err
+			}
+			if version >= 43 {
+				if _, err := db.ExecContext(ctx, "INSERT INTO export_existing_cleanups SELECT device_id,revision_id FROM download_cleanup_revisions"); err != nil {
+					return "", err
+				}
+			}
+		}
 		// Upgrade only the private snapshot. The selected profile remains as it was.
 		if err := migrateDatabase(ctx, db, filepath.Dir(filename)); err != nil {
 			return "", err
 		}
-	} else if dirty || version > newestRestoreSchema {
+		if mintsCleanup {
+			if _, err := db.ExecContext(ctx, restoreScript("export_download_evidence")); err != nil {
+				return "", err
+			}
+		}
+	} else if dirty || version > backupV1Schema {
 		return "", fmt.Errorf("unsupported backup database version %d", version)
 	}
 	q := dbgen.New(db)

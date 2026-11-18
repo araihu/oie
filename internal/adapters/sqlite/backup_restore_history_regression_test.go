@@ -234,7 +234,7 @@ func TestBackupRestoreUsesDiscardedReferenceWithinDestinationRetention(t *testin
 	}
 }
 
-func TestBackupRestoreRejectsConflictingScopedArchiveAlias(t *testing.T) {
+func TestBackupRestoreRequiresReviewForWrongDirectArchiveAuthority(t *testing.T) {
 	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	dest := copyRestoreFixture(t, source)
@@ -253,7 +253,7 @@ func TestBackupRestoreRejectsConflictingScopedArchiveAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest, archive, scratch := backupRestoreFixture(t, source, false)
-	if _, err := dest.mergeBackup(ctx, archive, scratch, manifest, now); err == nil || !strings.Contains(err.Error(), "conflicting account, conversation, or message identities") {
+	if _, err := dest.mergeBackup(ctx, archive, scratch, manifest, now); err == nil || !strings.Contains(err.Error(), string(incoming.ID)) {
 		t.Fatalf("restore accepted two local identities for the same scoped archive message: %v", err)
 	}
 	items, err := testRestoreEngine(t, dest).Messages(ctx, chat.ID, "", 100)

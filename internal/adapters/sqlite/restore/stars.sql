@@ -5,7 +5,11 @@ CREATE TEMP TABLE restore_idless_star_members (
   message_id TEXT PRIMARY KEY,canonical_id TEXT NOT NULL
 ) WITHOUT ROWID;
 INSERT INTO restore_idless_star_members
-WITH aliases AS MATERIALIZED (SELECT * FROM restore_idless_star_aliases), affected AS (
+WITH aliases AS MATERIALIZED (
+  SELECT * FROM restore_idless_star_aliases
+  UNION
+  SELECT source_id,retained_id FROM restore_room_original_aliases
+), affected AS (
   SELECT DISTINCT a.canonical_id FROM aliases a
   JOIN restore_messages selected ON selected.id IN (a.message_id,a.canonical_id)
 )

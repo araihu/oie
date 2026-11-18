@@ -37,6 +37,8 @@ SELECT echo_id,original_id FROM restore_witness_echoes
 UNION
 SELECT source_id,retained_id FROM restore_idless_direct_echoes
 UNION
+SELECT source_id,retained_id FROM restore_room_original_aliases
+UNION
 SELECT a.alias_id,a.canonical_id FROM message_canonical_aliases a
 JOIN messages e ON e.id=a.alias_id AND e.is_own=1 AND e.state='submitted'
 JOIN messages d ON d.id=a.canonical_id AND d.id=d.provider_id AND d.is_own=1
@@ -93,7 +95,8 @@ CREATE TEMP TABLE restore_message_metadata_changes (id TEXT PRIMARY KEY) WITHOUT
 INSERT INTO restore_message_metadata_changes
 SELECT b.message_id FROM backup.message_references b
 JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
-WHERE NOT EXISTS (
+WHERE b.message_id NOT IN (SELECT source_id FROM restore_room_original_aliases)
+AND NOT EXISTS (
   SELECT 1 FROM message_references d WHERE d.message_id=b.message_id AND d.scope=b.scope
     AND d.remote_id=b.remote_id AND d.author=b.author AND d.source_hash=b.source_hash
 )

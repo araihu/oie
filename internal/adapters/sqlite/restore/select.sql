@@ -3,6 +3,11 @@ INSERT INTO restore_accounts
 SELECT a.id, NOT EXISTS(SELECT 1 FROM accounts d WHERE d.id=a.id) FROM backup.accounts a
 WHERE NOT EXISTS (SELECT 1 FROM deleted_account_ids d WHERE d.id=a.id)
   AND NOT EXISTS (
+    SELECT 1 FROM xmpp_removed_accounts removed WHERE a.protocol='xmpp' AND removed.address_hash=oie_source_hash(a.address)
+      AND NOT EXISTS (SELECT 1 FROM backup.xmpp_removed_accounts known WHERE known.id=removed.id AND known.address_hash=removed.address_hash)
+      AND NOT EXISTS (SELECT 1 FROM revisions local JOIN backup.revisions source USING(id) WHERE local.entity_id=a.id AND source.entity_id=a.id)
+  )
+  AND NOT EXISTS (
   SELECT 1 FROM operations o
   WHERE o.resource_id=a.id AND o.kind='register_account' AND o.result='null'
 );
@@ -93,6 +98,9 @@ WHERE (d.id IS NOT NULL OR (
   -- A correction can follow an older retained root, but expiry evidence
   -- and the exclusion of active sends apply to every candidate.
   NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
+  AND NOT EXISTS (
+    SELECT 1 FROM restore_xmpp_excluded k WHERE k.message_id IN (m.id,a.canonical_id)
+  )
   AND NOT EXISTS (
     SELECT 1 FROM expired_message_references e
     JOIN backup.message_references ref ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
@@ -288,7 +296,17 @@ JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_
   AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
 JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='direct'
 WHERE root.id<>json_extract(root.payload,'$.OwnOriginID') AND json_extract(root.payload,'$.OwnOriginID')<>''
-  AND json_extract(alias.payload,'$.OwnOriginID')=json_extract(root.payload,'$.OwnOriginID');
+  AND json_extract(alias.payload,'$.OwnOriginID')=json_extract(root.payload,'$.OwnOriginID')
+UNION ALL
+SELECT alias.id,root.id
+FROM message_canonical_aliases link
+JOIN messages root ON root.id=link.canonical_id AND root.is_own=1 AND root.state='submitted'
+JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_id
+  AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
+JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
+JOIN message_revisions original ON original.id=alias.revision_id AND original.entity_id=alias.id
+WHERE root.provider_id LIKE 'room:%' AND json_extract(original.payload,'$.ProviderID')=root.provider_id
+  AND NOT EXISTS(SELECT 1 FROM message_correction_facts fact WHERE fact.message_id=alias.id);
 
 -- Carry just the physical rows that establish the path from an archived
 -- unstar to the retained head. Keep the ancestry available for re-export.
@@ -440,6 +458,9 @@ WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
   )
   AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
   AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
+  AND NOT EXISTS (
+    SELECT 1 FROM restore_xmpp_excluded k WHERE k.message_id IN (m.id,a.canonical_id)
+  )
   AND NOT EXISTS (
     SELECT 1 FROM expired_message_references e JOIN backup.message_references ref
       ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author

@@ -730,3 +730,35 @@ type UnclaimedLegacyDownloadRestoreAdmission struct {
 	Size           int64
 	DownloadedAtMs int64
 }
+
+type XmppMessageExclusion struct {
+	Account   string
+	Chat      string
+	Kind      string
+	KeyType   string
+	Authority string
+	RemoteID  string
+}
+
+type XmppMessageKey struct {
+	MessageID string
+	Account   string
+	Chat      string
+	Kind      interface{}
+	KeyType   string
+	Authority string
+	RemoteID  string
+}
+
+type XmppRemovedAccount struct {
+	ID          string
+	AddressHash string
+}
+
+type XmppUnidentifiedRemoval struct {
+	Account   string
+	Chat      string
+	Kind      string
+	CreatedMs int64
+	LocalID   string
+}

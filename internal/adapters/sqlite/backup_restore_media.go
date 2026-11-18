@@ -18,42 +18,25 @@ import (
 	"github.com/google/uuid"
 )
 
-type restoreDownloadSchema struct {
-	cleanup, lineage, legacy, admissions, unclaimedAdmissions bool
-	legacyImageClaims, activeLegacyImageClaims                bool
-}
-
-func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, schema restoreDownloadSchema, now time.Time) ([]string, error) {
+func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, manifest backupManifest, now time.Time) ([]string, error) {
 	files := manifest.Files
 	if _, err := tx.ExecContext(ctx, restoreScript("media_download_devices")); err != nil {
 		return nil, fmt.Errorf("read backup download devices: %w", err)
 	}
-	if schema.cleanup {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_download_cleanup")); err != nil {
-			return nil, fmt.Errorf("read backup download cleanup revisions: %w", err)
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_download_cleanup")); err != nil {
+		return nil, fmt.Errorf("read backup download cleanup revisions: %w", err)
 	}
-	if schema.lineage {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_download_lineage")); err != nil {
-			return nil, fmt.Errorf("read backup download membership and cleanup lineage: %w", err)
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_download_lineage")); err != nil {
+		return nil, fmt.Errorf("read backup download membership and cleanup lineage: %w", err)
 	}
-	if schema.legacy {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_download_legacy")); err != nil {
-			return nil, fmt.Errorf("read legacy download memberships: %w", err)
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_download_legacy")); err != nil {
+		return nil, fmt.Errorf("read legacy download memberships: %w", err)
 	}
-	if schema.legacyImageClaims {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_legacy_image_claims")); err != nil {
-			return nil, fmt.Errorf("restore legacy image claims: %w", err)
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_legacy_image_claims")); err != nil {
+		return nil, fmt.Errorf("restore legacy image claims: %w", err)
 	}
-	if schema.activeLegacyImageClaims {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_relayed_active_image_claims")); err != nil {
-			return nil, fmt.Errorf("restore relayed active image claims: %w", err)
-		}
-	} else if _, err := tx.ExecContext(ctx, restoreScript("media_retired_legacy_image_claims")); err != nil {
-		return nil, fmt.Errorf("restore expired legacy image claims: %w", err)
+	if _, err := tx.ExecContext(ctx, restoreScript("media_relayed_active_image_claims")); err != nil {
+		return nil, fmt.Errorf("restore relayed active image claims: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("media_active_legacy_image_claims")); err != nil {
 		return nil, fmt.Errorf("restore active legacy image claims: %w", err)
@@ -72,15 +55,11 @@ func (s *Store) restoreMedia(ctx context.Context, tx *sql.Tx, scratch string, ma
 	if _, err := tx.ExecContext(ctx, restoreScript("media_bindings")); err != nil {
 		return nil, fmt.Errorf("bind restored media: %w", err)
 	}
-	if schema.admissions {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_download_admissions")); err != nil {
-			return nil, fmt.Errorf("restore pending legacy download admissions: %w", err)
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_download_admissions")); err != nil {
+		return nil, fmt.Errorf("restore pending legacy download admissions: %w", err)
 	}
-	if schema.unclaimedAdmissions {
-		if _, err := tx.ExecContext(ctx, restoreScript("media_download_unclaimed_admissions")); err != nil {
-			return nil, fmt.Errorf("restore pending unclaimed legacy downloads: %w", err)
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("media_download_unclaimed_admissions")); err != nil {
+		return nil, fmt.Errorf("restore pending unclaimed legacy downloads: %w", err)
 	}
 	if err := updateRestoredImageDownloads(ctx, tx, now); err != nil {
 		return nil, fmt.Errorf("restore image downloads: %w", err)

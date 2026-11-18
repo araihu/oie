@@ -92,18 +92,18 @@ func allowsEditReplay(ctx context.Context, q *dbgen.Queries, retained dbgen.Mess
 	return edit == nil || matchesEditReplay(*edit, incoming), err
 }
 
-// Unlike direct stanzas, an archived room correction can use an occupant-
-// scoped provider key while its local acceptance uses the original client ID.
-func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, incoming *domain.Message) (bool, error) {
+// Room corrections use the verified occupant's key. An own correction can
+// also match a previously accepted command under the original client ID.
+func routeScopedRoomCorrection(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, incoming *domain.Message) (bool, error) {
 	fact := incoming.Correction
-	if chat.Kind != "room" || !incoming.IsOwn || !correctionValid(fact) || fact.TargetID == "" ||
+	if chat.Kind != "room" || !correctionValid(fact) || fact.TargetID == "" ||
 		!strings.HasPrefix(fact.Scope, "xmpp:correct:room:"+chat.Address+":") || !strings.HasPrefix(fact.Author, chat.Address+"/") {
 		return true, nil
 	}
 	key := fact.ID
 	provisional := incoming.ProviderID == key
 	lookup := dbgen.FindProviderMessageParams{
-		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: key, IsOwn: 1,
+		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: key, IsOwn: number(incoming.IsOwn),
 	}
 	// The client ID and nickname can be reused by another verified occupant.
 	// Keep a legacy physical owner only when its retained fact has this scope.
@@ -112,6 +112,9 @@ func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domai
 		return false, err
 	}
 	incoming.ProviderID = provider
+	if !incoming.IsOwn {
+		return true, nil
+	}
 	retained, err := q.FindProviderMessage(ctx, lookup)
 	if errors.Is(err, sql.ErrNoRows) {
 		if !provisional {

@@ -47,15 +47,16 @@ FROM restore_direct_mention_echo_keys e WHERE d.id=e.id AND e.is_local=1;
 
 INSERT INTO messages(id,revision_id,account_id,conversation_id,provider_id,is_own,state,payload,created_at_ms,timeline_at_ms,submitted_at_ms)
 SELECT m.id,m.revision_id,m.account_id,m.conversation_id,
-       CASE WHEN idless.source_id IS NOT NULL THEN '' ELSE COALESCE(e.provider_id,m.provider_id) END,m.is_own,m.state,
-       CASE WHEN idless.source_id IS NOT NULL THEN json_set(m.payload,'$.ProviderID','')
+       CASE WHEN idless.source_id IS NOT NULL OR room.source_id IS NOT NULL THEN '' ELSE COALESCE(e.provider_id,m.provider_id) END,m.is_own,m.state,
+       CASE WHEN idless.source_id IS NOT NULL OR room.source_id IS NOT NULL THEN json_set(m.payload,'$.ProviderID','')
             WHEN e.id IS NULL THEN m.payload
             WHEN e.ambiguous_origin=1 THEN json_remove(json_set(m.payload,'$.ProviderID',e.provider_id),'$.OwnOriginID')
             ELSE json_set(m.payload,'$.ProviderID',e.provider_id) END,
        m.created_at_ms,m.timeline_at_ms,m.submitted_at_ms
 FROM backup.messages m JOIN restore_messages x ON x.id=m.id AND x.is_new=1
 LEFT JOIN restore_direct_mention_echo_keys e ON e.id=m.id AND e.is_local=0
-LEFT JOIN restore_idless_direct_echoes idless ON idless.source_id=m.id;
+LEFT JOIN restore_idless_direct_echoes idless ON idless.source_id=m.id
+LEFT JOIN restore_room_original_aliases room ON room.source_id=m.id;
 INSERT INTO message_revisions SELECT r.* FROM backup.message_revisions r JOIN restore_messages x ON x.id=r.entity_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
 INSERT INTO message_canonical_aliases(alias_id,canonical_id)
@@ -63,6 +64,8 @@ SELECT echo_id,original_id FROM restore_witness_echoes WHERE TRUE ON CONFLICT(al
 INSERT INTO message_canonical_aliases(alias_id,canonical_id)
 SELECT e.source_id,e.retained_id FROM restore_idless_direct_echoes e
 JOIN restore_messages selected ON selected.id=e.source_id WHERE TRUE ON CONFLICT(alias_id) DO NOTHING;
+INSERT INTO message_canonical_aliases(alias_id,canonical_id)
+SELECT source_id,retained_id FROM restore_room_original_aliases WHERE TRUE ON CONFLICT(alias_id) DO NOTHING;
 
 -- A witness may already have an authenticated correction family. Keep its
 -- revisions and proof, while placing the content projection on the native ID.
@@ -92,7 +95,8 @@ INSERT INTO archive_aliases(account_id,scope,archive_id,message_id)
 SELECT a.account_id,a.scope,a.archive_id,COALESCE(idless.retained_id,a.message_id)
 FROM backup.archive_aliases a JOIN restore_messages x ON x.id=a.message_id
 LEFT JOIN restore_idless_direct_echoes idless ON idless.source_id=a.message_id
-WHERE NOT EXISTS (
+WHERE a.message_id NOT IN (SELECT source_id FROM restore_room_original_aliases)
+AND NOT EXISTS (
   SELECT 1 FROM restore_conflicting_relayed_echo_aliases d
   WHERE d.account_id=a.account_id AND d.scope=a.scope AND d.archive_id=a.archive_id
 ) ON CONFLICT DO NOTHING;
@@ -102,7 +106,8 @@ FROM backup.archive_aliases a JOIN restore_local_edit_witnesses e ON e.source_id
 JOIN messages witness ON witness.id=e.witness_id AND witness.account_id=a.account_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_references SELECT r.* FROM backup.message_references r JOIN restore_messages x ON x.id=r.message_id
-WHERE NOT EXISTS (
+WHERE r.message_id NOT IN (SELECT source_id FROM restore_room_original_aliases)
+AND NOT EXISTS (
   SELECT 1 FROM restore_conflicting_relayed_echo_refs d
   WHERE d.message_id=r.message_id AND d.scope=r.scope AND d.remote_id=r.remote_id AND d.author=r.author
 ) ON CONFLICT DO NOTHING;
@@ -133,7 +138,7 @@ WHERE edit.eligible=1 AND command.state<>'dispatching' ON CONFLICT(id) DO UPDATE
 WHERE (message_edit_commands.state='queued' AND excluded.state IN ('submitted','failed','unknown'))
    OR (message_edit_commands.state='unknown' AND excluded.state='submitted');
 INSERT INTO message_correction_facts SELECT f.* FROM backup.message_correction_facts f JOIN restore_messages x ON x.id=f.message_id
-WHERE TRUE ON CONFLICT DO NOTHING;
+WHERE f.message_id NOT IN (SELECT source_id FROM restore_room_original_aliases) ON CONFLICT DO NOTHING;
 INSERT INTO message_correction_facts(message_id,scope,author,remote_id,target_id,source_hash,source_revision_id)
 SELECT e.original_id,f.scope,f.author,f.remote_id,'',f.source_hash,m.revision_id
 FROM restore_witness_echoes e JOIN message_correction_facts f ON f.message_id=e.echo_id AND f.target_id=''

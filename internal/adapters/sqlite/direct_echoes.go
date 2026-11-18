@@ -16,6 +16,17 @@ func init() {
 	registerObservedWireMatch("oie_same_room_correction_wire", func(a, b domain.Message) bool {
 		return a.OutboundReply == nil && b.OutboundReply == nil && sameObservedWire(a, b)
 	})
+	registerObservedWireMatch("oie_same_archived_room_original_wire", func(a, b domain.Message) bool {
+		if a.OutboundReply != nil || b.OutboundReply != nil {
+			return false
+		}
+		// The SQL caller has already matched the authenticated room archive
+		// key. Legacy originals without an origin ID omitted mention evidence.
+		if a.WireMentions == "" && b.WireMentions == "" {
+			return sameObservedSource(a, b)
+		}
+		return sameObservedWire(a, b)
+	})
 }
 
 func registerObservedWireMatch(name string, matches func(domain.Message, domain.Message) bool) {
@@ -116,9 +127,14 @@ func sameObservedDirectWire(a, b domain.Message) bool {
 }
 
 func sameObservedWire(a, b domain.Message) bool {
-	return a.IsOwn && b.IsOwn && a.SendState == "submitted" && b.SendState == "submitted" &&
-		a.SourceBodyHash() == b.SourceBodyHash() && a.WireMentions != "" && a.WireMentions == b.WireMentions &&
+	return a.WireMentions != "" && a.WireMentions == b.WireMentions &&
 		a.MatchesWireMentions(domain.WireMentionProof{Evidence: b.WireMentions, Digest: b.WireMentionDigest}) &&
+		sameObservedSource(a, b)
+}
+
+func sameObservedSource(a, b domain.Message) bool {
+	return a.IsOwn && b.IsOwn && a.SendState == "submitted" && b.SendState == "submitted" &&
+		a.SourceBodyHash() == b.SourceBodyHash() &&
 		slices.Equal(a.FileReferences, b.FileReferences) && slices.Equal(a.AudioURLs, b.AudioURLs) &&
 		slices.Equal(a.FileDigests, b.FileDigests) && slices.Equal(a.MediaThumbnails, b.MediaThumbnails)
 }

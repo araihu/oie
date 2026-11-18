@@ -682,9 +682,7 @@ Quit Oiê or stop the hosted engine before restoring. The restore command
 verifies the archive, keeps the destination's identity and applies the changes
 in one transaction. Existing removals, retractions and retention rules remain
 in force. The restore also keeps removals made through a device's download
-cleanup. If the archive and destination have different identities for
-the same account, conversation, or provider message, Oiê reports an
-identity conflict and rolls back the merge.
+cleanup. Two profiles of the same XMPP account can recognize a shared message by a verified room stanza ID or a matching ID from the same server archive. Oiê retains both references when available. A possible duplicate without a shared verified reference, or a conflict between references, stops the restore. The error identifies the affected records when available. You can inspect the ZIP in a separate empty profile with the same restore command.
 
 ```sh
 bin/oie backup restore --data-dir "/path/to/profile" "$HOME/oie-backup.zip"

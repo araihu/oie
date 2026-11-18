@@ -21,10 +21,7 @@ import (
 //go:embed restore/*.sql
 var restoreSQL embed.FS
 
-const (
-	firstRestoreSchema  = 36
-	newestRestoreSchema = 52
-)
+const backupV1Schema = 53
 
 type RestoreSummary struct {
 	Accounts      int64 `json:"accountsAdded"`
@@ -32,15 +29,6 @@ type RestoreSummary struct {
 	Messages      int64 `json:"messagesAdded"`
 	PausedSends   int64 `json:"sendsPaused"`
 	MediaFiles    int   `json:"mediaFilesAdded"`
-}
-
-type restoreSchema struct {
-	recovered        bool
-	deletedAccounts  bool
-	recoveredHistory bool
-	ownEchoes        bool
-	retiredSends     bool
-	downloads        restoreDownloadSchema
 }
 
 func RestoreProfileBackup(ctx context.Context, dir, filename string, newID domain.ID) (_ RestoreSummary, err error) {
@@ -85,7 +73,7 @@ FROM schema_migrations LIMIT 1`).Scan(&version, &dirty, &versions); err != nil {
 	if versions != 1 {
 		return errors.New("backup database has multiple schema versions")
 	}
-	if dirty || version < firstRestoreSchema || version > newestRestoreSchema {
+	if dirty || version != backupV1Schema {
 		return fmt.Errorf("unsupported backup database version %d", version)
 	}
 	var integrity string
@@ -139,13 +127,12 @@ func checkRestoreArchiveSchema(ctx context.Context, filename string) (err error)
 	if err := attachRestoreArchive(ctx, conn, filename); err != nil {
 		return err
 	}
-	_, err = inspectRestoreSchema(ctx, conn)
-	return err
+	return inspectRestoreSchema(ctx, conn)
 }
 
 func attachRestoreArchive(ctx context.Context, conn *sql.Conn, filename string) error {
 	uri := url.URL{Scheme: "file", Path: filename, RawQuery: "mode=ro&immutable=1"}
-	_, err := conn.ExecContext(ctx, "ATTACH DATABASE ? AS backup", uri.String())
+	_, err := conn.ExecContext(ctx, "ATTACH DATABASE ? AS incoming", uri.String())
 	return err
 }
 
@@ -167,11 +154,10 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 		return result, err
 	}
 	defer func() {
-		_, detachErr := conn.ExecContext(context.WithoutCancel(ctx), "DETACH DATABASE backup")
+		_, detachErr := conn.ExecContext(context.WithoutCancel(ctx), "DETACH DATABASE incoming")
 		err = errors.Join(err, detachErr)
 	}()
-	schema, err := inspectRestoreSchema(ctx, conn)
-	if err != nil {
+	if err := inspectRestoreSchema(ctx, conn); err != nil {
 		return result, err
 	}
 	tx, err := conn.BeginTx(ctx, nil)
@@ -183,18 +169,28 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if err := q.AcquireWriteLock(ctx); err != nil {
 		return result, err
 	}
+	archive, cleanup, err := preparePortableArchive(ctx, tx, archivePath, scratch)
+	if err != nil {
+		return result, err
+	}
+	defer cleanup()
+	uri := url.URL{Scheme: "file", Path: archive, RawQuery: "mode=ro&immutable=1"}
+	if _, err := tx.ExecContext(ctx, "ATTACH DATABASE ? AS backup", uri.String()); err != nil {
+		return result, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+		_, detachErr := conn.ExecContext(context.WithoutCancel(ctx), "DETACH DATABASE backup")
+		err = errors.Join(err, detachErr)
+	}()
 	if _, err := tx.ExecContext(ctx, restoreScript("hold_table")); err != nil {
 		return result, err
 	}
-	if schema.recovered {
-		if _, err := tx.ExecContext(ctx, restoreScript("recovered_markers")); err != nil {
-			return result, err
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("recovered_markers")); err != nil {
+		return result, err
 	}
-	if schema.deletedAccounts {
-		if _, err := tx.ExecContext(ctx, restoreScript("deleted_accounts")); err != nil {
-			return result, err
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("deleted_accounts")); err != nil {
+		return result, err
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("markers")); err != nil {
 		return result, err
@@ -234,15 +230,11 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if err := mergeRestoreRevisions(ctx, tx, q, now); err != nil {
 		return result, fmt.Errorf("merge backup revisions: %w", err)
 	}
-	if schema.ownEchoes {
-		if _, err := tx.ExecContext(ctx, restoreScript("own_echoes")); err != nil {
-			return result, err
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("own_echoes")); err != nil {
+		return result, err
 	}
-	if schema.retiredSends {
-		if _, err := tx.ExecContext(ctx, restoreScript("retired_sends")); err != nil {
-			return result, err
-		}
+	if _, err := tx.ExecContext(ctx, restoreScript("retired_sends")); err != nil {
+		return result, err
 	}
 	if err := reconcileRestoredSendEvidence(ctx, tx, q, now); err != nil {
 		return result, fmt.Errorf("reconcile backup send evidence: %w", err)
@@ -254,7 +246,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if err != nil {
 		return result, err
 	}
-	if err := mergeRestoredQueue(ctx, tx, q, manifest.SourceEngine, schema.recovered, schema.recoveredHistory); err != nil {
+	if err := mergeRestoredQueue(ctx, tx, q, manifest.SourceEngine); err != nil {
 		return result, fmt.Errorf("quarantine recovered sends: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("hold_operations")); err != nil {
@@ -279,7 +271,7 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 			err = errors.Join(err, s.recoverRestoreMedia(context.WithoutCancel(ctx)))
 		}
 	}()
-	published, err := s.restoreMedia(ctx, tx, scratch, manifest, schema.downloads, now)
+	published, err := s.restoreMedia(ctx, tx, scratch, manifest, now)
 	if err != nil {
 		return result, err
 	}
@@ -295,32 +287,13 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	return result, nil
 }
 
-func inspectRestoreSchema(ctx context.Context, conn *sql.Conn) (restoreSchema, error) {
-	// Explicit column order and known ordinary tables are required. Archive
-	// triggers, views and SQL instructions are never installed or executed.
-	var schema restoreSchema
+func inspectRestoreSchema(ctx context.Context, conn *sql.Conn) error {
 	var valid bool
 	if err := conn.QueryRowContext(ctx, restoreScript("schema")).Scan(&valid); err != nil {
-		return schema, err
+		return err
 	}
 	if !valid {
-		return schema, errors.New("backup database schema does not match the supported tables")
+		return errors.New("backup database schema does not match the v1 format")
 	}
-	if err := conn.QueryRowContext(ctx, restoreScript("recovered_schema")).Scan(&schema.recovered, &valid); err != nil {
-		return schema, err
-	}
-	if schema.recovered && !valid {
-		return schema, errors.New("backup has an invalid recovered sends schema")
-	}
-	downloads := &schema.downloads
-	if err := conn.QueryRowContext(ctx, restoreScript("extended_schema")).Scan(&schema.deletedAccounts, &schema.recoveredHistory, &schema.ownEchoes,
-		&downloads.cleanup, &downloads.lineage, &downloads.legacy, &downloads.admissions,
-		&downloads.unclaimedAdmissions, &downloads.legacyImageClaims, &downloads.activeLegacyImageClaims,
-		&schema.retiredSends, &valid); err != nil {
-		return schema, err
-	}
-	if !valid {
-		return schema, errors.New("backup has an invalid restore evidence schema")
-	}
-	return schema, nil
+	return nil
 }
