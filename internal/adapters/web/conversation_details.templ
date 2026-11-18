@@ -87,6 +87,15 @@ if v.canSetReadReceipts(v.Selected) {
 @infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
 }
 }
+if v.OfflineHistory && !v.conversationRemoved() {
+@toggle.Toggle(toggle.Config{
+	ID:"keep-chat-offline",Label:v.Text.KeepChatOffline,Disabled:true,RootClass:"oie-device-toggle",
+	InputAttrs:templ.Attributes{
+		"data-keep-chat-offline":v.Selected.Id,"data-engine":v.EngineID,"data-account":v.Selected.AccountId,
+		"data-full":v.Text.KeepChatOfflineFull,"data-unavailable":v.Text.KeepChatOfflineUnavailable,
+	},
+})
+}
 }
 if v.RoomArchive != nil {
   <div class="oie-room-archive-setting">

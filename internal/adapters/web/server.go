@@ -278,6 +278,7 @@ type view struct {
 
 type copy struct {
 	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing string
+	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                    string
 
 	ConversationRemoved string
 

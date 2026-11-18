@@ -51,13 +51,22 @@ function cursor(engine, raw) {
   return /^\d{1,19}$/.test(sequence) ? BigInt(sequence) : -1n;
 }
 
-function recent(entries) {
-  return entries.filter(entry => Date.now() - entry.savedAt < maxAge);
+function sameChat(left, right) {
+  return left.account === right.account && left.chat === right.chat;
+}
+
+function isKept(current, entry) {
+  return current.kept?.some(chat => sameChat(chat, entry)) ?? false;
+}
+
+function recent(current) {
+  const cutoff = Date.now() - maxAge;
+  return current.entries.filter(entry => entry.savedAt > cutoff || isKept(current, entry));
 }
 
 function read() {
   return state(current => {
-    const entries = recent(current.entries);
+    const entries = recent(current);
     if (entries.length !== current.entries.length) return {...current, entries};
   });
 }
@@ -66,16 +75,18 @@ function newest(engine, previous, incoming) {
   return cursor(engine, incoming) > cursor(engine, previous) ? incoming : previous;
 }
 
-function save(current, data) {
+function canSave(current, data) {
   const sequence = cursor(data.engine, data.cursor);
-  if (!id.test(data.engine) || current.blocked || current.engine && current.engine !== data.engine ||
-      sequence < 0n || sequence < cursor(data.engine, current.minimum)) return;
-  const next = {...current, engine: data.engine, lang: data.lang, theme: data.theme, entries: recent(current.entries)};
-  if (!current.engine) next.checkpoint = data.cursor;
+  return id.test(data.engine) && !current.blocked && (!current.engine || current.engine === data.engine) &&
+    sequence >= 0n && sequence >= cursor(data.engine, current.minimum);
+}
+
+function snapshotEntry(current, data) {
   const {entry} = data;
-  if (!entry || !id.test(entry.account) || !id.test(entry.chat)) return next;
-  if (current.missing?.some(item => item.chat === entry.chat && (!item.account || item.account === entry.account) &&
-      sequence <= cursor(data.engine, item.through))) return next;
+  if (!entry || !id.test(entry.account) || !id.test(entry.chat) || !Array.isArray(entry.messages)) return;
+  const sequence = cursor(data.engine, data.cursor);
+  if (current.missing?.some(item => (!item.chat || item.chat === entry.chat) && (!item.account || item.account === entry.account) &&
+      sequence <= cursor(data.engine, item.through))) return;
   // Make room for the newest messages even if the full loaded page is large.
   const messages = [];
   let bytes = encoder.encode(JSON.stringify({...entry, messages})).byteLength;
@@ -85,18 +96,60 @@ function save(current, data) {
     bytes += size;
     messages.unshift(message);
   }
-  const entries = next.entries;
-  const previous = entries.find(item => item.chat === entry.chat && item.account === entry.account);
-  if (previous && cursor(data.engine, previous.cursor) > cursor(data.engine, data.cursor)) return next;
-  next.entries = [{...entry, messages, bytes, savedAt: Date.now(), cursor: data.cursor}];
-  let total = bytes;
-  for (const item of entries) {
-    if (item === previous) continue;
-    if (next.entries.length >= maxConversations || total + item.bytes > maxBytes) break;
+  return {...entry, messages, bytes, savedAt: Date.now(), cursor: data.cursor};
+}
+
+function fitSnapshot(current, entry) {
+  const others = recent(current).filter(item => !sameChat(item, entry));
+  const entries = [entry, ...others.filter(item => isKept(current, item))];
+  let total = entries.reduce((bytes, item) => bytes + item.bytes, 0);
+  if (entries.length > maxConversations || total > maxBytes) return;
+  for (const item of others) {
+    if (entries.length === maxConversations) break;
+    if (isKept(current, item) || total + item.bytes > maxBytes) continue;
     total += item.bytes;
-    next.entries.push(item);
+    entries.push(item);
+  }
+  return entries;
+}
+
+function save(current, data) {
+  if (!canSave(current, data)) return;
+  const next = {...current, engine: data.engine, lang: data.lang, theme: data.theme, entries: recent(current)};
+  if (!current.engine) next.checkpoint = data.cursor;
+  const entry = snapshotEntry(current, data);
+  if (!entry) return next;
+  const previous = next.entries.find(item => sameChat(item, entry));
+  if (!previous || cursor(data.engine, previous.cursor) <= cursor(data.engine, entry.cursor)) {
+    next.entries = fitSnapshot(next, entry) ?? next.entries;
   }
   return next;
+}
+
+function keepChat(current, data) {
+  const {engine, account, chat, keep, snapshot} = data;
+  if (current.blocked || current.engine && current.engine !== engine) return {error: 'unavailable'};
+  const kept = current.kept ?? [];
+  if (!keep) {
+    const next = {...current, kept: kept.filter(item => !sameChat(item, data))};
+    return {next: {...next, entries: recent(next)}};
+  }
+  if (isKept(current, data)) return {};
+  if (kept.length >= maxConversations) return {error: 'full'};
+  let next = current;
+  let entry = recent(current).find(item => sameChat(item, data));
+  if (!entry) {
+    if (!snapshot) return {error: 'missing'};
+    if (snapshot.engine !== engine || !snapshot.entry || !sameChat(snapshot.entry, data) || !canSave(current, snapshot)) {
+      return {error: 'unavailable'};
+    }
+    entry = snapshotEntry(current, snapshot);
+    if (!entry) return {error: 'unavailable'};
+    const entries = fitSnapshot(current, entry);
+    if (!entries) return {error: 'full'};
+    next = {...current, engine, checkpoint: current.checkpoint ?? snapshot.cursor, lang: snapshot.lang, theme: snapshot.theme, entries};
+  }
+  return {next: {...next, kept: [...kept, {account, chat, cursor: entry.cursor}]}};
 }
 
 function progress(current, {engine, through}) {
@@ -106,21 +159,25 @@ function progress(current, {engine, through}) {
   return {...current, checkpoint: through};
 }
 
-function invalidate(current, {engine, account, chat, through, confirmedMissing = false}) {
+function invalidate(current, {engine, account, chat, through, confirmedMissing = false, removeKeep = false}) {
   if (current.blocked || engine !== current.engine || cursor(engine, through) < 0n) return;
   const sequence = cursor(engine, through);
   const minimum = newest(engine, current.minimum, through);
   const checkpoint = confirmedMissing ? current.checkpoint : progress(current, {engine, through})?.checkpoint ?? current.checkpoint;
-  const entries = current.entries.filter(entry => (account && entry.account !== account) || (chat && entry.chat !== chat) ||
-    (confirmedMissing ? cursor(engine, entry.cursor) > sequence : cursor(engine, entry.cursor) >= sequence));
+  const removed = confirmedMissing || removeKeep;
+  const outside = item => (account && item.account !== account) || (chat && item.chat !== chat);
+  const entries = current.entries.filter(entry => outside(entry) ||
+    (removed ? cursor(engine, entry.cursor) > sequence : cursor(engine, entry.cursor) >= sequence));
+  const kept = removed ? current.kept?.filter(item => outside(item) || cursor(engine, item.cursor) > sequence ||
+    entries.some(entry => sameChat(entry, item))) : current.kept;
   let missing = current.missing;
-  if (confirmedMissing) {
-    // Fence a delayed snapshot read from the same event position as this 404.
+  if (removed) {
+    // A delayed snapshot from this event position cannot restore removed history.
     const previous = (missing ?? []).find(item => item.chat === chat && item.account === account);
     const other = (missing ?? []).filter(item => item !== previous);
     missing = [{account, chat, through: newest(engine, previous?.through, through)}, ...other].slice(0, maxConversations);
   }
-  return {...current, minimum, checkpoint, entries, missing};
+  return {...current, minimum, checkpoint, entries, missing, kept};
 }
 
 function verify(current, engine, through) {
@@ -142,10 +199,35 @@ self.addEventListener('message', event => {
   if ((path === '/' || path === shell) && data?.type === 'oie:offline-history-read' && port) {
     event.waitUntil(read().then(value => {
       port.postMessage(value);
-    }).catch(() => port.postMessage(null)).finally(() => port.close()));
+    }, () => port.postMessage(null)).finally(() => port.close()));
     return;
   }
   if (path !== '/') return;
+  if (port && data && ['oie:offline-keep-status', 'oie:offline-keep-chat'].includes(data.type) &&
+      [data.engine, data.account, data.chat].every(value => typeof value === 'string' && id.test(value))) {
+    const write = data.type === 'oie:offline-keep-chat' && typeof data.keep === 'boolean';
+    let error;
+    let changed = false;
+    const update = write ? current => {
+      const result = keepChat(current, data);
+      error = result.error;
+      changed = Boolean(result.next);
+      return result.next;
+    } : undefined;
+    event.waitUntil(state(update).then(async current => {
+      if (current.blocked || current.engine && current.engine !== data.engine) error = 'unavailable';
+      port.postMessage({kept: current.engine === data.engine && isKept(current, data), error});
+      if (changed) {
+        const {engine, account, chat} = data;
+        for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true})) {
+          if (client.id !== event.source.id && new URL(client.url).pathname === '/') {
+            client.postMessage({type: 'oie:offline-keep-changed', engine, account, chat});
+          }
+        }
+      }
+    }, () => port.postMessage(null)).finally(() => port.close()));
+    return;
+  }
   const updates = {
     'oie:offline-history-save': current => save(current, data),
     'oie:offline-history-invalidate': current => invalidate(current, data),
@@ -154,7 +236,7 @@ self.addEventListener('message', event => {
       if (data.engine && data.engine !== current.engine) return;
       if (data.blocked || !data.through) {
         verifiedNavigation = ++navigation;
-        return {...current, blocked: true, entries: []};
+        return {...current, blocked: true, entries: [], kept: []};
       }
       const minimum = newest(current.engine, current.minimum, data.through);
       const checkpoint = newest(current.engine, current.checkpoint, data.through);
@@ -243,7 +325,7 @@ self.addEventListener('fetch', event => {
         await state(current => {
           if (current.engine !== engine) return;
           verifiedNavigation = ++navigation;
-          return {...current, blocked: true, entries: []};
+          return {...current, blocked: true, entries: [], kept: []};
         }).then(() => notifyReset(engine)).catch(() => {});
       }
       return response;

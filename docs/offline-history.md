@@ -7,6 +7,14 @@ reach its engine, the inbox offers recent conversations in a read-only view.
 Previously saved drafts and queued sends are separate and are recovered in
 the normal composer.
 
+In conversation details, **Keep available offline** protects that chat’s
+saved messages from the seven-day expiration and automatic cache eviction.
+The setting applies to this browser profile. Turn it off to return the chat
+to ordinary cache behavior. The 12-conversation and 1 MiB limits still apply.
+If the space already used by protected chats leaves too little room, the
+setting stays off and Oiê asks you to free space. Open the chat online to
+refresh its saved messages. Offline reading covers the saved text only.
+
 ## Storage
 
 The root service worker precaches a small page with English and Brazilian
@@ -21,14 +29,17 @@ IndexedDB holds snapshots for the last verified engine, keyed by owning
 account and conversation. A snapshot contains text from at most 50 messages
 in the latest loaded page. A snapshot is bounded to 192 KiB. The browser keeps at most
 12 such snapshots from the last seven days within a combined 1 MiB budget.
-Authentication responses, engine changes, resets and observed account,
-conversation or history removals discard affected snapshots. A verified
-online navigation that discovers a gap in the events seen on this device
-discards older snapshots. Expired entries are removed on the next access. The service worker does not cache
+Authentication failures, engine changes, resets and observed account,
+conversation or history removals discard affected snapshots, including
+protected snapshots. Removing a chat or account, resetting app data, or
+changing engines clears the affected preferences. History changes and
+unobserved event gaps may invalidate saved text while retaining the setting.
+The next eligible chat view refreshes the saved text. Expired unprotected
+entries are removed on the next access. The service worker does not cache
 authenticated HTML, original withdrawn content, drafts, uploads or files.
 
-The configurable device limit, pinned offline conversations and search over
-saved text remain in [section 11.4](oie-spec.md#114-pwa-and-offline-data).
+The configurable device limit and search over saved text remain in
+[section 11.4](oie-spec.md#114-pwa-and-offline-data).
 
 ## Browser verification
 
@@ -39,5 +50,5 @@ OIE_OFFLINE_HISTORY_ONLY=1 node tests/browser/live-chat.cjs
 ```
 
 The disposable fixture exercises cold offline navigation, browser and engine
-outages, cache misses, withdrawn messages, account and engine scoping, and
-draft recovery after reconnecting.
+outages, age and capacity limits, keeping and releasing a chat, withdrawn
+messages, account and engine scoping, and draft recovery after reconnecting.

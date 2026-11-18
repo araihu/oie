@@ -50,6 +50,69 @@
     void worker.then(registration => registration?.active?.postMessage(data)).catch(() => {});
   };
 
+  const keepControl = () => document.querySelector('[data-keep-chat-offline]');
+  const keepScope = ({dataset}) => ({engine: dataset.engine, account: dataset.account, chat: dataset.keepChatOffline});
+  const changingKeep = new WeakSet();
+  let keepRead = 0;
+
+  async function refreshKeep(control = keepControl()) {
+    if (!control || changingKeep.has(control)) return;
+    const turn = ++keepRead;
+    const result = await keepRequest('oie:offline-keep-status', keepScope(control));
+    if (turn !== keepRead || !control.isConnected || changingKeep.has(control)) return;
+    if (result) control.checked = result.kept;
+    control.disabled = false;
+  }
+
+  async function keepRequest(type, scope) {
+    try {
+      return await request((await worker)?.active, {type, ...scope});
+    } catch {
+      return null;
+    }
+  }
+
+  window.addEventListener('drawer:open', event => {
+    if (event.detail?.id === 'details') void refreshKeep();
+  });
+  document.addEventListener('oie:info-content', () => {
+    const control = keepControl();
+    if (control?.getClientRects().length) void refreshKeep(control);
+  });
+  navigator.serviceWorker.addEventListener('message', ({data}) => {
+    const control = keepControl();
+    if (data?.type !== 'oie:offline-keep-changed' || !control?.getClientRects().length) return;
+    const {engine, account, chat} = keepScope(control);
+    if (data.engine === engine && data.account === account && data.chat === chat) void refreshKeep(control);
+  });
+  document.addEventListener('change', async ({target: control}) => {
+    if (control !== keepControl() || !control) return;
+    const keep = control.checked;
+    control.checked = !keep;
+    if (changingKeep.has(control)) return;
+    changingKeep.add(control);
+    ++keepRead;
+    control.setAttribute('aria-disabled', 'true');
+    const scope = keepScope(control);
+    let result = await keepRequest('oie:offline-keep-chat', {...scope, keep});
+    if (result?.error === 'missing' && control.isConnected) {
+      const pane = document.getElementById('conversation-pane');
+      const snapshot = pane && capture(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline'));
+      if (snapshot?.entry) result = await keepRequest('oie:offline-keep-chat', {...scope, keep, snapshot});
+    }
+    changingKeep.delete(control);
+    if (control.isConnected) {
+      control.removeAttribute('aria-disabled');
+      if (result) control.checked = result.kept;
+      if (control.getClientRects().length && (!result || result.error)) {
+        const message = result?.error === 'full' ? control.dataset.full : control.dataset.unavailable;
+        window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
+      }
+    }
+    const current = keepControl();
+    if (current?.getClientRects().length) void refreshKeep(current);
+  });
+
   window.OieOfflineHistory = {
     observe(action, response) {
       const url = new URL(action, location.href);
@@ -86,7 +149,7 @@
     },
   };
 
-  function snapshot(scope, header, timeline) {
+  function capture(scope, header, timeline) {
     const {engineId, accountId, conversationId, eventCursor, contextMissing} = scope.dataset;
     if (!uuid(engineId) || window.OieEvents?.replaced || window.OieRuntime?.memory.get('device-reset')) return;
     const {lang} = document.documentElement;
@@ -114,7 +177,12 @@
         ? document.querySelector(`[data-switch-account="${accountId}"] .oie-profile-identity strong`)?.textContent : '';
       if (title) data.entry = {account: accountId, chat: conversationId, title, label, messages};
     }
-    publish(data);
+    return data;
+  }
+
+  function snapshot(scope, header, timeline) {
+    const data = capture(scope, header, timeline);
+    if (data) publish(data);
   }
 
   document.addEventListener('oie:route-ready', () => {
@@ -124,6 +192,10 @@
   document.addEventListener('oie:shared-refresh', ({detail: page}) => {
     const regions = page.querySelector('#oie-live-regions');
     if (regions?.dataset.unavailable === 'false') snapshot(regions, page.querySelector('#live-header #chat-header'), page.querySelector('#live-timeline'));
+  });
+  document.addEventListener('oie:timeline-latest', () => {
+    const pane = document.getElementById('conversation-pane');
+    if (pane) snapshot(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline'));
   });
   document.addEventListener('oie:appearance-changed', () => {
     const root = document.getElementById('oie-app');
@@ -136,9 +208,9 @@
   const events = window.OieEvents?.target;
   if (events) {
     const findScope = {
-      'account.removed': value => ({account: value.removedAccountId}),
+      'account.removed': value => ({account: value.removedAccountId, removeKeep: true}),
       'conversation.updated': ({conversation}) => (conversation?.removedFromChats || conversation?.request)
-        ? {account: conversation.accountId, chat: conversation.id} : null,
+        ? {account: conversation.accountId, chat: conversation.id, removeKeep: true} : null,
       'conversation.history_pruned': ({historyPruned}) => historyPruned
         ? {account: historyPruned.accountId, chat: historyPruned.conversationId} : null,
       'message.updated': ({message}) => message ? {account: message.accountId, chat: message.conversationId} : null,
@@ -165,13 +237,17 @@
 
   async function read() {
     const registration = await navigator.serviceWorker.getRegistration('/');
-    if (!registration?.active) return null;
+    return request(registration?.active, {type: 'oie:offline-history-read'});
+  }
+
+  function request(active, data) {
+    if (!active) return null;
     return new Promise(resolve => {
       const {port1, port2} = new MessageChannel();
       const finish = result => { clearTimeout(timeout); port1.close(); resolve(result); };
       const timeout = setTimeout(() => finish(null), 2000);
       port1.onmessage = ({data}) => finish(data);
-      try { registration.active.postMessage({type: 'oie:offline-history-read'}, [port2]); }
+      try { active.postMessage(data, [port2]); }
       catch { finish(null); }
     });
   }

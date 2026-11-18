@@ -93,6 +93,108 @@ async function checkNavigationAuthority(id) {
   assert.equal(current.entries.length, 1, 'the delayed result of the old reset preserves the new engine');
   assert.equal(notices.length, 1);
   assert.equal(notices[0].engine, engine, 'the already open shells receive the reset of the old engine');
+
+  const account = id(20), otherAccount = id(21), chat = id(22);
+  const through = engine + ':2';
+  const snapshot = (account, chat, size = 0) => ({
+    engine, cursor: through, entry: {account, chat, title: 'Fixture', messages: [{text: 'a'.repeat(size)}]},
+  });
+  const keep = (cache, account, chat, size) =>
+    sandbox.keepChat(cache, {engine, account, chat, keep: true, snapshot: snapshot(account, chat, size)});
+  let cache = keep({engine, entries: []}, account, chat).next;
+  cache.entries[0].savedAt = 0;
+  for (let n = 0; n < 15; n++) cache = sandbox.save(cache, snapshot(otherAccount, id(50 + n)));
+  assert.equal(cache.entries.length, 12, 'the oldest kept chat still uses a slot in the shared cache');
+  assert(cache.entries.some(entry => entry.chat === chat && entry.account === account), 'kept history survives age and count eviction');
+  assert(!sandbox.isKept(cache, {account: otherAccount, chat}), 'another account cannot inherit the setting');
+  assert.equal(sandbox.keepChat(cache, {engine: other, account, chat, keep: false}).error, 'unavailable');
+  const afterUnkeep = sandbox.keepChat(cache, {engine, account, chat, keep: false}).next;
+  assert(!afterUnkeep.entries.some(entry => entry.chat === chat), 'unkeeping expired history restores normal eviction');
+
+  const invalidated = sandbox.invalidate(cache, {engine, account, chat, through: engine + ':3'});
+  assert(!invalidated.entries.some(entry => entry.chat === chat), 'kept text is invalidated by a history change');
+  assert(sandbox.isKept(invalidated, {account, chat}), 'the preference survives an update to the history');
+  const removed = sandbox.invalidate(invalidated, {engine, account, chat, through: engine + ':4', removeKeep: true});
+  assert(!sandbox.isKept(removed, {account, chat}), 'authoritative removal clears the preference');
+  const delayed = sandbox.save(removed, {...snapshot(account, chat), cursor: engine + ':4'});
+  assert(!delayed.entries.some(entry => entry.chat === chat), 'a same-cursor snapshot cannot restore a removed chat');
+  assert(!sandbox.isKept(sandbox.verify(cache, other, other + ':1'), {account, chat}), 'engine replacement clears the old preference');
+
+  const full = size => {
+    let current = {engine, entries: []};
+    const count = size ? 5 : 12;
+    for (let n = 0; n < count; n++) current = keep(current, account, id(70 + n), size).next;
+    assert.equal(keep(current, account, chat, size).error, 'full');
+    assert.equal(sandbox.save(current, snapshot(account, chat, size)).entries.length, count);
+    return current;
+  };
+  full(0);
+  const fullBytes = full(190 * 1024);
+  const small = keep(fullBytes, account, chat, 0).next;
+  const oversized = sandbox.save(small, snapshot(account, chat, 190 * 1024));
+  assert.equal(oversized.entries.find(entry => entry.chat === chat).messages[0].text, '', 'a growing snapshot preserves the earlier copy when it cannot fit');
+}
+
+async function changeKeep(page, control, until, desired, refused = false) {
+  await page.locator('label:has([data-keep-chat-offline])').click({trial: true});
+  await until(() => control.isEnabled(), 'offline control ready');
+  await control.focus();
+  await page.evaluate(() => {
+    const post = ServiceWorker.prototype.postMessage;
+    const selectors = ['label:has([data-keep-chat-offline])', '#details-body', '#message-composer', '#message-timeline'];
+    window.keepPaints = [];
+    let active = true;
+    const sample = () => {
+      if (!active) return;
+      window.keepPaints.push(selectors.map(selector => {
+        const node = document.querySelector(selector);
+        const {x, y, width, height} = node.getBoundingClientRect();
+        return [x, y, width, height, node.scrollTop];
+      }).flat());
+      requestAnimationFrame(sample);
+    };
+    sample();
+    ServiceWorker.prototype.postMessage = function (data, transfer) {
+      if (data.type !== 'oie:offline-keep-chat') return post.call(this, data, transfer);
+      window.releaseKeep = () => {
+        ServiceWorker.prototype.postMessage = post;
+        post.call(this, data, transfer);
+      };
+    };
+    window.stopKeepPaints = () => { active = false; return window.keepPaints; };
+  });
+  await control.press('Space');
+  await until(() => page.evaluate(() => Boolean(window.releaseKeep) && window.keepPaints.length > 4), 'painted pending keep');
+  assert.equal(await control.isChecked(), !desired, 'the toggle waits for durable storage');
+  assert.equal(await control.getAttribute('aria-disabled'), 'true');
+  await page.evaluate(() => { window.releaseKeep(); delete window.releaseKeep; });
+  await until(async () => await control.getAttribute('aria-disabled') !== 'true', 'confirmed offline preference');
+  assert.equal(await control.isChecked(), refused ? !desired : desired);
+  assert(await control.evaluate(node => node === document.activeElement), 'focus stays on the toggle');
+  const paints = await page.evaluate(() => window.stopKeepPaints());
+  for (const frame of paints) for (const [index, coordinate] of frame.entries()) {
+    assert(Math.abs(coordinate - paints[0][index]) <= 1, 'pending offline preference preserves painted geometry');
+  }
+}
+
+function editSavedHistory({age, kept} = {}) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open('oie.offline-history');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const tx = open.result.transaction('history', 'readwrite');
+      const store = tx.objectStore('history');
+      const read = store.get('current');
+      read.onsuccess = () => {
+        const value = read.result;
+        if (age) for (const entry of value.entries) entry.savedAt = 0;
+        if (kept) value.kept = kept;
+        store.put(value, 'current');
+      };
+      tx.oncomplete = () => { open.result.close(); resolve(); };
+      tx.onabort = () => reject(tx.error);
+    };
+  });
 }
 
 module.exports = async function checkOfflineHistory({browser, base, account, chat, state, until, id}) {
@@ -135,6 +237,25 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await until(async () => (await page.evaluate(savedHistory))?.entries.some(entry =>
         entry.messages.some(message => message.text === latest)), 'message cached for offline use');
 
+      const keepLabel = lang === 'pt-BR' ? 'Manter disponível sem conexão' : 'Keep available offline';
+      const keepControl = page.getByLabel(keepLabel, {exact: true});
+      await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+      assert.equal(await keepControl.isChecked(), false);
+      const observer = await newPage();
+      await observer.goto(route + '&open=details');
+      const observerControl = observer.getByLabel(keepLabel, {exact: true});
+      await until(() => observerControl.isEnabled(), 'offline control in the second tab');
+      await page.bringToFront();
+      await page.evaluate(editSavedHistory, {kept: Array.from({length: 12}, (_, index) => ({account, chat: id(400 + index)}))});
+      await changeKeep(page, keepControl, until, true, true);
+      const fullNotice = lang === 'pt-BR' ? 'Não há espaço para esta conversa.' : 'Not enough space for this chat.';
+      await page.getByText(fullNotice, {exact: false}).waitFor();
+      await page.evaluate(editSavedHistory, {kept: []});
+      await changeKeep(page, keepControl, until, true);
+      await until(() => observerControl.isChecked(), 'offline preference updates across tabs');
+      await observer.close();
+      await page.evaluate(editSavedHistory, {age: true});
+
       // A new document can open the inbox and follow a saved chat with no network.
       await page.close();
       await context.setOffline(true);
@@ -173,6 +294,10 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await page.locator('#offline-retry').click();
       await until(async () => await page.locator('#message-composer').inputValue() === draft, 'draft after offline browsing');
       assert.equal(state.effects, 0, 'reading offline and reconnecting does not send a draft');
+      await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+      const reopenedControl = page.getByLabel(keepLabel, {exact: true});
+      await until(() => reopenedControl.isChecked(), 'offline preference persists after reopening the browser page');
+      await changeKeep(page, reopenedControl, until, false);
 
       // A reachable BFF can lose its connection to the engine independently.
       await page.goto(root + '&inbox=1');
@@ -243,7 +368,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await peer.locator('#offline-empty').waitFor();
       assert.equal(await peer.getByText(latest, {exact: true}).count(), 0, 'reset immediately clears already open offline history');
       assert.deepEqual(errors, []);
-      console.log('PASS: Offline history, draft recovery and engine outage (' + lang + ', ' + width + ' px)');
+      console.log('PASS: Keep available offline, cache limits, draft recovery and engine outage (' + lang + ', ' + width + ' px)');
     } finally {
       state.engineDown = false;
       state.chatRemoved = false;
