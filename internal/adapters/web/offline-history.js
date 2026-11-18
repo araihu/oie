@@ -163,7 +163,8 @@
         });
       }
     },
-    searchFallback(params, current, response) {
+    async searchFallback(params, current, response) {
+      if (!navigator.serviceWorker.controller) return;
       const url = new URL('/search', location.href);
       url.search = new URLSearchParams(params);
       url.searchParams.set('lang', document.documentElement.lang);
@@ -171,7 +172,17 @@
       if (response) {
         this.observe(url, response);
         if (response.headers.get('X-Oie-Offline-History') !== 'unavailable') return;
+      } else if (navigator.onLine) {
+        // A failed fragment alone does not establish an outage. Keep Retry in the
+        // current workspace if the presentation server still answers.
+        try {
+          await fetch('/ui/offline-history', {
+            method: 'HEAD', cache: 'no-store', redirect: 'manual', signal: AbortSignal.timeout(2000),
+          });
+          return;
+        } catch { /* The presentation server is unreachable. */ }
       }
+      if (!current()) return;
       this.fallback(url, current, false, () => {});
     },
     fallback(action, current, replace, onFailure) {
