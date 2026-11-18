@@ -12,6 +12,7 @@ import (
 )
 
 func TestBackupRestoreKeepsPostCleanupDownloadAfterReleasedProfileUpgrade(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -50,6 +51,7 @@ func TestBackupRestoreKeepsPostCleanupDownloadAfterReleasedProfileUpgrade(t *tes
 }
 
 func TestBackupRestoreKeepsOlderUnprovenDownloadPortableWithoutCertifyingIt(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -115,6 +117,7 @@ func TestBackupRestoreKeepsOlderUnprovenDownloadPortableWithoutCertifyingIt(t *t
 }
 
 func TestBackupRestoreCompletesPortableLegacyDownloadAfterMetadataOnlySnapshot(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

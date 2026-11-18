@@ -228,6 +228,9 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	if _, err := tx.ExecContext(ctx, restoreScript("entities")); err != nil {
 		return result, fmt.Errorf("merge backup entities: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, restoreScript("stars")); err != nil {
+		return result, fmt.Errorf("merge backup stars: %w", err)
+	}
 	if err := mergeRestoreRevisions(ctx, tx, q, now); err != nil {
 		return result, fmt.Errorf("merge backup revisions: %w", err)
 	}

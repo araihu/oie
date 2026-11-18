@@ -49,6 +49,7 @@ func (p *guardedReplyProtocol) Send(ctx context.Context, _ domain.Account, out a
 }
 
 func TestBackupRestoreResumedReplyReloadsAfterRetractedTarget(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -129,6 +130,7 @@ func TestBackupRestoreResumedReplyReloadsAfterRetractedTarget(t *testing.T) {
 }
 
 func TestBackupRestoreResumedReplyDropsAmbiguousWireReferenceOnRetry(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	engine.SetProtocols(&outboundProtocol{wireReply: true})
 	ctx := t.Context()

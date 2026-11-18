@@ -12,6 +12,7 @@ import (
 )
 
 func TestBackupRestoreKeepsDirectWitnessWhenImportingTerminalEdit(t *testing.T) {
+	t.Parallel()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})
 	ctx := t.Context()

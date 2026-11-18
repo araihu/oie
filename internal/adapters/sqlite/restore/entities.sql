@@ -88,24 +88,6 @@ ON CONFLICT(id) DO NOTHING;
 
 INSERT INTO message_star_revisions SELECT r.* FROM backup.message_star_revisions r JOIN restore_messages x ON x.id=r.message_id
 WHERE TRUE ON CONFLICT(id) DO NOTHING;
-INSERT INTO message_stars SELECT s.* FROM backup.message_stars s JOIN restore_messages x ON x.id=s.message_id
-WHERE NOT EXISTS (SELECT 1 FROM restore_idless_direct_echoes e WHERE e.source_id=s.message_id)
-ON CONFLICT(message_id) DO NOTHING;
--- A source star may become the effective choice only when the retained
--- message and its aliases have no explicit destination choice.
-INSERT INTO message_stars(message_id,revision_id,starred,payload,updated_at)
-WITH candidates AS (
-  SELECT s.*,row_number() OVER (PARTITION BY e.retained_id ORDER BY s.updated_at DESC,s.revision_id DESC) AS preferred
-  FROM backup.message_stars s JOIN restore_messages x ON x.id=s.message_id
-  JOIN restore_idless_direct_echoes e ON e.source_id=s.message_id
-  WHERE NOT EXISTS (
-    SELECT 1 FROM message_stars local LEFT JOIN message_canonical_aliases a ON a.alias_id=local.message_id
-    WHERE COALESCE(a.canonical_id,local.message_id)=e.retained_id
-  )
-)
-SELECT message_id,revision_id,starred,payload,updated_at FROM candidates WHERE preferred=1
-ON CONFLICT(message_id) DO NOTHING;
-
 INSERT INTO archive_aliases(account_id,scope,archive_id,message_id)
 SELECT a.account_id,a.scope,a.archive_id,COALESCE(idless.retained_id,a.message_id)
 FROM backup.archive_aliases a JOIN restore_messages x ON x.id=a.message_id

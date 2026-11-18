@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreRelayedWitnessPreservesScopedReplyOwner(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	sender, room := promoteBackupRoomFixture(t, source, placeholder)
 	witness, relay := copyRestoreFixture(t, source), copyRestoreFixture(t, source)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreKeepsExpiredCorrectionBranchExcludedWhenItsRootIsNew(t *testing.T) {
+	t.Parallel()
 	source, sender, chat := outboxFixture(t)
 	ctx := t.Context()
 	sender.SetProtocols(&outboundProtocol{})

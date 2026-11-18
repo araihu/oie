@@ -12,6 +12,7 @@ import (
 )
 
 func TestBackupRestoreKeepsExpiredLegacyImageClaimAcrossReleasedUpgrade(t *testing.T) {
+	t.Parallel()
 	t.Run("expired before upgrade", func(t *testing.T) {
 		testBackupRestoreReleasedLegacyImageClaim(t, false)
 	})
@@ -180,6 +181,7 @@ func testBackupRestoreReleasedLegacyImageClaim(t *testing.T, upgradeBeforeExpiry
 }
 
 func TestBackupRestoreKeepsCurrentNamedImageExpiryAcrossReexport(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

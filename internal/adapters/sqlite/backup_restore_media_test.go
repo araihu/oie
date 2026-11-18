@@ -18,6 +18,7 @@ import (
 )
 
 func TestBackupRestoreWithoutMediaRecreatesDownloadableImagePreview(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	now := time.Now().UTC()
 	preview, _ := seedBackupDownloadedImage(t, source, chat, now)
@@ -42,6 +43,7 @@ func TestBackupRestoreWithoutMediaRecreatesDownloadableImagePreview(t *testing.T
 }
 
 func TestBackupRestoreWithMediaLeavesDeletedDownloadsDeleted(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -114,6 +116,7 @@ func TestBackupRestoreWithMediaLeavesDeletedDownloadsDeleted(t *testing.T) {
 }
 
 func TestBackupRestoreHonorsDestinationDownloadRetention(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	destination := copyRestoreFixture(t, source)
 	ctx := t.Context()

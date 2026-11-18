@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreRemembersOwnEchoBeforePendingBackup(t *testing.T) {
+	t.Parallel()
 	t.Run("retained echo", func(t *testing.T) { checkBackupRestoreOwnEchoOrder(t, true, false) })
 	t.Run("expired echo", func(t *testing.T) { checkBackupRestoreOwnEchoOrder(t, false, false) })
 	t.Run("expired echo in a rebackup", func(t *testing.T) { checkBackupRestoreOwnEchoOrder(t, false, true) })

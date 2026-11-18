@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreAttachmentEchoRequiresUploadedWireBody(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	engine, room := promoteBackupRoomFixture(t, source, placeholder)
 	engine.SetProtocols(&restoreAttachmentProtocol{})
@@ -96,6 +97,7 @@ func TestBackupRestoreAttachmentEchoRequiresUploadedWireBody(t *testing.T) {
 }
 
 func TestBackupRestoreCaptionOnlyEchoStopsResumedAttachmentWithoutLinking(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	engine, room := promoteBackupRoomFixture(t, source, placeholder)
 	engine.SetProtocols(&restoreAttachmentProtocol{})

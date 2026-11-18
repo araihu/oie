@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreEditedReplyScrubsExpiredQuote(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, sender, chat := outboxFixture(t)
 	protocol := &editProtocol{}

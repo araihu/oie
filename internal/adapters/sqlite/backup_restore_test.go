@@ -15,6 +15,7 @@ import (
 )
 
 func TestBackupRestoreMergesWithoutRevivingDeletedOrCancelledData(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -107,6 +108,7 @@ func TestBackupRestoreMergesWithoutRevivingDeletedOrCancelledData(t *testing.T) 
 }
 
 func TestBackupRestoreConcurrentRevisionsChooseSameWinner(t *testing.T) {
+	t.Parallel()
 	base, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -141,6 +143,7 @@ func TestBackupRestoreConcurrentRevisionsChooseSameWinner(t *testing.T) {
 }
 
 func TestBackupRestoreRequiresOwnerAndExplicitReviewForResuming(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -298,6 +301,7 @@ func (*restoreAttachmentProtocol) AttachmentAvailability(context.Context, domain
 }
 
 func TestBackupRestoreMediaAndPausedSendsSurviveAnotherBackup(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	engine.SetProtocols(&restoreAttachmentProtocol{})
 	ctx := t.Context()
@@ -349,6 +353,7 @@ func TestBackupRestoreMediaAndPausedSendsSurviveAnotherBackup(t *testing.T) {
 }
 
 func TestBackupRestoreSupportsOriginalArchiveSchemaAndRollsBackConflict(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -378,6 +383,7 @@ func TestBackupRestoreSupportsOriginalArchiveSchemaAndRollsBackConflict(t *testi
 }
 
 func TestBackupRestoreLeavesRemovedAccountAndItsHistoryDeleted(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -397,6 +403,7 @@ func TestBackupRestoreLeavesRemovedAccountAndItsHistoryDeleted(t *testing.T) {
 }
 
 func TestBackupRestoreKeepsCorrectionsAndDestinationRetraction(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

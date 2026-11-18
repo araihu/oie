@@ -18,6 +18,7 @@ import (
 )
 
 func TestBackupRestoreRebindsDownloadedImageAfterOpeningMessage(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -55,6 +56,7 @@ func TestBackupRestoreRebindsDownloadedImageAfterOpeningMessage(t *testing.T) {
 }
 
 func TestBackupRestoreRestoresOriginalImageWithMissingDerivative(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -134,6 +136,7 @@ func TestBackupRestoreRestoresOriginalImageWithMissingDerivative(t *testing.T) {
 }
 
 func TestBackupRestoreRebindsDownloadedImageFromExtensionlessURL(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -193,6 +196,7 @@ func TestBackupRestoreRebindsDownloadedImageFromExtensionlessURL(t *testing.T) {
 }
 
 func TestBackupRestoreRebindsFileOnlyForMatchingMessageRevision(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

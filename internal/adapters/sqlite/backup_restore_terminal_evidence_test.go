@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreKeepsScheduledPlacementAfterLateRejection(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	due := time.Now().UTC().Truncate(time.Millisecond).Add(time.Hour)
@@ -62,6 +63,7 @@ func TestBackupRestoreKeepsScheduledPlacementAfterLateRejection(t *testing.T) {
 }
 
 func TestBackupRestoreKeepsSubmittedAttachmentWireBodyForArchiveEcho(t *testing.T) {
+	t.Parallel()
 	for _, state := range []string{"submitted", "failed"} {
 		t.Run(state, func(t *testing.T) {
 			testBackupRestoreKeepsAttachmentWireBodyForArchiveEcho(t, state)

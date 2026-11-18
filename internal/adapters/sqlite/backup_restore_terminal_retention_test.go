@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreReservesOperationsForTerminalSendsOutsideRetention(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, state string
 		scheduled   bool

@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreKeepsActiveNamedImageEvidenceWithoutMedia(t *testing.T) {
+	t.Parallel()
 	legacy, named, old, current, namedDevice, now := independentlyDownloadedLegacyImage(t)
 	ctx := t.Context()
 	if policy, err := testRestoreEngine(t, named).SetDownloadPolicy(ctx, namedDevice, 1, false); err != nil || policy.Days != 1 || policy.Count != 1 {
@@ -66,6 +67,7 @@ func TestBackupRestoreKeepsActiveNamedImageEvidenceWithoutMedia(t *testing.T) {
 }
 
 func TestBackupRestoreKeepsGlobalAndNamedImageMembershipChoices(t *testing.T) {
+	t.Parallel()
 	legacy, named, old, _, namedDevice, now := independentlyDownloadedLegacyImage(t)
 	ctx := t.Context()
 	older, olderDB, olderScratch := backupRestoreFixture(t, legacy, true)

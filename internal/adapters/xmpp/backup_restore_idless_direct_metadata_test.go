@@ -178,6 +178,12 @@ func TestBackupRestoreIdlessDirectEchoPrefersKnownArchiveOwner(t *testing.T) {
 }
 
 func TestBackupRestoreIdlessInheritedFutureStarCanBeExplicitlyUnstarred(t *testing.T) {
+	t.Run("recent live", func(t *testing.T) { testBackupRestoreIdlessCausalStar(t, false) })
+	t.Run("retained older archive", func(t *testing.T) { testBackupRestoreIdlessCausalStar(t, true) })
+}
+
+func testBackupRestoreIdlessCausalStar(t *testing.T, old bool) {
+	t.Helper()
 	ctx := t.Context()
 	baseDir, liveDir, mamDir := t.TempDir(), t.TempDir(), t.TempDir()
 	base, e, _ := openDirectEchoProfile(t, baseDir)
@@ -191,7 +197,7 @@ func TestBackupRestoreIdlessInheritedFutureStarCanBeExplicitlyUnstarred(t *testi
 			t.Fatal(err)
 		}
 	}
-	live, _, manager := openDirectEchoProfile(t, liveDir)
+	live, liveReceiver, manager := openDirectEchoProfile(t, liveDir)
 	mam, _, _ := openDirectEchoProfile(t, mamDir)
 	later := time.Now().Add(2 * time.Hour)
 	sourceEngine, err := application.New(mam, "local", directEchoNewID, func() time.Time { return later })
@@ -201,8 +207,14 @@ func TestBackupRestoreIdlessInheritedFutureStarCanBeExplicitlyUnstarred(t *testi
 	sourceEngine.SetProtocols(New(mamDir, nil))
 	origin := mintDirectEchoID(t)
 	packet := idlessDirectPacket(account, origin, "a verified independently observed direct message", "")
-	receiveLiveDirectEchoPacket(t, manager, account, packet)
-	receiveArchivedDirectEchoPacket(t, sourceEngine, account, origin, "observed", packet, time.Now())
+	observedAt := time.Now()
+	if old {
+		observedAt = observedAt.Add(-48 * time.Hour)
+		receiveArchivedDirectEchoPacket(t, liveReceiver, account, origin, "other-observed", packet, observedAt)
+	} else {
+		receiveLiveDirectEchoPacket(t, manager, account, packet)
+	}
+	receiveArchivedDirectEchoPacket(t, sourceEngine, account, origin, "observed", packet, observedAt)
 	liveMessages, err := live.Messages(ctx, chat.ID, "", 10)
 	if err != nil || len(liveMessages) != 1 {
 		t.Fatal(liveMessages, err)
@@ -263,5 +275,69 @@ func TestBackupRestoreIdlessInheritedFutureStarCanBeExplicitlyUnstarred(t *testi
 		if err := store.Close(); err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	// The original observer still has the exact ancestor. The relay's lower
+	// wall-clock time cannot keep that ancestor selected over its descendant.
+	if old {
+		older, engine, _ := openDirectEchoProfile(t, mamDir)
+		days := 1
+		if _, err := engine.SetConversationRetention(ctx, chat.ID, "0", &days); err != nil {
+			t.Fatal(err)
+		}
+		if removed, err := older.PurgeExpiredHistory(ctx, time.Now(), directEchoNewID); err != nil || removed != 0 {
+			t.Fatalf("starred original was not retained past the cutoff: %d, %v", removed, err)
+		}
+		if err := older.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, filename := range []string{relay, relay, archive} {
+		if result, err := sqlite.RestoreProfileBackup(ctx, mamDir, filename, mintDirectEchoID(t)); err != nil || result.Messages != 0 {
+			t.Fatalf("reverse restore changed the logical message count: %+v, %v", result, err)
+		}
+	}
+	mam, originalEngine, _ := openDirectEchoProfile(t, mamDir)
+	if star, err := originalEngine.MessageStar(ctx, mamMessages[0].ID); err != nil || star.Starred || star.RevisionID != cleared.Star.RevisionID {
+		t.Fatalf("the original observer kept an ancestor after restoring the causal unstar: %+v, %v", star, err)
+	}
+	setAgain, err := originalEngine.SetMessageStar(ctx, mintDirectEchoID(t), mamMessages[0].ID, cleared.Star.RevisionID, true)
+	if err != nil || !setAgain.Star.Starred {
+		t.Fatalf("the reverse observer could not extend the restored choice: %+v, %v", setAgain, err)
+	}
+	if err := mam.Close(); err != nil {
+		t.Fatal(err)
+	}
+	secondRelay := writeRoomEchoBackup(t, mamDir)
+	if result, err := sqlite.RestoreProfileBackup(ctx, liveDir, secondRelay, mintDirectEchoID(t)); err != nil || result.Messages != 0 {
+		t.Fatalf("further relay changed the logical message count: %+v, %v", result, err)
+	}
+	live, receiver, _ = openDirectEchoProfile(t, liveDir)
+	if chosen, err := receiver.MessageStar(ctx, local.ID); err != nil || !chosen.Starred || chosen.RevisionID != setAgain.Star.RevisionID {
+		t.Fatalf("the star did not follow the second proven alias transition: %+v, %v", chosen, err)
+	}
+
+	concurrentDir := t.TempDir()
+	if _, err := sqlite.RestoreProfileBackup(ctx, concurrentDir, archive, mintDirectEchoID(t)); err != nil {
+		t.Fatal(err)
+	}
+	concurrent, conflicting, _ := openDirectEchoProfile(t, concurrentDir)
+	independentClear, err := conflicting.SetMessageStar(ctx, mintDirectEchoID(t), mamMessages[0].ID, star.Star.RevisionID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	independentSet, err := conflicting.SetMessageStar(ctx, mintDirectEchoID(t), mamMessages[0].ID, independentClear.Star.RevisionID, true)
+	if err != nil || !independentSet.Star.Starred {
+		t.Fatalf("could not establish a competing branch: %+v, %v", independentSet, err)
+	}
+	if err := concurrent.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlite.RestoreProfileBackup(ctx, concurrentDir, relay, mintDirectEchoID(t)); err != nil {
+		t.Fatal(err)
+	}
+	_, conflicting, _ = openDirectEchoProfile(t, concurrentDir)
+	if chosen, err := conflicting.MessageStar(ctx, mamMessages[0].ID); err != nil || !chosen.Starred || chosen.RevisionID != independentSet.Star.RevisionID {
+		t.Fatalf("the archive replaced the destination's concurrent star choice: %+v, %v", chosen, err)
 	}
 }

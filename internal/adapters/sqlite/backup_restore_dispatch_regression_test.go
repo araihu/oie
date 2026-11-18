@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreMergesRoomEchoWithExistingLogicalSend(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	engine, room := promoteBackupRoomFixture(t, source, placeholder)
 	witness := copyRestoreFixture(t, source)
@@ -45,12 +46,14 @@ func TestBackupRestoreMergesRoomEchoWithExistingLogicalSend(t *testing.T) {
 }
 
 func TestBackupRestoreResumedSendCannotDispatchAfterAuthenticatedEcho(t *testing.T) {
+	t.Parallel()
 	checkResumedSendBeforeWire(t, func(t *testing.T, store *Store, chat domain.Conversation, message domain.Message, _ time.Time) {
 		receiveBackupOwnDirectEcho(t, store, chat, message)
 	})
 }
 
 func TestBackupRestoreResumedSendCannotDispatchAfterAuthenticatedRetraction(t *testing.T) {
+	t.Parallel()
 	checkResumedSendBeforeWire(t, receiveBackupOwnDirectRetraction)
 }
 
@@ -120,6 +123,7 @@ func checkResumedSendObservation(t *testing.T, observe func(*testing.T, *Store, 
 }
 
 func TestBackupRestoreManagedAttemptCannotRetryAfterAuthenticatedEvidence(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		observe func(*testing.T, *Store, domain.Conversation, domain.Message, time.Time)
@@ -173,6 +177,7 @@ func resumedRestoreFixture(t *testing.T) (*Store, domain.Conversation, domain.Me
 }
 
 func TestBackupRestoreAuthenticatesPlainHistoricalEchoAndKeepsTimestamp(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ state, wireText string }{
 		{"submitted", "scheduled text"},
 		{"unknown", "earlier composition"},

@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreReclassifiesQuoteOnlyRoomMention(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	engine.SetProtocols(&outboundProtocol{})
 	room := outboundRoom(t, source, chat.AccountID, "room@rooms.localhost")

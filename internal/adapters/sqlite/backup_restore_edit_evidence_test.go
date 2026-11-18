@@ -17,6 +17,7 @@ import (
 )
 
 func TestBackupRestoreInterruptedEditMakesExactQueuedHTTPReplayUncertain(t *testing.T) {
+	t.Parallel()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})
 	ctx := t.Context()
@@ -101,6 +102,7 @@ func TestBackupRestoreInterruptedEditMakesExactQueuedHTTPReplayUncertain(t *test
 }
 
 func TestBackupRestoreIndependentCorrectionSettlesExactLocalEdit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, initial, want string
 		differentBody       bool

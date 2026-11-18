@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreReservesEditsWithoutMaterializedSource(t *testing.T) {
+	t.Parallel()
 	for _, state := range []string{"queued", "dispatching", "unknown", "failed"} {
 		t.Run(state, func(t *testing.T) {
 			ctx := t.Context()
@@ -78,6 +79,7 @@ func TestBackupRestoreReservesEditsWithoutMaterializedSource(t *testing.T) {
 }
 
 func TestBackupRestoreDoesNotReviveFailedEditOfExpiredOriginal(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})
@@ -130,6 +132,7 @@ func TestBackupRestoreDoesNotReviveFailedEditOfExpiredOriginal(t *testing.T) {
 }
 
 func TestBackupRestoreReconcilesSubmittedEditWithExactQueuedCommand(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})

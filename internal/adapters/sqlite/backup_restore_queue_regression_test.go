@@ -94,6 +94,7 @@ func TestRecoveredSendRetainsUncertainAttemptAcrossRestoreOrder(t *testing.T) {
 }
 
 func TestBackupRestoreUsesTerminalSendEvidenceOutsideRetention(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -143,6 +144,7 @@ func TestBackupRestoreUsesTerminalSendEvidenceOutsideRetention(t *testing.T) {
 }
 
 func TestBackupRestoreStopsOldDestinationQueueOnTerminalEvidence(t *testing.T) {
+	t.Parallel()
 	for _, terminal := range []string{"cancelled", "submitted"} {
 		t.Run(terminal, func(t *testing.T) {
 			source, engine, chat := outboxFixture(t)

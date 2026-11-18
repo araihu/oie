@@ -13,6 +13,7 @@ import (
 )
 
 func TestBackupRestoreBindsIdlessDirectImageToRetainedMessage(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	engine.SetProtocols(&outboundProtocol{})
 	base := copyRestoreFixture(t, source)

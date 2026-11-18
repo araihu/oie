@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreRecognizesAttachmentEchoAfterScrubbingSenderOnlyQuote(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	engine, room := promoteBackupRoomFixture(t, source, placeholder)
 	ctx := t.Context()

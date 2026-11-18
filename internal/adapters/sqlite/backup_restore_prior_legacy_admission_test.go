@@ -8,6 +8,7 @@ import (
 )
 
 func TestBackupRestoreKeepsPriorGlobalAdmissionWithNamedMedia(t *testing.T) {
+	t.Parallel()
 	legacy, named, old, _, device, now := independentlyDownloadedLegacyImage(t)
 	ctx := t.Context()
 	first, firstDB, firstScratch := backupRestoreFixture(t, legacy, false)

@@ -13,6 +13,7 @@ import (
 )
 
 func TestBackupRestoreBindsIdlessDirectFileToRetainedCatalog(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, sender, chat := outboxFixture(t)
 	sender.SetProtocols(&outboundProtocol{})

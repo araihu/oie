@@ -12,6 +12,7 @@ import (
 )
 
 func TestBackupRestoreRecoversExactFallbackFromOlderArchive(t *testing.T) {
+	t.Parallel()
 	base, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -79,6 +80,7 @@ func TestBackupRestoreRecoversExactFallbackFromOlderArchive(t *testing.T) {
 }
 
 func TestBackupRestoreProjectsReplyWhenDestinationRetainedOriginal(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

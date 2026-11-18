@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreInvalidatesRetainedMessageWithNewReplyMetadata(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

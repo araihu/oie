@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreReservesOperationKeysWithLocalDeliveryEvidence(t *testing.T) {
+	t.Parallel()
 	for _, proof := range []string{"own archive echo", "own retraction"} {
 		t.Run(proof, func(t *testing.T) {
 			source, engine, chat := outboxFixture(t)
@@ -52,6 +53,7 @@ func TestBackupRestoreReservesOperationKeysWithLocalDeliveryEvidence(t *testing.
 }
 
 func TestBackupRestoreRemembersOwnEchoExpiredBeforeExport(t *testing.T) {
+	t.Parallel()
 	for _, queue := range []string{"already local", "from a later import"} {
 		t.Run(queue, func(t *testing.T) {
 			source, engine, chat := outboxFixture(t)
@@ -98,6 +100,7 @@ func TestBackupRestoreRemembersOwnEchoExpiredBeforeExport(t *testing.T) {
 }
 
 func TestBackupRestoreRemembersAuthenticatedRoomEcho(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	engine, room := promoteBackupRoomFixture(t, source, placeholder)
 	witness := copyRestoreFixture(t, source)

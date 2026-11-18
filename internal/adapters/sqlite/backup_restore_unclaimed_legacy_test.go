@@ -12,6 +12,7 @@ import (
 )
 
 func TestBackupRestoreCompletesUnclaimedLegacyMediaWithoutUndoingClear(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -99,6 +100,7 @@ func TestBackupRestoreCompletesUnclaimedLegacyMediaWithoutUndoingClear(t *testin
 }
 
 func TestBackupRestoreKeepsClaimedLegacyImageOnNamedDevice(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -150,6 +152,7 @@ func TestBackupRestoreKeepsClaimedLegacyImageOnNamedDevice(t *testing.T) {
 }
 
 func TestBackupRestoreKeepsExpiredLegacyImageClaimAfterReexport(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

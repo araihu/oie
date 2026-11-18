@@ -8,6 +8,7 @@ import (
 )
 
 func TestBackupRestoreHistoricalSchedulePreservesDestinationActivity(t *testing.T) {
+	t.Parallel()
 	source, engine, first := outboxFixture(t)
 	ctx := t.Context()
 	engine.SetProtocols(&outboundProtocol{})

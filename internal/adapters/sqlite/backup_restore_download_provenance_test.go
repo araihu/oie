@@ -15,6 +15,7 @@ import (
 )
 
 func TestBackupRestoreKeepsProofWithEachRelayedDownload(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -116,6 +117,7 @@ func TestBackupRestoreKeepsProofWithEachRelayedDownload(t *testing.T) {
 }
 
 func TestBackupRestoreAcceptsProvenSuccessiveCleanup(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/domain"
@@ -94,16 +95,25 @@ func allowsEditReplay(ctx context.Context, q *dbgen.Queries, retained dbgen.Mess
 // Unlike direct stanzas, an archived room correction can use an occupant-
 // scoped provider key while its local acceptance uses the original client ID.
 func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domain.Conversation, incoming *domain.Message) (bool, error) {
-	if chat.Kind != "room" || !incoming.IsOwn || !correctionValid(incoming.Correction) || incoming.Correction.TargetID == "" ||
-		incoming.ProviderID == incoming.Correction.ID {
+	fact := incoming.Correction
+	if chat.Kind != "room" || !incoming.IsOwn || !correctionValid(fact) || fact.TargetID == "" ||
+		!strings.HasPrefix(fact.Scope, "xmpp:correct:room:"+chat.Address+":") || !strings.HasPrefix(fact.Author, chat.Address+"/") {
 		return true, nil
 	}
-	key := incoming.Correction.ID
-	retained, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{
+	key := fact.ID
+	provisional := incoming.ProviderID == key
+	// Origin matching may have selected the client ID before the room's
+	// occupant authority and the retained physical source were verified.
+	incoming.ProviderID = roomCorrectionProviderID(fact.Author, key)
+	lookup := dbgen.FindProviderMessageParams{
 		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: key, IsOwn: 1,
-	})
+	}
+	retained, err := q.FindProviderMessage(ctx, lookup)
 	if errors.Is(err, sql.ErrNoRows) {
-		return true, nil
+		if !provisional {
+			return true, nil
+		}
+		return true, bindUnmaterializedRoomEdit(ctx, q, incoming, lookup)
 	}
 	if err != nil {
 		return false, err
@@ -114,7 +124,7 @@ func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domai
 	if err != nil {
 		return false, err
 	}
-	if edit == nil || edit.Plan.Scope != incoming.Correction.Scope || edit.Plan.Author != incoming.Correction.Author {
+	if edit == nil || edit.Plan.Scope != fact.Scope || edit.Plan.Author != fact.Author {
 		return true, nil
 	}
 	if !matchesEditReplay(*edit, *incoming) {
@@ -122,6 +132,32 @@ func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domai
 	}
 	incoming.ProviderID = retained.ProviderID
 	return true, nil
+}
+
+func bindUnmaterializedRoomEdit(ctx context.Context, q *dbgen.Queries, incoming *domain.Message, lookup dbgen.FindProviderMessageParams) error {
+	row, err := q.GetMessageEditCommand(ctx, lookup.ProviderID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	edit, err := decodeEdit(row)
+	if err != nil {
+		return err
+	}
+	if row.AccountID != lookup.AccountID || row.ConversationID != lookup.ConversationID || !matchesEditReplay(edit, *incoming) {
+		return nil
+	}
+	// Restore can retain the archived occupant-scoped observation while
+	// adding its native acceptance receipt. Keep that source and its aliases.
+	lookup.ProviderID = incoming.ProviderID
+	if _, err := q.FindProviderMessage(ctx, lookup); errors.Is(err, sql.ErrNoRows) {
+		incoming.ProviderID = string(edit.Command.ID)
+	} else if err != nil {
+		return err
+	}
+	return nil
 }
 
 func matchesEditWire(p domain.PendingMessageEdit, m domain.Message, observed *domain.ReplyReference) bool {

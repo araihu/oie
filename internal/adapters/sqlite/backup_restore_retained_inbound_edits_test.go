@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreKeepsVerifiedEditsOfRetainedIncomingOriginal(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"room", "direct"} {
 		t.Run(kind, func(t *testing.T) {
 			source, sourceEngine, chat := outboxFixture(t)

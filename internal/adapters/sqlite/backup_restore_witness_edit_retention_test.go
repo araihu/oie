@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreKeepsWitnessedEditsOfRetainedOlderRoomSend(t *testing.T) {
+	t.Parallel()
 	destination, _, placeholder := outboxFixture(t)
 	sender, room := promoteBackupRoomFixture(t, destination, placeholder)
 	sender.SetProtocols(&outboundProtocol{})

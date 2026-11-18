@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreKeepsOwnSubmittedEditsAndReceipts(t *testing.T) {
+	t.Parallel()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})
 	ctx := t.Context()
@@ -88,6 +89,7 @@ func TestBackupRestoreKeepsOwnSubmittedEditsAndReceipts(t *testing.T) {
 }
 
 func TestBackupRestoreKeepsExpiredOwnEditCommandAndDescendantBodyOut(t *testing.T) {
+	t.Parallel()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})
 	ctx := t.Context()
@@ -145,6 +147,7 @@ func TestBackupRestoreKeepsExpiredOwnEditCommandAndDescendantBodyOut(t *testing.
 }
 
 func TestBackupRestoreRehydratesOwnEditReceiptAfterWideningRetention(t *testing.T) {
+	t.Parallel()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})
 	ctx := t.Context()

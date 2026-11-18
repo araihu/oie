@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreRetiresExactQueuedEditOnArchivedOutcome(t *testing.T) {
+	t.Parallel()
 	for _, state := range []string{"failed", "unknown"} {
 		t.Run(state, func(t *testing.T) {
 			ctx := t.Context()
@@ -88,6 +89,7 @@ func TestBackupRestoreRetiresExactQueuedEditOnArchivedOutcome(t *testing.T) {
 }
 
 func TestBackupRestoreSettlesUnknownEditWithVerifiedSubmittedHistory(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, editor, chat := outboxFixture(t)
 	editor.SetProtocols(&editProtocol{})

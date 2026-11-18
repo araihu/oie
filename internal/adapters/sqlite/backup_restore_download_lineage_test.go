@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreFillsPostCleanupDownloadAfterMetadataOnlyRestore(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -53,6 +54,7 @@ func TestBackupRestoreFillsPostCleanupDownloadAfterMetadataOnlyRestore(t *testin
 }
 
 func TestBackupRestorePreservesIndependentLocalDownloadCleanup(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	for _, clears := range []int{1, 2} {
 		name := "equal source generation"
@@ -108,6 +110,7 @@ func TestBackupRestorePreservesIndependentLocalDownloadCleanup(t *testing.T) {
 }
 
 func TestBackupRestoreOpensOlderDownloadArchiveWithoutCleanupRevision(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

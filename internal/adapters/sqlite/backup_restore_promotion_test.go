@@ -10,6 +10,7 @@ import (
 )
 
 func TestBackupRestoreSkipsAncestorOfPromotedRoom(t *testing.T) {
+	t.Parallel()
 	source, engine, placeholder := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -43,6 +44,7 @@ func TestBackupRestoreSkipsAncestorOfPromotedRoom(t *testing.T) {
 }
 
 func TestBackupRestoreRejectsIncompatibleDirectRoomHistory(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		changeSource func(*testing.T, *Store, *application.Engine, domain.Conversation)

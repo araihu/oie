@@ -8,6 +8,7 @@ import (
 )
 
 func TestBackupRestoreStopsActiveSendWithIndependentlyRetainedOwnEcho(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		age  time.Duration
@@ -56,6 +57,7 @@ func TestBackupRestoreStopsActiveSendWithIndependentlyRetainedOwnEcho(t *testing
 }
 
 func TestBackupRestoreKeepsCancellationReceiptForExistingQueue(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

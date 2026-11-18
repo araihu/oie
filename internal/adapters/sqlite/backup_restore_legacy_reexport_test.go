@@ -18,6 +18,7 @@ import (
 )
 
 func TestBackupRestoreReexportsNewDownloadsOnLegacyDevice(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -113,6 +114,7 @@ func TestBackupRestoreReexportsNewDownloadsOnLegacyDevice(t *testing.T) {
 }
 
 func TestBackupRestoreReexportsLegacyImagesClaimedInSettings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		version     uint
@@ -173,6 +175,7 @@ func TestBackupRestoreReexportsLegacyImagesClaimedInSettings(t *testing.T) {
 }
 
 func TestBackupRestoreCompletesDeferredLegacyDownloadAfterRelayingMetadata(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()

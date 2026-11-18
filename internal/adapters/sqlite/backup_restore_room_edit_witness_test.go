@@ -31,6 +31,7 @@ func (p *roomEditWitnessProtocol) PrepareCorrection(_ context.Context, _ domain.
 }
 
 func TestBackupRestoreKeepsRoomEditWitnessAndAcceptedDescendant(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, editor, placeholder := outboxFixture(t)
 	room := outboundRoom(t, source, placeholder.AccountID, "group@rooms.localhost")

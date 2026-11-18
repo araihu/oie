@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreReconcilesInterruptedClaimsBeforeWire(t *testing.T) {
+	t.Parallel()
 	source, sourceEngine, chat := outboxFixture(t)
 	ctx := t.Context()
 	cancelled := queueBackupFixture(t, sourceEngine, chat.ID, "cancelled in backup", nil)

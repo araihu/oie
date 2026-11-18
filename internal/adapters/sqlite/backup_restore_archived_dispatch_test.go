@@ -9,6 +9,7 @@ import (
 )
 
 func TestBackupRestoreAuthenticatesIndependentlyArchivedPlainSchedule(t *testing.T) {
+	t.Parallel()
 	const body = "scheduled text"
 	for _, tc := range []struct {
 		name, echoBody, wantState string
@@ -66,6 +67,7 @@ func TestBackupRestoreAuthenticatesIndependentlyArchivedPlainSchedule(t *testing
 }
 
 func TestBackupRestoreReconcilesUncertainNativeSubmission(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		outcome  string

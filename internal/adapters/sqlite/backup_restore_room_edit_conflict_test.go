@@ -18,6 +18,7 @@ import (
 )
 
 func TestBackupRestoreRoomCorrectionConflictKeepsLocalHistory(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	source, editor, placeholder := outboxFixture(t)
 	room := outboundRoom(t, source, placeholder.AccountID, "group@rooms.localhost")
@@ -109,6 +110,7 @@ func TestBackupRestoreRoomCorrectionConflictKeepsLocalHistory(t *testing.T) {
 }
 
 func TestBackupRestoreNativeCorrectionConflictKeepsLocalHistory(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, kind string
 		equivalent bool

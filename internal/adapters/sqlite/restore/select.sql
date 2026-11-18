@@ -235,6 +235,18 @@ WITH pairs AS MATERIALIZED (
 SELECT source_id,retained_id FROM counted
 WHERE retained_count=1 AND (established OR source_count=1);
 
+-- An explicit unstar can descend from the retained choice on this message
+-- even when the independently observed source falls outside the age window.
+-- The source remains an alias of the already retained logical message.
+INSERT INTO restore_messages
+SELECT e.source_id,1 FROM restore_idless_direct_echoes e
+JOIN backup.message_stars star ON star.message_id=e.source_id AND star.starred=0
+JOIN backup.message_star_revisions revision ON revision.id=star.revision_id AND revision.message_id=star.message_id
+WHERE EXISTS (
+  SELECT 1 FROM message_stars local LEFT JOIN message_canonical_aliases link ON link.alias_id=local.message_id
+  WHERE COALESCE(link.canonical_id,local.message_id)=e.retained_id
+) ON CONFLICT DO NOTHING;
+
 -- An older exact observation may add archive metadata to a retained message
 -- without enrolling a second copy of its history outside the age window.
 INSERT INTO restore_suppressed_echoes

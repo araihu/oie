@@ -12,6 +12,7 @@ import (
 )
 
 func TestBackupRestorePromotesAnEmptyDestinationPlaceholder(t *testing.T) {
+	t.Parallel()
 	source, sourceEngine, placeholder := outboxFixture(t)
 	ctx := t.Context()
 	preferences, err := sourceEngine.UpdateConversationPreferences(ctx, migrationID(), placeholder.ID,
@@ -54,6 +55,7 @@ func TestBackupRestorePromotesAnEmptyDestinationPlaceholder(t *testing.T) {
 }
 
 func TestBackupRestoreRejectsPromotionWithLocalDirectTraffic(t *testing.T) {
+	t.Parallel()
 	source, _, placeholder := outboxFixture(t)
 	dest := copyRestoreFixture(t, source)
 	_, room := promoteBackupRoomFixture(t, source, placeholder)
@@ -77,6 +79,7 @@ func TestBackupRestoreRejectsPromotionWithLocalDirectTraffic(t *testing.T) {
 }
 
 func TestBackupRestoreScrubsExpiredQuoteWithLateMetadata(t *testing.T) {
+	t.Parallel()
 	const secret = "source copy containing a private quotation"
 	const quote = "> " + secret + "\n"
 	const answer = "retained answer"
@@ -142,6 +145,7 @@ func TestBackupRestoreScrubsExpiredQuoteWithLateMetadata(t *testing.T) {
 }
 
 func TestBackupRestoreUsesDiscardedReferenceWithinDestinationRetention(t *testing.T) {
+	t.Parallel()
 	source, engine, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -231,6 +235,7 @@ func TestBackupRestoreUsesDiscardedReferenceWithinDestinationRetention(t *testin
 }
 
 func TestBackupRestoreRejectsConflictingScopedArchiveAlias(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	dest := copyRestoreFixture(t, source)
 	ctx := t.Context()

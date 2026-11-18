@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackupRestoreConversationPagesUseLocalActivityCursor(t *testing.T) {
+	t.Parallel()
 	source, engine, first := outboxFixture(t)
 	engine.SetProtocols(&outboundProtocol{})
 	ctx := t.Context()
@@ -53,6 +54,7 @@ func TestBackupRestoreConversationPagesUseLocalActivityCursor(t *testing.T) {
 }
 
 func TestBackupRestoreInvalidatesHistoryWithoutChangingDestinationActivity(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
@@ -85,6 +87,7 @@ func TestBackupRestoreInvalidatesHistoryWithoutChangingDestinationActivity(t *te
 }
 
 func TestBackupRestoreCanRecoverPreviouslyOutsideRetentionAfterWidening(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	dest := copyRestoreFixture(t, source)
@@ -114,6 +117,7 @@ func TestBackupRestoreCanRecoverPreviouslyOutsideRetentionAfterWidening(t *testi
 }
 
 func TestBackupRestoreDoesNotResurrectAccountDeletedAfterImport(t *testing.T) {
+	t.Parallel()
 	source, _, chat := outboxFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC()
