@@ -104,7 +104,7 @@ function searchSaved(current, {engine, account, accounts = [], chat, query}) {
   if (current.blocked || current.engine !== engine || !id.test(engine) ||
       (account !== null && !id.test(account)) || !Array.isArray(accounts) || accounts.length > 100 ||
       accounts.some(value => !id.test(value)) || (chat !== null && !id.test(chat)) ||
-      typeof query !== 'string' || query.length > 256 || !query.trim()) return hits;
+      typeof query !== 'string' || query.length > 400 || Array.from(query.trim()).length > 200 || !query.trim()) return hits;
 
   const pattern = new RegExp(query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
   for (const entry of current.entries) {

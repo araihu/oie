@@ -272,11 +272,11 @@ function editSavedHistory({age, kept} = {}) {
 
 // Use the ordinary snapshot writer so search sees the same account and message
 // identities that the offline timeline uses.
-async function saveSecondChat(page, until, {account, chat, messageID, text}) {
+async function saveSecondChat(page, until, {account, chat, messageID, emojiID, text}) {
   const {engine, checkpoint} = await page.evaluate(savedHistory);
   const entry = {account, chat, title: 'Mira', label: 'Work', messages: [{
     id: messageID, sender: 'Mira', date: '2026-11-06T17:00:00Z', text, own: false,
-  }]};
+  }, {id: emojiID, sender: 'Mira', date: '2026-11-06T18:00:00Z', text: '🧪'.repeat(200), own: false}]};
   await page.evaluate(data => navigator.serviceWorker.controller.postMessage(data), {
     type: 'oie:offline-history-save', engine, cursor: checkpoint, entry,
   });
@@ -305,6 +305,15 @@ async function checkSavedSearch(page, until, {root, account, chat, latest, withd
     assert((await links.innerText()).includes('<b>'), 'message markup in search results is literal text');
     assert.equal(await links.locator('mark').textContent(), '<b>');
     assert.equal(await links.locator('b').count(), 0);
+    for (const length of [129, 200]) {
+      const emoji = '🧪'.repeat(length);
+      await search(emoji, 1);
+      await until(async () => (await links.locator('mark').textContent()) === emoji, 'full Unicode search is highlighted');
+    }
+    const tooLong = await page.locator('#offline-search').getAttribute('data-too-long');
+    await query.fill('a'.repeat(201));
+    await until(async () => (await status.textContent()) === tooLong, 'oversized query explains the length limit');
+    assert.equal(await links.count(), 0);
     await search(draft, 0);
     await search('Texto literal', 2);
     await search(withdrawn, 0);
@@ -324,6 +333,9 @@ async function checkSavedSearch(page, until, {root, account, chat, latest, withd
   assert.equal(source.get('account'), second.account);
   assert.equal(source.get('chat'), second.chat);
   assert.equal(source.get('message'), second.messageID);
+  await page.goBack();
+  await until(async () => await links.count() === 2, 'Back restores offline search results');
+  assert.equal(await query.inputValue(), 'Texto literal');
 
   const native = new URL('/search', root);
   native.search = new URL(root).search;
@@ -368,7 +380,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
   const draft = 'Meu rascunho ainda está aqui.';
   const withdrawn = 'Original retraído que não pode aparecer sem conexão.';
   const missing = id(999);
-  const second = {account: id(310), chat: id(311), messageID: id(312), text: 'Texto literal do outro perfil.'};
+  const second = {account: id(310), chat: id(311), messageID: id(312), emojiID: id(313), text: 'Texto literal do outro perfil.'};
   const messages = [
     {id: id(101), revisionId: id(201), originalText: withdrawn, createdAt: '2026-11-07T19:00:00Z',
       retraction: {at: '2026-11-07T19:01:00Z', originalAvailable: true}},
@@ -446,21 +458,29 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await page.evaluate(editSavedHistory, {age: true});
       await saveSecondChat(page, until, second);
 
-      // Start in the normal search interface and lose the browser connection or the engine.
-      if (width === 390) {
-        await page.locator('[data-open-conversation-search]').filter({visible: true}).click();
-        await context.setOffline(true);
-        await page.locator('#conversation-search-query').fill('Texto literal');
-      } else {
-        await page.goto(root + '&inbox=1');
-        state.engineDown = true;
-        await page.locator('#conversation-search').fill('Texto literal');
+      // The two search clients handle transport errors differently. Exercise each
+      // with both a disconnected browser and an unreachable engine.
+      for (const browserOffline of [true, false]) {
+        await context.setOffline(false);
+        let field;
+        if (width === 390) {
+          await page.goto(route + '&open=details');
+          await page.locator('[data-open-conversation-search]').filter({visible: true}).click();
+          field = page.locator('#conversation-search-query');
+        } else {
+          await page.goto(root + '&inbox=1');
+          field = page.locator('#conversation-search');
+        }
+        await field.waitFor();
+        if (browserOffline) await context.setOffline(true);
+        else state.engineDown = true;
+        await field.fill('Texto literal');
+        const firstResults = page.locator('#offline-results').getByRole('link');
+        await until(async () => await firstResults.count() === (width === 390 ? 1 : 2),
+          'ordinary search opens saved messages when the ' + (browserOffline ? 'browser disconnects' : 'engine is down'));
+        assert.equal(await page.locator('#offline-query').inputValue(), 'Texto literal');
+        state.engineDown = false;
       }
-      const firstResults = page.locator('#offline-results').getByRole('link');
-      await until(async () => await firstResults.count() === (width === 390 ? 1 : 2),
-        'ordinary search opens matching saved messages after the connection fails');
-      assert.equal(await page.locator('#offline-query').inputValue(), 'Texto literal');
-      state.engineDown = false;
 
       // A new document can open the inbox and follow a saved chat with no network.
       await page.close();

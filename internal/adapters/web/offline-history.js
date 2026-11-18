@@ -36,7 +36,7 @@
     });
     navigator.serviceWorker.addEventListener('message', ({data}) => {
       if (data?.type === 'oie:offline-history-changed') {
-        if (data.engine === displayedEngine) void renderOffline();
+        if (!displayedEngine || data.engine === displayedEngine) void renderOffline();
         return;
       }
       if (data?.type === 'oie:offline-history-reset') {
@@ -326,6 +326,12 @@
       }
       main.classList.toggle('offline-searching', Boolean(query));
       if (!query) return;
+      if (query.length > 400 || Array.from(query).length > 200) {
+        results.replaceChildren();
+        results.hidden = true;
+        status.textContent = search.dataset.tooLong;
+        return;
+      }
       timer = setTimeout(async () => {
         const registration = await navigator.serviceWorker.getRegistration('/').catch(() => null);
         const hits = await request(registration?.active, {type: 'oie:offline-history-search', ...scope, query});
@@ -442,7 +448,7 @@
     const message = location.pathname === '/search' ? null : query.get('message');
     // A mounted reader stays bound to the engine that supplied its first snapshot.
     displayedEngine ??= state?.engine;
-    const currentScope = displayedEngine === state?.engine && !revokedEngines.has(displayedEngine);
+    const currentScope = !state?.blocked && displayedEngine === state?.engine && !revokedEngines.has(displayedEngine);
     if (!currentScope) stopSearch?.();
     const entries = !valid || !currentScope || expectedEngine && expectedEngine !== displayedEngine ? [] :
       (state?.entries ?? []).filter(matchesAccount);
