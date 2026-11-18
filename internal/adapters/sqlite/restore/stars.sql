@@ -5,16 +5,7 @@ CREATE TEMP TABLE restore_idless_star_members (
   message_id TEXT PRIMARY KEY,canonical_id TEXT NOT NULL
 ) WITHOUT ROWID;
 INSERT INTO restore_idless_star_members
-WITH aliases AS MATERIALIZED (
-  SELECT alias.id AS message_id,root.id AS canonical_id
-  FROM message_canonical_aliases link
-  JOIN messages root ON root.id=link.canonical_id AND root.is_own=1 AND root.state='submitted'
-  JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_id
-    AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
-  JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='direct'
-  WHERE root.id<>json_extract(root.payload,'$.OwnOriginID') AND json_extract(root.payload,'$.OwnOriginID')<>''
-    AND json_extract(alias.payload,'$.OwnOriginID')=json_extract(root.payload,'$.OwnOriginID')
-), affected AS (
+WITH aliases AS MATERIALIZED (SELECT * FROM restore_idless_star_aliases), affected AS (
   SELECT DISTINCT a.canonical_id FROM aliases a
   JOIN restore_messages selected ON selected.id IN (a.message_id,a.canonical_id)
 )

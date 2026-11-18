@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -429,7 +430,24 @@ func (s *Store) FinishMessageEdit(ctx context.Context, id domain.ID, state strin
 }
 
 func hasVerifiedEditEcho(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit) (bool, error) {
-	row, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: string(p.Command.ID), IsOwn: 1})
+	matched, err := hasVerifiedEditProvider(ctx, q, p, string(p.Command.ID))
+	if err != nil || matched {
+		return matched, err
+	}
+	return hasVerifiedRoomEditWitness(ctx, q, p)
+}
+
+func hasVerifiedRoomEditWitness(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit) (bool, error) {
+	if !strings.HasPrefix(p.Plan.Scope, "xmpp:correct:room:") {
+		return false, nil
+	}
+	return hasVerifiedEditProvider(ctx, q, p, roomCorrectionProviderID(p.Plan.Author, string(p.Command.ID)))
+}
+
+func hasVerifiedEditProvider(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, provider string) (bool, error) {
+	row, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{
+		AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: provider, IsOwn: 1,
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -465,8 +483,8 @@ func verifiedEditSource(ctx context.Context, q *dbgen.Queries, p domain.PendingM
 }
 
 func (s *Store) ObserveMessageEdit(ctx context.Context, account domain.ID, provider string, proof domain.MessageCorrection, text string, revision domain.ID, at time.Time) error {
-	id, err := domain.ParseID(provider)
-	if err != nil {
+	id, err := domain.ParseID(proof.ID)
+	if err != nil || !correctionProviderMatches(provider, proof.Scope, proof.Author, proof.ID) {
 		return nil
 	}
 	tx, q, err := begin(ctx, s)
@@ -570,6 +588,12 @@ func recordEditRoot(ctx context.Context, q *dbgen.Queries, p domain.PendingMessa
 func materializeEdit(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, at time.Time) error {
 	base, err := recordEditRoot(ctx, q, p)
 	if err != nil {
+		return err
+	}
+	// An authenticated archive may already own the exact correction under
+	// its occupant-scoped key. Its source and revision remain authoritative.
+	observed, err := hasVerifiedRoomEditWitness(ctx, q, p)
+	if err != nil || observed {
 		return err
 	}
 	existing, err := q.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{AccountID: string(p.Command.AccountID), ConversationID: string(p.Command.ConversationID), ProviderID: string(p.Command.ID), IsOwn: 1})

@@ -235,34 +235,18 @@ WITH pairs AS MATERIALIZED (
 SELECT source_id,retained_id FROM counted
 WHERE retained_count=1 AND (established OR source_count=1);
 
--- An explicit unstar can descend from the retained choice on this message
--- even when the independently observed source falls outside the age window.
--- The source remains an alias of the already retained logical message.
-INSERT INTO restore_messages
-SELECT e.source_id,1 FROM restore_idless_direct_echoes e
-JOIN backup.message_stars star ON star.message_id=e.source_id AND star.starred=0
-JOIN backup.message_star_revisions revision ON revision.id=star.revision_id AND revision.message_id=star.message_id
-WHERE EXISTS (
-  SELECT 1 FROM message_stars local LEFT JOIN message_canonical_aliases link ON link.alias_id=local.message_id
-  WHERE COALESCE(link.canonical_id,local.message_id)=e.retained_id
-) ON CONFLICT DO NOTHING;
-
--- An older exact observation may add archive metadata to a retained message
--- without enrolling a second copy of its history outside the age window.
-INSERT INTO restore_suppressed_echoes
-SELECT source_id,retained_id FROM restore_idless_direct_echoes e
-WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=e.source_id);
-
--- A re-export preserves each source and the verified alias. When the
--- canonical source already maps to a retained row, keep the aliases flat.
+-- Verify and flatten relayed aliases before applying the age window to
+-- any physical rows that carry the retained star's causal history.
 INSERT INTO restore_idless_direct_echoes
 SELECT source.id,COALESCE(mapped.retained_id,root.id)
 FROM backup.message_canonical_aliases edge
 JOIN backup.messages source ON source.id=edge.alias_id AND source.is_own=1 AND source.state='submitted'
-JOIN restore_messages selected ON selected.id=source.id
+JOIN restore_message_candidates candidate ON candidate.id=source.id
 JOIN backup.messages root ON root.id=edge.canonical_id AND root.is_own=1 AND root.state='submitted'
   AND root.account_id=source.account_id AND root.conversation_id=source.conversation_id
-JOIN restore_messages selected_root ON selected_root.id=root.id
+JOIN restore_message_candidates root_candidate ON root_candidate.id=root.id
+LEFT JOIN restore_messages selected ON selected.id=source.id
+LEFT JOIN restore_messages selected_root ON selected_root.id=root.id
 JOIN backup.conversations chat ON chat.id=root.conversation_id AND chat.account_id=root.account_id
 JOIN backup.accounts account ON account.id=root.account_id
 JOIN backup.message_references sr ON sr.message_id=source.id AND sr.scope='sender:'||account.address AND sr.author=account.address
@@ -275,13 +259,124 @@ LEFT JOIN backup.message_replies sp ON sp.message_id=source.id AND sp.body_hash=
 LEFT JOIN backup.message_replies rp ON rp.message_id=root.id AND rp.body_hash=rr.source_hash
 LEFT JOIN restore_idless_direct_echoes mapped ON mapped.source_id=root.id
 LEFT JOIN message_canonical_aliases known ON known.alias_id=source.id
+LEFT JOIN messages local ON local.id=root.id AND local.account_id=root.account_id AND local.conversation_id=root.conversation_id
+LEFT JOIN message_replies lp ON lp.message_id=local.id AND lp.body_hash=rr.source_hash
 WHERE json_extract(chat.payload,'$.Kind')='direct'
-  AND (selected.is_new=1 OR known.canonical_id=COALESCE(mapped.retained_id,root.id))
+  AND (candidate.is_new=1 OR known.canonical_id=COALESCE(mapped.retained_id,root.id))
+  AND (
+    (selected.id IS NOT NULL AND selected_root.id IS NOT NULL) OR mapped.retained_id IS NOT NULL
+    OR (local.id IS NOT NULL AND oie_same_direct_echo(root.payload,rp.payload,local.payload,lp.payload)=1 AND EXISTS (
+      SELECT 1 FROM message_references ref WHERE ref.message_id=local.id AND ref.scope=rr.scope
+        AND ref.remote_id=rr.remote_id AND ref.author=rr.author AND ref.source_hash=rr.source_hash
+    ))
+  )
   AND COALESCE(mapped.retained_id,root.id)<>source.id
   AND NOT EXISTS (SELECT 1 FROM backup.message_canonical_aliases edge WHERE edge.alias_id=root.id)
   AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases edge WHERE edge.alias_id=COALESCE(mapped.retained_id,root.id))
   AND NOT EXISTS (SELECT 1 FROM backup.message_correction_facts fact WHERE fact.message_id IN (source.id,root.id) AND fact.target_id<>'')
   AND oie_same_direct_echo(source.payload,sp.payload,root.payload,rp.payload)=1;
+
+CREATE TEMP VIEW restore_idless_star_aliases AS
+SELECT alias.id AS message_id,root.id AS canonical_id
+FROM message_canonical_aliases link
+JOIN messages root ON root.id=link.canonical_id AND root.is_own=1 AND root.state='submitted'
+JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_id
+  AND alias.conversation_id=root.conversation_id AND alias.is_own=1 AND alias.state='submitted' AND alias.provider_id=''
+JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='direct'
+WHERE root.id<>json_extract(root.payload,'$.OwnOriginID') AND json_extract(root.payload,'$.OwnOriginID')<>''
+  AND json_extract(alias.payload,'$.OwnOriginID')=json_extract(root.payload,'$.OwnOriginID');
+
+-- Carry just the physical rows that establish the path from an archived
+-- unstar to the retained head. Keep the ancestry available for re-export.
+CREATE TEMP TABLE restore_idless_star_age (
+  message_id TEXT NOT NULL,revision_id TEXT NOT NULL,PRIMARY KEY(message_id,revision_id)
+) WITHOUT ROWID;
+INSERT INTO restore_idless_star_age
+WITH RECURSIVE
+roots AS MATERIALIZED (
+  SELECT DISTINCT e.retained_id AS canonical_id
+  FROM restore_idless_direct_echoes e JOIN messages retained ON retained.id=e.retained_id
+  WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=e.source_id)
+),
+current_heads AS MATERIALIZED (
+  SELECT root.canonical_id,(
+    SELECT s.revision_id FROM message_stars s
+    WHERE s.message_id=root.canonical_id OR s.message_id IN (
+      SELECT alias.message_id FROM restore_idless_star_aliases alias WHERE alias.canonical_id=root.canonical_id
+    )
+    ORDER BY s.updated_at DESC,s.revision_id DESC LIMIT 1
+  ) AS revision_id
+  FROM roots root
+),
+archived_members AS MATERIALIZED (
+  SELECT e.source_id AS message_id,e.retained_id AS canonical_id
+  FROM restore_idless_direct_echoes e JOIN current_heads h ON h.canonical_id=e.retained_id AND h.revision_id IS NOT NULL
+  UNION
+  SELECT h.canonical_id,h.canonical_id FROM current_heads h
+  JOIN restore_message_candidates candidate ON candidate.id=h.canonical_id
+  WHERE h.revision_id IS NOT NULL
+),
+retained_members AS MATERIALIZED (
+  SELECT alias.message_id,alias.canonical_id
+  FROM restore_idless_star_aliases alias JOIN current_heads h ON h.canonical_id=alias.canonical_id
+  WHERE h.revision_id IS NOT NULL
+  UNION ALL
+  SELECT h.canonical_id,h.canonical_id FROM current_heads h WHERE h.revision_id IS NOT NULL
+),
+star_revisions AS MATERIALIZED (
+  SELECT member.canonical_id,r.id,r.message_id,r.parents,r.payload,r.created_at
+  FROM archived_members member JOIN backup.message_star_revisions r ON r.message_id=member.message_id
+  WHERE NOT EXISTS (SELECT 1 FROM message_star_revisions known WHERE known.id=r.id)
+    AND json_extract(r.payload,'$.RevisionID')=r.id AND json_extract(r.payload,'$.MessageID')=r.message_id
+  UNION ALL
+  SELECT member.canonical_id,r.id,r.message_id,r.parents,r.payload,r.created_at
+  FROM retained_members member JOIN message_star_revisions r ON r.message_id=member.message_id
+),
+edges AS MATERIALIZED (
+  SELECT child.canonical_id,child.id AS child_id,parent.id AS parent_id
+  FROM star_revisions child JOIN json_each(child.parents) edge ON edge.type='text'
+  JOIN star_revisions parent ON parent.canonical_id=child.canonical_id AND parent.id=edge.value
+),
+descendants(canonical_id,revision_id) AS (
+  SELECT canonical_id,revision_id FROM current_heads WHERE revision_id IS NOT NULL
+  UNION
+  SELECT d.canonical_id,e.child_id FROM descendants d JOIN edges e
+    ON e.canonical_id=d.canonical_id AND e.parent_id=d.revision_id
+),
+keep(canonical_id,revision_id) AS (
+  SELECT member.canonical_id,s.revision_id
+  FROM archived_members member
+  JOIN backup.message_stars s ON s.message_id=member.message_id AND s.starred=0
+  JOIN star_revisions r ON r.id=s.revision_id AND r.message_id=s.message_id AND r.canonical_id=member.canonical_id
+  JOIN descendants d ON d.canonical_id=r.canonical_id AND d.revision_id=r.id
+  JOIN current_heads h ON h.canonical_id=r.canonical_id AND h.revision_id<>r.id
+  WHERE r.payload=s.payload AND r.created_at=s.updated_at
+    AND json_extract(s.payload,'$.RevisionID')=s.revision_id AND json_extract(s.payload,'$.MessageID')=s.message_id
+    AND json_extract(s.payload,'$.Starred')=s.starred
+  UNION
+  SELECT k.canonical_id,e.parent_id FROM keep k
+  JOIN current_heads h ON h.canonical_id=k.canonical_id AND h.revision_id<>k.revision_id
+  JOIN edges e ON e.canonical_id=k.canonical_id AND e.child_id=k.revision_id
+  JOIN descendants d ON d.canonical_id=e.canonical_id AND d.revision_id=e.parent_id
+)
+SELECT DISTINCT candidate.id,r.id FROM keep k JOIN star_revisions r
+  ON r.canonical_id=k.canonical_id AND r.id=k.revision_id
+JOIN archived_members member ON member.canonical_id=r.canonical_id AND member.message_id=r.message_id
+JOIN restore_message_candidates candidate ON candidate.id=member.message_id
+WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=candidate.id);
+
+INSERT INTO restore_messages
+SELECT DISTINCT message_id,1 FROM restore_idless_star_age;
+
+DELETE FROM restore_idless_direct_echoes
+WHERE source_id IN (SELECT alias_id FROM backup.message_canonical_aliases)
+  AND NOT EXISTS(SELECT 1 FROM restore_messages selected WHERE selected.id=source_id);
+
+-- An older exact observation may add archive metadata to a retained message
+-- without enrolling a second copy of its history outside the age window.
+INSERT INTO restore_suppressed_echoes
+SELECT source_id,retained_id FROM restore_idless_direct_echoes e
+WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=e.source_id);
 
 -- The destination can retain its own original beyond the archive cutoff.
 -- The verified echo may still contribute metadata for that retained body.

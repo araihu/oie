@@ -316,6 +316,9 @@ func testBackupRestoreIdlessCausalStar(t *testing.T, old bool) {
 	if chosen, err := receiver.MessageStar(ctx, local.ID); err != nil || !chosen.Starred || chosen.RevisionID != setAgain.Star.RevisionID {
 		t.Fatalf("the star did not follow the second proven alias transition: %+v, %v", chosen, err)
 	}
+	if err := live.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	concurrentDir := t.TempDir()
 	if _, err := sqlite.RestoreProfileBackup(ctx, concurrentDir, archive, mintDirectEchoID(t)); err != nil {

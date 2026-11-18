@@ -106,7 +106,11 @@ func TestBackupRestoreRoomCorrectionReplayPreservesScopedSource(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer db.Close()
+		defer func() {
+			if err := db.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		var id domain.ID
 		if err := db.QueryRowContext(ctx, `SELECT message_id FROM archive_aliases WHERE account_id=? AND scope=? AND archive_id=?`,
 			account.ID, room.Address, archiveKey).Scan(&id); err != nil {
