@@ -261,7 +261,7 @@ GitHub Actions runs the five Dagger modes independently on standard
 `ubuntu-24.04` runners and verifies the app image on amd64 and arm64. Each
 Dagger job uploads `dagger-ci-evidence-<mode>` with its own stage logs and
 test evidence, including on failure. Actions jobs bypass the local lock.
-`make test-race` allows 25 minutes per Go test package for the SQLite
+`make test-race` allows 30 minutes per Go test package for the SQLite
 fixtures that exercise archived profiles and both merge orders.
 The `Required CI` check aggregates both the Dagger and image smoke jobs.
 New commits on a PR cancel its superseded workflow runs.

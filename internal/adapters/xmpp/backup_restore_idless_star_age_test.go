@@ -1,7 +1,9 @@
 package xmpp
 
 import (
+	"database/sql"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,11 +14,12 @@ import (
 
 func TestBackupRestoreRelayedCausalUnstarAcrossCutoff(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		multiHop bool
+		name              string
+		multiHop, sibling bool
 	}{
 		{name: "re-exported alias owns the unstar"},
 		{name: "an older intermediary has no current star", multiHop: true},
+		{name: "repeat excludes an unrelated revision of the same carrier", sibling: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -85,7 +88,17 @@ func TestBackupRestoreRelayedCausalUnstarAcrossCutoff(t *testing.T) {
 			oldStar := set(first.dir, first.message.ID, "", true)
 			ancestorArchive := writeRoomEchoBackup(t, first.dir)
 			apply(second.dir, ancestorArchive, 0)
+			var unrelated domain.MessageStar
+			var fork string
+			if tc.sibling {
+				fork = t.TempDir()
+				apply(fork, writeRoomEchoBackup(t, second.dir), 1)
+				unrelated = set(fork, second.message.ID, oldStar.RevisionID, false)
+			}
 			unstar := set(second.dir, second.message.ID, oldStar.RevisionID, false)
+			if tc.sibling {
+				apply(second.dir, writeRoomEchoBackup(t, fork), 0)
+			}
 			secondArchive := writeRoomEchoBackup(t, second.dir)
 			carriers := []domain.Message{first.message, second.message}
 			var relay string
@@ -96,6 +109,8 @@ func TestBackupRestoreRelayedCausalUnstarAcrossCutoff(t *testing.T) {
 				unstar = set(third.dir, third.message.ID, restar.RevisionID, false)
 				carriers = append(carriers, third.message)
 				relay = writeRoomEchoBackup(t, third.dir)
+			} else if tc.sibling {
+				relay = secondArchive
 			} else {
 				apply(first.dir, secondArchive, 0)
 				relay = writeRoomEchoBackup(t, first.dir)
@@ -125,9 +140,39 @@ func TestBackupRestoreRelayedCausalUnstarAcrossCutoff(t *testing.T) {
 			destination := t.TempDir()
 			apply(destination, ancestorArchive, 1)
 			setShortRetention(destination)
-			for range 2 {
+			retainsAlternative := func(dir string) bool {
+				t.Helper()
+				db, err := sql.Open("sqlite", filepath.Join(dir, "oie.sqlite"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := db.Close(); err != nil {
+						t.Error(err)
+					}
+				}()
+				var exists bool
+				if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM message_star_revisions WHERE id=?)`, unrelated.RevisionID).Scan(&exists); err != nil {
+					t.Fatal(err)
+				}
+				return exists
+			}
+			if tc.sibling && !retainsAlternative(second.dir) {
+				t.Fatal("the relay did not contain the unrelated revision")
+			}
+			var cursor int64
+			for pass := range 2 {
 				apply(destination, relay, 0)
 				check(destination, unstar)
+				if tc.sibling {
+					store, _, _ := openDirectEchoProfile(t, destination)
+					_, current, err := store.Snapshot(ctx)
+					closeStore(store)
+					if err != nil || (pass > 0 && current != cursor) || retainsAlternative(destination) {
+						t.Fatalf("applying the archive again admitted the unrelated ancestry or emitted changes: cursor %d to %d, %v", cursor, current, err)
+					}
+					cursor = current
+				}
 			}
 
 			// The re-export includes the intermediary even though that physical
@@ -157,6 +202,28 @@ func TestBackupRestoreRelayedCausalUnstarAcrossCutoff(t *testing.T) {
 			apply(fresh, seed, 0)
 			setShortRetention(fresh)
 			apply(fresh, relay, 0)
+
+			if tc.sibling {
+				setRetention := func(days int) {
+					t.Helper()
+					store, engine, _ := openDirectEchoProfile(t, destination)
+					defer closeStore(store)
+					policy, err := engine.ConversationRetention(ctx, chat.ID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := engine.SetConversationRetention(ctx, chat.ID, policy.Revision, &days); err != nil {
+						t.Fatal(err)
+					}
+				}
+				setRetention(0)
+				apply(destination, relay, 0)
+				check(destination, unstar)
+				if !retainsAlternative(destination) {
+					t.Fatal("ordinary eligibility did not admit the valid revision after widening")
+				}
+				setRetention(1)
+			}
 
 			// Even widening afterward must leave explicit expiry evidence in
 			// force when the old archive still retains the ancestor star.

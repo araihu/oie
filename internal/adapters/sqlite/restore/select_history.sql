@@ -132,7 +132,7 @@ WHERE id IN (
   JOIN messages m ON m.id=r.id
   WHERE NOT EXISTS(SELECT 1 FROM message_revisions d WHERE d.id=b.id)
   UNION
-  SELECT m.conversation_id FROM backup.message_star_revisions b
+  SELECT m.conversation_id FROM restore_admitted_star_revisions b
   JOIN restore_messages r ON r.id=b.message_id AND r.is_new=0
   JOIN messages m ON m.id=r.id
   WHERE NOT EXISTS(SELECT 1 FROM message_star_revisions d WHERE d.id=b.id)

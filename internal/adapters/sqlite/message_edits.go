@@ -441,7 +441,12 @@ func hasVerifiedRoomEditWitness(ctx context.Context, q *dbgen.Queries, p domain.
 	if !strings.HasPrefix(p.Plan.Scope, "xmpp:correct:room:") {
 		return false, nil
 	}
-	return hasVerifiedEditProvider(ctx, q, p, roomCorrectionProviderID(p.Plan.Author, string(p.Command.ID)))
+	remote := string(p.Command.ID)
+	matched, err := hasVerifiedEditProvider(ctx, q, p, scopedRoomCorrectionProviderID(p.Plan.Scope, p.Plan.Author, remote))
+	if err != nil || matched {
+		return matched, err
+	}
+	return hasVerifiedEditProvider(ctx, q, p, roomCorrectionProviderID(p.Plan.Author, remote))
 }
 
 func hasVerifiedEditProvider(ctx context.Context, q *dbgen.Queries, p domain.PendingMessageEdit, provider string) (bool, error) {

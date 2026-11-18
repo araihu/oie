@@ -86,9 +86,7 @@ FROM backup.operations o JOIN restore_messages x ON x.id=o.resource_id AND x.is_
 WHERE o.kind IN ('send_message','cancel_message','update_pending_message','send_scheduled_message_now','forward_message')
 ON CONFLICT(id) DO NOTHING;
 
-INSERT INTO message_star_revisions SELECT r.* FROM backup.message_star_revisions r JOIN restore_messages x ON x.id=r.message_id
-WHERE NOT EXISTS (SELECT 1 FROM restore_idless_star_age admitted WHERE admitted.message_id=r.message_id)
-   OR EXISTS (SELECT 1 FROM restore_idless_star_age admitted WHERE admitted.message_id=r.message_id AND admitted.revision_id=r.id)
+INSERT INTO message_star_revisions SELECT * FROM restore_admitted_star_revisions WHERE TRUE
 ON CONFLICT(id) DO NOTHING;
 INSERT INTO archive_aliases(account_id,scope,archive_id,message_id)
 SELECT a.account_id,a.scope,a.archive_id,COALESCE(idless.retained_id,a.message_id)

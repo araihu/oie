@@ -102,12 +102,16 @@ func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domai
 	}
 	key := fact.ID
 	provisional := incoming.ProviderID == key
-	// Origin matching may have selected the client ID before the room's
-	// occupant authority and the retained physical source were verified.
-	incoming.ProviderID = roomCorrectionProviderID(fact.Author, key)
 	lookup := dbgen.FindProviderMessageParams{
 		AccountID: string(chat.AccountID), ConversationID: string(chat.ID), ProviderID: key, IsOwn: 1,
 	}
+	// The client ID and nickname can be reused by another verified occupant.
+	// Keep a legacy physical owner only when its retained fact has this scope.
+	provider, err := selectRoomCorrectionProvider(ctx, q, lookup, *fact)
+	if err != nil {
+		return false, err
+	}
+	incoming.ProviderID = provider
 	retained, err := q.FindProviderMessage(ctx, lookup)
 	if errors.Is(err, sql.ErrNoRows) {
 		if !provisional {
@@ -132,6 +136,37 @@ func matchNativeRoomEditReplay(ctx context.Context, q *dbgen.Queries, chat domai
 	}
 	incoming.ProviderID = retained.ProviderID
 	return true, nil
+}
+
+func selectRoomCorrectionProvider(ctx context.Context, q *dbgen.Queries, lookup dbgen.FindProviderMessageParams, proof domain.MessageCorrection) (string, error) {
+	scoped := scopedRoomCorrectionProviderID(proof.Scope, proof.Author, proof.ID)
+	lookup.ProviderID = scoped
+	if _, err := q.FindProviderMessage(ctx, lookup); err == nil {
+		return scoped, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	legacy := roomCorrectionProviderID(proof.Author, proof.ID)
+	lookup.ProviderID = legacy
+	row, err := q.FindProviderMessage(ctx, lookup)
+	if errors.Is(err, sql.ErrNoRows) {
+		return scoped, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	retained, err := decodeMessage(row)
+	if err != nil {
+		return "", err
+	}
+	fact, err := observedRoomEditFact(ctx, q, retained)
+	if err != nil {
+		return "", err
+	}
+	if fact != nil && fact.Scope == proof.Scope && fact.Author == proof.Author && fact.RemoteID == proof.ID {
+		return legacy, nil
+	}
+	return scoped, nil
 }
 
 func bindUnmaterializedRoomEdit(ctx context.Context, q *dbgen.Queries, incoming *domain.Message, lookup dbgen.FindProviderMessageParams) error {

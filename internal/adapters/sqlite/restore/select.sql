@@ -102,16 +102,20 @@ WHERE (d.id IS NOT NULL OR (
 AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
 AND m.state NOT IN ('queued','dispatching','unknown');
 
-CREATE TEMP TABLE restore_messages (id TEXT PRIMARY KEY, is_new INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TEMP TABLE restore_messages (
+  id TEXT PRIMARY KEY,is_new INTEGER NOT NULL,within_retention INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
 INSERT INTO restore_messages
-SELECT m.id,m.is_new FROM restore_message_candidates m
-WHERE m.is_new=0 OR m.days=0 OR m.age_ms>=@now_ms - 86400000 * m.days
-   OR EXISTS (
+WITH eligibility AS (
+  SELECT m.id,m.is_new,m.days=0 OR m.age_ms>=@now_ms - 86400000 * m.days OR EXISTS (
        SELECT 1 FROM backup.message_stars s WHERE s.starred=1 AND (
          s.message_id=COALESCE(m.canonical_id,m.id)
          OR s.message_id IN (SELECT al.alias_id FROM backup.message_canonical_aliases al WHERE al.canonical_id=COALESCE(m.canonical_id,m.id))
        )
-   );
+  ) AS within_retention
+  FROM restore_message_candidates m
+)
+SELECT id,is_new,within_retention FROM eligibility WHERE is_new=0 OR within_retention;
 
 -- Earlier direct observations could keep the sender reference while taking
 -- the origin from the ordinary provider ID. Its exact scoped reference can
@@ -288,6 +292,14 @@ WHERE root.id<>json_extract(root.payload,'$.OwnOriginID') AND json_extract(root.
 
 -- Carry just the physical rows that establish the path from an archived
 -- unstar to the retained head. Keep the ancestry available for re-export.
+-- An alias already retained by this exception still has the same cutoff on
+-- a repeat. A normal age-eligible source can contribute its full history.
+CREATE TEMP TABLE restore_idless_star_restricted (message_id TEXT PRIMARY KEY) WITHOUT ROWID;
+INSERT INTO restore_idless_star_restricted
+SELECT e.source_id FROM restore_idless_direct_echoes e JOIN messages retained ON retained.id=e.retained_id
+LEFT JOIN restore_messages selected ON selected.id=e.source_id
+WHERE COALESCE(selected.within_retention,0)=0;
+
 CREATE TEMP TABLE restore_idless_star_age (
   message_id TEXT NOT NULL,revision_id TEXT NOT NULL,PRIMARY KEY(message_id,revision_id)
 ) WITHOUT ROWID;
@@ -295,8 +307,7 @@ INSERT INTO restore_idless_star_age
 WITH RECURSIVE
 roots AS MATERIALIZED (
   SELECT DISTINCT e.retained_id AS canonical_id
-  FROM restore_idless_direct_echoes e JOIN messages retained ON retained.id=e.retained_id
-  WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=e.source_id)
+  FROM restore_idless_direct_echoes e JOIN restore_idless_star_restricted limited ON limited.message_id=e.source_id
 ),
 current_heads AS MATERIALIZED (
   SELECT root.canonical_id,(
@@ -359,14 +370,18 @@ keep(canonical_id,revision_id) AS (
   JOIN edges e ON e.canonical_id=k.canonical_id AND e.child_id=k.revision_id
   JOIN descendants d ON d.canonical_id=e.canonical_id AND d.revision_id=e.parent_id
 )
-SELECT DISTINCT candidate.id,r.id FROM keep k JOIN star_revisions r
+SELECT DISTINCT limited.message_id,r.id FROM keep k JOIN star_revisions r
   ON r.canonical_id=k.canonical_id AND r.id=k.revision_id
 JOIN archived_members member ON member.canonical_id=r.canonical_id AND member.message_id=r.message_id
-JOIN restore_message_candidates candidate ON candidate.id=member.message_id
-WHERE NOT EXISTS (SELECT 1 FROM restore_messages selected WHERE selected.id=candidate.id);
+JOIN restore_idless_star_restricted limited ON limited.message_id=member.message_id;
 
-INSERT INTO restore_messages
-SELECT DISTINCT message_id,1 FROM restore_idless_star_age;
+INSERT INTO restore_messages(id,is_new)
+SELECT DISTINCT message_id,1 FROM restore_idless_star_age WHERE TRUE ON CONFLICT DO NOTHING;
+
+CREATE TEMP VIEW restore_admitted_star_revisions AS
+SELECT r.* FROM backup.message_star_revisions r JOIN restore_messages selected ON selected.id=r.message_id
+WHERE NOT EXISTS (SELECT 1 FROM restore_idless_star_restricted limited WHERE limited.message_id=r.message_id)
+   OR EXISTS (SELECT 1 FROM restore_idless_star_age admitted WHERE admitted.message_id=r.message_id AND admitted.revision_id=r.id);
 
 DELETE FROM restore_idless_direct_echoes
 WHERE source_id IN (SELECT alias_id FROM backup.message_canonical_aliases)
@@ -612,7 +627,7 @@ WHERE id IS NOT NULL GROUP BY id;
 DELETE FROM restore_messages
 WHERE is_new=1 AND id IN (SELECT id FROM restore_retained_correction_sources WHERE allowed=0);
 
-INSERT INTO restore_messages
+INSERT INTO restore_messages(id,is_new)
 SELECT id,is_new FROM restore_retained_correction_sources WHERE allowed=1
 ON CONFLICT DO NOTHING;
 

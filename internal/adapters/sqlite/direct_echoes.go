@@ -12,7 +12,14 @@ import (
 )
 
 func init() {
-	sqlitedriver.MustRegisterDeterministicScalarFunction("oie_same_direct_echo", 4, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
+	registerObservedWireMatch("oie_same_direct_echo", sameObservedDirectWire)
+	registerObservedWireMatch("oie_same_room_correction_wire", func(a, b domain.Message) bool {
+		return a.OutboundReply == nil && b.OutboundReply == nil && sameObservedWire(a, b)
+	})
+}
+
+func registerObservedWireMatch(name string, matches func(domain.Message, domain.Message) bool) {
+	sqlitedriver.MustRegisterDeterministicScalarFunction(name, 4, func(_ *sqlitedriver.FunctionContext, args []driver.Value) (driver.Value, error) {
 		var a, b domain.Message
 		aPayload, _ := args[0].(string)
 		bPayload, _ := args[2].(string)
@@ -22,7 +29,7 @@ func init() {
 		if err := json.Unmarshal([]byte(bPayload), &b); err != nil {
 			return nil, err
 		}
-		if !sameObservedDirectWire(a, b) {
+		if !matches(a, b) {
 			return int64(0), nil
 		}
 		aReply, _ := args[1].(string)
@@ -35,7 +42,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return number(sameObservedDirectReply(a, ar, b, br)), nil
+		return number(sameObservedReply(a, ar, b, br)), nil
 	})
 }
 
@@ -88,7 +95,7 @@ func findDirectEchoWithoutStanzaID(ctx context.Context, q *dbgen.Queries, c doma
 		if err != nil {
 			return "", err
 		}
-		if !sameObservedDirectReply(previous, reply, incoming, incoming.ReplyReference) {
+		if !sameObservedReply(previous, reply, incoming, incoming.ReplyReference) {
 			continue
 		}
 		if match != "" && match != row.ID {
@@ -104,15 +111,19 @@ func withoutStanzaID(m domain.Message) bool {
 }
 
 func sameObservedDirectWire(a, b domain.Message) bool {
+	return a.OwnOriginID != "" && a.OwnOriginID == b.OwnOriginID && withoutStanzaID(a) && withoutStanzaID(b) &&
+		sameObservedWire(a, b)
+}
+
+func sameObservedWire(a, b domain.Message) bool {
 	return a.IsOwn && b.IsOwn && a.SendState == "submitted" && b.SendState == "submitted" &&
-		a.OwnOriginID != "" && a.OwnOriginID == b.OwnOriginID && withoutStanzaID(a) && withoutStanzaID(b) &&
 		a.SourceBodyHash() == b.SourceBodyHash() && a.WireMentions != "" && a.WireMentions == b.WireMentions &&
 		a.MatchesWireMentions(domain.WireMentionProof{Evidence: b.WireMentions, Digest: b.WireMentionDigest}) &&
 		slices.Equal(a.FileReferences, b.FileReferences) && slices.Equal(a.AudioURLs, b.AudioURLs) &&
 		slices.Equal(a.FileDigests, b.FileDigests) && slices.Equal(a.MediaThumbnails, b.MediaThumbnails)
 }
 
-func sameObservedDirectReply(a domain.Message, ar *domain.ReplyReference, b domain.Message, br *domain.ReplyReference) bool {
+func sameObservedReply(a domain.Message, ar *domain.ReplyReference, b domain.Message, br *domain.ReplyReference) bool {
 	if ar == nil || br == nil {
 		return ar == nil && br == nil && a.OriginalText == b.OriginalText
 	}

@@ -9,11 +9,20 @@ JOIN restore_chats chat ON chat.id=command.conversation_id
 JOIN backup.conversations conversation ON conversation.id=chat.id AND conversation.account_id=command.account_id
 JOIN backup.messages source ON source.account_id=command.account_id AND source.conversation_id=command.conversation_id
   AND source.is_own=1 AND source.state='submitted'
-  AND source.provider_id IN (command.id,CASE
-    WHEN json_extract(conversation.payload,'$.Kind')='room'
+  AND (source.provider_id=command.id OR (
+    json_extract(conversation.payload,'$.Kind')='room'
       AND instr(json_extract(command.payload,'$.Plan.Scope'),'xmpp:correct:room:'||conversation.address||':')=1
       AND instr(json_extract(command.payload,'$.Plan.Author'),conversation.address||'/')=1
-    THEN oie_room_correction_provider_id(json_extract(command.payload,'$.Plan.Author'),command.id) END)
+      AND source.provider_id IN (
+        oie_room_correction_provider_id(json_extract(command.payload,'$.Plan.Author'),command.id),
+        oie_scoped_room_correction_provider_id(json_extract(command.payload,'$.Plan.Scope'),json_extract(command.payload,'$.Plan.Author'),command.id)
+      )
+      AND EXISTS (
+        SELECT 1 FROM backup.message_correction_facts observed WHERE observed.message_id=source.id
+          AND observed.scope=json_extract(command.payload,'$.Plan.Scope') AND observed.author=json_extract(command.payload,'$.Plan.Author')
+          AND observed.remote_id=command.id AND observed.target_id=json_extract(command.payload,'$.Plan.OriginalWireID')
+      )
+  ))
 WHERE command.state IN ('submitted','failed')
   AND (source.provider_id=command.id OR NOT EXISTS (
     SELECT 1 FROM backup.messages native WHERE native.account_id=command.account_id
@@ -168,11 +177,15 @@ JOIN backup.conversations chat ON chat.id=root.conversation_id
 LEFT JOIN messages retained_root ON retained_root.id=root.id
 JOIN messages witness ON witness.account_id=root.account_id AND witness.conversation_id=root.conversation_id
   AND witness.id<>source.source_id AND witness.is_own=1 AND witness.state='submitted'
-  AND witness.provider_id IN (command.id,CASE
-    WHEN json_extract(chat.payload,'$.Kind')='room'
+  AND (witness.provider_id=command.id OR (
+    json_extract(chat.payload,'$.Kind')='room'
       AND instr(json_extract(command.payload,'$.Plan.Scope'),'xmpp:correct:room:'||chat.address||':')=1
       AND instr(json_extract(command.payload,'$.Plan.Author'),chat.address||'/')=1
-    THEN oie_room_correction_provider_id(json_extract(command.payload,'$.Plan.Author'),command.id) END)
+      AND witness.provider_id IN (
+        oie_room_correction_provider_id(json_extract(command.payload,'$.Plan.Author'),command.id),
+        oie_scoped_room_correction_provider_id(json_extract(command.payload,'$.Plan.Scope'),json_extract(command.payload,'$.Plan.Author'),command.id)
+      )
+  ))
 LEFT JOIN message_canonical_aliases alias ON alias.alias_id=witness.id
 LEFT JOIN restore_witness_echoes witnessed_root ON witnessed_root.echo_id=alias.canonical_id AND witnessed_root.original_id=root.id
 JOIN message_correction_facts local ON local.message_id=witness.id AND local.remote_id=command.id AND local.target_id=root.provider_id

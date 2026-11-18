@@ -263,7 +263,8 @@ LEFT JOIN message_replies reply ON reply.message_id=witness.id AND reply.body_ha
 WHERE command.state IN ('submitted','failed') AND command.message_id=?1
   AND command.account_id=?2 AND command.conversation_id=?3
   AND (witness.provider_id=command.id OR (instr(fact.scope,'xmpp:correct:room:')=1
-    AND witness.provider_id=oie_room_correction_provider_id(fact.author,fact.remote_id)))
+    AND witness.provider_id IN (oie_room_correction_provider_id(fact.author,fact.remote_id),
+                                oie_scoped_room_correction_provider_id(fact.scope,fact.author,fact.remote_id))))
   AND (alias.alias_id IS NULL OR alias.canonical_id=command.message_id)
   AND json_extract(command.payload,'$.ContentRevisionID')=CAST(?4 AS TEXT)
   AND json_extract(receipt.result,'$.ID')=command.id AND json_extract(receipt.result,'$.MessageID')=command.message_id

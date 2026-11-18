@@ -45,24 +45,25 @@ UNION ALL
           AND instr(observed.scope,'xmpp:correct:room:'||chat.address||':')=1 AND instr(observed.author,chat.address||'/')=1
           AND instr(known.scope,'xmpp:correct:room:'||chat.address||':')=1 AND instr(known.author,chat.address||'/')=1
       )
+      AND (incoming.provider_id=observed.remote_id OR (
+        json_extract(chat.payload,'$.Kind')='room'
+        AND incoming.provider_id IN (oie_room_correction_provider_id(observed.author,observed.remote_id),
+                                     oie_scoped_room_correction_provider_id(observed.scope,observed.author,observed.remote_id))
+      ))
+      AND (retained.provider_id=known.remote_id OR (
+        json_extract(chat.payload,'$.Kind')='room'
+        AND retained.provider_id IN (oie_room_correction_provider_id(known.author,known.remote_id),
+                                     oie_scoped_room_correction_provider_id(known.scope,known.author,known.remote_id))
+      ))
       AND (
         retained.id=incoming.id AND (
           known.scope<>observed.scope OR known.author<>observed.author OR known.remote_id<>observed.remote_id
           OR known.target_id<>observed.target_id OR known.source_hash<>observed.source_hash
         )
-          AND (incoming.provider_id=observed.remote_id OR (
-            json_extract(chat.payload,'$.Kind')='room'
-            AND incoming.provider_id=oie_room_correction_provider_id(observed.author,observed.remote_id)
-          ))
-          AND (retained.provider_id=known.remote_id OR (
-            json_extract(chat.payload,'$.Kind')='room'
-            AND retained.provider_id=oie_room_correction_provider_id(known.author,known.remote_id)
-          ))
         OR selected.is_new=1 AND retained.id<>incoming.id AND json_extract(chat.payload,'$.Kind')='room'
-          AND ((incoming.id=incoming.provider_id AND incoming.provider_id=observed.remote_id
-                AND retained.provider_id=oie_room_correction_provider_id(known.author,known.remote_id))
-               OR (retained.id=retained.provider_id AND retained.provider_id=known.remote_id
-                   AND incoming.provider_id=oie_room_correction_provider_id(observed.author,observed.remote_id)))
+          AND incoming.provider_id<>retained.provider_id
+          AND (incoming.provider_id<>observed.remote_id OR incoming.id=incoming.provider_id)
+          AND (retained.provider_id<>known.remote_id OR retained.id=retained.provider_id)
       )
       AND observed.source_hash=COALESCE(NULLIF(json_extract(incoming.payload,'$.WireBodySHA256'),''),
                                         oie_source_hash(json_extract(incoming.payload,'$.OriginalText')))

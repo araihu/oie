@@ -5,20 +5,33 @@ const { once } = require('node:events');
 const { mkdtemp, rm } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 
-async function loopbackAddress() {
+async function reserveLoopbackAddress() {
   const probe = net.createServer().listen(0, '127.0.0.1');
   await once(probe, 'listening');
-  const listen = '127.0.0.1:' + probe.address().port;
-  await new Promise(resolve => probe.close(resolve));
+  return {
+    listen: '127.0.0.1:' + probe.address().port,
+    release: () => new Promise(resolve => probe.close(resolve)),
+  };
+}
+
+async function loopbackAddress() {
+  const {listen, release} = await reserveLoopbackAddress();
+  await release();
   return listen;
 }
 
 async function startOie(binary, args, readyPath, configure, startupTimeout = 15000) {
-  const listen = await loopbackAddress();
   const dir = await mkdtemp(path.join(tmpdir(), 'oie-browser-'));
-  let options;
+  let listen, options;
   try {
-    options = await configure?.({listen, dir});
+    const reservation = await reserveLoopbackAddress();
+    listen = reservation.listen;
+    try {
+      options = await configure?.({listen, dir});
+    } finally {
+      // Hosted configuration starts the issuer and chooses the probe address.
+      await reservation.release();
+    }
   } catch (error) {
     await rm(dir, {recursive: true, force: true});
     throw error;
