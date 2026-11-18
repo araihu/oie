@@ -113,11 +113,16 @@ function thumbnail(color,width=8,height=8){
   assert.equal(await a.evaluate(()=>copied.pop()),messages[0].originalText);
   await panels.waitFor({state:'detached'});
   await context.setOffline(false);
-  let refuse=true;
-  await a.route('**/ui/message-menu?*',route=>refuse?route.fulfill({status:503}):route.continue());
+  // Live updates can refresh an open menu. Keep the simulated outage active
+  // until the user actually activates Retry, including during its transition.
+  await a.route('**/ui/message-menu?*',async route=>{
+   if(await a.evaluate(()=>window.menuRetryClicked))return route.continue();
+   return route.fulfill({status:503});
+  });
   await menu(a,first).click();const retry=a.locator('#retry-menu-'+first);
   await retry.waitFor({state:'visible'});
-  refuse=false;await retry.click();await star(a,first).waitFor({state:'visible'});
+  await retry.evaluate(button=>button.addEventListener('click',()=>{window.menuRetryClicked=true},{capture:true,once:true}));
+  await retry.click();await star(a,first).waitFor({state:'visible'});
   await a.unroute('**/ui/message-menu?*');
   await a.keyboard.press('Escape');await panels.waitFor({state:'detached'});
   await clickStar(a,first);await pressed(a,first,true);assert.equal(state.effects,1);
