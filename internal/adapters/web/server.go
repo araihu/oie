@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -1237,36 +1238,37 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.setAccounts(accounts.JSON200.Items)
 	if v.RefreshInbox {
-		v.AccountUnread = s.accountUnread(ctx)
+		var reads sync.WaitGroup
+		var unread map[string]int
+		reads.Go(func() { unread = s.accountUnread(ctx) })
 		s.loadInbox(ctx, v, editor)
+		reads.Wait()
+		v.AccountUnread = unread
 		return
 	}
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly && !favoritesOnly {
-		v.AccountUnread = s.accountUnread(ctx)
-	}
-	for _, a := range v.Accounts {
-		if !paneOnly && !scheduledOnly {
-			s.loadAvatars(ctx, v, a.Id)
-		}
-		if listOnly || paneOnly || scheduledOnly || favoritesOnly {
-			continue
-		}
-		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
-			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
-			if err == nil && h.JSON200 != nil {
-				v.Histories[a.Id] = *h.JSON200
+	showAccounts := !listOnly && !paneOnly && !scheduledOnly && !favoritesOnly
+	s.loadAccountSummaries(ctx, v, !paneOnly && !scheduledOnly, showAccounts, showAccounts && !accountsOnly, editor)
+	if showAccounts {
+		if !v.Preview && v.accountScreen() == "detail" {
+			accountID := v.managedAccountID()
+			for _, a := range v.Accounts {
+				if a.Id != accountID {
+					continue
+				}
+				h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
+				if err == nil && h.JSON200 != nil {
+					v.Histories[a.Id] = *h.JSON200
+				}
+				if prefs, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, a.Id, editor); err == nil {
+					v.AccountCommunication = prefs.JSON200
+				}
+				break
 			}
-			if prefs, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, a.Id, editor); err == nil {
-				v.AccountCommunication = prefs.JSON200
-			}
 		}
-		s.loadAccountConnection(ctx, v, a.Id, editor)
-	}
-	if !listOnly && !paneOnly && !scheduledOnly && !favoritesOnly {
 		s.loadCapabilities(ctx, v)
 		if v.accountScreen() == "contacts" {
 			s.loadContacts(ctx, r, v)
@@ -1312,11 +1314,63 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	s.loadScheduleEdit(ctx, v, r.URL.Query().Get("editSchedule"))
 }
 
-func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {
-	connection, err := s.client.GetAccountConnectionWithResponse(ctx, accountID, editor)
-	if err == nil && connection.JSON200 != nil {
-		v.Connections[accountID] = connectionView{Known: true, Value: *connection.JSON200}
+// Fetch independent account summaries with bounded concurrency. Publish in
+// account order so a slow or unavailable page cannot reorder avatar accounts.
+func (s *Server) loadAccountSummaries(ctx context.Context, v *view, avatars, connections, unread bool, editor engineapi.RequestEditorFn) {
+	if !avatars && !connections && !unread {
+		return
 	}
+	type summary struct {
+		avatars    map[avatarIdentity]string
+		connection *engineapi.Connection
+	}
+	results := make([]summary, len(v.Accounts))
+	jobs := make(chan func(), len(results)*2+1)
+	var totals map[string]int
+	if unread {
+		jobs <- func() { totals = s.accountUnread(ctx) }
+	}
+	for i, a := range v.Accounts {
+		if avatars {
+			jobs <- func() { results[i].avatars = s.accountAvatars(ctx, a.Id) }
+		}
+		if connections {
+			jobs <- func() { results[i].connection = s.accountConnection(ctx, a.Id, editor) }
+		}
+	}
+	close(jobs)
+	var workers sync.WaitGroup
+	for range min(4, len(jobs)) {
+		workers.Go(func() {
+			for read := range jobs {
+				read()
+			}
+		})
+	}
+	workers.Wait()
+	if unread {
+		v.AccountUnread = totals
+	}
+	for i, a := range v.Accounts {
+		v.applyAccountAvatars(a.Id, results[i].avatars)
+		if c := results[i].connection; c != nil {
+			v.Connections[a.Id] = connectionView{Known: true, Value: *c}
+		}
+	}
+}
+
+func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {
+	if c := s.accountConnection(ctx, accountID, editor); c != nil {
+		v.Connections[accountID] = connectionView{Known: true, Value: *c}
+	}
+}
+
+func (s *Server) accountConnection(ctx context.Context, accountID string, editor engineapi.RequestEditorFn) *engineapi.Connection {
+	connection, err := s.client.GetAccountConnectionWithResponse(ctx, accountID, editor)
+	if err != nil {
+		return nil
+	}
+	return connection.JSON200
 }
 
 func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.RequestEditorFn) bool {
@@ -1745,37 +1799,60 @@ func presentationContext(ctx context.Context, v view) context.Context {
 // currently selected account, search or archive filter. Incomplete totals are
 // hidden rather than presenting a partial count as an exact total.
 func (s *Server) accountUnread(ctx context.Context) map[string]int {
+	// Each filter has its own cursor chain. Merge active first if a conversation
+	// moves between the two lists while the reads are in flight.
+	var active map[string]unreadCount
+	var reads sync.WaitGroup
+	reads.Go(func() { active = s.unreadConversations(ctx, false) })
+	archived := s.unreadConversations(ctx, true)
+	reads.Wait()
+	if active == nil || archived == nil {
+		return nil
+	}
 	totals := map[string]int{}
-	seen := map[string]bool{}
-	limit := 100
-	unread := true
-	for _, archived := range []bool{false, true} {
-		params := &engineapi.ListConversationsParams{Limit: &limit, UnreadOnly: &unread, Archived: &archived}
-		cursors := map[string]bool{}
-		for {
-			response, err := s.client.ListConversationsWithResponse(ctx, params)
-			if err != nil || response.JSON200 == nil {
-				return nil
-			}
-			for _, c := range response.JSON200.Items {
-				if !seen[c.Id] {
-					totals[c.AccountId] += c.UnreadCount
-					seen[c.Id] = true
-				}
-			}
-			next := response.JSON200.NextCursor
-			if next == nil || *next == "" {
-				break
-			}
-			if cursors[*next] {
-				return nil
-			}
-			cursors[*next] = true
-			params.Cursor = next
+	for _, c := range active {
+		totals[c.account] += c.count
+	}
+	for id, c := range archived {
+		if _, counted := active[id]; !counted {
+			totals[c.account] += c.count
 		}
 	}
 	return totals
 }
+
+type unreadCount struct {
+	account string
+	count   int
+}
+
+func (s *Server) unreadConversations(ctx context.Context, archived bool) map[string]unreadCount {
+	limit, unread := 100, true
+	params := &engineapi.ListConversationsParams{Limit: &limit, UnreadOnly: &unread, Archived: &archived}
+	found := map[string]unreadCount{}
+	cursors := map[string]bool{}
+	for {
+		response, err := s.client.ListConversationsWithResponse(ctx, params)
+		if err != nil || response.JSON200 == nil {
+			return nil
+		}
+		for _, c := range response.JSON200.Items {
+			if _, seen := found[c.Id]; !seen {
+				found[c.Id] = unreadCount{account: c.AccountId, count: c.UnreadCount}
+			}
+		}
+		next := response.JSON200.NextCursor
+		if next == nil || *next == "" {
+			return found
+		}
+		if cursors[*next] {
+			return nil
+		}
+		cursors[*next] = true
+		params.Cursor = next
+	}
+}
+
 func (v view) activeAccountName() string {
 	if v.AccountFilter != "" {
 		if a := v.account(v.AccountFilter); a.Id != "" {

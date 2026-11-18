@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -189,28 +191,50 @@ func (s *Server) loadLatestPane(ctx context.Context, v *view, editor engineapi.R
 
 func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.Message, extras map[string]*mediaView) {
 	v.setTimelineMessages(items, extras)
-	// Each enrichment request stays within the public batch contract.
-	for start := 0; start < len(v.Messages); start += 50 {
-		part := *v
-		part.Messages = v.Messages[start:min(start+50, len(v.Messages))]
-		part.MessageVideos = nil
-		s.loadMessagePreviews(ctx, &part)
-		s.loadMessageVideos(ctx, &part)
-		v.PreviewsKnown = v.PreviewsKnown || part.PreviewsKnown
-		for i := range part.Messages {
-			part.Messages[i].PresentationKnown = part.PreviewsKnown
-			part.Messages[i].VideosKnown = part.MessageVideos != nil || v.Preview
+	// Each engine read sees the same immutable page. Keep the public 50-row
+	// media batches and join all readers before changing message presentation.
+	type mediaBatch struct {
+		messages      []messageView
+		previewsKnown bool
+		videos        map[string][]engineapi.SharedContentItem
+	}
+	var batches []mediaBatch
+	for messages := range slices.Chunk(v.Messages, 50) {
+		batches = append(batches, mediaBatch{messages: messages})
+	}
+	var reads sync.WaitGroup
+	reads.Go(func() {
+		part := view{Selected: v.Selected, Preview: v.Preview, MessagePreviews: v.MessagePreviews, PreviewsKnown: v.PreviewsKnown}
+		for i := range batches {
+			part.Messages = batches[i].messages
+			s.loadMessagePreviews(ctx, &part)
+			batches[i].previewsKnown = part.PreviewsKnown
+		}
+	})
+	reads.Go(func() {
+		part := view{Selected: v.Selected, Preview: v.Preview}
+		for i := range batches {
+			part.Messages = batches[i].messages
+			batches[i].videos = s.readMessageVideos(ctx, &part)
+		}
+	})
+	reads.Go(func() { s.loadMessageAudio(ctx, v) })
+	reads.Go(func() { s.loadMessageStars(ctx, v) })
+	reads.Go(func() { s.loadReactions(ctx, v) })
+	reads.Wait()
+
+	for _, batch := range batches {
+		v.PreviewsKnown = v.PreviewsKnown || batch.previewsKnown
+		for i := range batch.messages {
+			batch.messages[i].PresentationKnown = batch.previewsKnown
+			batch.messages[i].VideosKnown = batch.videos != nil || v.Preview
 		}
 		if v.MessageVideos == nil {
 			v.MessageVideos = map[string][]engineapi.SharedContentItem{}
 		}
-		for id, entries := range part.MessageVideos {
-			v.MessageVideos[id] = entries
-		}
+		v.excludeVideoPreviews(batch.videos)
+		maps.Copy(v.MessageVideos, batch.videos)
 	}
-	s.loadMessageAudio(ctx, v)
-	s.loadMessageStars(ctx, v)
-	s.loadReactions(ctx, v)
 	v.formatTimelineMessages(ctx)
 }
 

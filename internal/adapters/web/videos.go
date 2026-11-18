@@ -327,6 +327,10 @@ func validMessageMedia(item engineapi.SharedContentItem, message messageView, ow
 
 func (v *view) applyMessageVideos(items map[string][]engineapi.SharedContentItem) {
 	v.MessageVideos = items
+	v.excludeVideoPreviews(items)
+}
+
+func (v *view) excludeVideoPreviews(items map[string][]engineapi.SharedContentItem) {
 	for id, videos := range items {
 		urls := map[string]bool{}
 		for _, video := range videos {
