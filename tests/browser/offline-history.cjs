@@ -270,6 +270,108 @@ function editSavedHistory({age, kept} = {}) {
   });
 }
 
+// Use the ordinary snapshot writer so search sees the same account and message
+// identities that the offline timeline uses.
+async function saveSecondChat(page, until, {account, chat, messageID, emojiID, text}) {
+  const {engine, checkpoint} = await page.evaluate(savedHistory);
+  const entry = {account, chat, title: 'Mira', label: 'Work', messages: [{
+    id: messageID, sender: 'Mira', date: '2026-11-06T17:00:00Z', text, own: false,
+  }, {id: emojiID, sender: 'Mira', date: '2026-11-06T18:00:00Z', text: '🧪'.repeat(200), own: false}]};
+  await page.evaluate(data => navigator.serviceWorker.controller.postMessage(data), {
+    type: 'oie:offline-history-save', engine, cursor: checkpoint, entry,
+  });
+  await until(async () => (await page.evaluate(savedHistory))?.entries.some(item =>
+    item.account === account && item.chat === chat), 'second account’s chat saved for offline search');
+}
+
+async function checkSavedSearch(page, until, {root, account, chat, latest, withdrawn, draft, second, missing}) {
+  const query = page.locator('#offline-query');
+  const results = page.locator('#offline-results');
+  const links = results.getByRole('link');
+  const empty = await page.locator('#offline-search').getAttribute('data-empty');
+  const status = page.locator('#offline-search-status');
+  const search = async (text, count) => {
+    await query.fill(text);
+    await until(async () => await links.count() === count &&
+      (count > 0 || (await status.textContent()) === (text ? empty : '')), 'saved search results for ' + text);
+  };
+  await query.waitFor();
+  const requests = [];
+  const record = request => requests.push(request.url());
+  page.on('request', record);
+  try {
+    await search('Texto literal', 2);
+    await search('<b>', 1);
+    assert((await links.innerText()).includes('<b>'), 'message markup in search results is literal text');
+    assert.equal(await links.locator('mark').textContent(), '<b>');
+    assert.equal(await links.locator('b').count(), 0);
+    for (const length of [129, 200]) {
+      const emoji = '🧪'.repeat(length);
+      await search(emoji, 1);
+      await until(async () => (await links.locator('mark').textContent()) === emoji, 'full Unicode search is highlighted');
+    }
+    const tooLong = await page.locator('#offline-search').getAttribute('data-too-long');
+    await query.fill('a'.repeat(201));
+    await until(async () => (await status.textContent()) === tooLong, 'oversized query explains the length limit');
+    assert.equal(await links.count(), 0);
+    await search(draft, 0);
+    await search('Texto literal', 2);
+    await search(withdrawn, 0);
+    await search('Texto literal', 2);
+    await search('', 0);
+    await page.locator('#offline-conversations').getByRole('link', {name: /Mira/}).waitFor();
+    assert.deepEqual(requests, [], 'typing and clearing a saved message search makes no network requests');
+  } finally {
+    page.off('request', record);
+  }
+
+  await search('Texto literal', 2);
+  await links.filter({hasText: second.text}).click();
+  const target = page.locator('#offline-messages li:focus');
+  await target.getByText(second.text, {exact: true}).waitFor();
+  const source = new URL(page.url()).searchParams;
+  assert.equal(source.get('account'), second.account);
+  assert.equal(source.get('chat'), second.chat);
+  assert.equal(source.get('message'), second.messageID);
+  await page.goBack();
+  await until(async () => await links.count() === 2, 'Back restores offline search results');
+  assert.equal(await query.inputValue(), 'Texto literal');
+
+  const native = new URL('/search', root);
+  native.search = new URL(root).search;
+  native.searchParams.set('q', 'Texto literal');
+  native.searchParams.append('accountIds', second.account);
+  native.searchParams.append('accountIds', missing);
+  await page.goto(native.href);
+  await until(async () => await links.count() === 1, 'offline native search preserves multiple selected accounts');
+  assert.equal(await query.inputValue(), 'Texto literal');
+  assert((await links.innerText()).includes(second.text));
+  native.searchParams.set('nativeAccountId', account);
+  native.searchParams.set('conversationId', chat);
+  await page.goto(native.href);
+  await until(async () => await links.count() === 1, 'native picker and conversation scope restored');
+  assert((await links.innerText()).includes('queda'));
+  native.searchParams.set('engineId', missing);
+  await page.goto(native.href);
+  await page.locator('#offline-empty').waitFor();
+  assert.equal(await query.isVisible(), false, 'a foreign engine cannot search this device’s saved messages');
+
+  await page.goto(root + '&chat=' + chat + '&searchMode=messages&searchQuery=Texto+literal&searchAccount=' + second.account);
+  await until(async () => await links.count() === 1, 'compact search URL restores its own account filters');
+  assert((await links.innerText()).includes(second.text));
+  await page.goto(root + '&chat=' + chat + '&chatSearch=1&chatQuery=Texto+literal');
+  await until(async () => await links.count() === 1, 'in-chat search URL restores its query and scope');
+  assert((await links.innerText()).includes('queda'));
+  await page.goto(root + '&account=' + account);
+  await search('Texto literal', 1);
+  assert((await links.innerText()).includes('queda'), 'account-scoped search excludes other accounts');
+  await page.goto(root + '&chat=' + chat);
+  await search('Texto literal', 1);
+  assert((await links.innerText()).includes('queda'), 'in-chat search excludes other chats');
+  await search('', 0);
+  await page.locator('#offline-messages').getByText(latest, {exact: true}).waitFor();
+}
+
 module.exports = async function checkOfflineHistory({browser, base, account, chat, state, until, id}) {
   await checkNavigationAuthority(id);
   const artifacts = path.join(__dirname, 'artifacts');
@@ -278,6 +380,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
   const draft = 'Meu rascunho ainda está aqui.';
   const withdrawn = 'Original retraído que não pode aparecer sem conexão.';
   const missing = id(999);
+  const second = {account: id(310), chat: id(311), messageID: id(312), emojiID: id(313), text: 'Texto literal do outro perfil.'};
   const messages = [
     {id: id(101), revisionId: id(201), originalText: withdrawn, createdAt: '2026-11-07T19:00:00Z',
       retraction: {at: '2026-11-07T19:01:00Z', originalAvailable: true}},
@@ -353,6 +456,31 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       assert(await observer.evaluate(() => window.disabledBeforeKeepRetry), 'chat stays disabled until its saved preference is confirmed');
       await observer.close();
       await page.evaluate(editSavedHistory, {age: true});
+      await saveSecondChat(page, until, second);
+
+      // The two search clients handle transport errors differently. Exercise each
+      // with both a disconnected browser and an unreachable engine.
+      for (const browserOffline of [true, false]) {
+        await context.setOffline(false);
+        let field;
+        if (width === 390) {
+          await page.goto(route + '&open=details');
+          await page.locator('[data-open-conversation-search]').filter({visible: true}).click();
+          field = page.locator('#conversation-search-query');
+        } else {
+          await page.goto(root + '&inbox=1');
+          field = page.locator('#conversation-search');
+        }
+        await field.waitFor();
+        if (browserOffline) await context.setOffline(true);
+        else state.engineDown = true;
+        await field.fill('Texto literal');
+        const firstResults = page.locator('#offline-results').getByRole('link');
+        await until(async () => await firstResults.count() === (width === 390 ? 1 : 2),
+          'ordinary search opens saved messages when the ' + (browserOffline ? 'browser disconnects' : 'engine is down'));
+        assert.equal(await page.locator('#offline-query').inputValue(), 'Texto literal');
+        state.engineDown = false;
+      }
 
       // A new document can open the inbox and follow a saved chat with no network.
       await page.close();
@@ -360,6 +488,8 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       page = await newPage();
       await page.goto(root);
       await page.getByText(status, {exact: true}).waitFor();
+      await checkSavedSearch(page, until, {root, account, chat, latest, withdrawn, draft, second, missing});
+      await page.goto(root);
       await page.locator('#offline-conversations').getByRole('link', {name: /Bob/}).click();
       const timeline = page.locator('#offline-messages');
       await timeline.getByText(latest, {exact: true}).waitFor();
@@ -404,6 +534,12 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await page.locator('#offline-retry').click();
       await until(async () => await page.locator('#message-composer').inputValue() === draft, 'draft after offline browsing');
       assert.equal(state.effects, 0, 'reading offline and reconnecting does not send a draft');
+      const {engine: activeEngine, checkpoint} = await page.evaluate(savedHistory);
+      await page.evaluate(data => navigator.serviceWorker.controller.postMessage(data), {
+        type: 'oie:offline-history-invalidate', engine: activeEngine, account: second.account, chat: second.chat,
+        through: checkpoint, confirmedMissing: true,
+      });
+      await until(async () => (await page.evaluate(savedHistory))?.entries.length === 1, 'second chat removed');
       await page.locator('#chat-header .oie-chat-avatar-trigger').click();
       const reopenedControl = page.getByLabel(keepLabel, {exact: true});
       await until(() => reopenedControl.isChecked(), 'offline preference persists after reopening the browser page');
@@ -422,12 +558,26 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       const stale = await page.evaluate(savedHistory);
       assert.equal(stale.entries.length, 1);
       await page.goto(root + '&inbox=1');
+      const searchPeer = await newPage();
+      await context.setOffline(true);
+      await searchPeer.goto(route);
+      await searchPeer.locator('#offline-query').fill('Texto literal');
+      const peerResults = searchPeer.locator('#offline-results').getByRole('link');
+      await peerResults.waitFor();
+      await context.setOffline(false);
       state.chatRemoved = true;
       const missingFragment = page.waitForResponse(response =>
         new URL(response.url()).searchParams.get('chat') === chat &&
         response.request().headers()['hx-request'] === 'true' && response.status() === 404);
       await page.locator('#conversation-list a[data-conversation-id="' + chat + '"]').click();
       await missingFragment;
+      await peerResults.waitFor({state: 'detached'});
+      assert.equal(await searchPeer.locator('#offline-results').textContent(), '', 'removing a chat clears its active search results');
+      const peerQuery = searchPeer.locator('#offline-query');
+      if (await peerQuery.isVisible()) await peerQuery.fill('');
+      assert.equal(await searchPeer.locator('#offline-messages').getByText(latest, {exact: true}).count(), 0,
+        'clearing search after a chat removal cannot reveal the old message');
+      await searchPeer.close();
       await until(async () => (await page.evaluate(savedHistory))?.entries.length === 0, 'HTMX 404 evicts the chat');
       await page.evaluate(({engine, entries: [entry]}) => navigator.serviceWorker.controller.postMessage({
         type: 'oie:offline-history-save', engine, cursor: entry.cursor, entry,
@@ -467,6 +617,8 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       await context.setOffline(true);
       await peer.goto(route);
       await peer.locator('#offline-messages').getByText(latest, {exact: true}).waitFor();
+      await peer.locator('#offline-query').fill('Texto literal');
+      await peer.locator('#offline-results').getByRole('link').waitFor();
       await context.setOffline(false);
       const engine = (await page.evaluate(savedHistory)).engine;
       const resetStatus = await page.evaluate(async engine => {
@@ -477,6 +629,8 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       assert.equal(resetStatus, 204);
       await peer.locator('#offline-empty').waitFor();
       assert.equal(await peer.getByText(latest, {exact: true}).count(), 0, 'reset immediately clears already open offline history');
+      assert.equal(await peer.locator('#offline-results').getByRole('link').count(), 0, 'reset clears search results in another tab');
+      assert.equal(await peer.locator('#offline-query').inputValue(), '', 'reset clears the query in another tab');
       assert.deepEqual(errors, []);
       console.log('PASS: Keep available offline, cache limits, draft recovery and engine outage (' + lang + ', ' + width + ' px)');
     } finally {

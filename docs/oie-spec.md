@@ -978,8 +978,9 @@ seven-day maximum age. The cache belongs to that browser profile and follows the
 engine and owning account. **Keep available offline** in conversation details
 protects saved text from age and space eviction within those shared limits.
 Verified removals and history invalidation still apply. Drafts and queued sends
-use their existing storage. Authenticated hosted sessions, configurable limits,
-offline search and media remain pending. See
+use their existing storage. The offline reader searches saved message text across
+its chat list or within one chat. Each result opens the matching message.
+Authenticated hosted sessions, configurable limits and offline media remain pending. See
 [offline history](offline-history.md).
 
 ### 11.5 Language and timestamps

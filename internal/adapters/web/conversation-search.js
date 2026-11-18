@@ -188,6 +188,7 @@ window.OieRuntime.register('conversation-search',life=>{
  }
  async function request(cursor='',position=0,focusResult=true){
   if(!valid()||!opened||busy||composing)return;const request=state(),generation=epoch;if(!request.q){reset();return}if(Array.from(request.q).length>200){failure='';status(root.dataset.searchInvalid);controls();return}
+  const current=()=>valid()&&opened&&generation===epoch&&same(request);
   busy=true;failure='';lastSearchFocus=focusResult;status(root.dataset.searchLoading);controls();controller=new AbortController();const ownController=controller,timeout=life.timeout(()=>ownController.abort(),12000);
   try{
    const params=new URLSearchParams({...request,limit:'50',presentation:'conversation',lang:document.documentElement.lang});
@@ -201,7 +202,7 @@ window.OieRuntime.register('conversation-search',life=>{
     visited.add(cursor);
     lastCursor=cursor;
     if(cursor)params.set('cursor',cursor);else params.delete('cursor');
-    const response=await life.fetch('/ui/message-search?'+params,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:ownController.signal});if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error(response.status===409?'engine_changed':response.status===400?'invalid':'response');const html=await response.text();if(html.length>2*1024*1024)throw Error('large');if(!valid()||!opened||generation!==epoch||!same(request))return;
+    const response=await life.fetch('/ui/message-search?'+params,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:ownController.signal});if(response.status===503&&current())window.OieOfflineHistory?.searchFallback(request,current,response);if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error(response.status===409?'engine_changed':response.status===400?'invalid':'response');const html=await response.text();if(html.length>2*1024*1024)throw Error('large');if(!valid()||!opened||generation!==epoch||!same(request))return;
     const page=parse(html,request,cursor);localCoverage=page.coverage;
     addHits(page.items);next=page.next;updateCoverage();
     if(focusResult||!hits.length)break;
@@ -222,7 +223,7 @@ window.OieRuntime.register('conversation-search',life=>{
    if(!hits.length)status(root.dataset.searchEmpty);
    else if(focusResult){await select(position);return;}
    controls();
-  }catch(error){if(valid()&&opened&&generation===epoch&&same(request)){busy=false;failure='search';status(error.message==='engine_changed'?root.dataset.searchEngineChanged:error.message==='invalid'?root.dataset.searchInvalid:root.dataset.searchFailed);controls()}}
+  }catch(error){if(current()){if(error.name==='TypeError'&&!ownController.signal.aborted)window.OieOfflineHistory?.searchFallback(request,current);busy=false;failure='search';status(error.message==='engine_changed'?root.dataset.searchEngineChanged:error.message==='invalid'?root.dataset.searchInvalid:root.dataset.searchFailed);controls()}}
   finally{clearTimeout(timeout);if(controller===ownController)controller=null;}
  }
  function addHits(items){

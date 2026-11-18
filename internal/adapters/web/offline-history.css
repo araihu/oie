@@ -39,7 +39,7 @@ main {
 
 h1 { font-size: 1.375rem; margin-block: 0 1rem; }
 
-#offline-conversations, #offline-messages {
+#offline-conversations, #offline-messages, #offline-results {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -47,7 +47,7 @@ h1 { font-size: 1.375rem; margin-block: 0 1rem; }
   overscroll-behavior: contain;
 }
 
-#offline-conversations a {
+#offline-conversations a, #offline-results a {
   display: block;
   padding: .75rem 0;
   border-bottom: 1px solid color-mix(in srgb, CanvasText 20%, Canvas);
@@ -71,3 +71,19 @@ h1 { font-size: 1.375rem; margin-block: 0 1rem; }
 #offline-messages p { margin: 0; white-space: pre-wrap; }
 #offline-messages time, .offline-sender { font-size: .8125rem; }
 .offline-sender { display: block; font-weight: 600; }
+
+#offline-search label { display: block; margin-bottom: .25rem; font-weight: 600; }
+#offline-query {
+  box-sizing: border-box;
+  width: 100%;
+  padding: .5rem .75rem;
+  font: inherit;
+  color: inherit;
+  background: Canvas;
+  border: 1px solid GrayText;
+  border-radius: .4rem;
+}
+#offline-search { margin-block-end: .75rem; }
+#offline-search-status { margin: 0; }
+#offline-results strong { display: block; }
+main.offline-searching :is(#offline-conversations, #offline-messages, #offline-empty) { display: none; }

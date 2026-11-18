@@ -20,6 +20,14 @@ space, Oiê reports that the latest messages could not be saved. Free space
 and reopen the chat online to refresh the offline copy. Offline reading
 covers the saved text only.
 
+## Searching saved messages
+
+In the offline inbox, search for a word or phrase across the saved conversations.
+Opening a conversation limits search to its saved messages. Results show the
+matched text and open the source message. Clearing the field returns to the list
+or timeline. Offline search uses the current saved copies, including kept chats.
+Older messages outside those copies are searchable through the engine when online.
+
 ## Storage
 
 The root service worker precaches a small page with English and Brazilian
@@ -43,7 +51,7 @@ The next eligible chat view refreshes the saved text. Expired unprotected
 entries are removed on the next access. The service worker does not cache
 authenticated HTML, original withdrawn content, drafts, uploads or files.
 
-The configurable device limit and search over saved text remain in
+The configurable device limit remains in
 [section 11.4](oie-spec.md#114-pwa-and-offline-data).
 
 ## Browser verification

@@ -1,4 +1,9 @@
 {
+  "OfflineSearchTooLong": "Enter up to 200 characters.",
+  "OfflineSearchAll": "Search messages saved on this device",
+  "OfflineSearchChat": "Search saved messages in this chat",
+  "OfflineSearchEmpty": "No matches in saved messages.",
+  "OfflineSearchCount": "Matches: {count}",
   "OfflineHistoryStatus": "Offline",
   "OfflineHistoryTitle": "Saved conversations",
   "OfflineHistoryEmpty": "No conversations are available offline.",

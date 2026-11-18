@@ -1,4 +1,9 @@
 {
+  "OfflineSearchTooLong": "Digite até 200 caracteres.",
+  "OfflineSearchAll": "Pesquisar mensagens salvas neste dispositivo",
+  "OfflineSearchChat": "Pesquisar mensagens salvas nesta conversa",
+  "OfflineSearchEmpty": "Nenhum resultado nas mensagens salvas.",
+  "OfflineSearchCount": "Resultados: {count}",
   "OfflineHistoryStatus": "Sem conexão",
   "OfflineHistoryTitle": "Conversas salvas",
   "OfflineHistoryEmpty": "Nenhuma conversa está disponível sem conexão.",
