@@ -421,17 +421,24 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
     await pin(oldest, false);
     await pin(newest, false);
 
-    await context.setOffline(true);
     const composer = online.locator('#message-composer');
     await composer.fill('Send when connected');
+    const draftTab = await context.newPage();
+    await draftTab.goto(base + '/?lang=en&chat=' + chat);
+    const draft = draftTab.locator('#message-composer');
+    await draft.fill('An unsent draft');
+    await context.setOffline(true);
     await online.locator('[data-send-message]').click();
     await online.locator('[data-pending-send]').getByRole('img', {name: 'Waiting for connection'}).waitFor();
-    await composer.fill('An unsent draft');
     await select.selectOption('262144');
     await until(async () => await select.inputValue() === '262144', 'lower limit saved');
     await until(async () => !(await online.evaluate(savedHistory)).entries.some(e => e.chat === oldest), 'oldest ordinary copy evicted');
-    assert.equal(await other.locator('#offline-storage-limit').inputValue(), '1048576');
-    assert.equal(await composer.inputValue(), 'An unsent draft');
+    await other.reload();
+    const otherLimit = other.locator('#offline-storage-limit');
+    await otherLimit.scrollIntoViewIfNeeded();
+    await until(() => otherLimit.isEnabled(), 'independent profile reloaded its own limit');
+    assert.equal(await otherLimit.inputValue(), '1048576');
+    assert.equal(await draft.inputValue(), 'An unsent draft');
     assert(await online.locator('[data-pending-send]').getByText('Send when connected', {exact:true}).isVisible());
 
     const reader = await context.newPage();
