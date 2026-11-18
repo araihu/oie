@@ -1,21 +1,114 @@
 window.OieRuntime.register('actions', life => {
  'use strict';
- function initializeSourceMenu(event){
-  const trigger=event.target.closest?.('[data-message-menu-trigger]');
-  const slot=trigger?.closest('[data-source-menu-deferred]');
-  if(!slot||!window.Alpine)return;
-  // The same input event continues into the now-initialized Goshtoso menu.
-  window.Alpine.mutateDom(()=>{
-   window.Alpine.destroyTree(slot);
-   slot.removeAttribute('x-ignore');
-   slot.removeAttribute('data-source-menu-deferred');
-   window.Alpine.initTree(slot);
+ let active;
+
+ function disposeMenu() {
+  if (!active) return;
+  const {slot, root, trigger, observer, request} = active;
+  active = undefined;
+  observer.disconnect();
+  request?.abort();
+  if (!slot.contains(root)) return;
+  const restoreFocus = root.contains(document.activeElement);
+  window.Alpine.mutateDom(() => {
+   trigger.remove();
+   window.Alpine.destroyTree(root);
+   trigger.removeAttribute('aria-controls');
+   trigger.setAttribute('aria-expanded', 'false');
+   slot.replaceChildren(trigger);
   });
+  if (restoreFocus) trigger.focus({preventScroll:true});
  }
- life.on(document,'click',initializeSourceMenu,true);
- life.on(document,'keydown',event=>{
-  if(['Enter',' ','ArrowDown'].includes(event.key))initializeSourceMenu(event);
- },true);
+
+ function openMenu(event) {
+  const trigger = event.target.closest?.('[data-message-menu-trigger]');
+  const slot = trigger?.closest('[data-menu-url]');
+  if (!slot || active?.root.contains(trigger) || !window.Alpine) return;
+  const controls = window.OieRuntime.messageControls('menu', slot.dataset.messageMenuSlot);
+  if (!controls) return;
+  const root = controls.firstElementChild;
+  const extra = controls.querySelector('[data-menu-extra]');
+  const panel = root.querySelector('[role="menu"]');
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  disposeMenu();
+  extra.setAttribute('hx-get', slot.dataset.menuUrl);
+  panel.append(extra);
+  const retry = root.querySelector('[id^="retry-menu-"]');
+  retry.hidden = true;
+  const load = () => extra.dispatchEvent(new Event('oie:menu-load'));
+  retry.addEventListener('click', load);
+  const focused = document.activeElement === trigger;
+  window.Alpine.mutateDom(() => {
+   root.querySelector('[data-message-menu-trigger]').replaceWith(trigger);
+   slot.replaceChildren(root);
+   window.Alpine.initTree(root);
+  });
+  if (focused) trigger.focus({preventScroll:true});
+  const observer = new MutationObserver(() => {
+   if (trigger.getAttribute('aria-expanded') !== 'false' || panel.style.display !== 'none') return;
+   // Let the component finish its transition and Escape focus restoration.
+   queueMicrotask(() => {
+    if (active?.root === root && trigger.getAttribute('aria-expanded') === 'false') disposeMenu();
+   });
+  });
+  active = {slot, root, trigger, observer, extra, retry, load};
+  window.htmx.process(root);
+  // A long press already called trigger.click(). Replay through the mounted
+  // popover without reentering the native button's click activation.
+  if (event.type === 'click') trigger.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
+  else trigger.dispatchEvent(new KeyboardEvent('keydown', {key:event.key, bubbles:true, cancelable:true}));
+  load();
+  observer.observe(trigger, {attributes:true, attributeFilter:['aria-expanded']});
+  observer.observe(panel, {attributes:true, attributeFilter:['style']});
+ }
+
+ // Keep local Copy mounted across the request, a retry, or a live update.
+ life.on(document, 'htmx:before:request', ({detail:{ctx}}) => {
+  if (!active || ctx.target !== active.extra) return;
+  active.request = ctx.request;
+  ctx.target.setAttribute('aria-busy','true');
+ });
+ life.on(document, 'htmx:after:request', event => {
+  const ctx = event.detail.ctx;
+  if (!ctx.target?.hasAttribute('data-menu-extra')) return;
+  if (!active || ctx.target !== active.extra || !ctx.target.isConnected ||
+      active.trigger.getAttribute('aria-expanded') === 'false' || ctx.response?.status !== 200) {
+   event.preventDefault();
+   return;
+  }
+  if (ctx.target.contains(document.activeElement) || document.activeElement === active.retry) {
+   ctx.oieMenuFocus = document.activeElement.id;
+  }
+ });
+ life.on(document, 'htmx:after:swap', ({detail:{ctx}}) => {
+  if (!active || ctx.target !== active.extra) return;
+  active.retry.hidden = true;
+  document.dispatchEvent(new CustomEvent('oie:actions-refreshed'));
+  if (ctx.oieMenuFocus) {
+   const previous = document.getElementById(ctx.oieMenuFocus);
+   (previous && !previous.disabled && !previous.hidden ? previous : active.root.querySelector('[id^="copy-message-"]')).focus({preventScroll:true});
+  }
+ });
+ life.on(document, 'htmx:finally:request', ({detail:{ctx}}) => {
+  if (!active || ctx.target !== active.extra || active.request !== ctx.request) return;
+  active.request = undefined;
+  ctx.target.removeAttribute('aria-busy');
+  if (ctx.response?.status !== 200) {
+   const focused = ctx.target.contains(document.activeElement);
+   ctx.target.replaceChildren();
+   active.retry.hidden = false;
+   if (focused) active.retry.focus({preventScroll:true});
+  }
+ });
+ life.on(document, 'oie:message-menu-updated', event => {
+  if (active?.slot === event.target) active.load();
+ });
+ life.on(document, 'click', openMenu, true);
+ life.on(document, 'keydown', event => {
+  if (['Enter',' ','ArrowDown'].includes(event.key)) openMenu(event);
+ }, true);
+ life.cleanup(disposeMenu);
  // Public Dropdown item IDs are application hooks. Escape uses its supported
  // keyboard lifecycle to dismiss and restore focus after native actions.
  life.on(document,'click',event=>{

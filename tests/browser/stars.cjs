@@ -31,6 +31,10 @@ function thumbnail(color,width=8,height=8){
   if(u.pathname==='/api/v1/conversations')return send(200,{items:[c]});if(u.pathname===`/api/v1/conversations/${chat}`)return send(200,c);
   if(u.pathname.endsWith('/message-stars')){if(state.batchUnavailable)return send(503,{code:'unavailable',status:503});return send(200,{items:u.searchParams.getAll('messageId').map(value=>stars.get(value))})}
   if(u.pathname.endsWith('/messages')){if(req.method!=='GET'){state.provider++;return send(500,{code:'unexpected_send'})}return send(200,{items:[...messages].reverse()})}
+  if(u.pathname.endsWith('/context')){
+   const target=messages.find(m=>u.pathname==='/api/v1/conversations/'+chat+'/messages/'+m.id+'/context');
+   return target?send(200,{items:[target],targetId:target.id,hasOlder:false,hasNewer:false}):send(404,{});
+  }
   if(u.pathname.endsWith('/previews'))return send(200,{items:previews});
   if(req.method==='POST'&&u.pathname.endsWith('/download')){
    const retained=previews.find(preview=>preview.kind==='image'&&u.pathname===`/api/v1/previews/${preview.id}/download`);
@@ -55,8 +59,13 @@ function thumbnail(color,width=8,height=8){
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],external=[],findings=[];
  const until=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label)};
  const menu=(page,id)=>page.locator(`[data-message-menu-trigger="${id}"]`),star=(page,id)=>page.locator('#star-message-'+id);
- const clickStar=async(page,id)=>{await menu(page,id).click();await star(page,id).waitFor({state:'visible'});await star(page,id).click();};
- const pressed=async(page,id,value)=>until(async()=>await star(page,id).getAttribute('data-starred')===String(value)&&!await star(page,id).isDisabled()&&await star(page,id).getAttribute('data-star-pending')!=='true','settled star state '+value);
+ const sourceRow=(page,id)=>page.locator('[data-message-id="'+id+'"]');
+ const openMenu=async(page,id)=>{
+  if(await menu(page,id).getAttribute('aria-expanded')!=='true')await menu(page,id).click();
+  await star(page,id).waitFor({state:'visible'});
+ };
+ const clickStar=async(page,id)=>{await openMenu(page,id);await star(page,id).click();await star(page,id).waitFor({state:'detached'});};
+ const pressed=(page,id,value)=>until(async()=>await sourceRow(page,id).getAttribute('data-starred')===String(value),'settled star state '+value);
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en',timezoneId:'America/Sao_Paulo'});
@@ -64,18 +73,66 @@ function thumbnail(color,width=8,height=8){
   await context.addInitScript(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}})});
   const a=await context.newPage(),b=await context.newPage();for(const page of [a,b])page.on('pageerror',e=>errors.push(e.message));
   await b.route('**/ui/events*',route=>route.abort());await b.route('**/ui/refresh*',route=>route.abort());const url=`${base}/?chat=${chat}&account=${account}&lang=en&theme=dark`;await a.goto(url);await b.goto(url);
-  const first=messages[0].id;await clickStar(a,first);await pressed(a,first,true);assert.equal(state.effects,1);
+  const first=messages[0].id;
+  const panels=a.locator('[data-message-menu-slot] [role="menu"]');
+  assert.equal(await panels.count(),0);
+  const menuURL=new URL(await sourceRow(a,first).locator('[data-menu-url]').getAttribute('data-menu-url'),base);
+  for(const [field,value,status] of [['messageId','invalid',400],['accountId',id(999),404],['engineId',id(999),409],['messageId',id(999),404]]){
+   const url=new URL(menuURL);url.searchParams.set(field,value);
+   assert.equal((await context.request.get(url.href)).status(),status);
+  }
+  await menu(a,first).focus();
+  assert.equal(await panels.count(),0);
+  await a.keyboard.press('ArrowDown');
+  await panels.waitFor({state:'visible'});
+  assert.equal(await panels.count(),1);
+  await a.keyboard.press('Escape');
+  await panels.waitFor({state:'detached'});
+  assert(await menu(a,first).evaluate(node=>node===document.activeElement));
+  // A slow menu must not displace the selection or steal its keyboard focus.
+  let release;
+  const hold=new Promise(resolve=>{release=resolve});
+  const slow=a.waitForRequest(req=>req.url()===menuURL.href);
+  await a.route(menuURL.href,async route=>{
+   const response=await route.fetch();await hold;await route.fulfill({response});
+  });
+  await menu(a,first).press('Enter');await slow;
+  const second=messages[1].id;
+  await menu(a,second).click();await star(a,second).waitFor({state:'visible'});
+  release();await a.unrouteAll({behavior:'wait'});
+  assert.equal(await panels.count(),1);
+  assert.equal(await menu(a,second).getAttribute('aria-expanded'),'true');
+  assert.equal(await a.locator('#star-message-'+first).count(),0);
+  await a.keyboard.press('Escape');await panels.waitFor({state:'detached'});
+  // A disconnected browser can copy the original and retry just the menu.
+  await context.setOffline(true);
+  await menu(a,first).click();
+  await a.locator('#retry-menu-'+first).waitFor({state:'visible'});
+  await a.locator('#copy-message-'+first).click();
+  await until(async()=>await a.evaluate(()=>copied.length)===1,'offline copy completed');
+  assert.equal(await a.evaluate(()=>copied.pop()),messages[0].originalText);
+  await panels.waitFor({state:'detached'});
+  await context.setOffline(false);
+  let refuse=true;
+  await a.route('**/ui/message-menu?*',route=>refuse?route.fulfill({status:503}):route.continue());
+  await menu(a,first).click();const retry=a.locator('#retry-menu-'+first);
+  await retry.waitFor({state:'visible'});
+  refuse=false;await retry.click();await star(a,first).waitFor({state:'visible'});
+  await a.unroute('**/ui/message-menu?*');
+  await a.keyboard.press('Escape');await panels.waitFor({state:'detached'});
+  await clickStar(a,first);await pressed(a,first,true);assert.equal(state.effects,1);
   await clickStar(b,first);await pressed(b,first,true);assert.equal(state.effects,1);assert((await b.locator('#oie-star-status').textContent()).includes('changed elsewhere'));
   await b.unroute('**/ui/events*');await b.unroute('**/ui/refresh*');await b.reload();await until(()=>streams.size===2,'two live tabs');await clickStar(b,first);await pressed(a,first,false);await pressed(b,first,false);assert.equal(state.effects,2);
   findings.push('Two tabs use independent intents; stale revision conflicts do not retry or change provider/content state, then authoritative SSE refetch converges both');
   let dropped=false;await a.route('**/ui/messages/star',async route=>{if(!dropped){dropped=true;await route.fetch();await route.abort('connectionreset')}else route.continue()});
-  await clickStar(a,first);await until(async()=>await star(a,first).getAttribute('aria-label')==='Retry star change','lost response retry');assert.equal(state.effects,3);const pendingKey=state.puts.at(-1).key,pendingBody=state.puts.at(-1).body,oldSnapshot={...stars.get(first)};
-  await clickStar(b,first);await pressed(b,first,false);assert.equal(state.effects,4);await a.reload();assert.equal(await star(a,first).getAttribute('aria-label'),'Retry star change');await clickStar(a,first);await until(async()=>await star(a,first).getAttribute('aria-label')==='Star message','replay resolved');await pressed(a,first,false);assert.equal(state.effects,4);assert.equal(state.puts.at(-1).key,pendingKey);assert.equal(state.puts.at(-1).body,pendingBody);
+  await clickStar(a,first);await openMenu(a,first);await until(async()=>await star(a,first).getAttribute('aria-label')==='Retry star change','lost response retry');assert.equal(state.effects,3);const pendingKey=state.puts.at(-1).key,pendingBody=state.puts.at(-1).body,oldSnapshot={...stars.get(first)};
+  await clickStar(b,first);await pressed(b,first,false);assert.equal(state.effects,4);await a.reload();await openMenu(a,first);assert.equal(await star(a,first).getAttribute('aria-label'),'Retry star change');await clickStar(a,first);await openMenu(a,first);await until(async()=>await star(a,first).getAttribute('aria-label')==='Star message','replay resolved');await pressed(a,first,false);assert.equal(state.effects,4);assert.equal(state.puts.at(-1).key,pendingKey);assert.equal(state.puts.at(-1).body,pendingBody);
   findings.push('Lost accepted response retains operation key/body across reload; retry replays its historical receipt but GET displays the newer unstar without another effect');
-  await a.evaluate(id=>{window.starValues=[];new MutationObserver(()=>starValues.push(document.getElementById('star-message-'+id)?.dataset.starred)).observe(document.getElementById('star-message-'+id),{attributes:true,attributeFilter:['data-starred']})},first);emit('message.star_changed',{star:oldSnapshot});await a.waitForTimeout(500);assert((await a.evaluate(()=>starValues)).every(value=>value==='false'));await pressed(a,first,false);
+  await a.keyboard.press('Escape');await panels.waitFor({state:'detached'});
+  await a.evaluate(id=>{window.starValues=[];new MutationObserver(()=>starValues.push(document.querySelector('[data-message-id="'+id+'"]').dataset.starred)).observe(document.querySelector('[data-message-id="'+id+'"]'),{attributes:true,attributeFilter:['data-starred']})},first);emit('message.star_changed',{star:oldSnapshot});await a.waitForTimeout(500);assert((await a.evaluate(()=>starValues)).every(value=>value==='false'));await pressed(a,first,false);
   const draft='Keep source draft while stars change';await a.locator('#message-composer').fill(draft);await a.locator('#message-composer').focus();await clickStar(b,first);await pressed(a,first,true);assert.equal(await a.locator('#message-composer').inputValue(),draft);assert(await a.locator('#message-composer').evaluate(el=>document.activeElement===el));
   findings.push('A delayed old star event never re-stars a newer unstar; refetch and remote changes preserve composer text/focus');
-  await menu(a,first).focus();await a.keyboard.press('Enter');await until(async()=>await a.locator('#copy-message-'+first).evaluate(el=>document.activeElement===el),'keyboard copy focus');await a.keyboard.press('ArrowDown');await until(async()=>await star(a,first).evaluate(el=>document.activeElement===el),'keyboard star focus');await a.keyboard.press('Escape');await until(async()=>await menu(a,first).evaluate(el=>document.activeElement===el),'menu escape restores trigger');
+  await menu(a,first).focus();await a.keyboard.press('Enter');await until(async()=>await a.locator('#copy-message-'+first).evaluate(el=>document.activeElement===el),'keyboard copy focus');await star(a,first).waitFor({state:'visible'});await a.keyboard.press('ArrowDown');await until(async()=>await star(a,first).evaluate(el=>document.activeElement===el),'keyboard star focus');await a.keyboard.press('Escape');await until(async()=>await menu(a,first).evaluate(el=>document.activeElement===el),'menu escape restores trigger');
   await menu(a,first).click();await a.locator('#copy-message-'+first).click();await until(async()=>await a.evaluate(()=>copied.length)===1,'source copied');assert.equal(await a.evaluate(()=>copied[0]),messages[0].originalText);
   findings.push('Public chevron menu supports Enter/arrow keys/Escape and exact original-source Copy');
   const inlineID=messages[4].id,indicator=a.locator(`[data-message-bubble="${inlineID}"] [data-message-star-indicator]`),beforeInline=state.effects;
@@ -99,7 +156,7 @@ function thumbnail(color,width=8,height=8){
    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);console.log('PASS: read-only timestamp stars, menu-only toggles, no click effect, EN/PT touch layout and accessibility, original draft preserved');return;
   }
   const media=messages[1].id;await a.locator(`[data-preview-id="${previews[0].id}"] [data-preview-expand]`).first().click();await a.locator('#oie-image-viewer').waitFor({state:'visible'});await until(async()=>await a.locator('.oie-viewer-sender strong').textContent()==='Bob','actual source sender');assert((await a.locator('[data-viewer-date]').textContent()).includes('9:01'));assert.equal(await a.locator('.oie-viewer-header [data-star-message]').getAttribute('data-star-message'),media);
-  const viewerStar=a.locator('.oie-viewer-header [data-star-message]');await viewerStar.click();await until(async()=>await viewerStar.getAttribute('aria-pressed')==='true','viewer star');assert.equal(stars.get(media).starred,true);assert.equal(await a.locator('#star-message-'+media).count(),1);assert.equal(await a.locator(`[data-message-id="${media}"] [data-image-menu-trigger]`).count(),2);
+  const viewerStar=a.locator('.oie-viewer-header [data-star-message]');await viewerStar.click();await until(async()=>await viewerStar.getAttribute('aria-pressed')==='true','viewer star');assert.equal(stars.get(media).starred,true);assert.equal(await a.locator('#star-message-'+media).count(),0);assert.equal(await a.locator(`[data-message-id="${media}"] [data-image-menu-trigger]`).count(),2);
   await a.locator('[data-viewer-close]').click();await a.locator(`[data-preview-id="${previews[1].id}"] [data-preview-expand]`).first().click();await until(async()=>await viewerStar.getAttribute('aria-pressed')==='true','second image shares source star');assert.equal(await a.locator('.oie-viewer-sender strong').textContent(),'Bob');assert.equal(await a.locator('.oie-image-integrity').count(),0);await a.locator('[data-viewer-close]').click();
   const single=messages[2].id;assert.equal(await a.locator(`[data-message-id="${single}"] [data-image-menu-trigger]`).count(),0);await menu(a,single).click();const downloadPromise=a.waitForEvent('download');await a.locator('#save-preview-'+previews[2].id).click();const download=await downloadPromise;assert.equal(download.suggestedFilename(),'photo2.png');assert.deepEqual(await fs.readFile(await download.path()),bytes);
   findings.push('Compact source header uses actual sender/device time and shared star across images; one-image messages have one menu with cached same-origin Save, multiple images have scoped actions');

@@ -261,14 +261,14 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   // A snapshot announces shared content before synchronizing message-menu slots.
   // Capture the surviving node only after that synchronization completes.
   const watchSnapshot=async()=>page.evaluate(({engine,account,chat,source})=>{
-   const controller=new AbortController(),state={previousGeneration:window.OieRuntime.generation,routeGeneration:null,swapGeneration:null,snapshotGeneration:null,copy:null};window.catalogActionSettlement=state;
+   const controller=new AbortController(),state={previousGeneration:window.OieRuntime.generation,routeGeneration:null,swapGeneration:null,snapshotGeneration:null,slot:null};window.catalogActionSettlement=state;
    const current=()=>document.body.dataset.engineId===engine&&document.body.dataset.accountId===account&&document.body.dataset.conversationId===chat;
    document.addEventListener('oie:route-ready',event=>{if(current())state.routeGeneration=event.detail.generation},{signal:controller.signal});
    document.addEventListener('htmx:after:settle',event=>{const target=event.detail.task?.target;if(current()&&target?.id==='oie-route'&&target===document.getElementById('oie-route'))state.swapGeneration=window.OieRuntime.generation},{signal:controller.signal});
    document.addEventListener('oie:shared-refresh',event=>{const regions=event.detail?.querySelector('#oie-live-regions');if(!current()||regions?.dataset.engineId!==engine||regions.dataset.accountId!==account||regions.dataset.conversationId!==chat)return;state.snapshotGeneration=window.OieRuntime.generation},{signal:controller.signal});
-   document.addEventListener('oie:actions-refreshed',()=>{if(current()&&state.snapshotGeneration===window.OieRuntime.generation){state.copy=document.getElementById('copy-message-'+source);controller.abort()}},{signal:controller.signal});
+   document.addEventListener('oie:actions-refreshed',()=>{if(current()&&state.snapshotGeneration===window.OieRuntime.generation){state.slot=document.querySelector('[data-message-menu-slot="'+source+'"]');controller.abort()}},{signal:controller.signal});
   },{engine,account,chat,source:items[0].message.id});
-  const snapshotApplied=()=>page.evaluate(()=>{const s=window.catalogActionSettlement;return s.snapshotGeneration===window.OieRuntime.generation&&s.copy?.isConnected&&s.copy===document.getElementById(s.copy.id)});
+  const snapshotApplied=()=>page.evaluate(()=>{const s=window.catalogActionSettlement;return s.snapshotGeneration===window.OieRuntime.generation&&s.slot?.isConnected});
   const shell=await page.locator('#oie-app').elementHandle();
   const settings=await page.locator('[data-route-settings]').elementHandle();
   const viewers=await page.locator('[data-route-viewers]').elementHandle();
@@ -304,15 +304,14 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   await shell.dispose();
   await settings.dispose();
   await viewers.dispose();
-  assert(await page.evaluate(()=>window.catalogActionSettlement.copy.isConnected),'menu measurement starts from the applied live DOM');
+  assert(await page.evaluate(()=>window.catalogActionSettlement.slot.isConnected),'menu measurement starts from the applied live DOM');
   const deferredMenu=page.locator(`[data-message-menu-slot="${items[0].message.id}"]`);
-  assert.equal(await deferredMenu.getAttribute('data-source-menu-deferred'),'');
+  assert.equal(await deferredMenu.locator('[role=menu]').count(),0);
   const deferredTrigger=deferredMenu.locator('[data-message-menu-trigger]');
   await deferredTrigger.focus();await page.keyboard.press('ArrowDown');
   await deferredMenu.getByRole('menu').waitFor({state:'visible'});
-  assert.equal(await deferredMenu.getAttribute('data-source-menu-deferred'),null);
   await page.keyboard.press('Escape');
-  await deferredMenu.getByRole('menu').waitFor({state:'hidden'});
+  await deferredMenu.locator('[role=menu]').waitFor({state:'detached'});
   await until(async()=>await deferredTrigger.evaluate(el=>el===document.activeElement),'first keyboard open restores focus on Escape');
   // Exercise the actual message action menu with the consumer theme overrides.
   const painted=el=>{

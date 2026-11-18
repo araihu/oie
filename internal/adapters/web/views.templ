@@ -229,6 +229,10 @@ if !v.CompactSource {
 @documentViewer(v)
 </div>
 }
+<template data-message-template="menu">
+@dropdown.Dropdown(dropdown.Config{ID:"message-menu-oie-message-placeholder",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"oie-message-placeholder"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:offlineMenuSections(v)})
+<div data-menu-extra hx-trigger="oie:menu-load" hx-target="this" hx-select="[role=menu] > *" hx-swap="innerHTML settle:0ms show:none" hx-sync="this:queue last" hx-push-url="false"></div>
+</template>
 @reactionPicker(v)
 if !v.Preview {
 @forwardDialog(v)
@@ -1131,8 +1135,8 @@ templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
 if m.Moderation==nil && m.Retraction==nil {
 @messageReactionShortcut(v,m)
-<div class="oie-message-menu-slot" data-message-menu-slot={m.Id} x-ignore data-source-menu-deferred>
-@dropdown.Dropdown(dropdown.Config{ID:"message-menu-"+m.Id,Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,m.Id),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:messageActions(v,m)})
+<div class="oie-message-menu-slot oie-message-menu" data-message-menu-slot={m.Id} data-menu-url={v.messageMenuURL(m)}>
+@messageMenuTrigger(v,m.Id)
 </div>
 }
 <div class="oie-message-body-content">

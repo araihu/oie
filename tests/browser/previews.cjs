@@ -38,6 +38,10 @@ function thumbnail(color,width=8,height=8){
   if(u.pathname===`/api/v1/accounts/${account}/history`)return send(200,{accountId:account,state:'complete',retainedMessages:messages.length,conversations:1,updatedAt:'2026-11-08T12:00:00Z'});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:[conversation()]});
   if(u.pathname===`/api/v1/conversations/${chat}`)return send(200,conversation());
+  if(u.pathname.endsWith('/context')){
+   const item=messages.find(m=>u.pathname==='/api/v1/conversations/'+chat+'/messages/'+m.id+'/context');
+   return item?send(200,{items:[item],targetId:item.id,hasOlder:false,hasNewer:false}):send(404,{status:404});
+  }
   if(u.pathname.startsWith('/api/v1/messages/')){const message=messages.find(item=>item.id===u.pathname.split('/').at(-1));return message?send(200,message):send(404,{status:404})}
   if(u.pathname===`/api/v1/conversations/${chat}/messages`){
    const all=[...messages].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));

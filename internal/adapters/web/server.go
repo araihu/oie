@@ -912,6 +912,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.setReactions(w, r)
 		return
 	}
+	if r.URL.Path == "/ui/message-menu" {
+		s.serveMessageMenu(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/message-edit-target" {
 		s.prepareMessageEdit(w, r)
 		return

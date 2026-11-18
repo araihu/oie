@@ -1465,6 +1465,21 @@ type GetBrowserMessageEditHistoryParams struct {
 // GetBrowserMessageEditHistoryParamsLang defines parameters for GetBrowserMessageEditHistory.
 type GetBrowserMessageEditHistoryParamsLang string
 
+// ReadMessageMenuParams defines parameters for ReadMessageMenu.
+type ReadMessageMenuParams struct {
+	// EngineId Engine identity.
+	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
+
+	// AccountId Owning account.
+	AccountId openapi_types.UUID `form:"accountId" json:"accountId"`
+
+	// ConversationId Owning conversation.
+	ConversationId openapi_types.UUID `form:"conversationId" json:"conversationId"`
+
+	// MessageId Retained message.
+	MessageId openapi_types.UUID `form:"messageId" json:"messageId"`
+}
+
 // GetBrowserMessageReactionsParams defines parameters for GetBrowserMessageReactions.
 type GetBrowserMessageReactionsParams struct {
 	// EngineId Selected engine identity.

@@ -395,6 +395,28 @@ paths:
           description: The engine changed or the account is disconnected.
         '503':
           description: The service could not confirm the profile photo change.
+  /ui/message-menu:
+    get:
+      tags: [Messages]
+      operationId: readMessageMenu
+      summary: Open the actions for one retained message
+      description: Returns a localized HTML dropdown scoped to the current engine, account and conversation.
+      parameters:
+      - {in: query, name: engineId, required: true, description: Engine identity., schema: {type: string, format: uuid}}
+      - {in: query, name: accountId, required: true, description: Owning account., schema: {type: string, format: uuid}}
+      - {in: query, name: conversationId, required: true, description: Owning conversation., schema: {type: string, format: uuid}}
+      - {in: query, name: messageId, required: true, description: Retained message., schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Current message actions.
+          content:
+            text/html:
+              schema: {type: string}
+        '400': {description: Invalid identity.}
+        '404': {description: Message unavailable in this scope.}
+        '409': {description: The engine changed.}
+        '500': {description: The menu could not be rendered.}
+        '503': {description: The engine is unavailable.}
   /ui/messages/forward:
     get:
       tags: [Messages]
