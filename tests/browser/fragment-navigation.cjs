@@ -561,7 +561,7 @@ async function assertMobileControlOwnership(page) {
     for(const [section,label]of sidebarDestinations){
       await fallback.locator('.oie-sidebar a').filter({hasText:label}).click();
       assert.equal(new URL(fallback.url()).searchParams.get('section'),section);
-      assert.equal(await fallback.locator('#oie-app').count(),1);
+      await fallback.locator('#oie-app').waitFor({state:'attached'});
       assert((await fallback.locator('.oie-sidebar a[aria-current=page]').textContent()).includes(label));
       if(section==='media')await fallback.locator('#shared-content-results [data-shared-item]').first().waitFor({state:'visible'});
     }
