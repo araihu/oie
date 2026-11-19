@@ -3,8 +3,8 @@ set -eu
 umask 077
 mode=${1:-all}
 case "$mode" in
-  all|checks|build|race|desktop|browser-consumer|browser-integration|release) ;;
-  *) echo 'usage: tools/ci/run.sh [all|checks|build|race|desktop|browser-consumer|browser-integration|release]' >&2; exit 2 ;;
+  all|checks|build|race|race-core|race-restore|desktop|browser-consumer|browser-integration|release) ;;
+  *) echo 'usage: tools/ci/run.sh [all|checks|build|race|race-core|race-restore|desktop|browser-consumer|browser-integration|release]' >&2; exit 2 ;;
 esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 ci_artifacts=${OIE_CI_ARTIFACTS:-"$root/tests/browser/artifacts/ci"}

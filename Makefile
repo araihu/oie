@@ -58,8 +58,15 @@ test:
 	GOWORK=off $(GO) test $(GO_TEST_EXEC) ./...
 	GOWORK=off $(GO) -C cli test $(GO_TEST_EXEC) ./...
 
-test-race:
-	GOWORK=off $(GO) test $(GO_TEST_EXEC) -race -timeout=30m ./...
+.PHONY: test-race-core test-race-restore
+RACE_RESTORE_TESTS := ^TestBackupRestore
+test-race: test-race-core test-race-restore
+
+test-race-core:
+	GOWORK=off $(GO) test $(GO_TEST_EXEC) -race -timeout=30m -skip '$(RACE_RESTORE_TESTS)' ./...
+
+test-race-restore:
+	GOWORK=off $(GO) test $(GO_TEST_EXEC) -race -timeout=30m -run '$(RACE_RESTORE_TESTS)' ./...
 
 check-generated:
 	sh scripts/check-generated.sh $(VACUUM)

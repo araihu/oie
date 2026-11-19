@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ciModes       = "all|checks|build|race|desktop|browser-consumer|browser-integration|release"
+	ciModes       = "all|checks|build|race|race-core|race-restore|desktop|browser-consumer|browser-integration|release"
 	daggerVersion = "v0.21.9"
 	daggerImage   = "registry.dagger.io/engine:v0.21.9@sha256:3c4e0cedaea400d7e30155e050f94910ea5f381b6f5942dd2172382657628cb4"
 	goImage       = "golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea"
@@ -195,8 +195,8 @@ func (r runner) pipeline(ctx context.Context, mode, sourcePath string) error {
 		// so their fixtures use TMPDIR while the compiler still uses disk.
 		WithEnvVariable("OIE_GO_TEST_EXEC", "env -u GOTMPDIR")
 	switch mode {
-	case "race":
-		_, err := r.stage(ctx, "race", goContainer.WithExec([]string{"make", "test-race"}))
+	case "race", "race-core", "race-restore":
+		_, err := r.stage(ctx, mode, goContainer.WithExec([]string{"make", "test-" + mode}))
 		return err
 	case "browser-consumer", "browser-integration":
 		built, err := r.stage(ctx, "build", goContainer.WithExec([]string{"make", "build"}))
