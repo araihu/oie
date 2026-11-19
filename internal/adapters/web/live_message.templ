@@ -1,0 +1,11 @@
+package web
+
+templ liveMessage(v view) {
+<div id="oie-live-message" data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-after={v.AppendAfter}>
+@liveInbox(v)
+<div id="live-header">@conversationPreferenceData(v)</div>
+@starData(v)
+@timelineEnvelope(v)
+@message(v,v.Messages[0],v.AppendGrouped,true)
+</div>
+}

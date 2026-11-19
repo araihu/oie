@@ -77,9 +77,7 @@ templ roomInvitationStatus(v view) {
    <input type="hidden" name="conversationId" value={v.Selected.Id}/>
    <input type="hidden" name="expectedRevisionId" value={roomRevision(v.RoomSession)}/>
    <input type="hidden" name="expectedConversationRevisionId" value={v.Selected.RevisionId}/>
-   if v.RoomSession.LastErrorCode!=nil && *v.RoomSession.LastErrorCode=="not_authorized" {
-    @textinput.TextInput(textinput.Config{ID:"room-invitation-password",Name:"password",Label:v.Text.RoomPassword,Type:"password",InputAttrs:templ.Attributes{"maxlength":"1023","autocomplete":"off"}})
-   }
+   @roomPasswordField(v,"room-invitation-password",v.RoomSession.LastErrorCode!=nil && *v.RoomSession.LastErrorCode=="not_authorized")
    if v.RoomSession.LastErrorCode!=nil && *v.RoomSession.LastErrorCode=="nickname_conflict" {
     @textinput.TextInput(textinput.Config{ID:"room-nickname",Name:"nickname",Label:v.Text.RoomNickname,Value:roomNickname(v),InputAttrs:templ.Attributes{"maxlength":strconv.Itoa(100)}})
    }

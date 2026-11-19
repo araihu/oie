@@ -701,6 +701,8 @@
   "RoomModerateMessage": "Remove message",
   "RoomMessageModerated": "Message removed by moderation.",
   "RoomUserAddress": "User address",
+  "RoomOriginalPassword": "Original room password",
+  "RoomPasswordRetry": "Enter the original room password if you used one, then retry.",
   "RoomPassword": "Room password (optional)",
   "RoomSessionTitle": "Room session",
   "EmojiPicker": "Choose emoji",

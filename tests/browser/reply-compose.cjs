@@ -1,6 +1,7 @@
 // Isolated canonical engine fixture. No external XMPP/provider traffic.
 const assert=require('node:assert/strict'),http=require('node:http'),path=require('node:path'),fs=require('node:fs/promises');
 const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
+const {isDeepStrictEqual}=require('node:util');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const engine=id(1),account=id(2),chat=id(3),room=id(4),revision=id(5),source=id(6),roomSource=id(7),streams=new Set(),operations=new Map(),roomOps=new Map();
@@ -23,7 +24,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(conversation&&parts[5]==='room-session'){
    if(req.method==='GET')return send(200,state.room);
    const command=parts[6]==='leave'?'leave':'join',key=req.headers['idempotency-key'];state.roomBodies.push({command,key,input});
-   if(roomOps.has(key)){assert.deepEqual(roomOps.get(key),{command,input});return send(200,state.room)}
+   if(roomOps.has(key)){
+    if(!isDeepStrictEqual(roomOps.get(key),{command,input}))return problem(409,'idempotency_conflict');
+    return send(200,state.room);
+   }
    if(state.conflictNextJoin){state.conflictNextJoin=false;state.room={...state.room,intentRevisionId:id(900)}}
    if(input.expectedRevisionId!==(state.room.intentRevisionId||null))return send(409,{status:409,code:'revision_conflict',currentRoomSession:state.room});
    roomOps.set(key,{command,input});if(command==='join')state.joinEffects++;else state.leaveEffects++;
@@ -48,6 +52,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   if(parts[3]==='operations'){
    state.receiptReads++;
+   const roomOp=roomOps.get(parts[4]);
+   if(roomOp)return send(200,{id:parts[4],kind:roomOp.command+'_room',resourceId:room,status:'succeeded',createdAt:state.room.updatedAt});
    const receipt=operations.get(parts[4]);if(!receipt)return problem(404,'not_found');
    const {acceptedMessage,...metadata}=receipt;
    return send(200,u.searchParams.get('includeAcceptedMessage')==='true'?{...metadata,acceptedMessage}:metadata);
@@ -73,6 +79,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.locator('[aria-controls=chat-options-panel]').click();
   await page.locator('#chat-join-room').click();
   await dialog.waitFor({state:'visible'});assert(await status.isVisible());
+ };
+ const waitForRoomRetry=async(page,command,key)=>{
+  const form=page.locator('[data-room-command="'+command+'"]');
+  const copy=await page.locator('#oie-live-copy').evaluate(node=>({retry:node.dataset.retry,unknown:node.dataset.roomCommandUnknown}));
+  const action=form.getByRole('button',{name:copy.retry,exact:true});
+  await until(async()=>await action.isVisible()&&await action.isEnabled()&&
+    await form.locator('[name=operationKey]').inputValue()===key&&
+    await form.getByRole('alert').textContent()===copy.unknown,'uncertain '+command+' offers retry with the original key');
  };
  const quote=async(page,sourceID)=>{if(page.viewportSize().width>720){await page.locator('[data-message-menu-trigger="'+sourceID+'"]').focus();await page.keyboard.press('Enter');await until(async()=>await page.locator('#copy-message-'+sourceID).evaluate(el=>document.activeElement===el),'menu keyboard focus');await page.locator('#reply-message-'+sourceID).focus();await page.keyboard.press('Enter')}else{await page.locator('[data-message-menu-trigger="'+sourceID+'"]').tap();await page.locator('#reply-message-'+sourceID).tap();}await until(async()=>await page.locator('[data-composer-reply]').isVisible(),'quote prepared')};
  try{
@@ -102,10 +116,47 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   // A swapped fragment exposes its CAS fields before its new runtime restores
   // the scoped draft. Check both after that runtime starts, without a timed sleep.
   state.conflictNextJoin=true;await roomControls(page);await page.locator('[data-room-action=join]').click();await until(async()=>await page.locator('[data-form-feedback]').filter({hasText:'Room state changed'}).count()>0,'stale join conflict');assert.equal(state.joinEffects,0);const beforeRoomRefresh=await page.evaluate(()=>window.OieRuntime.generation);await page.locator('[data-room-refresh]').click();await until(async()=>await page.evaluate(previous=>window.OieRuntime.generation>previous,beforeRoomRefresh)&&await page.locator('[data-room-command] [name=expectedRevisionId]').inputValue()===id(900),'explicit refresh adopts current revision and starts its restored composer');assert.equal(await page.locator('#message-composer').inputValue(),'A room reply, queued after explicit join');assert.equal(await page.locator('[name=replyToMessageId]').inputValue(),roomSource);
-  await roomControls(page);await page.locator('#room-nickname').fill('Alice device');let joinDropped=false;await page.route('**/ui/rooms/join',async route=>{if(!joinDropped){joinDropped=true;await route.fetch();await route.abort('connectionreset')}else await route.continue()});await page.locator('[data-room-action=join]').click();await until(()=>state.joinEffects===1,'explicit join intent');await until(async()=>await page.locator('[data-room-command=join]').getAttribute('data-busy')==='false','uncertain join reply');await page.reload();await until(async()=>await page.locator('[data-room-command=join]').count()===1,'same pending join restored despite active status');await roomControls(page);await page.locator('[data-room-action]').click();await until(async()=>await page.locator('[data-room-state]').getAttribute('data-room-state')==='joining'&&await page.locator('[data-room-command=leave]').count()===1,'join reconciled, not claimed joined');assert.equal(state.joinEffects,1);assert.equal(state.roomBodies.at(-1).key,state.roomBodies.at(-2).key);assert.deepEqual(state.roomBodies.at(-1).input,state.roomBodies.at(-2).input);
-  await until(async()=>await page.locator('[data-send-message]').isEnabled(),'active room queues before joined');await page.keyboard.press('Escape');await page.locator('#room-session-dialog').waitFor({state:'hidden'});await page.locator('[data-send-message]').click();await until(()=>state.effects===2,'room reply queued once');assert.equal(state.sendBodies.at(-1).input.replyToMessageId,roomSource);assert.equal(state.room.state,'joining');state.room={...state.room,state:'joined'};emit('conversation.room_session_changed');await until(async()=>await page.locator('[data-room-state]').getAttribute('data-room-state')==='joined','actual joined event');assert(await page.locator('#room-session-status').isHidden());await page.locator('#chat-options button').first().click();const leaveMenu=page.locator('#chat-leave-room');assert(await leaveMenu.isEnabled());assert.equal(await leaveMenu.locator('svg').count(),1,'leave has a leading icon');let leaveDropped=false,releaseLeave;const leaveGate=new Promise(resolve=>releaseLeave=resolve);await page.route('**/ui/rooms/leave',async route=>{if(!leaveDropped){leaveDropped=true;await route.fetch();await leaveGate;await route.abort('connectionreset')}else await route.continue()});await leaveMenu.click();await until(()=>state.leaveEffects===1,'direct menu leave');assert(await page.locator('#room-session-dialog').isHidden(),'direct leave has no intermediate panel');assert(await leaveMenu.isDisabled(),'pending leave cannot be submitted twice');releaseLeave();await page.locator('#room-session-dialog').waitFor({state:'visible'});await until(async()=>await page.locator('[data-room-command=leave]').getAttribute('data-busy')==='false','uncertain direct leave');assert((await page.locator('#room-session-dialog [data-form-feedback]').textContent()).trim());await page.locator('[data-room-action=leave]').click();await until(async()=>await page.locator('[data-room-command=join]').count()===1,'leave retry reconciled');assert.equal(state.leaveEffects,1);assert.deepEqual(state.roomBodies.at(-1),state.roomBodies.at(-2),'leave retry preserves command key and body');await page.keyboard.press('Escape');await page.locator('#room-session-dialog').waitFor({state:'hidden'});await until(async()=>await leaveMenu.isDisabled(),'left room disables direct leave');await until(async()=>await page.locator('[data-send-message]').isDisabled(),'leave clears send permission');
+  await roomControls(page);
+  await page.locator('#room-nickname').fill('Alice device');
+  const joinForm=page.locator('[data-room-command=join]');
+  const joinButton=joinForm.locator('[data-room-action=join]');
+  const joinKey=await joinForm.locator('[name=operationKey]').inputValue();
+  const deliverRefresh=Promise.withResolvers(),dropJoin=Promise.withResolvers();
+  let refreshHeld=false,joinAccepted=false;
+  await page.route('**/ui/refresh?*',async route=>{
+    if(refreshHeld)return route.continue();
+    refreshHeld=true;
+    await deliverRefresh.promise;
+    await route.fulfill({response:await route.fetch()});
+  });
+  await page.route('**/ui/rooms/join',async route=>{
+    if(joinAccepted)return route.continue();
+    await route.fetch();
+    joinAccepted=true;
+    await dropJoin.promise;
+    await route.abort('connectionreset');
+  });
+  try{
+    await page.evaluate(()=>document.dispatchEvent(new Event('oie:refresh-request')));
+    await until(()=>refreshHeld,'room refresh already in flight');
+    await joinButton.click();
+    await until(()=>joinAccepted,'room join accepted by the engine');
+    assert.equal(state.joinEffects,1);
+    const refreshed=page.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
+    deliverRefresh.resolve();
+    await (await refreshed).finished();
+    await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+    assert(await joinButton.isDisabled(),'an overlapping refresh keeps the submitted join disabled');
+  }finally{
+    deliverRefresh.resolve();
+    dropJoin.resolve();
+  }
+  await waitForRoomRetry(page,'join',joinKey);
+  await page.reload();await until(async()=>await page.locator('[data-room-command=join]').count()===1,'same pending join restored despite active status');await roomControls(page);await page.locator('[data-room-action]').click();await until(async()=>await page.locator('[data-room-state]').getAttribute('data-room-state')==='joining'&&await page.locator('[data-room-command=leave]').count()===1,'join reconciled, not claimed joined');assert.equal(state.joinEffects,1);assert.equal(state.roomBodies.at(-1).key,state.roomBodies.at(-2).key);assert.deepEqual(state.roomBodies.at(-1).input,state.roomBodies.at(-2).input);
+  await until(async()=>await page.locator('[data-send-message]').isEnabled(),'active room queues before joined');await page.keyboard.press('Escape');await page.locator('#room-session-dialog').waitFor({state:'hidden'});await page.locator('[data-send-message]').click();await until(()=>state.effects===2,'room reply queued once');assert.equal(state.sendBodies.at(-1).input.replyToMessageId,roomSource);assert.equal(state.room.state,'joining');state.room={...state.room,state:'joined'};emit('conversation.room_session_changed');await until(async()=>await page.locator('[data-room-state]').getAttribute('data-room-state')==='joined','actual joined event');assert(await page.locator('#room-session-status').isHidden());await page.locator('#chat-options button').first().click();const leaveMenu=page.locator('#chat-leave-room');assert(await leaveMenu.isEnabled());assert.equal(await leaveMenu.locator('svg').count(),1,'leave has a leading icon');const leaveKey=await page.locator('[data-room-command=leave] [name=operationKey]').inputValue();let leaveDropped=false,releaseLeave;const leaveGate=new Promise(resolve=>releaseLeave=resolve);await page.route('**/ui/rooms/leave',async route=>{if(!leaveDropped){leaveDropped=true;await route.fetch();await leaveGate;await route.abort('connectionreset')}else await route.continue()});await leaveMenu.click();await until(()=>state.leaveEffects===1,'direct menu leave');assert(await page.locator('#room-session-dialog').isHidden(),'direct leave has no intermediate panel');assert(await leaveMenu.isDisabled(),'pending leave cannot be submitted twice');releaseLeave();await page.locator('#room-session-dialog').waitFor({state:'visible'});await waitForRoomRetry(page,'leave',leaveKey);await page.locator('[data-room-action=leave]').click();await until(async()=>await page.locator('[data-room-command=join]').count()===1,'leave retry reconciled');assert.equal(state.leaveEffects,1);assert.deepEqual(state.roomBodies.at(-1),state.roomBodies.at(-2),'leave retry preserves command key and body');await page.keyboard.press('Escape');await page.locator('#room-session-dialog').waitFor({state:'hidden'});await until(async()=>await leaveMenu.isDisabled(),'left room disables direct leave');await until(async()=>await page.locator('[data-send-message]').isDisabled(),'leave clears send permission');
   findings.push('Read-only room quote/draft do not join; stale CAS requires explicit refresh; uncertain Join reuses exact key/body through reload; durable active intent permits queueing before joined; explicit leave disables new sends');
   const denied=await browser.newContext({viewport:{width:390,height:844},locale:'pt-BR',timezoneId:'America/Sao_Paulo',isMobile:true,hasTouch:true});await denied.addInitScript(()=>{for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});const mobile=await denied.newPage();mobile.on('pageerror',e=>errors.push(e.message));await open(mobile,chat,'pt-BR');await quote(mobile,source);await mobile.locator('#message-composer').fill('Resposta sem armazenamento');await mobile.locator('.oie-back-button').click();await until(async()=>await mobile.locator('a[data-conversation-id]:visible').count()>0,'mobile conversation list');await mobile.locator('a[data-conversation-id="'+room+'"]').first().click();await until(async()=>new URL(mobile.url()).searchParams.get('chat')===room&&await mobile.locator('#room-session-status').count()===1&&await mobile.locator('#room-session-status').isHidden(),'denied room navigation');await roomControls(mobile);assert(await mobile.locator('#room-session-status').isVisible());assert.equal(state.joinEffects,1);assert.equal(state.leaveEffects,1);await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const roomAxe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(roomAxe.violations.map(v=>v.id),[]);await mobile.keyboard.press('Escape');await mobile.locator('#room-session-dialog').waitFor({state:'hidden'});await mobile.locator('.oie-back-button').click();await until(async()=>await mobile.locator('a[data-conversation-id]:visible').count()>0,'mobile conversation list');await mobile.locator('a[data-conversation-id="'+chat+'"]').first().click();await until(async()=>new URL(mobile.url()).searchParams.get('chat')===chat&&await mobile.locator('#message-composer').isVisible()&&await mobile.locator('#message-composer').inputValue()==='Resposta sem armazenamento'&&await mobile.locator('[name=replyToMessageId]').inputValue()===source,'denied storage memory restore');await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert(await mobile.locator('#send-message-form .oie-storage-warning').isVisible());
+  await require('./protected-join.cjs')({page,base,room,account,state,open,roomControls,until,id});
   findings.push('pt-BR touch quote UI retains body/target across HTMX routes with denied storage, visible warning and zero WCAG A/AA violations');assert.deepEqual(errors,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await mobile.screenshot({path:path.join(artifacts,'reply-composer-mobile.png')});await fs.writeFile(path.join(artifacts,'reply-compose-report.json'),JSON.stringify({findings,effects:state.effects,joinEffects:state.joinEffects,leaveEffects:state.leaveEffects,pageErrors:errors},null,2));console.log('PASS: canonical reply preparation, quote/draft journals, uncertain acceptance, fallback receipts, explicit CAS room lifecycle and denied-storage mobile');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

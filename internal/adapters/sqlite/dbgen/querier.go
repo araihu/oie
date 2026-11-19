@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	AccountUnreadTotals(ctx context.Context) ([]AccountUnreadTotalsRow, error)
 	AcknowledgeMessageSearchPending(ctx context.Context, arg AcknowledgeMessageSearchPendingParams) error
 	AcquireWriteLock(ctx context.Context) error
 	AdvanceDisplayedHead(ctx context.Context, arg AdvanceDisplayedHeadParams) (int64, error)

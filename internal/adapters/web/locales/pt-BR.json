@@ -701,6 +701,8 @@
   "RoomModerateMessage": "Remover mensagem",
   "RoomMessageModerated": "Mensagem removida pela moderação.",
   "RoomUserAddress": "Endereço da pessoa",
+  "RoomOriginalPassword": "Senha original da sala",
+  "RoomPasswordRetry": "Se você usou uma senha para entrar na sala, digite-a novamente e tente de novo.",
   "RoomPassword": "Senha da sala (opcional)",
   "RoomSessionTitle": "Participação na sala",
   "EmojiPicker": "Escolher emoji",

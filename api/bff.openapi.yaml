@@ -276,8 +276,20 @@ paths:
         schema: {type: string}
       - name: X-Oie-Inbox-Event
         in: header
-        description: Latest contiguous event affecting only other conversations. A matching cursor allows a list and unread count update.
+        description: Latest contiguous inbox event. A matching cursor allows a list and unread count update or a verified live message append.
         schema: {type: string}
+      - name: X-Oie-Timeline-Message
+        in: header
+        description: Incoming message reported by a creation event for the open conversation.
+        schema: {type: string, format: uuid}
+      - name: X-Oie-Timeline-After
+        in: header
+        description: Last message mounted at the live edge, immediately before the incoming message.
+        schema: {type: string, format: uuid}
+      - name: X-Oie-Timeline-Scope
+        in: header
+        description: Conversation state that must still match for an append.
+        schema: {type: string, pattern: '^[0-9a-f]{64}$'}
       - name: X-Oie-Inbox-Row
         in: header
         description: Changed conversation when all contiguous events affect the same row. Other rows may be represented by version checks.

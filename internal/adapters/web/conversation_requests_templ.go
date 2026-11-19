@@ -552,15 +552,13 @@ func roomInvitationStatus(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\"> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if v.RoomSession.LastErrorCode != nil && *v.RoomSession.LastErrorCode == "not_authorized" {
-				templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "room-invitation-password", Name: "password", Label: v.Text.RoomPassword, Type: "password", InputAttrs: templ.Attributes{"maxlength": "1023", "autocomplete": "off"}}).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
+			templ_7745c5c3_Err = roomPasswordField(v, "room-invitation-password", v.RoomSession.LastErrorCode != nil && *v.RoomSession.LastErrorCode == "not_authorized").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
 			}
 			if v.RoomSession.LastErrorCode != nil && *v.RoomSession.LastErrorCode == "nickname_conflict" {
 				templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: "room-nickname", Name: "nickname", Label: v.Text.RoomNickname, Value: roomNickname(v), InputAttrs: templ.Attributes{"maxlength": strconv.Itoa(100)}}).Render(ctx, templ_7745c5c3_Buffer)
@@ -583,7 +581,7 @@ func roomInvitationStatus(v view) templ.Component {
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.JoinRoom)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 86, Col: 124}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 84, Col: 124}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -607,7 +605,7 @@ func roomInvitationStatus(v view) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.RoomUnavailable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 90, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_requests.templ`, Line: 88, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {

@@ -25,7 +25,6 @@ templ forwardForm(v view, source messageView, rooms []forwardRoom) {
 		<input type="hidden" name="messageId" value={ source.Id }/>
 		<input type="hidden" name="revisionId" value={ source.RevisionId }/>
 		<div id="forward-message-preview" class="oie-forward-preview" data-forward-preview data-source-revision={ source.RevisionId }>
-			@viewerSource(v,source)
 			<div class={ "oie-starred-bubble", templ.KV("oie-message-own",source.IsOwn) }>
 				@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(source.IsOwn),RootClass:"oie-bubble",MessageContent:starredBubbleBody(v,source,messageTimelineTime(source.Message))})
 			</div>

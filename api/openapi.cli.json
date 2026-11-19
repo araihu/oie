@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.40.0",
+    "version": "0.41.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -2810,6 +2810,44 @@
           }
         },
         "x-cli-name": "register"
+      }
+    },
+    "/api/v1/accounts/unread-totals": {
+      "get": {
+        "operationId": "getAccountUnreadTotals",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Get unread message totals by account",
+        "description": "Counts unread messages in active and archived chats. Removed chats and manual unread reminders contribute nothing. Accounts with zero unread messages are omitted.",
+        "responses": {
+          "200": {
+            "description": "Unread message totals in one database snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountUnreadTotals"
+                },
+                "example": {
+                  "totals": {
+                    "019a5df0-0000-7000-8000-000000000001": 7
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "x-cli-group": [
+          "accounts"
+        ],
+        "x-cli-name": "unread-totals",
+        "x-cli-description": "Show unread message totals by account."
       }
     },
     "/api/v1/accounts/{accountId}": {
@@ -7607,7 +7645,8 @@
               "0.37.0",
               "0.38.0",
               "0.39.0",
-              "0.40.0"
+              "0.40.0",
+              "0.41.0"
             ]
           },
           "eventCursor": {
@@ -7706,6 +7745,27 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "AccountUnreadTotals": {
+        "description": "Unread message counts for accounts with at least one unread message.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "totals"
+        ],
+        "properties": {
+          "totals": {
+            "type": "object",
+            "description": "Number of unread messages keyed by account UUID.",
+            "example": {
+              "019a5df0-0000-7000-8000-000000000001": 7
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       },

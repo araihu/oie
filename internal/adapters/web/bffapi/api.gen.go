@@ -1584,8 +1584,17 @@ type RefreshWorkspaceParams struct {
 	// XOieRefreshCursor Cursor of the fully applied chat view. A matching engine cursor allows an empty response.
 	XOieRefreshCursor *string `json:"X-Oie-Refresh-Cursor,omitempty"`
 
-	// XOieInboxEvent Latest contiguous event affecting only other conversations. A matching cursor allows a list and unread count update.
+	// XOieInboxEvent Latest contiguous inbox event. A matching cursor allows a list and unread count update or a verified live message append.
 	XOieInboxEvent *string `json:"X-Oie-Inbox-Event,omitempty"`
+
+	// XOieTimelineMessage Incoming message reported by a creation event for the open conversation.
+	XOieTimelineMessage *openapi_types.UUID `json:"X-Oie-Timeline-Message,omitempty"`
+
+	// XOieTimelineAfter Last message mounted at the live edge, immediately before the incoming message.
+	XOieTimelineAfter *openapi_types.UUID `json:"X-Oie-Timeline-After,omitempty"`
+
+	// XOieTimelineScope Conversation state that must still match for an append.
+	XOieTimelineScope *string `json:"X-Oie-Timeline-Scope,omitempty"`
 
 	// XOieInboxRow Changed conversation when all contiguous events affect the same row. Other rows may be represented by version checks.
 	XOieInboxRow *string `json:"X-Oie-Inbox-Row,omitempty"`

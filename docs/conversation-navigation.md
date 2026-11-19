@@ -38,8 +38,16 @@ On a connected, unchanged chat view, the recovery poll sends the applied engine
 cursor. The server can confirm it with HTTP 204. A contiguous sequence of
 message or conversation events affecting other chats can refresh just the inbox
 and account unread counts. The client verifies the versions of retained rows
-before applying the result. A gap, an unexpected row version or a change in the
-open conversation requests the full live regions.
+before applying the result. At the live edge of a direct chat, one incoming
+plain-text message can append a row and update the inbox and unread counts.
+The BFF verifies the event cursor, conversation scope and preceding message.
+A gap, a stale row, a historical window or a richer message requests full
+live regions. Engine API 0.41 returns unread totals for all accounts in one
+read. Older engines use the paged fallback.
+
+The first invalidation schedules a refresh after 16 ms. Further invalidations
+keep that deadline. Refresh starts are at least 250 ms apart, and events
+during a read can schedule one follow-up read.
 
 The inbox uses the engine cursor to browse pages of up to 100 conversations.
 Changing the page replaces only the list. Its cursor is part of the URL and the

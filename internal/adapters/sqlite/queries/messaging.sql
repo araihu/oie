@@ -13,6 +13,12 @@ INSERT INTO conversation_revisions(id,entity_id,parents,payload,created_at) VALU
 SELECT created_at FROM conversation_revisions WHERE entity_id=? AND parents='[]' ORDER BY created_at,id LIMIT 1;
 -- name: UpdateConversation :exec
 UPDATE conversations SET revision_id=?,payload=?,activity_sequence=?,unread_count=? WHERE id=?;
+-- name: AccountUnreadTotals :many
+SELECT account_id, CAST(SUM(unread_count) AS INTEGER) AS total
+FROM conversations
+WHERE unread_count > 0 AND COALESCE(json_extract(payload,'$.RemovedFromChats'),0)=0
+GROUP BY account_id;
+
 -- name: ListConversations :many
 SELECT sqlc.embed(conversations), CAST(CASE
     WHEN CAST(sqlc.arg(include_latest_message_page_count) AS INTEGER) = 0

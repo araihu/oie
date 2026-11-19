@@ -17,6 +17,8 @@ window.OieRuntime.register('live', life => {
   const initialList = document.getElementById('conversation-list');
   let appliedCursor = initialList?.dataset.inboxCursor === body.dataset.eventCursor && inbox.current(initialList) ? body.dataset.eventCursor : '';
   let inboxEventCursor = '', changedRow = '', fullRefresh = false;
+  let pendingAppend;
+  let lastRefreshStart = -Infinity;
   let sourceNavigation, refreshController;
   let stopped = false, storageDenied = false;
   life.cleanup(()=>{stopped=true;});
@@ -859,15 +861,27 @@ window.OieRuntime.register('live', life => {
   if(roomDraftKey){try{roomOperation=JSON.parse(localStorage.getItem(roomDraftKey)||'null')||inMemory.get(roomDraftKey)||null}catch{roomOperation=inMemory.get(roomDraftKey)||null}}
   if(roomOperation&&(!canonicalID(roomOperation.operationKey)||!['join','leave'].includes(roomOperation.command)||roomOperation.conversationId!==body.dataset.conversationId||roomOperation.accountId!==body.dataset.accountId))roomOperation=null;
   let roomCommandPassword = "";
-  function keepRoomOperation(value){if(!value)roomCommandPassword="";if(!value&&roomOperation){const region=document.querySelector('#room-session-status');if(region)region.dataset.version='';}roomOperation=value;if(!roomDraftKey)return;if(value)inMemory.set(roomDraftKey,value);else inMemory.delete(roomDraftKey);try{if(value)localStorage.setItem(roomDraftKey,JSON.stringify(value));else localStorage.removeItem(roomDraftKey)}catch{storageWarning()}}
+  let roomPasswordRequested = false;
+  let roomCommandGeneration = 0;
+  function keepRoomOperation(value){if(!value){roomCommandPassword="";roomPasswordRequested=false;}if(!value&&roomOperation){const region=document.querySelector('#room-session-status');if(region)region.dataset.version='';}roomOperation=value;if(!roomDraftKey)return;if(value)inMemory.set(roomDraftKey,value);else inMemory.delete(roomDraftKey);try{if(value)localStorage.setItem(roomDraftKey,JSON.stringify(value));else localStorage.removeItem(roomDraftKey)}catch{storageWarning()}}
   function restoreRoomOperation(){
     if(!roomOperation)return;
     const form=document.querySelector('[data-room-command]');if(!form)return;
+    form.hidden=false;
     form.action='/ui/rooms/'+roomOperation.command;form.dataset.oieAction=roomOperation.command+'_room';form.dataset.roomCommand=roomOperation.command;
     for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname']){const field=form.elements.namedItem(key);if(field)field.value=roomOperation[key]||'';}
     for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=true;
+    const passwordField=form.querySelector('[data-room-password-field]');
+    if (roomPasswordRequested && passwordField) {
+      passwordField.hidden=false;
+      passwordField.querySelector('label').textContent=passwordField.dataset.originalPasswordLabel;
+      const input=passwordField.querySelector('input');
+      input.disabled=false;
+      input.readOnly=false;
+      input.required=roomOperation.passwordRequired===true;
+    }
     const button=form.querySelector('[data-room-action]');if(button){button.dataset.roomAction=roomOperation.command;button.textContent=text('retry');button.title=text('retry');}
-    const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
+    const region=form.querySelector('[data-form-feedback]');if(region){region.textContent=roomPasswordRequested&&passwordField ? passwordField.dataset.passwordRetry : text('roomCommandUnknown');region.dataset.error='true';region.setAttribute('role','alert');}
   }
   const roomEntryPasswords = new WeakMap();
   const roomEntryFields = ['operationKey','accountId','address','name','nickname'];
@@ -1633,14 +1647,28 @@ window.OieRuntime.register('live', life => {
     let value;
     try { value = JSON.parse(event.data); } catch { return false; }
     const id = value?.message?.conversationId || value?.conversation?.id;
-    if (!canonicalID(id) || id === body.dataset.conversationId) return false;
+    if (!canonicalID(id)) return false;
+    if(!inboxEventCursor)pendingAppend=undefined;
+    if(id===body.dataset.conversationId){
+      const m=value.message;
+      if(type==='message.created'&&!inboxEventCursor&&m?.sendState==='received'&&!m.isOwn&&!m.historical&&
+         m.accountId===body.dataset.accountId&&canonicalID(m.id)&&typeof m.originalText==='string'&&m.originalText&&!m.reply&&!m.retraction&&!m.moderation&&
+         !m.attachments?.length&&!m.audioAttachmentUrls?.length&&!m.videoAttachmentUrls?.length&&
+         !m.originalText.includes('://')&&window.OieTimeline?.appendEdge()){
+        pendingAppend={id:m.id,cursor:event.lastEventId,paired:false};
+      }else if(type==='conversation.updated'&&pendingAppend?.cursor===inboxEventCursor&&!pendingAppend.paired&&
+               value.conversation?.accountId===body.dataset.accountId){
+        // A retained incoming message and its conversation summary commit together.
+        pendingAppend={...pendingAppend,cursor:event.lastEventId,paired:true};
+      }else return false;
+    }else if(pendingAppend)return false;
     changedRow = !inboxEventCursor || changedRow === id ? id : '';
     inboxEventCursor = event.lastEventId;
     scheduleRefresh(true);
     return true;
   }
 
-  function applyInboxUpdate(region, list, generation) {
+  function applyInboxUpdate(region, list, generation, append) {
     const fresh = region.querySelector('#live-list');
     if (!list?.isConnected || !fresh) return false;
     const rows = new Map([...list.querySelectorAll('[data-conversation-row]')].map(row => [row.dataset.conversationRow, row]));
@@ -1649,6 +1677,7 @@ window.OieRuntime.register('live', life => {
       if (!existing || existing.dataset.version !== stub.dataset.version) return false;
       stub.dataset.conversationRow = existing.dataset.conversationRow;
     }
+    if(append&&!append())return false;
     inbox.reconcile(list, fresh);
     list.dataset.version = fresh.dataset.version;
     inbox.track(list, generation, region.dataset.eventCursor);
@@ -1668,7 +1697,9 @@ window.OieRuntime.register('live', life => {
     if (stopped || mock) return;
     if (pendingRequests || refreshing || sourceNavigation) { refreshAgain = true; return; }
     refreshing = true;
+    lastRefreshStart = performance.now();
     const renameEpoch = accountRenameEpoch;
+    const roomGeneration = roomCommandGeneration;
     const starGeneration=Number(body.dataset.starGeneration||0);
     const preferenceGeneration=Number(body.dataset.conversationPreferenceGeneration||0);
     const list = document.getElementById('conversation-list');
@@ -1694,9 +1725,18 @@ window.OieRuntime.register('live', life => {
       !journal?.pending && !sourceNavigation && !recoveringView && !refreshQuery.has('open') &&
       !refreshQuery.has('searchMode') && !refreshQuery.has('chatSearch') &&
       ![...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]:not([hidden])')].some(dialog => dialog.getClientRects().length);
+    const append=pendingAppend?.cursor===inboxEventCursor?pendingAppend:undefined;
     if(conditional && inboxEventCursor){
-      headers['X-Oie-Inbox-Event']=inboxEventCursor;
-      headers['X-Oie-Inbox-Row']=changedRow;
+      const edge=append&&window.OieTimeline?.appendEdge();
+      if(!append||edge){
+        headers['X-Oie-Inbox-Event']=inboxEventCursor;
+        headers['X-Oie-Inbox-Row']=changedRow;
+        if(append){
+          headers['X-Oie-Timeline-Message']=append.id;
+          headers['X-Oie-Timeline-After']=edge.id;
+          headers['X-Oie-Timeline-Scope']=edge.scope;
+        }
+      }
     }else if(conditional && inbox.current(list)){
       headers['X-Oie-Refresh-Cursor']=appliedCursor;
     }
@@ -1713,9 +1753,27 @@ window.OieRuntime.register('live', life => {
         return;
       }
       if (!response.ok) throw new Error('refresh unavailable');
-      const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const markup = await response.text();
       if(life.signal.aborted||controller.signal.aborted)return;
-      if(requestedSearch!==location.search || renameEpoch!==accountRenameEpoch){refreshAgain=true;return;}
+      // A room refresh started before Join or Leave can carry the opposite command.
+      if(requestedSearch!==location.search || renameEpoch!==accountRenameEpoch || roomGeneration!==roomCommandGeneration){refreshAgain=true;return;}
+      const page = new DOMParser().parseFromString(markup, 'text/html');
+      const message=page.getElementById('oie-live-message');
+      if(message){
+        if(message.dataset.engineId!==body.dataset.engineId){engineChanged();return;}
+        const cursor=message.dataset.eventCursor;
+        if(!append||fullRefresh||pendingRequests||journal?.pending||cursor!==append.cursor||cursor!==inboxEventCursor||inboxGeneration!==inbox.generation||
+           preferenceGeneration!==Number(body.dataset.conversationPreferenceGeneration||0)||
+           !applyInboxUpdate(message,list,inboxGeneration,()=>window.OieTimeline?.appendMessage(message,headers['X-Oie-Timeline-After'],append.id,reactionStartedAt,starGeneration))){
+          refreshAgain=true;return;
+        }
+        const state=message.querySelector('#live-header [data-conversation-preference-state]');
+        if(state)rememberConversationForRemoval({id:state.dataset.conversation,accountId:state.dataset.account,revisionId:state.dataset.revision,title:document.querySelector('#chat-header h2')?.textContent});
+        document.dispatchEvent(new CustomEvent('oie:conversation-preferences-refreshed',{detail:{page}}));
+        document.dispatchEvent(new CustomEvent('oie:live-message-appended',{detail:{cursor}}));
+        appliedCursor=cursor;inboxEventCursor='';pendingAppend=undefined;
+        return;
+      }
       const inboxOnly = page.getElementById('oie-live-inbox');
       if(inboxOnly){
         if(inboxOnly.dataset.engineId!==body.dataset.engineId){engineChanged();return;}
@@ -1747,7 +1805,7 @@ window.OieRuntime.register('live', life => {
           for(const key of ['sendAllowed','composeAllowed'])composer.dataset[key]=nextRoom.dataset[key]||'false';
           input.disabled=composer.dataset.composeAllowed!=='true'&&!journal?.pending;
         }
-        if(room.dataset.version!==nextRoom.dataset.version&&!room.querySelector('input[name="nickname"]')?.matches(':focus')){
+        if(room.dataset.version!==nextRoom.dataset.version&&!room.querySelector('input[name="nickname"]:focus,input[name="password"]:not([readonly]):focus')){
           const previousFocus=room.contains(document.activeElement),previousFeedback=room.querySelector('[data-form-feedback]'),previousCommand=room.querySelector('[data-room-command]')?.dataset.roomCommand;
           const savedFeedback=previousFeedback?.textContent,savedError=previousFeedback?.dataset.error;
           mutateDOM(room,nextRoom.innerHTML);room.dataset.version=nextRoom.dataset.version;room.dataset.roomState=nextRoom.dataset.roomState;room.dataset.roomActive=nextRoom.dataset.roomActive;for(const key of ['sendAllowed','composeAllowed','replyAllowed'])room.dataset[key]=nextRoom.dataset[key];
@@ -1940,6 +1998,7 @@ window.OieRuntime.register('live', life => {
     if(fragment!=='source'&&fragment!=='source-pane')return;
     sourceNavigation=ctx;
     clearTimeout(refreshTimer);
+    refreshTimer = undefined;
     refreshController?.abort();
   });
   life.on(document,'htmx:finally:request',event=>{
@@ -1983,8 +2042,14 @@ window.OieRuntime.register('live', life => {
     if (stopped || life.signal.aborted) return;
     if (conditional !== true) { fullRefresh = true; inboxEventCursor = ''; }
     if (sourceNavigation) { refreshAgain = true; return; }
-    clearTimeout(refreshTimer);
-    refreshTimer = life.timeout(refresh, 100);
+    if (refreshTimer !== undefined) return;
+    // Give an isolated event one short coalescing window. Under sustained
+    // traffic, keep the same deadline and start at most four reads per second.
+    const delay = Math.max(16, 250 - (performance.now() - lastRefreshStart));
+    refreshTimer = life.timeout(() => {
+      refreshTimer = undefined;
+      void refresh();
+    }, delay);
   }
 
   function needsReplyRefresh(reply) {
@@ -2210,9 +2275,14 @@ window.OieRuntime.register('live', life => {
     if (roomEntry && values.get('password')) roomEntryPasswords.set(form, values.get('password'));
     const roomCommand=form.dataset.roomCommand;
     const roomMenuSubmit=roomCommand==='leave'&&form.dataset.roomMenuSubmit==='true';
+    if (roomCommand) roomCommandGeneration++;
     if(roomCommand==='join'&&values.get('password'))roomCommandPassword=values.get('password');
     if(roomCommand==='join'&&roomCommandPassword)values.set('password',roomCommandPassword);
-    if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),expectedConversationRevisionId:values.get('expectedConversationRevisionId')||'',nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
+    // Old journals have no password marker. Check their receipt before replaying too.
+    if(roomCommand==='join'&&roomOperation&&roomOperation.passwordRequired!==false&&!roomCommandPassword&&!roomPasswordRequested){
+      values.set('checkJoinReceipt','1');
+    }
+    if(roomCommand){if(roomOperation){for(const key of ['operationKey','expectedRevisionId','expectedConversationRevisionId','nickname','conversationId','accountId'])values.set(key,roomOperation[key]||'')}else keepRoomOperation({command:roomCommand,passwordRequired:!!roomCommandPassword,operationKey:values.get('operationKey'),expectedRevisionId:values.get('expectedRevisionId'),expectedConversationRevisionId:values.get('expectedConversationRevisionId')||'',nickname:values.get('nickname')||'',conversationId:values.get('conversationId'),accountId:values.get('accountId')})}
 
     if(sending){
       values.set('originalText',journal.text);values.set('replyToMessageId',journal.reply?.messageId||'');values.set('mentions',JSON.stringify(journal.mentions||[]));setScheduledValues(values);
@@ -2316,6 +2386,12 @@ window.OieRuntime.register('live', life => {
           saveRoomEntry(form, null);
           if (result.nextKey) form.elements.namedItem('operationKey').value = result.nextKey;
         }
+        if(roomCommand==='join'&&(result.code==='room_password_requested'||(roomPasswordRequested&&result.code==='idempotency_conflict'))){
+          roomPasswordRequested=true;
+          roomCommandPassword='';
+          const password=form.elements.namedItem('password');
+          if(password)password.value='';
+        }
         if(roomCommand&&result.rejected){keepRoomOperation(null);for(const field of form.querySelectorAll('input:not([type=hidden])'))field.readOnly=false;}
         if(scheduleDrawer&&['state_conflict','revision_conflict','not_found'].includes(result.code)){
           scheduleDrawer.dispatchEvent(new Event('oie:schedule-refresh'));
@@ -2396,6 +2472,7 @@ window.OieRuntime.register('live', life => {
       }
       if(life.signal.aborted)return;
       pendingRequests--;renderReply();syncRoomLeave();
+      if (roomCommand && roomOperation) restoreRoomOperation();
       if (roomEntry) restoreRoomEntry(form, pendingRoomEntry(form));
       if(journal?.pending)renderPendingSend(pendingBubble?.dataset.pendingState||'uncertain');
       if (sending && (!savedOffline || retainsSendFocus())) focusAfterSend();

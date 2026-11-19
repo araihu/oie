@@ -30,6 +30,16 @@ type ReadRepository interface {
 	MarkMessagesRead(context.Context, ReadMutation) (ReadResult, error)
 }
 
+func (e *Engine) AccountUnreadTotals(ctx context.Context) (map[string]int, error) {
+	r, ok := e.repo.(interface {
+		AccountUnreadTotals(context.Context) (map[string]int, error)
+	})
+	if !ok {
+		return nil, ErrProtocolUnavailable
+	}
+	return r.AccountUnreadTotals(ctx)
+}
+
 func (e *Engine) HasMessageRead(ctx context.Context, id domain.ID) (bool, error) {
 	if !validID(id) {
 		return false, ErrInvalid

@@ -350,6 +350,12 @@
     const regions = page.querySelector('#oie-live-regions');
     if (regions?.dataset.unavailable === 'false') snapshot(regions, page.querySelector('#live-header #chat-header'), page.querySelector('#live-timeline'));
   });
+  document.addEventListener('oie:live-message-appended', ({detail: {cursor}}) => {
+    const pane = document.getElementById('conversation-pane');
+    if (!pane) return;
+    const data = capture(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline'));
+    if (data?.entry) publish({...data, cursor});
+  });
   document.addEventListener('oie:timeline-latest', () => {
     const pane = document.getElementById('conversation-pane');
     if (pane) snapshot(pane, pane.querySelector('#chat-header'), pane.querySelector('#message-timeline'));

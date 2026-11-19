@@ -107,7 +107,6 @@ templ starredMessageRow(v view, item engineapi.StarredMessage, showSource bool) 
 				}
 			</p>
 		}
-		@viewerSource(v,m)
 		<div class={"oie-starred-bubble",templ.KV("oie-message-own",m.IsOwn)}>
 			@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),RootClass:"oie-bubble",MessageContent:starredBubbleBody(v,m,position)})
 		</div>
