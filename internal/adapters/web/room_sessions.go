@@ -172,6 +172,25 @@ func (s *Server) changeRoom(ctx context.Context, r *http.Request, text copy, lea
 	if owner.JSON200.AccountId != account || owner.JSON200.Kind != "room" {
 		return 409, mutationResult{Message: text.OperationConflict, Rejected: true}
 	}
+	// A reloaded tab no longer holds the password. A receipt confirms the
+	// original Join without resubmitting it with a different fingerprint.
+	if !leave && r.Form.Get("checkJoinReceipt") == "1" {
+		receipt, err := s.client.GetOperationWithResponse(ctx, key, nil)
+		if err != nil {
+			return 503, mutationResult{Message: text.RoomCommandUnknown}
+		}
+		if receipt.StatusCode() == http.StatusNotFound {
+			return 422, mutationResult{Code: "room_password_requested", Message: text.RoomPasswordRetry}
+		}
+		op := receipt.JSON200
+		if op == nil {
+			return 503, mutationResult{Message: text.RoomCommandUnknown}
+		}
+		if op.Id != key || op.ResourceId != conversation || op.Kind != "join_room" || op.Status != "succeeded" {
+			return 409, mutationResult{Message: text.OperationConflict, Rejected: true}
+		}
+		return 200, mutationResult{OK: true, Message: text.RoomJoinRequested, NextKey: newOperationKey()}
+	}
 	var revision *string
 	if expected != "" {
 		revision = &expected

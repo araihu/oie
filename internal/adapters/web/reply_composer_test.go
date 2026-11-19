@@ -150,3 +150,68 @@ func TestRoomCASPassesExplicitNullAndNeverPrechecksReplay(t *testing.T) {
 		t.Fatal("BFF bypassed authoritative replay")
 	}
 }
+
+func TestUncertainRoomJoinReceipt(t *testing.T) {
+	key := newOperationKey()
+	cases := []struct {
+		name                     string
+		account, operation, room string
+		kind                     engineapi.OperationKind
+		outcome                  engineapi.OperationStatus
+		readStatus, wantStatus   int
+	}{
+		{"accepted", testAccount, key, testChat, "join_room", "succeeded", 200, 200},
+		{"foreign owner", testMessage, key, testChat, "join_room", "succeeded", 0, 409},
+		{"different operation", testAccount, testMessage, testChat, "join_room", "succeeded", 200, 409},
+		{"different room", testAccount, key, testMessage, "join_room", "succeeded", 200, 409},
+		{"different command", testAccount, key, testChat, "leave_room", "succeeded", 200, 409},
+		{"unknown outcome", testAccount, key, testChat, "join_room", "pending", 200, 409},
+		{"absent receipt", testAccount, key, testChat, "join_room", "", 404, 422},
+		{"unavailable receipt", testAccount, key, testChat, "join_room", "", 503, 503},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method != http.MethodGet {
+					t.Errorf("receipt check issued %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(405)
+					return
+				}
+				switch r.URL.Path {
+				case "/api/v1/conversations/" + testChat:
+					_ = json.NewEncoder(w).Encode(engineapi.Conversation{Id: testChat, AccountId: tc.account, Kind: "room"})
+				case "/api/v1/operations/" + key:
+					if tc.readStatus == 0 {
+						t.Error("read receipt before checking room ownership")
+						w.WriteHeader(403)
+						return
+					}
+					w.WriteHeader(tc.readStatus)
+					if tc.readStatus == 200 {
+						_ = json.NewEncoder(w).Encode(engineapi.Operation{Id: tc.operation, Kind: tc.kind, ResourceId: tc.room, Status: tc.outcome})
+					} else {
+						_ = json.NewEncoder(w).Encode(map[string]int{"status": tc.readStatus})
+					}
+				default:
+					t.Errorf("unexpected read %s", r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer backend.Close()
+			ui, err := New(backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/ui/rooms/join", nil)
+			req.Form = url.Values{"operationKey": {key}, "accountId": {testAccount}, "conversationId": {testChat}, "expectedRevisionId": {""}, "checkJoinReceipt": {"1"}}
+			status, result := ui.changeRoom(t.Context(), req, copy{}, false)
+			if status != tc.wantStatus || result.OK != (status == 200) || result.Rejected != (status == 409) {
+				t.Fatalf("got %d, ok=%v, rejected=%v", status, result.OK, result.Rejected)
+			}
+			if status == 422 && result.Code != "room_password_requested" {
+				t.Fatalf("missing password prompt on absent receipt: %s", result.Code)
+			}
+		})
+	}
+}

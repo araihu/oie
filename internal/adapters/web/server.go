@@ -432,6 +432,8 @@ type copy struct {
 	RoomMessageModerated                                                                                                                                                                                     string
 	RoomUserAddress                                                                                                                                                                                          string
 	RoomPassword                                                                                                                                                                                             string
+	RoomOriginalPassword                                                                                                                                                                                     string
+	RoomPasswordRetry                                                                                                                                                                                        string
 	RoomSessionTitle                                                                                                                                                                                         string
 	DocumentOpen                                                                                                                                                                                             string
 	DocumentViewer                                                                                                                                                                                           string
