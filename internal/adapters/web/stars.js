@@ -46,22 +46,34 @@ window.OieRuntime.register('stars', life => {
       const text=button.querySelector('[data-star-label]');if(text)text.textContent=label||'';
     }
   }
-  function read(root){
+  const readTimes=new Map();
+  function applySnapshot(id,state,startedAt){
+    if(startedAt<(readTimes.get(id)||0))return;
+    readTimes.set(id,startedAt);
+    states.set(id,state);
+  }
+  function read(root,startedAt=performance.now()){
     const data=root.querySelector('#oie-star-data');if(!data)return;
-    if(data.dataset.known!=='true'){for(const value of states.values())value.known=false;return;}
-    for(const row of data.querySelectorAll('[data-star-state]'))states.set(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null});
+    if(data.dataset.known!=='true'){for(const [id,value] of states)applySnapshot(id,{...value,known:false},startedAt);return;}
+    for(const row of data.querySelectorAll('[data-star-state]'))applySnapshot(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null},startedAt);
   }
   function sharedState(button){
     return {known:true,starred:button.dataset.sharedStar==='true',revision:button.dataset.revision||null};
   }
-  function readShared(root){
+  function readShared(root,startedAt=performance.now()){
     for(const button of root.querySelectorAll('[data-shared-star]')){
-      states.set(button.dataset.starMessage,sharedState(button));
+      applySnapshot(button.dataset.starMessage,sharedState(button),startedAt);
     }
   }
   read(document);
   readShared(document);
-  function readInfo(root){if(!root)return;for(const data of root.querySelectorAll('[data-info-star-states]'))if(data.dataset.known==='true'){for(const row of data.querySelectorAll('[data-star-state]'))states.set(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null});}render();}
+  function readInfo(root,startedAt=performance.now()){
+    if(!root)return;
+    for(const row of root.querySelectorAll('[data-info-star-states][data-known="true"] [data-star-state]')){
+      applySnapshot(row.dataset.starSource,{known:true,starred:row.dataset.starred==='true',revision:row.dataset.revision||null},startedAt);
+    }
+    render();
+  }
   readInfo(document);
 
   window.OieMasonry?.layout(document.getElementById('favorites-results'));
@@ -77,7 +89,13 @@ window.OieRuntime.register('stars', life => {
     render();
   });
 
-  life.on(document,'oie:actions-refreshed',render);
+  life.on(document,'oie:actions-refreshed',event=>{
+    const state=event.detail?.menuState;
+    if(state && event.detail.starGeneration===generation){
+      applySnapshot(state.menuState,{known:state.starKnown==='true',starred:state.starred==='true',revision:state.revision||null},Number(state.startedAt));
+    }
+    render();
+  });
   function refreshStarredPage(current,fresh,scroll,heading){
     if(!current||!fresh||current.dataset.version===fresh.dataset.version)return;
     const top=scroll?.scrollTop;
@@ -147,7 +165,7 @@ window.OieRuntime.register('stars', life => {
       document.getElementById('details-body'),()=>info.querySelector('[data-info-heading]'));
     refreshStarredPage(document.getElementById('favorites-results'),page.querySelector('#favorites-results'),
       document.getElementById('favorites-scroll'),()=>document.getElementById('favorites-heading'));
-    read(page);readShared(page);readInfo(page);
+    read(page,event.detail.startedAt);readShared(page,event.detail.startedAt);readInfo(page,event.detail.startedAt);
   });
   let viewerRead=false,viewerAgain=false;
   async function refreshViewer(){

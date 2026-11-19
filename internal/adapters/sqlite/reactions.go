@@ -68,6 +68,10 @@ func readReactions(ctx context.Context, q *dbgen.Queries, id domain.ID) (applica
 	return readScopedReactions(ctx, q, id, domain.Conversation{})
 }
 
+func emptyReactionState(m domain.Message) domain.MessageReactions {
+	return domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
+}
+
 func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c domain.Conversation) (application.MessageReactionCandidate, error) {
 	var out application.MessageReactionCandidate
 	canonical, err := resolveMessageAlias(ctx, q, id)
@@ -110,7 +114,7 @@ func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c 
 		return out, err
 	}
 	out.Source = m
-	state := domain.MessageReactions{MessageID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID, OwnEmojis: []string{}, Items: []domain.ReactionItem{}, Actors: []domain.ReactionActor{}, MaxEmojis: 8}
+	state := emptyReactionState(m)
 	type reference struct {
 		ID     string `json:"id"`
 		Scope  string `json:"scope"`
@@ -118,25 +122,31 @@ func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c 
 		Unique bool   `json:"unique"`
 	}
 	safeRefs := []reference{}
-	unique := map[string]bool{}
-	for _, ref := range refs {
-		found, known := unique[ref.RemoteID]
-		if !known {
-			target, err := reactionTarget(ctx, q, m.AccountID, m.ConversationID, domain.MessageReference{ID: ref.RemoteID})
-			if err != nil {
-				return out, err
-			}
-			found = target == m.ID
-			unique[ref.RemoteID] = found
+	// Reuse the same scoped resolution for eligibility and for observations.
+	// All lookups are for this account and conversation in one transaction.
+	resolved := map[domain.MessageReference]domain.ID{}
+	resolve := func(ref domain.MessageReference) (domain.ID, error) {
+		if target, ok := resolved[ref]; ok {
+			return target, nil
 		}
-		safeRefs = append(safeRefs, reference{ref.RemoteID, ref.Scope, ref.Author, found})
+		target, err := reactionTarget(ctx, q, m.AccountID, m.ConversationID, ref)
+		if err == nil {
+			resolved[ref] = target
+		}
+		return target, err
+	}
+	for _, ref := range refs {
+		target, err := resolve(domain.MessageReference{ID: ref.RemoteID})
+		if err != nil {
+			return out, err
+		}
+		safeRefs = append(safeRefs, reference{ref.RemoteID, ref.Scope, ref.Author, target == m.ID})
 	}
 	observations, err := q.ReactionObservationsForTargets(ctx, dbgen.ReactionObservationsForTargetsParams{AccountID: string(m.AccountID), Address: c.Address, Kind: c.Kind, MessageID: string(m.ID), References: jsonText(safeRefs), RoomEpoch: privacy.Epoch})
 	if err != nil {
 		return out, err
 	}
 	heads := map[string]reactionHead{}
-	resolved := map[domain.MessageReference]domain.ID{}
 	for _, observation := range observations {
 		var in application.IncomingReaction
 		if err = json.Unmarshal([]byte(observation.Payload), &in); err != nil {
@@ -162,13 +172,9 @@ func readScopedReactions(ctx context.Context, q *dbgen.Queries, id domain.ID, c 
 				linked = domain.ID(cmd.MessageID)
 			}
 		}
-		target, known := resolved[in.Target]
-		if !known {
-			target, err = reactionTarget(ctx, q, m.AccountID, m.ConversationID, in.Target)
-			if err != nil {
-				return out, err
-			}
-			resolved[in.Target] = target
+		target, err := resolve(in.Target)
+		if err != nil {
+			return out, err
 		}
 		if target != m.ID && linked != m.ID {
 			continue
@@ -321,12 +327,25 @@ func (s *Store) ReadConversationReactions(ctx context.Context, conversation doma
 	if err != nil {
 		return nil, err
 	}
+	plain, err := plainReactionPage(ctx, q, c, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]application.MessageReactionCandidate, 0, len(ids))
 	seen := make(map[domain.ID]bool, len(ids))
 	for _, id := range ids {
-		candidate, err := readScopedReactions(ctx, q, id, c)
-		if err != nil {
-			return nil, err
+		if seen[id] {
+			continue
+		}
+		m, ok := plain[id]
+		var candidate application.MessageReactionCandidate
+		if ok {
+			candidate = application.MessageReactionCandidate{Source: *m, Snapshot: emptyReactionState(*m)}
+		} else {
+			candidate, err = readScopedReactions(ctx, q, id, c)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if !seen[candidate.Source.ID] {
 			seen[candidate.Source.ID] = true

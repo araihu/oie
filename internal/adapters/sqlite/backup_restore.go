@@ -21,7 +21,7 @@ import (
 //go:embed restore/*.sql
 var restoreSQL embed.FS
 
-const backupV1Schema = 53
+const backupV1Schema = 54
 
 type RestoreSummary struct {
 	Accounts      int64 `json:"accountsAdded"`

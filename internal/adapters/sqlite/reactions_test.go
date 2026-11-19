@@ -991,3 +991,52 @@ func TestLeaveIntentImmediatelyWithdrawsPublicReactionActors(t *testing.T) {
 		t.Fatalf("API response retains real actor after accepting leave intent: %+v", after.Actors)
 	}
 }
+
+func TestPlainReactionPageMatchesCanonicalReferences(t *testing.T) {
+	store, engine, c := outboxFixture(t)
+	engine.SetProtocols(&reactionProtocol{max: 4})
+	first := ownSubmittedEdit(t, store, engine, c, "original")
+	other := ownSubmittedEdit(t, store, engine, c, "other")
+	ctx := t.Context()
+	ids := []domain.ID{other.ID, first.ID, first.ID}
+
+	check := func() {
+		t.Helper()
+		batch, err := store.ReadConversationReactions(ctx, c.ID, ids)
+		if err != nil || len(batch) != 2 {
+			t.Fatalf("page: %v, %v", batch, err)
+		}
+		for i, id := range ids[:2] {
+			single, err := store.ReadMessageReactions(ctx, id)
+			if err != nil || !reflect.DeepEqual(single, batch[i]) {
+				t.Fatalf("source or snapshot differs for %s: single=%+v batch=%+v err=%v", id, single, batch[i], err)
+			}
+		}
+	}
+	insert := func(id domain.ID, remote, hash string) {
+		t.Helper()
+		if _, err := store.queries.InsertMessageReference(ctx, dbgen.InsertMessageReferenceParams{MessageID: string(id), Scope: "test", RemoteID: remote, Author: c.Address, SourceHash: hash}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"j", "i", "h", "g", "f", "e", "d", "c", "b", "a"} {
+		insert(first.ID, name, first.SourceBodyHash())
+	}
+	foreign, err := engine.OpenConversation(ctx, migrationID(), c.AccountID, "another@localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := ownSubmittedEdit(t, store, engine, foreign.Conversation, "foreign source")
+	insert(peer.ID, "a", peer.SourceBodyHash())
+	plain, err := plainReactionPage(ctx, store.read, c, ids)
+	if err != nil || len(plain) != 2 {
+		t.Fatalf("unrelated conversations sharing a reference must still batch: %d, %v", len(plain), err)
+	}
+
+	check()
+	// A second physical source and a mismatching body hash each invalidate
+	// previously safe references. The canonical reader owns those decisions.
+	insert(other.ID, "a", other.SourceBodyHash())
+	insert(first.ID, "b", "tainted")
+	check()
+}

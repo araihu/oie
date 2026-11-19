@@ -257,12 +257,14 @@ finishes cleanup. Time spent waiting is outside `OIE_CI_TIMEOUT`. Ctrl+C cancels
 the waiting invocation. Keep the lock file in place while any run is active.
 Direct Dagger commands and other projects use their own concurrency.
 
-GitHub Actions runs the five Dagger modes independently on standard
+GitHub Actions runs the Dagger modes independently on standard
 `ubuntu-24.04` runners and verifies the app image on amd64 and arm64. Each
 Dagger job uploads `dagger-ci-evidence-<mode>` with its own stage logs and
 test evidence, including on failure. Actions jobs bypass the local lock.
-`make test-race` allows 30 minutes per Go test package for the SQLite
-fixtures that exercise archived profiles and both merge orders.
+`race-restore` runs the `TestBackupRestore` tests, including the SQLite
+fixtures that exercise both merge orders. `race-core` runs the remaining
+tests. Each job allows 30 minutes per Go package. Use `sh tools/ci/run.sh`
+with either mode to reproduce one job, or `make test-race` to run both locally.
 The `Required CI` check aggregates both the Dagger and image smoke jobs.
 New commits on a PR cancel its superseded workflow runs.
 Use `gh pr checks` from the PR branch to find the current run. For a failed

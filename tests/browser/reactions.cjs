@@ -73,6 +73,28 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   const chip=glyph=>region.locator('[data-reaction-emoji="'+glyph+'"]');
   const removeReaction=async glyph=>{await region.locator('[data-reaction-summary]').click();await chip(glyph).waitFor({state:'visible'});await chip(glyph).click()};
   const own=async(glyph,value)=>await until(async()=>await chip(glyph).count()===Number(value),'own reaction '+glyph+' '+value);
+  const recovery=await context.newPage();
+  await recovery.route('**/ui/refresh*',route=>route.abort());
+  state.noBatch=true;
+  await recovery.goto(route());
+  const recoveryRegion=recovery.locator('[data-reaction-source="'+message+'"]');
+  assert.equal(await recoveryRegion.getAttribute('data-reaction-state'),'null');
+  state.noBatch=false;
+  await recovery.locator('[data-message-menu-trigger="'+message+'"]').click();
+  await recovery.locator('#react-message-'+message).click();
+  await recovery.locator('#oie-reaction-quick [data-reaction-quick-emoji]:visible').first().waitFor();
+  for(const pageEligible of [false,true]){
+   state.eligible=pageEligible;
+   await recovery.reload();
+   assert.equal(JSON.parse(await recoveryRegion.getAttribute('data-reaction-state')).eligible,pageEligible);
+   state.eligible=!pageEligible;
+   await recovery.locator('[data-message-menu-trigger="'+message+'"]').click();
+   const action=recovery.locator('#react-message-'+message);
+   await action.waitFor({state:'visible'});
+   assert.equal(await action.isEnabled(),!pageEligible,'the latest eligibility read controls the menu');
+  }
+  state.eligible=true;
+  await recovery.close();
   await page.goto(route());await until(async()=>await page.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'runtime');await input.fill('Keep this unsent draft 😀');await own('👍',false);
   await openReact();await quick.waitFor({state:'visible'});assert.equal(await modal.isVisible(),false);
   assert.equal(await quick.locator('[data-reaction-quick-emoji]:visible').count(),7);
@@ -122,7 +144,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   state.peerName='Bob';
   emit();
   // A rejected delayed preparation must never flash the picker or shift layout.
-  state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:!document.querySelector('#oie-reaction-quick').hidden}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await openReact();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('#react-message-'+message).isEnabled(),'eligibility refreshed');
+  state.delay=450;state.prepareEligible=false;await page.evaluate(()=>{const read=()=>{const i=document.querySelector('#message-composer').getBoundingClientRect(),t=document.querySelector('#message-timeline');return{x:i.x,y:i.y,w:i.width,h:i.height,scroll:t.scrollTop,picker:!document.querySelector('#oie-reaction-quick').hidden}};window.reactionGeometry={read,frames:[read()],active:true};const tick=()=>{if(!reactionGeometry.active)return;reactionGeometry.frames.push(read());requestAnimationFrame(tick)};requestAnimationFrame(tick)});const beforeEffects=state.effects,beforeReads=state.reads;await openReact();await until(()=>state.reads>beforeReads,'delayed preflight');await wait(700);const frames=await page.evaluate(()=>{reactionGeometry.active=false;return reactionGeometry.frames});assert(frames.length>10);for(const f of frames){assert(!f.picker);for(const k of ['x','y','w','h','scroll'])assert(Math.abs(f[k]-frames[0][k])<=1,k+' shifted')};assert.equal(state.effects,beforeEffects);assert.equal(await input.inputValue(),'Keep this unsent draft 😀');state.delay=0;state.prepareEligible=null;state.eligible=true;emit();await until(async()=>await page.locator('.oie-reaction-shortcut[data-reaction-open="'+message+'"]').isEnabled(),'eligibility refreshed');
   // Missing acceptance can retry only the exact same command after a receipt GET.
   let abort=true;await page.route('**/ui/messages/reactions',r=>{if(abort){abort=false;return r.abort('connectionreset')}return r.continue()});await react();await pick('😂');await region.locator('[data-reaction-check]').waitFor({state:'visible'});assert.equal(state.effects,2);await region.locator('[data-reaction-check]').click();await until(async()=>await region.locator('[data-reaction-check]').getAttribute('aria-label')==='Try again','missing receipt exposes Retry');await region.locator('[data-reaction-check]').click();await own('😂',true);assert.equal(state.effects,3);await page.unroute('**/ui/messages/reactions');
   // Lost reply after acceptance must reconcile without another engine POST.

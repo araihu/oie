@@ -71,6 +71,10 @@ paths:
       summary: Render the workspace or a requested presentation fragment
       description: Native navigation returns the workspace document. HTMX navigation may select an uncached HTML fragment, using the same URL and account and conversation visibility rules as native navigation.
       parameters:
+      - name: inboxCursor
+        in: query
+        description: Opaque cursor for the next page of the current conversation list.
+        schema: {type: string}
       - name: section
         in: query
         description: Workspace section. Use favorites to browse starred messages across conversations, scoped to the selected account when present.
@@ -262,6 +266,22 @@ paths:
       operationId: refreshWorkspace
       summary: Refresh the live regions of the current workspace
       parameters:
+      - name: inboxCursor
+        in: query
+        description: Opaque cursor for the next page of the current conversation list.
+        schema: {type: string}
+      - name: X-Oie-Refresh-Cursor
+        in: header
+        description: Cursor of the fully applied chat view. A matching engine cursor allows an empty response.
+        schema: {type: string}
+      - name: X-Oie-Inbox-Event
+        in: header
+        description: Latest contiguous event affecting only other conversations. A matching cursor allows a list and unread count update.
+        schema: {type: string}
+      - name: X-Oie-Inbox-Row
+        in: header
+        description: Changed conversation when all contiguous events affect the same row. Other rows may be represented by version checks.
+        schema: {type: string}
       - name: X-Oie-Inbox-Scope
         in: header
         description: Scope of the list mounted in the current tab.
@@ -276,6 +296,8 @@ paths:
           content:
             text/html:
               schema: {type: string}
+        '204':
+          description: The applied chat view matches the current engine event cursor.
         '503':
           description: The live regions could not be rendered.
   /ui/accounts/label:
@@ -373,6 +395,28 @@ paths:
           description: The engine changed or the account is disconnected.
         '503':
           description: The service could not confirm the profile photo change.
+  /ui/message-menu:
+    get:
+      tags: [Messages]
+      operationId: readMessageMenu
+      summary: Open the actions for one retained message
+      description: Returns a localized HTML dropdown scoped to the current engine, account and conversation.
+      parameters:
+      - {in: query, name: engineId, required: true, description: Engine identity., schema: {type: string, format: uuid}}
+      - {in: query, name: accountId, required: true, description: Owning account., schema: {type: string, format: uuid}}
+      - {in: query, name: conversationId, required: true, description: Owning conversation., schema: {type: string, format: uuid}}
+      - {in: query, name: messageId, required: true, description: Retained message., schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Current message actions.
+          content:
+            text/html:
+              schema: {type: string}
+        '400': {description: Invalid identity.}
+        '404': {description: Message unavailable in this scope.}
+        '409': {description: The engine changed.}
+        '500': {description: The menu could not be rendered.}
+        '503': {description: The engine is unavailable.}
   /ui/messages/forward:
     get:
       tags: [Messages]

@@ -15,12 +15,16 @@ import (
 const readReceiptsPath = "/ui/settings/read-receipts"
 
 func supportsReadReceipts(version engineapi.EngineApiVersion) bool {
+	return supportsEngineMinor(version, 39)
+}
+
+func supportsEngineMinor(version engineapi.EngineApiVersion, required int) bool {
 	majorText, rest, _ := strings.Cut(string(version), ".")
 	minorText, patchText, _ := strings.Cut(rest, ".")
 	major, majorErr := strconv.Atoi(majorText)
 	minor, minorErr := strconv.Atoi(minorText)
 	_, patchErr := strconv.Atoi(patchText)
-	return majorErr == nil && minorErr == nil && patchErr == nil && (major > 0 || major == 0 && minor >= 39)
+	return majorErr == nil && minorErr == nil && patchErr == nil && (major > 0 || major == 0 && minor >= required)
 }
 
 type readReceiptsView struct {

@@ -32,6 +32,40 @@ func TestMessageSourceContextKeepsWindowAndMetadataScoped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("optional latest page presentation", func(t *testing.T) {
+		include := true
+		limit := 5
+		response, err := client.ListMessagesWithResponse(t.Context(), string(chat.ID), &engineapi.ListMessagesParams{Limit: &limit, IncludePresentation: &include})
+		if err != nil || response.JSON200 == nil {
+			t.Fatal(response, err)
+		}
+		page := response.JSON200
+		if len(page.Items) != limit || page.NextCursor == nil || page.Presentation == nil {
+			t.Fatal(page)
+		}
+		meta := page.Presentation
+		if meta.Details == nil || meta.Details.ConversationId != string(chat.ID) || meta.Capabilities == nil || meta.Capabilities.AccountId != string(chat.AccountID) || meta.Reactions == nil || len(*meta.Reactions) != limit || meta.Stars == nil || len(*meta.Stars) != limit {
+			t.Fatalf("incomplete presentation: %+v", meta)
+		}
+		visible := map[string]bool{}
+		for _, m := range page.Items {
+			visible[m.Id] = true
+		}
+		for _, star := range *meta.Stars {
+			if !visible[star.MessageId] {
+				t.Fatal(star)
+			}
+		}
+		limit = 51
+		large, err := client.ListMessagesWithResponse(t.Context(), string(chat.ID), &engineapi.ListMessagesParams{Limit: &limit, IncludePresentation: &include})
+		if err != nil || large.StatusCode() != http.StatusBadRequest {
+			t.Fatal(large, err)
+		}
+		plain, err := client.ListMessagesWithResponse(t.Context(), string(chat.ID), &engineapi.ListMessagesParams{})
+		if err != nil || plain.JSON200 == nil || plain.JSON200.Presentation != nil {
+			t.Fatal(plain, err)
+		}
+	})
 	target := string(timelineHTTPID(13))
 	response, err := client.GetMessageSourceContextWithResponse(t.Context(), string(chat.ID), target)
 	if err != nil || response.JSON200 == nil {

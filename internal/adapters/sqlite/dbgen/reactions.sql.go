@@ -328,6 +328,111 @@ func (q *Queries) InterruptedMessageReactionCommands(ctx context.Context) ([]Mes
 	return items, nil
 }
 
+const listPlainReactionReferences = `-- name: ListPlainReactionReferences :many
+SELECT r.message_id,r.scope,r.remote_id,r.author,r.source_hash
+FROM json_each(CAST(?1 AS TEXT)) AS requested
+CROSS JOIN message_references r ON r.rowid IN (
+ SELECT src.rowid FROM message_references src WHERE src.message_id=CAST(requested.value AS TEXT)
+ ORDER BY src.scope,src.remote_id,src.author LIMIT 64)
+ORDER BY r.message_id,r.scope,r.remote_id,r.author
+`
+
+// Plain sources have no aliases or ambiguous references. Keep the same
+// ordered, per-source limit as ListCanonicalMessageReferences.
+func (q *Queries) ListPlainReactionReferences(ctx context.Context, messageIds string) ([]MessageReference, error) {
+	rows, err := q.db.QueryContext(ctx, listPlainReactionReferences, messageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MessageReference{}
+	for rows.Next() {
+		var i MessageReference
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.Scope,
+			&i.RemoteID,
+			&i.Author,
+			&i.SourceHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlainReactionSources = `-- name: ListPlainReactionSources :many
+SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms FROM messages m
+WHERE m.id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+AND m.conversation_id=?2
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases WHERE alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases WHERE canonical_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_content_heads WHERE canonical_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_reaction_commands WHERE message_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM retained_message_retractions WHERE source_id=m.id AND EXISTS (SELECT 1 FROM message_retractions))
+AND NOT EXISTS (
+ SELECT 1 FROM message_references r
+ WHERE r.message_id=m.id AND (
+  EXISTS (SELECT 1 FROM message_reaction_observations o WHERE o.account_id=m.account_id AND o.address=?3 AND o.target_id=r.remote_id)
+  OR EXISTS (SELECT 1 FROM room_message_moderation rm WHERE rm.account_id=m.account_id AND rm.room_address=?3 AND rm.stanza_id=r.remote_id)
+  OR EXISTS (SELECT 1 FROM message_references other CROSS JOIN messages peer ON peer.id=other.message_id
+             WHERE peer.account_id=m.account_id AND peer.conversation_id=m.conversation_id
+             AND other.remote_id=r.remote_id AND other.scope=r.scope
+             AND (other.message_id<>m.id OR other.source_hash<>r.source_hash))
+  OR r.source_hash<>COALESCE(json_extract(m.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(m.payload,'$.OriginalText')))
+ ))
+`
+
+type ListPlainReactionSourcesParams struct {
+	MessageIds     string
+	ConversationID string
+	Address        string
+}
+
+// A page can establish an empty reaction state in bulk. Leave messages with
+// aliases, projection changes or reaction evidence to the canonical resolver.
+func (q *Queries) ListPlainReactionSources(ctx context.Context, arg ListPlainReactionSourcesParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, listPlainReactionSources, arg.MessageIds, arg.ConversationID, arg.Address)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.RevisionID,
+			&i.AccountID,
+			&i.ConversationID,
+			&i.ProviderID,
+			&i.IsOwn,
+			&i.State,
+			&i.Payload,
+			&i.CreatedAtMs,
+			&i.TimelineAtMs,
+			&i.SubmittedAtMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingMessageReactionCommands = `-- name: PendingMessageReactionCommands :many
 SELECT id, revision_id, message_id, account_id, conversation_id, state, payload, next_attempt_at FROM message_reaction_commands WHERE state='queued' AND next_attempt_at<=? ORDER BY next_attempt_at,id LIMIT 32
 `

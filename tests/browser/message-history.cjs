@@ -50,6 +50,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   })});
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   for(const c of chats){if(u.pathname===`/api/v1/conversations/${c.id}`)return send(200,c);if(u.pathname===`/api/v1/conversations/${c.id}/messages`)return state.failTimeline?send(503,{status:503,code:'unavailable'}):send(200,{items:messages(c).reverse()});}
+  if(u.pathname.endsWith('/context')){
+   const source=chats.flatMap(messages).find(m=>u.pathname==='/api/v1/conversations/'+m.conversationId+'/messages/'+m.id+'/context');
+   return source?send(200,{targetId:source.id,items:[source],hasOlder:false,hasNewer:false}):send(404,{status:404,code:'not_found'});
+  }
   const retained=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)$/);if(retained){const m=chats.flatMap(messages).find(m=>m.id===(retained[1]===id(900)?targetID(chats[0]):retained[1]));return m?send(200,m):send(404,{status:404,code:'not_found'})}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   return send(404,{status:404,code:'not_found'});
@@ -75,7 +79,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await context.route('**/*',r=>{if(new URL(r.request().url()).origin!==base){external.push(r.request().url());return r.abort()}return r.continue()});
   await context.addInitScript(()=>document.addEventListener('oie:shared-refresh',()=>{window.historyInitialRefresh=true},{once:true}));
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));let documents=0;page.on('request',r=>{if(r.isNavigationRequest()&&r.frame()===page.mainFrame())documents++});
-  await page.goto(route(chats[0]));await page.locator('[data-message-edited][data-open-message-history]').first().waitFor();await until(()=>streams.size>0,'SSE ready');await page.waitForFunction(()=>window.OieEvents?.connected&&window.historyInitialRefresh);
+  const firstRefresh=page.waitForResponse(r=>new URL(r.url()).pathname==='/ui/refresh');
+  await page.goto(route(chats[0]));await page.locator('[data-message-edited][data-open-message-history]').first().waitFor();
+  await until(()=>streams.size>0,'SSE ready');
+  const unchanged=(await firstRefresh).status()===204;
+  await page.waitForFunction(unchanged=>window.OieEvents?.connected&&(unchanged||window.historyInitialRefresh),unchanged);
   const target=page.locator('[data-message-id="'+targetID(chats[0])+'"]'),edited=target.locator('[data-message-edited][data-open-message-history]'),slot=page.locator('#message-history-content'),drawer=page.getByRole('dialog',{name:'Message history',exact:true});
   assert.equal(await edited.locator('use').getAttribute('href'),'/assets/icons/heroicons.svg#hi-16-solid-pencil-square');
   await page.locator('#message-composer').fill('Keep this draft 😀');await edited.scrollIntoViewIfNeeded();await edited.focus();
