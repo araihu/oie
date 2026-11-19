@@ -13,6 +13,7 @@ window.OieRuntime.register('timeline',life=>{
  let correctedScrollTop;
  let exhaustedArchiveEdge='';
  let latestSnapshot=null;
+ let replyRefreshPending=false,replyRefreshRetried=false,replyRefreshTimer=0,nextReplyRefresh=0;
  const hiddenChecks=new Set(),hiddenRevisions=new Map(),expired=new Set();
  function rememberHidden(id,revision){
   hiddenRevisions.set(id,revision);
@@ -190,12 +191,15 @@ window.OieRuntime.register('timeline',life=>{
  }
  function normalizedRows(before,plans){const items=new Map(before.map(item=>[item.id,item]));for(const plan of plans){if(!items.has(plan.previous))continue;items.delete(plan.previous);const existing=items.get(plan.record.id);if(existing&&existing.ms!==plan.record.ms)throw Error('alias_timestamp');if(!existing)items.set(plan.record.id,plan.record)}return [...items.values()].sort(tuple)}
  function endpoint(mode,direction='',cursor='',bounds){const url=new URL('/ui/timeline',location.origin);for(const [key,value]of Object.entries({engineId:identity.engine,accountId:identity.account,conversationId:identity.conversation,mode,direction,cursor,lang:document.documentElement.lang,theme:document.documentElement.dataset.mode||'system',...(bounds||{})}))if(value)url.searchParams.set(key,value);return url}
- async function request(mode,direction,manual=false,target='',focusOptions={}){let nextRequest;
+ async function request(mode,direction,manual=false,target='',options={}){let nextRequest;
   if(disposed||busy||!manual&&failed)return;if(mode==='page'&&!(direction==='older'?older||remoteOlder():newer))return;
   retryMode=mode;
   if(mode==='page'&&!capacity(direction)){failed='paused';retryDirection=direction;controls();observe();return}
-  const before=current();if(!before.length&&mode!=='context')return false;const bound=direction==='older'?before[0]:before.at(-1),bounds={oldest:before[0]?.id||'',newest:before.at(-1)?.id||''},url=mode==='window'?endpoint(mode,'','',bounds):mode==='context'?endpoint(mode,'',target):endpoint(mode,direction,bound.id),generation=++epoch,starGeneration=Number(document.body.dataset.starGeneration||0);
-  busy=true;retryDirection=direction;retryMode=mode;retryTarget=target;failed='';controls();observe();controller=new AbortController();
+  const before=current(),replyCheck=options.pendingReplies===true;
+  const range=replyCheck?before.filter(item=>item.node.querySelector('[data-reply-unavailable]')):before;
+  if(!range.length&&mode!=='context')return false;
+  const bound=direction==='older'?before[0]:before.at(-1),bounds={oldest:range[0]?.id||'',newest:range.at(-1)?.id||''},url=mode==='window'?endpoint(mode,'','',bounds):mode==='context'?endpoint(mode,'',target):endpoint(mode,direction,bound.id),generation=++epoch,starGeneration=Number(document.body.dataset.starGeneration||0);
+  busy=true;retryDirection=replyCheck?'':direction;retryMode=mode;retryTarget=target;failed='';controls();observe();controller=new AbortController();
   const oldestCovered=Number(root.dataset.archiveCovered||0);
   const loadArchive=mode==='page'&&direction==='older'&&remoteOlder()&&(!older||oldestCovered>0&&bound.ms<=oldestCovered);
   const timer=life.timeout(()=>controller.abort(),loadArchive?65000:12000);
@@ -210,6 +214,12 @@ window.OieRuntime.register('timeline',life=>{
    const response=await life.fetch(url,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:controller.signal});if(!response.ok||!response.headers.get('Content-Type')?.startsWith('text/html'))throw Error('response');const html=await response.text();if(html.length>12*1024*1024)throw Error('large');if(disposed||generation!==epoch)return;
    const pageDocument=new DOMParser().parseFromString(html,'text/html'),page=parse(pageDocument,mode==='window'?200:50);if(!page||page.data.mode!==mode||(mode==='page'||mode==='context')&&page.data.cursor!==(mode==='context'?target:bound.id)||mode==='page'&&page.data.direction!==direction||mode==='window'&&(page.data.requestOldest!==bounds.oldest||page.data.requestNewest!==bounds.newest))throw Error('request');
    page.startedAt=startedAt;
+   if(replyCheck){
+    const pending=new Set(range.map(item=>item.id));
+    const resolved=page.entries.filter(item=>pending.has(item.id)&&item.node.querySelector('[data-reply-target]'));
+    if(resolved.length)merge({...page,entries:resolved},{starGeneration});
+    return;
+   }
    const proofs=aliasPlans(pageDocument,mode==='page'?[bound.id]:mode==='context'?[target]:[bounds.oldest,bounds.newest]);
    const aliases=proofs.filter(plan=>!plan.release),normalized=normalizedRows(current(),aliases),lower=normalized[0],upper=normalized.at(-1),canonicalBound=mode==='page'?normalized.find(item=>item.id===(page.data.canonicalCursor||bound.id)):null;
    if((mode==='page'||mode==='context')&&(!uuid(page.data.canonicalCursor)||page.data.canonicalCursor!==(mode==='context'?target:bound.id)&&!aliases.some(plan=>plan.previous===(mode==='context'?target:bound.id)&&plan.record.id===page.data.canonicalCursor)))throw Error('cursor_proof');
@@ -235,7 +245,7 @@ window.OieRuntime.register('timeline',life=>{
    if(mode==='context'){
     if(!page.entries.some(item=>item.id===page.data.canonicalCursor))throw Error('context_target');
     const selection=getSelection(),locked=rows().some(row=>!!row.querySelector('[aria-expanded="true"]')||[...row.querySelectorAll('video,audio')].some(media=>!media.paused&&!media.ended)||selection&&!selection.isCollapsed&&(row.contains(selection.anchorNode)||row.contains(selection.focusNode)));if(locked){failed='paused';return}
-    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';rememberLatest(page);liveAttached=false;setSource(page.data.canonicalCursor);document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:focusOptions.focus!==false}}));capture();return true}return false;
+    if(merge(page,{direction:'context',reset:true,starGeneration})){older=page.data.hasOlder==='true';newer=page.data.hasNewer==='true';rememberLatest(page);liveAttached=false;setSource(page.data.canonicalCursor);document.dispatchEvent(new CustomEvent('oie:timeline-focus',{detail:{id:page.data.canonicalCursor,focus:options.focus!==false}}));capture();return true}return false;
    }
    const far=aliases.filter(plan=>!before.some(item=>item.id===plan.record.id)&&(tuple(plan.record,before[0])<0||tuple(plan.record,before.at(-1))>0));
    if(far.length){
@@ -266,11 +276,18 @@ window.OieRuntime.register('timeline',life=>{
      else if(!page.entries.length&&page.data.complete!=='true')nextRequest={mode:'window',direction:'older'};
     }
    }
-  }catch(error){if(!disposed&&!life.signal.aborted&&generation===epoch){failed='failed';retryDirection=direction||'older'}}
+  }catch(error){
+   if(!disposed&&!life.signal.aborted&&generation===epoch){
+    if(replyCheck){
+     if(!replyRefreshRetried){replyRefreshRetried=true;replyRefreshPending=true}
+    }else{failed='failed';retryDirection=direction||'older'}
+   }
+  }
   finally{clearTimeout(timer);if(!disposed){busy=false;controls();observe();if(nextRequest&&!focusPending){life.timeout(()=>request(nextRequest.mode,nextRequest.direction,true,nextRequest.target||''),0)}else retryRefresh()}}
  }
  function retryRefresh(){
   if(refreshAgain&&!focusPending){refreshAgain=false;life.timeout(()=>refresh(refreshPage,refreshStartedAt),100)}
+  if(replyRefreshPending)scheduleReplyRefresh(false);
  }
  // An already mounted immediate send can be scheduled or cancelled by a second
  // client. Check the current read model before removing it for an SSE update.
@@ -311,10 +328,24 @@ window.OieRuntime.register('timeline',life=>{
  }
  function appendEdge(){
   if(disposed||busy||failed||focusPending||!root.clientHeight||!liveAttached||newer||!atBottom()||!latestSnapshot?.scope)return null;
-  // An arriving original can change a reply card already in this window.
-  if(root.querySelector('[data-reply-unavailable]'))return null;
   const tail=edge('newer')?.previousElementSibling;
   return tail?.dataset.messageId===latestSnapshot.id?latestSnapshot:null;
+ }
+ // A new original can resolve an older mounted card. Keep ordinary live appends
+ // small and coalesce window reads if an original stays missing in a busy chat.
+ function scheduleReplyRefresh(newActivity=true){
+  if(newActivity)replyRefreshRetried=false;
+  if(replyRefreshTimer)return;
+  replyRefreshPending=!disposed&&!failed&&!!root.querySelector('[data-reply-unavailable]');
+  if(!replyRefreshPending||busy||focusPending)return;
+  replyRefreshTimer=life.timeout(()=>{
+   replyRefreshTimer=0;
+   if(busy||focusPending)return; // retryRefresh resumes the check when the current read settles.
+   replyRefreshPending=false;
+   if(disposed||failed)return;
+   nextReplyRefresh=performance.now()+5000;
+   void request('window','older',false,'',{pendingReplies:true});
+  },Math.max(0,nextReplyRefresh-performance.now()));
  }
  function appendMessage(region,after,id,startedAt,starGeneration){
   const last=appendEdge();
@@ -327,6 +358,7 @@ window.OieRuntime.register('timeline',life=>{
   page.startedAt=startedAt;
   if(!merge(page,{direction:'newer',starGeneration}))return false;
   rememberLatest(page);
+  scheduleReplyRefresh();
   updateJumpUnread(page);
   controls();
   return true;
@@ -346,13 +378,18 @@ window.OieRuntime.register('timeline',life=>{
   if(focused||!liveAttached&&retired.size===before.length){request('context','',true,(focused||before[0]).id);return}
   if(overlap.length)merge({...snapshot,entries:overlap.filter(item=>!retired.has(item.id))},{direction:'update',retired});
   if(liveAttached&&!current().length&&snapshot.entries.length){older=snapshot.data.hasOlder==='true';newer=snapshot.data.hasNewer==='true';merge(snapshot,{direction:'newer'});controls();return}
-  const completeCoverage=before.every(item=>snapshot.entries.some(value=>value.id===item.id));
+  const snapshotIDs=new Set(snapshot.entries.map(item=>item.id));
+  const completeCoverage=before.every(item=>snapshotIDs.has(item.id));
   if(liveAttached){
    const newest=snapshot.entries.at(-1);
    if(newest&&tuple(newest,before.at(-1))>0){
     unseenLiveMessages=true;
     newer=true;
-    if(failed)controls();else request('page','newer');
+    if(failed)controls();else{
+     void request('page','newer');
+     // The latest snapshot excludes older mounted rows when the tail grows.
+     if(!completeCoverage&&before.some(item=>!snapshotIDs.has(item.id)&&item.node.querySelector('[data-reply-unavailable]')))scheduleReplyRefresh();
+    }
     return;
    }
   }

@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
+	"time"
+
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
-	"strings"
 )
 
 func (s *Store) History(ctx context.Context, id domain.ID) (domain.HistoryStatus, error) {
@@ -103,13 +105,108 @@ func verifiedRoomOccurrence(ctx context.Context, q *dbgen.Queries, c domain.Conv
 	owners, err := q.FindVerifiedRoomOccurrence(ctx, dbgen.FindVerifiedRoomOccurrenceParams{
 		AccountID: string(c.AccountID), RoomAddress: c.Address, RemoteID: id,
 	})
-	if err != nil || len(owners) == 0 {
+	// A contested SID cannot identify a physical source. The provider and
+	// archive keys can still recognize their own replays without joining them.
+	if err != nil || len(owners) != 1 {
 		return "", err
 	}
-	if len(owners) != 1 {
-		return "", application.ErrInvalid
-	}
 	return owners[0], nil
+}
+
+func ownRoomEdit(m domain.Message) bool {
+	return m.Correction != nil && m.Correction.TargetID != ""
+}
+
+func linkRoomArchiveEcho(ctx context.Context, q *dbgen.Queries, c domain.Conversation, uid string) error {
+	echo, err := q.LinkRoomArchiveEcho(ctx, dbgen.LinkRoomArchiveEchoParams{
+		AccountID: string(c.AccountID), RoomAddress: c.Address, RoomUid: uid,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	at := time.Now().UTC()
+	if err := refreshConversationSummary(ctx, q, c.ID, at); err != nil {
+		return err
+	}
+	_, err = change(ctx, q, "conversation.history_pruned", domain.HistoryPruned{ConversationID: c.ID, MessageIDs: []domain.ID{domain.ID(echo)}}, at)
+	return err
+}
+
+func priorRoomArchiveSource(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message, uid string) (string, error) {
+	id, err := q.GetLegacyRoomArchiveSource(ctx, dbgen.GetLegacyRoomArchiveSourceParams{AccountID: string(c.AccountID), Scope: c.Address, ArchiveID: uid})
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	row, err := q.GetMessage(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	archived, err := decodeMessage(row)
+	if err != nil {
+		return "", err
+	}
+	if archived.ConversationID != c.ID || archived.ArchiveScope != c.Address || archived.ArchiveID != uid ||
+		archived.Sender.DisplayName != m.Sender.DisplayName || archived.SourceBodyHash() != m.SourceBodyHash() || ownRoomEdit(archived) {
+		return "", nil
+	}
+	ok, err := roomSourceAcceptsIdentity(ctx, q, c, m, id, uid)
+	if !ok || err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func roomSourceAcceptsIdentity(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message, id, uid string) (bool, error) {
+	for _, ref := range m.References {
+		if ref.Scope == "room:"+c.Address && ref.ID == uid {
+			return q.RoomSourceAcceptsIdentity(ctx, dbgen.RoomSourceAcceptsIdentityParams{
+				MessageID: id, SourceHash: m.SourceBodyHash(), WireBody: m.OriginalText, Author: ref.Author,
+				RoomAddress: &c.Address, PersonalAddress: m.Sender.PersonalAddress, IsOwn: number(m.IsOwn), Uid: uid,
+			})
+		}
+	}
+	return false, nil
+}
+
+// The same room archive key can be replayed with conflicting verified facts.
+// Keep both physical sources and prevent either one acquiring the other's metadata.
+func disputedRoomArchiveReplay(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message, echo, uid string) (bool, error) {
+	if uid == "" || m.ArchiveScope != c.Address {
+		return false, nil
+	}
+	owner, err := q.RoomArchiveEchoOwner(ctx, echo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil || owner == "" {
+		return true, err
+	}
+	if uid == m.ArchiveID {
+		compatible, err := roomSourceAcceptsIdentity(ctx, q, c, m, owner, uid)
+		if err != nil || compatible {
+			return false, err
+		}
+	}
+	if err := q.DisputeRoomArchiveEcho(ctx, echo); err != nil {
+		return true, err
+	}
+	row, err := q.GetMessage(ctx, echo)
+	if err != nil {
+		return true, err
+	}
+	id := domain.ID(row.ConversationID)
+	at := time.Now().UTC()
+	if err := refreshConversationSummary(ctx, q, id, at); err != nil {
+		return true, err
+	}
+	_, err = change(ctx, q, "conversation.history_pruned", domain.HistoryPruned{ConversationID: id, MessageIDs: []domain.ID{}}, at)
+	return true, err
 }
 
 // Check portable exclusions before materializing a conversation or message.
@@ -128,20 +225,28 @@ func checkXMPPOccurrence(ctx context.Context, q *dbgen.Queries, c domain.Convers
 	if stanzaID == "" && m.ArchiveID == "" {
 		return "", false, nil
 	}
-	excluded, err = q.IsExcludedXMPPOccurrence(ctx, dbgen.IsExcludedXMPPOccurrenceParams{
+	match, err := q.MatchExcludedXMPPOccurrence(ctx, dbgen.MatchExcludedXMPPOccurrenceParams{
 		AccountID: string(c.AccountID), Chat: c.Address, Kind: c.Kind, ArchiveScope: m.ArchiveScope, ArchiveID: m.ArchiveID, StanzaID: stanzaID,
 	})
-	if err != nil || !excluded {
-		return stanzaID, excluded, err
+	if err != nil || match != "observed" {
+		return stanzaID, match == "equivalent", err
 	}
+	distinctRoomIDs := c.Kind == "room" && m.ArchiveScope == c.Address && m.ArchiveID != "" && stanzaID != "" && m.ArchiveID != stanzaID
 	for _, key := range []struct{ kind, authority, id string }{{"stanza-id", c.Address, stanzaID}, {"mam", m.ArchiveScope, m.ArchiveID}} {
-		if key.id == "" {
+		if key.id == "" || key.kind == "stanza-id" && c.Kind == "room" && m.ArchiveScope == c.Address && key.id == m.ArchiveID {
 			continue
 		}
 		if err := q.RememberExcludedXMPPKey(ctx, dbgen.RememberExcludedXMPPKeyParams{
 			AccountID: string(c.AccountID), Chat: c.Address, Kind: c.Kind, KeyType: key.kind, Authority: key.authority, RemoteID: key.id,
 		}); err != nil {
 			return "", false, err
+		}
+		if distinctRoomIDs {
+			if err := q.RememberDistinctRoomExclusionKey(ctx, dbgen.RememberDistinctRoomExclusionKeyParams{
+				AccountID: string(c.AccountID), Chat: c.Address, KeyType: key.kind, RemoteID: key.id,
+			}); err != nil {
+				return "", false, err
+			}
 		}
 	}
 	return stanzaID, true, nil

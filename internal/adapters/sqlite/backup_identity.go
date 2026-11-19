@@ -135,9 +135,9 @@ func quoteBackupName(s string) string { return `"` + strings.ReplaceAll(s, `"`, 
 // role, so an equal string inside a message body or remote reference is opaque.
 func translateBackupTables(ctx context.Context, tx *sql.Tx) error {
 	const tables = `accounts revisions conversations conversation_revisions messages message_revisions
-	operations archive_aliases outbox message_references message_replies message_sender_identities
+	operations archive_aliases legacy_room_archive_uids outbox message_references message_replies message_sender_identities
 	message_retractions room_message_moderation message_edit_commands message_correction_facts
-	message_content_heads message_canonical_aliases expired_message_ids expired_message_references
+	message_content_heads message_canonical_aliases room_archive_echo_links disputed_room_archive_echoes expired_message_ids expired_message_references
 	discarded_message_references staged_attachments account_communication_preferences contacts contact_revisions
 	avatars avatar_revisions conversation_read_revisions conversation_read_states message_reads message_previews
 	preview_revisions shared_content shared_content_state message_stars message_star_revisions accepted_direct_history
@@ -172,6 +172,10 @@ func translateBackupTables(ctx context.Context, tx *sql.Tx) error {
 				}
 			case "source_id":
 				if table != "message_content_heads" {
+					continue
+				}
+			case "echo_id", "original_id":
+				if table != "room_archive_echo_links" {
 					continue
 				}
 			case "message_id", "conversation_id", "account_id", "canonical_id", "alias_id", "peer_id", "resource_id":

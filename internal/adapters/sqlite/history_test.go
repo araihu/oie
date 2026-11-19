@@ -217,7 +217,8 @@ func TestRoomArchiveWithoutInnerStanzaIDKeepsOwnLiveMessage(t *testing.T) {
 	receive(packet)
 	// A semianonymous room returns only the outer MAM ID and occupant nickname.
 	packet.Historical, packet.IsOwn = true, false
-	packet.CanonicalID, packet.ProviderID, packet.References = "", "room:archive-client-id", nil
+	packet.CanonicalID, packet.ProviderID = "", "room:archive-client-id"
+	// The adapter validates the outer room UID as its reflected stanza ID.
 	packet.ArchiveScope, packet.ArchiveID = chat.Address, roomID
 	receive(packet)
 	receive(packet)
@@ -227,9 +228,11 @@ func TestRoomArchiveWithoutInnerStanzaIDKeepsOwnLiveMessage(t *testing.T) {
 	}
 	// A different occurrence of the same text is a separate message.
 	packet.ArchiveID, packet.ProviderID, packet.SenderName = "room-issued-43", "room:other-client-id", "Bob"
+	packet.References = []domain.MessageReference{{Scope: "room:" + chat.Address, Author: chat.Address + "/Bob", ID: packet.ArchiveID}}
 	receive(packet)
 	// The personal archive has a separate ID namespace.
 	packet.ArchiveScope, packet.ArchiveID, packet.ProviderID = "alice@localhost", roomID, "room:personal-archive-id"
+	packet.References = nil
 	receive(packet)
 	history, err = store.Messages(t.Context(), chat.ID, "", 10)
 	if err != nil || len(history) != 3 {

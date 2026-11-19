@@ -9,10 +9,20 @@ import (
 	"context"
 )
 
+const disputeRoomArchiveEcho = `-- name: DisputeRoomArchiveEcho :exec
+INSERT OR IGNORE INTO disputed_room_archive_echoes(message_id) SELECT echo_id FROM room_archive_echo_links WHERE echo_id=?
+`
+
+func (q *Queries) DisputeRoomArchiveEcho(ctx context.Context, echoID string) error {
+	_, err := q.db.ExecContext(ctx, disputeRoomArchiveEcho, echoID)
+	return err
+}
+
 const findVerifiedRoomOccurrence = `-- name: FindVerifiedRoomOccurrence :many
-SELECT DISTINCT r.message_id FROM message_references r
+SELECT DISTINCT CAST(COALESCE(held.original_id,r.message_id) AS TEXT) AS message_id FROM message_references r
 JOIN messages m ON m.id=r.message_id
 JOIN conversations c ON c.id=m.conversation_id AND c.account_id=m.account_id
+LEFT JOIN room_archive_echo_links held ON held.echo_id=m.id AND held.room_uid=r.remote_id
 WHERE m.account_id=?1 AND c.address=?2
   AND json_extract(c.payload,'$.Kind')='room' AND r.scope='room:'||c.address
   AND r.remote_id=?3 AND instr(r.author,c.address||'/')=1
@@ -109,6 +119,25 @@ func (q *Queries) GetHistoryStatus(ctx context.Context, accountID string) (strin
 	return payload, err
 }
 
+const getLegacyRoomArchiveSource = `-- name: GetLegacyRoomArchiveSource :one
+SELECT a.message_id FROM archive_aliases a
+JOIN legacy_room_archive_uids old ON old.message_id=a.message_id AND old.archive_id=a.archive_id
+WHERE a.account_id=? AND a.scope=? AND a.archive_id=?
+`
+
+type GetLegacyRoomArchiveSourceParams struct {
+	AccountID string
+	Scope     string
+	ArchiveID string
+}
+
+func (q *Queries) GetLegacyRoomArchiveSource(ctx context.Context, arg GetLegacyRoomArchiveSourceParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getLegacyRoomArchiveSource, arg.AccountID, arg.Scope, arg.ArchiveID)
+	var message_id string
+	err := row.Scan(&message_id)
+	return message_id, err
+}
+
 const insertArchiveAlias = `-- name: InsertArchiveAlias :exec
 INSERT INTO archive_aliases(account_id,scope,archive_id,message_id) VALUES(?,?,?,?)
 `
@@ -130,36 +159,87 @@ func (q *Queries) InsertArchiveAlias(ctx context.Context, arg InsertArchiveAlias
 	return err
 }
 
-const isExcludedXMPPOccurrence = `-- name: IsExcludedXMPPOccurrence :one
-SELECT EXISTS (
- SELECT 1 FROM xmpp_message_exclusions e JOIN accounts a ON a.address=e.account AND a.protocol='xmpp'
- WHERE a.id=?1 AND e.chat=?2 AND e.kind=?3
- AND ((e.key_type='mam' AND e.authority=?4 AND e.remote_id=?5)
-   OR (e.key_type='stanza-id' AND e.authority=e.chat AND e.remote_id=?6))
-)
+const isRoomArchiveEchoOf = `-- name: IsRoomArchiveEchoOf :one
+SELECT EXISTS(SELECT 1 FROM room_archive_echo_links WHERE echo_id=? AND original_id=? AND room_uid=?)
 `
 
-type IsExcludedXMPPOccurrenceParams struct {
-	AccountID    string
-	Chat         string
-	Kind         string
-	ArchiveScope string
-	ArchiveID    string
-	StanzaID     string
+type IsRoomArchiveEchoOfParams struct {
+	EchoID     string
+	OriginalID string
+	RoomUid    string
 }
 
-func (q *Queries) IsExcludedXMPPOccurrence(ctx context.Context, arg IsExcludedXMPPOccurrenceParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isExcludedXMPPOccurrence,
-		arg.AccountID,
-		arg.Chat,
-		arg.Kind,
-		arg.ArchiveScope,
-		arg.ArchiveID,
-		arg.StanzaID,
-	)
+func (q *Queries) IsRoomArchiveEchoOf(ctx context.Context, arg IsRoomArchiveEchoOfParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isRoomArchiveEchoOf, arg.EchoID, arg.OriginalID, arg.RoomUid)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const linkRoomArchiveEcho = `-- name: LinkRoomArchiveEcho :one
+INSERT OR IGNORE INTO room_archive_echo_links(echo_id,original_id,account_id,room_address,room_uid)
+SELECT p.echo_id,p.original_id,p.account_id,p.room_address,p.room_uid FROM room_archive_echo_pairs p
+WHERE p.account_id=?1 AND p.room_address=?2 AND p.room_uid=?3
+RETURNING echo_id
+`
+
+type LinkRoomArchiveEchoParams struct {
+	AccountID   string
+	RoomAddress string
+	RoomUid     string
+}
+
+func (q *Queries) LinkRoomArchiveEcho(ctx context.Context, arg LinkRoomArchiveEchoParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, linkRoomArchiveEcho, arg.AccountID, arg.RoomAddress, arg.RoomUid)
+	var echo_id string
+	err := row.Scan(&echo_id)
+	return echo_id, err
+}
+
+const matchExcludedXMPPOccurrence = `-- name: MatchExcludedXMPPOccurrence :one
+WITH markers AS (
+ SELECT e.account, e.chat, e.kind, e.key_type, e.authority, e.remote_id FROM xmpp_message_exclusions e JOIN accounts a ON a.address=e.account AND a.protocol='xmpp'
+ WHERE a.id=?4 AND e.chat=?5 AND e.kind=?6
+ AND e.remote_id IN (?2,?3)
+)
+SELECT CAST(CASE WHEN EXISTS (
+ SELECT 1 FROM markers e WHERE (e.key_type='mam' AND e.authority=?1 AND e.remote_id=?2)
+ OR (e.key_type='stanza-id' AND e.authority=e.chat AND e.remote_id=?3
+     AND NOT (?1=e.chat AND ?2=?3))
+) THEN 'observed' WHEN EXISTS (
+ SELECT 1 FROM markers e WHERE e.kind='room' AND e.authority=e.chat
+ AND NOT EXISTS (SELECT 1 FROM distinct_room_exclusion_keys d WHERE d.account=e.account AND d.chat=e.chat
+                 AND d.key_type=e.key_type AND d.remote_id=e.remote_id)
+ AND ((e.key_type='mam' AND e.remote_id=?3
+       AND (?1<>e.chat OR ?2=?3))
+   OR (e.key_type='stanza-id' AND ?1=e.chat AND e.remote_id=?2
+       AND (?3='' OR ?3=?2)))
+) THEN 'equivalent' ELSE '' END AS TEXT) AS match_kind
+`
+
+type MatchExcludedXMPPOccurrenceParams struct {
+	ArchiveScope string
+	ArchiveID    string
+	StanzaID     string
+	AccountID    string
+	Chat         string
+	Kind         string
+}
+
+// Only an observed key may teach us another deletion key. The opposite
+// form of a room UID can suppress a replay without becoming a new fact.
+func (q *Queries) MatchExcludedXMPPOccurrence(ctx context.Context, arg MatchExcludedXMPPOccurrenceParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, matchExcludedXMPPOccurrence,
+		arg.ArchiveScope,
+		arg.ArchiveID,
+		arg.StanzaID,
+		arg.AccountID,
+		arg.Chat,
+		arg.Kind,
+	)
+	var match_kind string
+	err := row.Scan(&match_kind)
+	return match_kind, err
 }
 
 const putArchiveCheckpoint = `-- name: PutArchiveCheckpoint :exec
@@ -221,6 +301,29 @@ func (q *Queries) PutHistoryStatus(ctx context.Context, arg PutHistoryStatusPara
 	return err
 }
 
+const rememberDistinctRoomExclusionKey = `-- name: RememberDistinctRoomExclusionKey :exec
+INSERT OR IGNORE INTO distinct_room_exclusion_keys(account,chat,key_type,remote_id)
+SELECT a.address,?1,?2,?3
+FROM accounts a WHERE a.id=?4 AND a.protocol='xmpp'
+`
+
+type RememberDistinctRoomExclusionKeyParams struct {
+	Chat      string
+	KeyType   string
+	RemoteID  string
+	AccountID string
+}
+
+func (q *Queries) RememberDistinctRoomExclusionKey(ctx context.Context, arg RememberDistinctRoomExclusionKeyParams) error {
+	_, err := q.db.ExecContext(ctx, rememberDistinctRoomExclusionKey,
+		arg.Chat,
+		arg.KeyType,
+		arg.RemoteID,
+		arg.AccountID,
+	)
+	return err
+}
+
 const rememberExcludedXMPPKey = `-- name: RememberExcludedXMPPKey :exec
 INSERT OR IGNORE INTO xmpp_message_exclusions(account,chat,kind,key_type,authority,remote_id)
 SELECT a.address,?1,?2,?3,?4,?5
@@ -246,4 +349,71 @@ func (q *Queries) RememberExcludedXMPPKey(ctx context.Context, arg RememberExclu
 		arg.AccountID,
 	)
 	return err
+}
+
+const restoreRoomArchiveEchoLinks = `-- name: RestoreRoomArchiveEchoLinks :exec
+INSERT OR IGNORE INTO room_archive_echo_links(echo_id,original_id,account_id,room_address,room_uid)
+SELECT p.echo_id,p.original_id,p.account_id,p.room_address,p.room_uid FROM room_archive_echo_pairs p
+`
+
+func (q *Queries) RestoreRoomArchiveEchoLinks(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, restoreRoomArchiveEchoLinks)
+	return err
+}
+
+const roomArchiveEchoOwner = `-- name: RoomArchiveEchoOwner :one
+SELECT p.original_id FROM room_archive_echo_links p WHERE p.echo_id=?1
+UNION ALL
+SELECT '' FROM disputed_room_archive_echoes d WHERE d.message_id=?1
+`
+
+func (q *Queries) RoomArchiveEchoOwner(ctx context.Context, echoID string) (string, error) {
+	row := q.db.QueryRowContext(ctx, roomArchiveEchoOwner, echoID)
+	var original_id string
+	err := row.Scan(&original_id)
+	return original_id, err
+}
+
+const roomSourceAcceptsIdentity = `-- name: RoomSourceAcceptsIdentity :one
+SELECT EXISTS (
+ SELECT 1 FROM messages m JOIN accounts a ON a.id=m.account_id
+ WHERE m.id=?1
+ AND (COALESCE(NULLIF(json_extract(m.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(m.payload,'$.OriginalText')))=?2
+   OR (m.is_own=1 AND oie_attachment_wire_matches(json_extract(m.payload,'$.OriginalText'),json_extract(m.payload,'$.AttachmentWireText'),json_extract(m.payload,'$.WireBodySHA256'),?3)=1))
+ AND (m.is_own=1 AND m.id=m.provider_id OR ?4=?5||'/'||json_extract(m.payload,'$.Sender.DisplayName'))
+ AND (?6='' OR m.is_own=0 OR ?6=a.address)
+ AND NOT EXISTS (SELECT 1 FROM message_sender_identities i WHERE i.message_id=m.id AND
+       (?7=1 AND i.personal_address<>a.address OR ?6<>'' AND i.personal_address<>?6))
+ AND NOT EXISTS (SELECT 1 FROM message_references r WHERE r.message_id=m.id AND r.scope='room:'||?5
+       AND (r.remote_id<>?8 OR r.author<>?4))
+)
+`
+
+type RoomSourceAcceptsIdentityParams struct {
+	MessageID       string
+	SourceHash      string
+	WireBody        interface{}
+	Author          string
+	RoomAddress     *string
+	PersonalAddress interface{}
+	IsOwn           interface{}
+	Uid             string
+}
+
+// A room UID locates an occurrence. Confirm that its occupant and body still
+// agree before attaching incoming metadata to the retained source.
+func (q *Queries) RoomSourceAcceptsIdentity(ctx context.Context, arg RoomSourceAcceptsIdentityParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, roomSourceAcceptsIdentity,
+		arg.MessageID,
+		arg.SourceHash,
+		arg.WireBody,
+		arg.Author,
+		arg.RoomAddress,
+		arg.PersonalAddress,
+		arg.IsOwn,
+		arg.Uid,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

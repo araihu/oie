@@ -53,16 +53,13 @@ type Querier interface {
 	DeleteRedactedQuoteSharedContent(ctx context.Context, arg DeleteRedactedQuoteSharedContentParams) error
 	DiscardPendingImageDownloads(ctx context.Context, sourceID string) error
 	DiscardRecoveredSend(ctx context.Context, messageID string) error
+	DisputeRoomArchiveEcho(ctx context.Context, echoID string) error
 	DropDeviceDownloads(ctx context.Context, deviceID string) ([]DeviceDownload, error)
 	DropExpiredDownloads(ctx context.Context, nowMs int64) ([]DeviceDownload, error)
 	DropExpiredMessageEvents(ctx context.Context, ids string) error
 	EnsureDownloadDevice(ctx context.Context, deviceID string) error
 	ExpiryCandidates(ctx context.Context, arg ExpiryCandidatesParams) ([]string, error)
 	ExpirySourceIDs(ctx context.Context, ids string) ([]string, error)
-	// MAM 2 can omit the room's stanza-id inside the forwarded message. Use the
-	// original stored under that room's archive ID when it has no explicit room
-	// reference. A filtered-out or conflicting explicit reference takes precedence.
-	FindArchivedRoomReplyTarget(ctx context.Context, arg FindArchivedRoomReplyTargetParams) (FindArchivedRoomReplyTargetRow, error)
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindAvatarHashes(ctx context.Context, arg FindAvatarHashesParams) ([]FindAvatarHashesRow, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)
@@ -98,6 +95,7 @@ type Querier interface {
 	GetGlobalRetention(ctx context.Context) (GetGlobalRetentionRow, error)
 	GetHistoryCounts(ctx context.Context, ownerID string) (GetHistoryCountsRow, error)
 	GetHistoryStatus(ctx context.Context, accountID string) (string, error)
+	GetLegacyRoomArchiveSource(ctx context.Context, arg GetLegacyRoomArchiveSourceParams) (string, error)
 	GetMediaFile(ctx context.Context, hash string) (MediaFile, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetMessageEditCommand(ctx context.Context, id string) (MessageEditCommand, error)
@@ -167,16 +165,17 @@ type Querier interface {
 	InterruptedPreviewJobs(ctx context.Context, limit int64) ([]MessagePreview, error)
 	InvalidateSharedContent(ctx context.Context, messageID string) error
 	IsDiscardedReplyReference(ctx context.Context, arg IsDiscardedReplyReferenceParams) (bool, error)
-	IsExcludedXMPPOccurrence(ctx context.Context, arg IsExcludedXMPPOccurrenceParams) (bool, error)
 	IsExpiredCorrectionTarget(ctx context.Context, arg IsExpiredCorrectionTargetParams) (bool, error)
 	IsExpiredMessage(ctx context.Context, id string) (bool, error)
 	IsExpiredReplyReference(ctx context.Context, arg IsExpiredReplyReferenceParams) (bool, error)
+	IsRoomArchiveEchoOf(ctx context.Context, arg IsRoomArchiveEchoOfParams) (bool, error)
 	KeepLegacyDownloadMembership(ctx context.Context, arg KeepLegacyDownloadMembershipParams) error
 	KeepLegacyImageCompletions(ctx context.Context, sourceID string) error
 	// XEP-0333 signals a position, so an eligible target must precede any unread message.
 	LatestDisplayedTarget(ctx context.Context, arg LatestDisplayedTargetParams) (LatestDisplayedTargetRow, error)
 	LatestLogicalMessage(ctx context.Context, conversationID string) (Message, error)
 	LatestOwnMessage(ctx context.Context, conversationID string) (Message, error)
+	LinkRoomArchiveEcho(ctx context.Context, arg LinkRoomArchiveEchoParams) (string, error)
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]string, error)
 	ListAvatarTargets(ctx context.Context, ownerID string) ([]ListAvatarTargetsRow, error)
 	ListAvatars(ctx context.Context, arg ListAvatarsParams) ([]Avatar, error)
@@ -229,6 +228,9 @@ type Querier interface {
 	MarkAcceptedDirectHistory(ctx context.Context, conversationID string) error
 	MarkOutboxWireStarted(ctx context.Context, messageID string) error
 	MarkSharedContentIndexed(ctx context.Context, arg MarkSharedContentIndexedParams) error
+	// Only an observed key may teach us another deletion key. The opposite
+	// form of a room UID can suppress a replay without becoming a new fact.
+	MatchExcludedXMPPOccurrence(ctx context.Context, arg MatchExcludedXMPPOccurrenceParams) (string, error)
 	MessageRetractionSources(ctx context.Context, arg MessageRetractionSourcesParams) ([]string, error)
 	// Bound the leading expression so SQLite seeks into messages_timeline.
 	MessagesAfterTarget(ctx context.Context, arg MessagesAfterTargetParams) ([]Message, error)
@@ -281,6 +283,7 @@ type Querier interface {
 	RecordRetiredImageMembership(ctx context.Context, arg RecordRetiredImageMembershipParams) error
 	RecoveredSendHasDestinationEvidence(ctx context.Context, arg RecoveredSendHasDestinationEvidenceParams) (int64, error)
 	RedactedQuotePreviewIDs(ctx context.Context, arg RedactedQuotePreviewIDsParams) ([]string, error)
+	RememberDistinctRoomExclusionKey(ctx context.Context, arg RememberDistinctRoomExclusionKeyParams) error
 	RememberExcludedXMPPKey(ctx context.Context, arg RememberExcludedXMPPKeyParams) error
 	RememberOwnOrigin(ctx context.Context, arg RememberOwnOriginParams) error
 	RemoveAccount(ctx context.Context, id string) (int64, error)
@@ -295,9 +298,14 @@ type Querier interface {
 	ResetRoomReactionPrivacy(ctx context.Context, accountID string) error
 	ResolveMessageAlias(ctx context.Context, aliasID string) (string, error)
 	RestoreReviewedSendReceipts(ctx context.Context, messageID string) error
+	RestoreRoomArchiveEchoLinks(ctx context.Context) error
 	// A local star decision supersedes inherited heads without erasing their
 	// immutable revisions, even when the inherited clock was ahead.
 	RetireInheritedIdlessStarHeads(ctx context.Context, messageID string) error
+	RoomArchiveEchoOwner(ctx context.Context, echoID string) (string, error)
+	// A room UID locates an occurrence. Confirm that its occupant and body still
+	// agree before attaching incoming metadata to the retained source.
+	RoomSourceAcceptsIdentity(ctx context.Context, arg RoomSourceAcceptsIdentityParams) (bool, error)
 	ScrubContentHeadInboundQuote(ctx context.Context, arg ScrubContentHeadInboundQuoteParams) error
 	ScrubContentHeadOutboundQuotes(ctx context.Context, arg ScrubContentHeadOutboundQuotesParams) error
 	ScrubConversationEventPreviews(ctx context.Context, payload string) error

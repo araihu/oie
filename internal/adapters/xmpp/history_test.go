@@ -77,3 +77,40 @@ func TestRoomOwnAuthorRequiresUnambiguousArchivedJID(t *testing.T) {
 		}
 	}
 }
+
+func TestRoomArchiveUIDSuppliesMissingStanzaID(t *testing.T) {
+	const room = "room@conference.localhost"
+	account := domain.Account{Address: "alice@localhost"}
+	for _, tc := range []struct {
+		name, scope, elements string
+		verified              bool
+		want                  string
+	}{
+		{"missing forwarded ID", room, "", true, "archive-id"},
+		{"foreign issuer only", room, `<stanza-id xmlns="urn:xmpp:sid:0" by="host.example" id="foreign"/>`, true, "archive-id"},
+		{"explicit room ID", room, `<stanza-id xmlns="urn:xmpp:sid:0" by="room@conference.localhost" id="explicit"/>`, true, "explicit"},
+		{"repeated room ID", room, `<stanza-id xmlns="urn:xmpp:sid:0" by="room@conference.localhost" id="a"/><stanza-id xmlns="urn:xmpp:sid:0" by="room@conference.localhost" id="b"/>`, true, ""},
+		{"malformed room ID", room, `<stanza-id xmlns="urn:xmpp:sid:0" by="room@conference.localhost" id=""/>`, true, ""},
+		{"unverified room", room, "", false, ""},
+		{"personal archive", account.Address, "", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			xmlText := `<result xmlns="urn:xmpp:mam:2" id="archive-id"><forwarded xmlns="urn:xmpp:forward:0"><delay xmlns="urn:xmpp:delay" stamp="2026-11-08T12:00:00Z"/><message xmlns="jabber:client" from="room@conference.localhost/Bob" type="groupchat"><body>hello</body>` + tc.elements + `</message></forwarded></result>`
+			var result archiveResult
+			if err := xml.Unmarshal([]byte(xmlText), &result); err != nil {
+				t.Fatal(err)
+			}
+			in, ok, err := archivedIncoming(account, tc.scope, &result, archiveTrust{SIDVerified: tc.verified})
+			if err != nil || !ok {
+				t.Fatalf("decode: %t %v", ok, err)
+			}
+			if tc.want == "" {
+				if len(in.References) != 0 {
+					t.Fatalf("unexpected references: %+v", in.References)
+				}
+			} else if len(in.References) != 1 || in.References[0] != (domain.MessageReference{Scope: "room:" + room, Author: room + "/Bob", ID: tc.want}) {
+				t.Fatalf("room archive reference: %+v", in.References)
+			}
+		})
+	}
+}

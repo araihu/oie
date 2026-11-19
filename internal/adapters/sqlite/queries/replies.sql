@@ -18,6 +18,8 @@ WHERE m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversat
 AND r.remote_id=sqlc.arg(remote_id)
 AND (CAST(sqlc.arg(scope) AS TEXT)='' OR r.scope=CAST(sqlc.arg(scope) AS TEXT))
 AND (CAST(sqlc.arg(author) AS TEXT)='' OR r.author=CAST(sqlc.arg(author) AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM room_archive_reference_conflicts conflict
+ WHERE conflict.message_id=r.message_id AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id)
 LIMIT 129;
 
 -- name: MessagesAtOrBeforeTarget :many
@@ -47,22 +49,3 @@ AND NOT EXISTS (
  AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id AND conflict.message_id<>r.message_id
 )
 ORDER BY r.scope,r.remote_id,r.author LIMIT 8;
-
--- name: FindArchivedRoomReplyTarget :one
--- MAM 2 can omit the room's stanza-id inside the forwarded message. Use the
--- original stored under that room's archive ID when it has no explicit room
--- reference. A filtered-out or conflicting explicit reference takes precedence.
-SELECT m.id, m.payload, CAST(COALESCE(NULLIF(json_extract(m.payload,'$.WireBodySHA256'),''),
- oie_source_hash(json_extract(m.payload,'$.OriginalText'))) AS TEXT) AS source_hash
-FROM archive_aliases a
-JOIN messages m ON m.id=a.message_id AND m.account_id=a.account_id
-JOIN conversations c ON c.id=m.conversation_id AND c.account_id=m.account_id
-WHERE a.account_id=sqlc.arg(account_id) AND a.scope=sqlc.arg(room_address) AND a.archive_id=sqlc.arg(remote_id)
-AND c.id=sqlc.arg(conversation_id) AND c.address=a.scope AND json_extract(c.payload,'$.Kind')='room'
-AND json_extract(m.payload,'$.ArchiveScope')=a.scope AND json_extract(m.payload,'$.ArchiveID')=a.archive_id
-AND (CAST(sqlc.arg(author) AS TEXT)='' OR sqlc.arg(author)=a.scope||'/'||json_extract(m.payload,'$.Sender.DisplayName'))
-AND NOT EXISTS (SELECT 1 FROM message_references r WHERE r.message_id=m.id AND r.scope='room:'||a.scope)
-AND NOT EXISTS (
- SELECT 1 FROM message_references r CROSS JOIN messages other ON other.id=r.message_id
- WHERE r.remote_id=a.archive_id AND r.scope='room:'||a.scope AND other.conversation_id=c.id
-);

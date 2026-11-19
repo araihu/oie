@@ -8,7 +8,15 @@ CREATE TEMP TABLE portable_pairs(source TEXT,destination TEXT, PRIMARY KEY(sourc
 INSERT OR IGNORE INTO portable_pairs
 SELECT s.message_id,d.message_id FROM portable_keys s JOIN portable_keys d
 USING(account,chat,kind,key_type,authority,remote_id)
-WHERE s.incoming=1 AND d.incoming=0;
+WHERE s.incoming=1 AND d.incoming=0
+-- A room MAM result can supply its UID as a missing stanza ID. It cannot
+-- bridge two different archive occurrences through that inferred stanza ID.
+AND NOT (s.kind='room' AND s.key_type='stanza-id' AND EXISTS (
+ SELECT 1 FROM portable_keys sm JOIN portable_keys dm USING(account,chat,kind,key_type,authority)
+ WHERE sm.incoming=1 AND sm.message_id=s.message_id AND dm.incoming=0 AND dm.message_id=d.message_id
+   AND sm.key_type='mam' AND sm.authority=s.chat AND sm.remote_id<>dm.remote_id
+   AND (sm.remote_id=s.remote_id OR dm.remote_id=s.remote_id)
+));
 
 CREATE TEMP TABLE portable_message_matches(source TEXT,destination TEXT,PRIMARY KEY(source,destination)) WITHOUT ROWID;
 INSERT INTO portable_message_matches
