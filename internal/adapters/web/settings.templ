@@ -181,6 +181,21 @@ templ deviceSettings(v view) {
 		@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
 		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
 	</div>
+	if v.OfflineHistory && !v.Preview && v.EngineID != "" {
+		<section class="oie-settings-section" aria-labelledby="offline-storage-title" data-offline-storage hidden data-engine={v.EngineID} data-usage={v.Text.OfflineStorageUsage} data-excess={v.Text.OfflineStorageExcess} data-failed={v.Text.OfflineStorageFailed}>
+			<h2 id="offline-storage-title">{v.Text.OfflineStorageTitle}</h2>
+			<label for="offline-storage-limit">{v.Text.OfflineStorageLimit}</label>
+			<select class="oie-download-select" id="offline-storage-limit" aria-describedby="offline-storage-help offline-storage-used" disabled>
+				<option value="262144">256 KiB</option>
+				<option value="524288">512 KiB</option>
+				<option value="1048576" selected>1 MiB</option>
+				<option value="2097152">2 MiB</option>
+			</select>
+			<p id="offline-storage-help">{v.Text.OfflineStorageHelp}</p>
+			<p id="offline-storage-used" class="oie-download-feedback"></p>
+			<p role="status" class="oie-download-feedback"></p>
+		</section>
+	}
 	if v.canManageLocalDownloads() {
 		@downloadRetentionSettings(v)
 	}

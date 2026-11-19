@@ -94,6 +94,17 @@ async function checkNavigationAuthority(id) {
   assert.equal(notices.length, 1);
   assert.equal(notices[0].engine, engine, 'the already open shells receive the reset of the old engine');
 
+  current = sandbox.verify({...saved, byteLimit: 512 * 1024}, engine, 'invalid');
+  assert.equal(current.engine, '');
+  assert.equal(sandbox.storageLimit(current), 512 * 1024);
+  handlers.get('fetch')({
+    request: {key: 'unbound reset', method: 'POST', url: 'http://test/ui/engine/reset'},
+    respondWith: promise => { reset = promise; },
+  });
+  requests.get('unbound reset').resolve(new Response(null, {status: 204, headers: {'X-Oie-Reset-Engine': engine}}));
+  await reset;
+  assert.equal(sandbox.storageLimit(current), 1024 * 1024, 'reset restores the default with an unbound cache');
+
   const account = id(20), otherAccount = id(21), chat = id(22);
   const through = engine + ':2';
   const snapshot = (account, chat, size = 0) => ({
@@ -135,6 +146,12 @@ async function checkNavigationAuthority(id) {
   const newKeep = sandbox.keepChat(afterMissedRemovals, {engine, account: otherAccount, chat, keep: true, snapshot: newSnapshot});
   assert(newKeep.next.entries.some(item => item.chat === chat), 'preferences lacking snapshots do not consume cache slots');
   const fullBytes = full(190 * 1024);
+  const raised = sandbox.resizeStorage(fullBytes, 2 * 1024 * 1024).next;
+  assert(keep(raised, account, chat, 190 * 1024).next, 'raising the default budget makes a refused copy fit');
+  assert.equal(sandbox.storageLimit(sandbox.verify(raised, other, other + ':3')), 2 * 1024 * 1024,
+    'the browser limit survives a change of engine');
+  assert.equal(sandbox.resizeStorage(fullBytes, 256 * 1024).excess,
+    sandbox.totalBytes(fullBytes.entries) - 256 * 1024, 'refusal reports the exact protected excess');
   const visibleSmall = sandbox.save(fullBytes, snapshot(account, chat, 0));
   const newerLarge = {...snapshot(account, chat, 190 * 1024), cursor: engine + ':4'};
   const enable = (cache, snapshot) => sandbox.keepChat(cache, {engine, account, chat, keep: true, snapshot});
@@ -372,6 +389,111 @@ async function checkSavedSearch(page, until, {root, account, chat, latest, withd
   await page.locator('#offline-messages').getByText(latest, {exact: true}).waitFor();
 }
 
+async function checkStorageLimit({browser, base, account, chat, id, until}) {
+  const context = await browser.newContext({viewport: {width: 390, height: 760}});
+  const separate = await browser.newContext();
+  const settingsURL = base + '/?lang=en&inbox=1&open=settings&settingsTab=device';
+  async function openSettings(profile) {
+    const page = await profile.newPage();
+    await page.goto(settingsURL);
+    const select = page.locator('#offline-storage-limit');
+    await select.scrollIntoViewIfNeeded();
+    await until(() => select.isEnabled(), 'offline storage usage loaded');
+    return page;
+  }
+  try {
+    const online = await context.newPage();
+    await online.goto(base + '/?lang=en&chat=' + chat);
+    await until(async () => (await online.evaluate(savedHistory))?.entries.length, 'first chat saved');
+    const settings = await openSettings(context);
+    const shellRequest = '**/ui/offline-history?lang=*';
+    await separate.route(shellRequest, route => route.abort('failed'));
+    const other = await separate.newPage();
+    await other.goto(settingsURL);
+    const otherLimit = other.locator('#offline-storage-limit');
+    await otherLimit.scrollIntoViewIfNeeded();
+    const otherFeedback = other.locator('[data-offline-storage] [role=status]');
+    await until(async () => (await otherFeedback.textContent()).includes('Offline storage is unavailable'),
+      'failed worker installation reports the error');
+    assert(await otherLimit.isDisabled());
+    await separate.unroute(shellRequest);
+    await other.getByRole('tab', {name: 'General'}).click();
+    // Return after the browser has observed the device panel leaving the viewport.
+    await otherLimit.evaluate(node => new Promise(resolve => {
+      const observer = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(node);
+    }));
+    await other.getByRole('tab', {name: 'This device'}).click();
+    await otherLimit.scrollIntoViewIfNeeded();
+    await until(() => otherLimit.isEnabled(), 'returning to device settings retries a failed worker installation');
+    const select = settings.locator('#offline-storage-limit');
+    const {engine, checkpoint} = await online.evaluate(savedHistory);
+    const protectedChat = id(810), oldest = id(811), newest = id(812);
+    for (const [n, conversation] of [oldest, protectedChat, newest].entries()) {
+      const entry = {account, chat: conversation, title: 'Saved ' + n,
+        messages: [{id: id(820 + n), sender: 'Bob', date: '2026-11-07T20:00:00Z', text: 'needle' + n + ' ' + 'x'.repeat(100 * 1024)}]};
+      await online.evaluate(data => navigator.serviceWorker.controller.postMessage(data), {
+        type: 'oie:offline-history-save', engine, cursor: checkpoint, entry,
+      });
+      await until(async () => (await online.evaluate(savedHistory)).entries.some(e => e.chat === conversation), 'saved test conversation');
+    }
+    const pin = (conversation, keep) => online.evaluate(data => new Promise(resolve => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = event => resolve(event.data.kept);
+      navigator.serviceWorker.controller.postMessage(data, [channel.port2]);
+    }), {type: 'oie:offline-keep-chat', engine, account, chat: conversation, keep});
+    for (const conversation of [oldest, protectedChat, newest]) assert(await pin(conversation, true));
+    const feedback = settings.locator('[data-offline-storage] [role=status]');
+    await select.selectOption('262144');
+    await until(async () => (await feedback.textContent()).includes('Free at least'), 'refused limit shows space to free');
+    assert.equal(await select.inputValue(), '1048576');
+    assert.equal((await online.evaluate(savedHistory)).entries.filter(e => [oldest, protectedChat, newest].includes(e.chat)).length, 3);
+    await pin(oldest, false);
+    await until(async () => (await feedback.textContent()) === '', 'another tab freed enough protected space');
+    assert.equal(await select.inputValue(), '1048576', 'freeing space does not apply a previously refused limit');
+    await pin(newest, false);
+
+    const composer = online.locator('#message-composer');
+    await composer.fill('Send when connected');
+    const draftTab = await context.newPage();
+    await draftTab.goto(base + '/?lang=en&chat=' + chat);
+    const draft = draftTab.locator('#message-composer');
+    await draft.fill('An unsent draft');
+    await context.setOffline(true);
+    await online.locator('[data-send-message]').click();
+    await online.locator('[data-pending-send]').getByRole('img', {name: 'Waiting for connection'}).waitFor();
+    await select.selectOption('262144');
+    await until(async () => await select.inputValue() === '262144', 'lower limit saved');
+    await until(async () => !(await online.evaluate(savedHistory)).entries.some(e => e.chat === oldest), 'oldest ordinary copy evicted');
+    await other.reload();
+    await otherLimit.scrollIntoViewIfNeeded();
+    await until(() => otherLimit.isEnabled(), 'independent profile reloaded its own limit');
+    assert.equal(await otherLimit.inputValue(), '1048576');
+    const stored = await online.evaluate(({engine, account, chat}) => {
+      const read = kind => JSON.parse(localStorage.getItem([kind, engine, account, chat].join(':')));
+      return {draft: read('oie.draft.v1'), send: read('oie.offline-send.v1')};
+    }, {engine, account, chat});
+    assert.equal(stored.draft?.text, 'An unsent draft');
+    assert.equal(stored.send?.text, 'Send when connected');
+    assert.equal(await draft.inputValue(), 'An unsent draft');
+    assert(await online.locator('[data-pending-send]').getByText('Send when connected', {exact:true}).isVisible());
+
+    const reader = await context.newPage();
+    await reader.goto(base + '/?lang=en');
+    await reader.locator('#offline-query').fill('needle');
+    await until(async () => await reader.locator('#offline-results a').count() === 2, 'protected and newest copies remain searchable');
+    const text = await reader.locator('#offline-results').innerText();
+    assert(text.includes('needle1') && text.includes('needle2') && !text.includes('needle0'));
+  } finally {
+    await context.close();
+    await separate.close();
+  }
+}
+
 module.exports = async function checkOfflineHistory({browser, base, account, chat, state, until, id}) {
   await checkNavigationAuthority(id);
   const artifacts = path.join(__dirname, 'artifacts');
@@ -390,6 +512,8 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
     ...message, conversationId: chat, accountId: account, sender: {id: id(6), displayName: 'Bob'},
     isOwn: false, sendState: 'received',
   }));
+
+  await checkStorageLimit({browser, base, account, chat, id, until});
 
   for (const [width, lang, theme] of [[390, 'pt-BR', 'light'], [1440, 'en', 'dark']]) {
     const context = await browser.newContext({viewport: {width, height: 760}, locale: lang});
