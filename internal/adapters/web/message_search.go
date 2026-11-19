@@ -346,7 +346,16 @@ func (s *Server) messageSearch(w http.ResponseWriter, r *http.Request) {
 	v := s.baseView(r)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	engine, err := s.client.GetEngineWithResponse(ctx)
+	raw, err := s.client.GetEngine(ctx)
+	if v.OfflineHistory {
+		if availability := offlineEngineStatus(raw, err); availability != "" {
+			w.Header().Set("X-Oie-Offline-History", availability)
+		}
+	}
+	var engine *engineapi.GetEngineResponse
+	if err == nil {
+		engine, err = engineapi.ParseGetEngineResponse(raw)
+	}
 	if err != nil || engine.JSON200 == nil {
 		v.MessageSearch.State = "unavailable"
 		v.MessageSearch.Status = 503

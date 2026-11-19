@@ -32,14 +32,22 @@ function state(update) {
       const tx = db.transaction('history', update ? 'readwrite' : 'readonly');
       const store = tx.objectStore('history');
       const query = store.get('current');
-      let value;
+      let value, changedEngine;
       query.onsuccess = () => {
         const current = query.result ?? {engine: '', entries: []};
         const next = update?.(current);
-        if (next) store.put(next, 'current');
+        if (next) {
+          store.put(next, 'current');
+          if (next.engine !== current.engine || next.entries.length !== current.entries.length ||
+              next.entries.some((entry, index) => entry !== current.entries[index])) changedEngine = current.engine;
+        }
         value = next ?? current;
       };
-      tx.oncomplete = () => { db.close(); resolve(value); };
+      tx.oncomplete = async () => {
+        db.close();
+        if (changedEngine) await notifyReaders('oie:offline-history-changed', changedEngine).catch(() => {});
+        resolve(value);
+      };
       tx.onabort = () => { db.close(); reject(tx.error); };
     };
   });
@@ -51,31 +59,90 @@ function cursor(engine, raw) {
   return /^\d{1,19}$/.test(sequence) ? BigInt(sequence) : -1n;
 }
 
-function recent(entries) {
-  return entries.filter(entry => Date.now() - entry.savedAt < maxAge);
+function sameChat(left, right) {
+  return left.account === right.account && left.chat === right.chat;
+}
+
+function isKept(current, entry) {
+  return current.kept?.some(chat => sameChat(chat, entry)) ?? false;
+}
+
+function keepStatus(current, scope) {
+  const kept = current.kept?.find(item => sameChat(item, scope));
+  return {
+    kept: Boolean(kept),
+    full: kept?.full === true,
+    available: current.entries.some(entry => sameChat(entry, scope) &&
+      (kept || Date.now() - entry.savedAt < maxAge)),
+  };
+}
+
+async function notifyKeep(engine, scope, status, exceptID) {
+  const {account, chat} = scope;
+  for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true})) {
+    if ((!exceptID || client.id !== exceptID) && ['/', '/search'].includes(new URL(client.url).pathname)) {
+      client.postMessage({type: 'oie:offline-keep-changed', engine, account, chat, ...status});
+    }
+  }
+}
+
+function recent(current) {
+  const cutoff = Date.now() - maxAge;
+  return current.entries.filter(entry => entry.savedAt > cutoff || isKept(current, entry));
 }
 
 function read() {
   return state(current => {
-    const entries = recent(current.entries);
+    const entries = recent(current);
     if (entries.length !== current.entries.length) return {...current, entries};
   });
+}
+
+// Search the same verified, age-pruned snapshot used by the offline reader.
+function searchSaved(current, {engine, account, accounts = [], chat, query}) {
+  const hits = [];
+  if (current.blocked || current.engine !== engine || !id.test(engine) ||
+      (account !== null && !id.test(account)) || !Array.isArray(accounts) || accounts.length > 100 ||
+      accounts.some(value => !id.test(value)) || (chat !== null && !id.test(chat)) ||
+      typeof query !== 'string' || query.length > 400 || Array.from(query.trim()).length > 200 || !query.trim()) return hits;
+
+  const pattern = new RegExp(query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
+  for (const entry of current.entries) {
+    if ((account && entry.account !== account) || (accounts.length && !accounts.includes(entry.account)) ||
+        (chat && entry.chat !== chat)) continue;
+    for (const message of entry.messages) {
+      if (message.withdrawn || !id.test(message.id) || typeof message.text !== 'string') continue;
+      const match = pattern.exec(message.text);
+      if (!match) continue;
+      const start = Math.max(0, match.index - 48);
+      const end = match.index + match[0].length;
+      hits.push({
+        account: entry.account, chat: entry.chat, title: entry.title, label: entry.label,
+        message: message.id, sender: message.sender, date: message.date,
+        before: (start ? '…' : '') + message.text.slice(start, match.index), match: match[0],
+        after: message.text.slice(end, end + 96) + (end + 96 < message.text.length ? '…' : ''),
+      });
+    }
+  }
+  return hits.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 
 function newest(engine, previous, incoming) {
   return cursor(engine, incoming) > cursor(engine, previous) ? incoming : previous;
 }
 
-function save(current, data) {
+function canSave(current, data) {
   const sequence = cursor(data.engine, data.cursor);
-  if (!id.test(data.engine) || current.blocked || current.engine && current.engine !== data.engine ||
-      sequence < 0n || sequence < cursor(data.engine, current.minimum)) return;
-  const next = {...current, engine: data.engine, lang: data.lang, theme: data.theme, entries: recent(current.entries)};
-  if (!current.engine) next.checkpoint = data.cursor;
+  return id.test(data.engine) && !current.blocked && (!current.engine || current.engine === data.engine) &&
+    sequence >= 0n && sequence >= cursor(data.engine, current.minimum);
+}
+
+function snapshotEntry(current, data) {
   const {entry} = data;
-  if (!entry || !id.test(entry.account) || !id.test(entry.chat)) return next;
-  if (current.missing?.some(item => item.chat === entry.chat && (!item.account || item.account === entry.account) &&
-      sequence <= cursor(data.engine, item.through))) return next;
+  if (!entry || !id.test(entry.account) || !id.test(entry.chat) || !Array.isArray(entry.messages)) return;
+  const sequence = cursor(data.engine, data.cursor);
+  if (current.missing?.some(item => (!item.chat || item.chat === entry.chat) && (!item.account || item.account === entry.account) &&
+      sequence <= cursor(data.engine, item.through))) return;
   // Make room for the newest messages even if the full loaded page is large.
   const messages = [];
   let bytes = encoder.encode(JSON.stringify({...entry, messages})).byteLength;
@@ -85,18 +152,86 @@ function save(current, data) {
     bytes += size;
     messages.unshift(message);
   }
-  const entries = next.entries;
-  const previous = entries.find(item => item.chat === entry.chat && item.account === entry.account);
-  if (previous && cursor(data.engine, previous.cursor) > cursor(data.engine, data.cursor)) return next;
-  next.entries = [{...entry, messages, bytes, savedAt: Date.now(), cursor: data.cursor}];
-  let total = bytes;
-  for (const item of entries) {
-    if (item === previous) continue;
-    if (next.entries.length >= maxConversations || total + item.bytes > maxBytes) break;
+  return {...entry, messages, bytes, savedAt: Date.now(), cursor: data.cursor};
+}
+
+function fitSnapshot(current, entry) {
+  const others = recent(current).filter(item => !sameChat(item, entry));
+  const entries = [entry, ...others.filter(item => isKept(current, item))];
+  let total = entries.reduce((bytes, item) => bytes + item.bytes, 0);
+  if (entries.length > maxConversations || total > maxBytes) return;
+  for (const item of others) {
+    if (entries.length === maxConversations) break;
+    if (isKept(current, item) || total + item.bytes > maxBytes) continue;
     total += item.bytes;
-    next.entries.push(item);
+    entries.push(item);
   }
-  return next;
+  return entries;
+}
+
+function recordCapacity(current, entry, full) {
+  const pin = current.kept?.find(item => sameChat(item, entry));
+  const previous = current.entries.find(item => sameChat(item, entry));
+  const sequence = cursor(current.engine, entry.cursor);
+  if (cursor(current.engine, pin?.cursor) > sequence || cursor(current.engine, previous?.refreshBlockedAt) > sequence) {
+    return current;
+  }
+  if (full && previous && previous.refreshBlockedAt !== entry.cursor) {
+    current = {...current, entries: current.entries.map(item => item === previous ? {...item, refreshBlockedAt: entry.cursor} : item)};
+  }
+  if (!pin) return current;
+  return {...current, kept: current.kept.map(item => item === pin ? {...pin, cursor: entry.cursor, full} : item)};
+}
+
+function save(current, data) {
+  if (!canSave(current, data)) return;
+  const next = {...current, engine: data.engine, lang: data.lang, theme: data.theme, entries: recent(current)};
+  if (!current.engine) next.checkpoint = data.cursor;
+  const entry = snapshotEntry(current, data);
+  if (!entry) return next;
+  const previous = next.entries.find(item => sameChat(item, entry));
+  const pin = next.kept?.find(item => sameChat(item, entry));
+  const sequence = cursor(data.engine, entry.cursor);
+  if (cursor(data.engine, previous?.cursor) > sequence || cursor(data.engine, previous?.refreshBlockedAt) > sequence ||
+      cursor(data.engine, pin?.cursor) > sequence) return next;
+  const entries = fitSnapshot(next, entry);
+  if (entries) next.entries = entries;
+  return recordCapacity(next, entry, !entries);
+}
+
+function keepChat(current, data) {
+  const {engine, account, chat, keep, snapshot} = data;
+  if (current.blocked || current.engine && current.engine !== engine) return {error: 'unavailable'};
+  const kept = current.kept ?? [];
+  if (!keep) {
+    const next = {...current, kept: kept.filter(item => !sameChat(item, data))};
+    return {next: {...next, entries: recent(next)}};
+  }
+  if (isKept(current, data)) return {};
+  let next = current;
+  let entry = recent(current).find(item => sameChat(item, data));
+  if (snapshot && (snapshot.engine !== engine || !snapshot.entry || !sameChat(snapshot.entry, data))) return {error: 'unavailable'};
+  const incoming = cursor(engine, snapshot?.cursor);
+  const blocked = cursor(engine, entry?.refreshBlockedAt);
+  if (blocked >= 0n && incoming < blocked) return {error: 'full'};
+
+  // Prefer a more recent copy already saved by another tab over the mounted page.
+  if (snapshot && incoming >= cursor(engine, entry?.cursor) && canSave(current, snapshot)) {
+    const candidate = snapshotEntry(current, snapshot);
+    if (!candidate) return {error: 'unavailable'};
+    const entries = fitSnapshot(current, candidate);
+    if (!entries) {
+      // Remember this refusal even when the automatic save has not arrived yet.
+      return {error: 'full', next: recordCapacity(current, candidate, true)};
+    }
+    entry = candidate;
+    next = {...current, engine, checkpoint: current.checkpoint ?? snapshot.cursor, lang: snapshot.lang, theme: snapshot.theme, entries};
+  } else if (blocked >= 0n) {
+    return {error: 'full'};
+  } else if (!entry) {
+    return {error: snapshot ? 'unavailable' : 'missing'};
+  }
+  return {next: {...next, kept: [...kept, {account, chat, cursor: entry.cursor, full: false}]}};
 }
 
 function progress(current, {engine, through}) {
@@ -106,21 +241,25 @@ function progress(current, {engine, through}) {
   return {...current, checkpoint: through};
 }
 
-function invalidate(current, {engine, account, chat, through, confirmedMissing = false}) {
+function invalidate(current, {engine, account, chat, through, confirmedMissing = false, removeKeep = false}) {
   if (current.blocked || engine !== current.engine || cursor(engine, through) < 0n) return;
   const sequence = cursor(engine, through);
   const minimum = newest(engine, current.minimum, through);
   const checkpoint = confirmedMissing ? current.checkpoint : progress(current, {engine, through})?.checkpoint ?? current.checkpoint;
-  const entries = current.entries.filter(entry => (account && entry.account !== account) || (chat && entry.chat !== chat) ||
-    (confirmedMissing ? cursor(engine, entry.cursor) > sequence : cursor(engine, entry.cursor) >= sequence));
+  const removed = confirmedMissing || removeKeep;
+  const outside = item => (account && item.account !== account) || (chat && item.chat !== chat);
+  const entries = current.entries.filter(entry => outside(entry) ||
+    (removed ? cursor(engine, entry.cursor) > sequence : cursor(engine, entry.cursor) >= sequence));
+  const kept = removed ? current.kept?.filter(item => outside(item) || cursor(engine, item.cursor) > sequence ||
+    entries.some(entry => sameChat(entry, item))) : current.kept;
   let missing = current.missing;
-  if (confirmedMissing) {
-    // Fence a delayed snapshot read from the same event position as this 404.
+  if (removed) {
+    // A delayed snapshot from this event position cannot restore removed history.
     const previous = (missing ?? []).find(item => item.chat === chat && item.account === account);
     const other = (missing ?? []).filter(item => item !== previous);
     missing = [{account, chat, through: newest(engine, previous?.through, through)}, ...other].slice(0, maxConversations);
   }
-  return {...current, minimum, checkpoint, entries, missing};
+  return {...current, minimum, checkpoint, entries, missing, kept};
 }
 
 function verify(current, engine, through) {
@@ -139,13 +278,42 @@ self.addEventListener('message', event => {
   const path = new URL(event.source.url).pathname;
   const data = event.data;
   const port = event.ports[0];
-  if ((path === '/' || path === shell) && data?.type === 'oie:offline-history-read' && port) {
+  const workspacePath = path === '/' || path === '/search';
+  const searching = data?.type === 'oie:offline-history-search';
+  if ((workspacePath || path === shell) && port && (searching || data?.type === 'oie:offline-history-read')) {
     event.waitUntil(read().then(value => {
-      port.postMessage(value);
-    }).catch(() => port.postMessage(null)).finally(() => port.close()));
+      port.postMessage(searching ? searchSaved(value, data) : value);
+    }, () => port.postMessage(null)).finally(() => port.close()));
     return;
   }
-  if (path !== '/') return;
+  if (!workspacePath) return;
+  if (port && data && ['oie:offline-keep-status', 'oie:offline-keep-chat'].includes(data.type) &&
+      [data.engine, data.account, data.chat].every(value => typeof value === 'string' && id.test(value))) {
+    const write = data.type === 'oie:offline-keep-chat' && typeof data.keep === 'boolean';
+    let error;
+    let changed = false;
+    const update = write ? current => {
+      const result = keepChat(current, data);
+      error = result.error;
+      changed = Boolean(result.next && !result.error);
+      return result.next;
+    } : undefined;
+    const reply = async current => {
+      const matches = !current.blocked && current.engine === data.engine;
+      const status = matches ? keepStatus(current, data) : {kept: false, available: false, full: false};
+      if (!matches && (current.engine || current.blocked)) error = 'unavailable';
+      port.postMessage({...status, error});
+      if (changed) await notifyKeep(data.engine, data, status, event.source.id);
+    };
+    event.waitUntil(state(update).then(reply, async cause => {
+      if (cause?.name !== 'QuotaExceededError') return port.postMessage(null);
+      changed = false;
+      error = 'full';
+      // The transaction rolled back. Report the previously committed setting.
+      return state().then(reply, () => port.postMessage(null));
+    }).finally(() => port.close()));
+    return;
+  }
   const updates = {
     'oie:offline-history-save': current => save(current, data),
     'oie:offline-history-invalidate': current => invalidate(current, data),
@@ -154,7 +322,7 @@ self.addEventListener('message', event => {
       if (data.engine && data.engine !== current.engine) return;
       if (data.blocked || !data.through) {
         verifiedNavigation = ++navigation;
-        return {...current, blocked: true, entries: []};
+        return {...current, blocked: true, entries: [], kept: []};
       }
       const minimum = newest(current.engine, current.minimum, data.through);
       const checkpoint = newest(current.engine, current.checkpoint, data.through);
@@ -162,30 +330,71 @@ self.addEventListener('message', event => {
       return {...current, minimum, checkpoint, entries};
     },
   };
-  if (Object.hasOwn(updates, data?.type)) event.waitUntil(state(updates[data.type]).catch(() => {}));
+  if (!Object.hasOwn(updates, data?.type)) return;
+  if (data.type === 'oie:offline-history-progress') {
+    event.waitUntil(state(updates[data.type]).catch(() => {}));
+    return;
+  }
+  event.waitUntil(updateOfflineState(data, updates[data.type]).catch(() => {}));
 });
 
+// Notify only after the transaction commits. Snapshots can be updated by any tab.
+async function updateOfflineState(data, update) {
+  let changes = [];
+  const apply = mutation => state(current => {
+    const next = mutation(current);
+    changes = [];
+    if (!next) return;
+    const affected = data.entry ? [data.entry] : current.kept ?? [];
+    for (const pin of affected) {
+      const before = keepStatus(current, pin);
+      if (!before.kept) continue;
+      const after = keepStatus(next, pin);
+      if (before.kept !== after.kept || before.full !== after.full || before.available !== after.available) {
+        changes.push({pin, after});
+      }
+    }
+    return next;
+  });
+  try {
+    await apply(update);
+  } catch (cause) {
+    if (cause?.name !== 'QuotaExceededError' || !data.entry) throw cause;
+    // Recording a boolean on the existing pin does not require the larger snapshot.
+    await apply(current => {
+      if (!canSave(current, data)) return;
+      const cached = current.entries.find(item => sameChat(item, data.entry));
+      if (cursor(data.engine, cached?.cursor) > cursor(data.engine, data.cursor)) return;
+      return recordCapacity(current, {...data.entry, cursor: data.cursor}, true);
+    });
+  }
+  await Promise.all(changes.map(({pin, after}) => notifyKeep(data.engine, pin, after)));
+}
+
 function conversationURL(url) {
+  if (url.pathname === '/search') return ['', 'messages'].includes(url.searchParams.get('searchType') || '');
   return url.pathname === '/' && ['chats', 'archived'].includes(url.searchParams.get('section') || 'chats') &&
-    !url.searchParams.has('open') && !url.searchParams.has('searchQuery');
+    (!url.searchParams.has('open') || url.searchParams.get('open') === 'details' && id.test(url.searchParams.get('chat'))) &&
+    (!url.searchParams.has('searchQuery') || (url.searchParams.get('searchMode') === 'messages' &&
+      ['', 'messages'].includes(url.searchParams.get('searchType') || '')));
 }
 
 async function offlineResponse(url, fallback) {
   if (!conversationURL(url)) return fallback ?? Response.error();
   const data = await read().catch(() => null);
-  if (fallback && !data?.entries.length) return fallback;
+  if (fallback && !data?.entries.length && !data?.kept?.some(item => item.full)) return fallback;
   const lang = url.searchParams.get('lang') || data?.lang;
   const page = await caches.match(shell + '?lang=' + (lang === 'pt-BR' ? 'pt-BR' : 'en'), {cacheName: shellCache});
   if (!page) return fallback ?? Response.error();
   return new Response(page.body, {status: fallback?.status ?? 200, headers: page.headers});
 }
 
-async function notifyReset(engine) {
+async function notifyReaders(type, engine) {
   const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
   for (const client of windows) {
     const url = new URL(client.url);
-    if (url.origin === self.location.origin && (url.pathname === '/' || url.pathname === shell)) {
-      client.postMessage({type: 'oie:offline-history-reset', engine});
+    if (url.origin === self.location.origin && ['/', '/search', shell].includes(url.pathname)) {
+      client.postMessage({type, engine});
     }
   }
 }
@@ -204,7 +413,7 @@ async function workspace(request, url) {
     const through = response.headers.get('X-Oie-Offline-Cursor');
     const chat = url.searchParams.get('chat');
     const account = url.searchParams.get('account');
-    const missingChat = response.status === 404 && id.test(chat) &&
+    const missingChat = url.pathname === '/' && response.status === 404 && id.test(chat) &&
       (account === null || id.test(account)) && !url.searchParams.has('notificationEngine');
     const removal = {engine, account, chat, through, confirmedMissing: true};
     await state(current => {
@@ -243,12 +452,12 @@ self.addEventListener('fetch', event => {
         await state(current => {
           if (current.engine !== engine) return;
           verifiedNavigation = ++navigation;
-          return {...current, blocked: true, entries: []};
-        }).then(() => notifyReset(engine)).catch(() => {});
+          return {...current, blocked: true, entries: [], kept: []};
+        }).then(() => notifyReaders('oie:offline-history-reset', engine)).catch(() => {});
       }
       return response;
     })());
-  } else if (request.method === 'GET' && request.mode === 'navigate' && url.pathname === '/') {
+  } else if (request.method === 'GET' && request.mode === 'navigate' && ['/', '/search'].includes(url.pathname)) {
     event.respondWith(workspace(request, url));
   } else if (request.method === 'GET' && scripts.includes(url.pathname)) {
     event.respondWith(fetch(request).catch(async () => (await caches.match(request, {cacheName: shellCache})) ?? Response.error()));

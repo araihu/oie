@@ -283,7 +283,10 @@ type view struct {
 }
 
 type copy struct {
+	OfflineSearchAll, OfflineSearchChat, OfflineSearchEmpty, OfflineSearchCount, OfflineSearchTooLong                   string
+	OfflineHistoryFull, OfflineHistoryPending                                                                           string
 	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing string
+	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                    string
 
 	ConversationRemoved string
 
@@ -1134,6 +1137,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, v)
 }
+func offlineEngineStatus(response *http.Response, err error) string {
+	if err != nil {
+		return "unavailable"
+	}
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return "denied"
+	}
+	if transientEngineStatus(response.StatusCode) {
+		return "unavailable"
+	}
+	return ""
+}
+
 func (s *Server) baseView(r *http.Request) view {
 	v := view{DevBuildID: s.devBuildID, Locale: locale(r), Theme: appearanceMode(r), Avatars: map[avatarIdentity]string{}, Connections: map[string]connectionView{}, Histories: map[string]engineapi.HistoryStatus{}, Values: map[string]string{}, MessagePreviews: map[string][]engineapi.MessagePreview{}}
 	v.Text = s.catalogs[v.Locale]
@@ -1185,18 +1201,10 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return nil
 	}
 	rawEngine, err := s.client.GetEngine(ctx, editor)
+	v.OfflineEngineStatus = offlineEngineStatus(rawEngine, err)
 	if err != nil {
-		v.OfflineEngineStatus = "unavailable"
 		v.Unavailable = true
 		return
-	}
-	switch rawEngine.StatusCode {
-	case http.StatusUnauthorized, http.StatusForbidden:
-		v.OfflineEngineStatus = "denied"
-	default:
-		if transientEngineStatus(rawEngine.StatusCode) {
-			v.OfflineEngineStatus = "unavailable"
-		}
 	}
 	engine, err := engineapi.ParseGetEngineResponse(rawEngine)
 	if err != nil || engine.JSON200 == nil {
@@ -1725,7 +1733,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	if v.CompactSource || r.Header.Get("HX-Request") == "true" && r.Header.Get("X-Oie-Fragment") == "conversation" {
 		buf = encodeFragment(w, r, buf)
 	}
-	if v.OfflineHistory && r.URL.Path == "/" {
+	if v.OfflineHistory && (r.URL.Path == "/" || r.URL.Path == "/search") {
 		if v.OfflineEngineStatus != "" {
 			w.Header().Set("X-Oie-Offline-History", v.OfflineEngineStatus)
 		} else if validOperationKey(v.EngineID) {
