@@ -20,7 +20,7 @@ jobs:
     name: Dagger (${{ matrix.mode }})
     if: github.event_name != 'push' || vars.OIE_REQUIRED_PR_CI != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: ${{ matrix.mode == 'race-restore' && 60 || 40 }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,7 +36,7 @@ jobs:
       - run: sh tools/ci/run.sh "$MODE"
         env:
           MODE: ${{ matrix.mode }}
-          OIE_CI_TIMEOUT: 35m
+          OIE_CI_TIMEOUT: ${{ matrix.mode == 'race-restore' && '55m' || '35m' }}
           OIE_CI_ARTIFACTS: ${{ runner.temp }}/oie-ci
           OIE_CI_BROWSER_FULL_MATRIX: ${{ inputs.full_browser_matrix && '1' || '0' }}
       - if: ${{ !cancelled() }}

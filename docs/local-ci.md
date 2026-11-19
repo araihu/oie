@@ -263,8 +263,11 @@ Dagger job uploads `dagger-ci-evidence-<mode>` with its own stage logs and
 test evidence, including on failure. Actions jobs bypass the local lock.
 `race-restore` runs the `TestBackupRestore` tests, including the SQLite
 fixtures that exercise both merge orders. `race-core` runs the remaining
-tests. Each job allows 30 minutes per Go package. Use `sh tools/ci/run.sh`
-with either mode to reproduce one job, or `make test-race` to run both locally.
+tests. The core tests allow 30 minutes per Go package. The restore tests allow
+45 minutes because the XMPP package can spend over 30 minutes restoring and
+migrating fixture databases under race detection on hosted runners.
+Use `OIE_CI_TIMEOUT=55m sh tools/ci/run.sh race-restore` to reproduce the
+hosted restore job, or `make test-race` to run both suites locally.
 The `Required CI` check aggregates both the Dagger and image smoke jobs.
 New commits on a PR cancel its superseded workflow runs.
 Use `gh pr checks` from the PR branch to find the current run. For a failed
