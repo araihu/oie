@@ -316,7 +316,6 @@ self.addEventListener('message', event => {
   }
   if (!workspacePath) return;
   if (port && data?.type === 'oie:offline-storage' && id.test(data.engine)) {
-    let excess = 0;
     event.waitUntil(state(current => {
       if (current.blocked || current.engine && current.engine !== data.engine) return;
       if (data.limit === undefined) {
@@ -325,13 +324,13 @@ self.addEventListener('message', event => {
         return;
       }
       if (!byteLimits.includes(data.limit)) return;
-      const result = resizeStorage(current, data.limit);
-      excess = result.excess ?? 0;
-      return result.next;
+      return resizeStorage(current, data.limit).next;
     }).then(current => {
       if (current.blocked || current.engine && current.engine !== data.engine ||
           data.limit !== undefined && !byteLimits.includes(data.limit)) return port.postMessage(null);
-      port.postMessage({limit: storageLimit(current), used: totalBytes(recent(current)), excess});
+      const entries = recent(current);
+      port.postMessage({limit: storageLimit(current), used: totalBytes(entries),
+        protectedBytes: totalBytes(entries.filter(entry => isKept(current, entry)))});
     }, () => port.postMessage(null)).finally(() => port.close()));
     return;
   }
@@ -498,7 +497,7 @@ self.addEventListener('fetch', event => {
       const engine = response.headers.get('X-Oie-Reset-Engine');
       if (response.status === 204 && id.test(engine)) {
         await state(current => {
-          if (current.engine !== engine) return;
+          if (current.engine && current.engine !== engine) return;
           verifiedNavigation = ++navigation;
           return {...current, byteLimit: defaultByteLimit, blocked: true, entries: [], kept: []};
         }).then(() => notifyReaders('oie:offline-history-reset', engine)).catch(() => {});

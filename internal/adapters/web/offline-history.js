@@ -56,11 +56,31 @@
   }
 
   if (location.pathname !== '/' && location.pathname !== '/search') return;
-  const worker = navigator.serviceWorker.register('/offline-worker.js', {updateViaCache: 'none'})
-    .then(() => navigator.serviceWorker.ready)
-    .catch(() => null);
+  let registration;
+  function offlineWorker() {
+    if (!registration) {
+      registration = navigator.serviceWorker.register('/offline-worker.js', {updateViaCache: 'none'}).then(async reg => {
+        if (reg.active) return reg;
+        const candidate = reg.installing || reg.waiting;
+        if (!candidate) throw new Error('No offline worker');
+        await new Promise((resolve, reject) => {
+          function check() {
+            if (candidate.state !== 'activated' && candidate.state !== 'redundant') return;
+            candidate.removeEventListener('statechange', check);
+            if (candidate.state === 'activated') resolve();
+            else reject(new Error('Offline worker unavailable'));
+          }
+          candidate.addEventListener('statechange', check);
+          check();
+        });
+        return reg;
+      }).catch(() => { registration = undefined; return null; });
+    }
+    return registration;
+  }
+  void offlineWorker();
   const publish = data => {
-    void worker.then(registration => registration?.active?.postMessage(data)).catch(() => {});
+    void offlineWorker().then(reg => reg?.active?.postMessage(data)).catch(() => {});
   };
 
   function renderKeepStatus(control, result) {
@@ -97,10 +117,16 @@
   }
 
   async function workerRequest(type, scope) {
+    let timer;
     try {
-      return await request((await worker)?.active, {type, ...scope});
+      const reg = await Promise.race([offlineWorker(), new Promise(resolve => {
+        timer = setTimeout(() => resolve(null), 2000);
+      })]);
+      return await request(reg?.active, {type, ...scope});
     } catch {
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -113,7 +139,7 @@
     const {engine} = section.dataset;
     const numbers = new Intl.NumberFormat(document.documentElement.lang);
     const size = bytes => bytes < 1024 ? numbers.format(bytes) + ' B' : numbers.format(Math.ceil(bytes / 1024)) + ' KiB';
-    let confirmed, saving = false, turn = 0, visible = false, refreshPending = false;
+    let confirmed, refusedLimit, saving = false, turn = 0, visible = false, refreshPending = false;
 
     async function update(limit) {
       const version = ++turn;
@@ -125,12 +151,16 @@
         status.textContent = section.dataset.failed;
         return;
       }
-      if (limit !== undefined || confirmed !== result.limit || select.disabled) status.textContent = '';
+      if (limit !== undefined || confirmed !== result.limit) {
+        refusedLimit = limit !== result.limit ? limit : undefined;
+      }
+      const excess = refusedLimit === undefined ? 0 : result.protectedBytes - refusedLimit;
+      if (excess <= 0) refusedLimit = undefined;
+      status.textContent = excess > 0 ? section.dataset.excess.replace('{size}', size(excess)) : '';
       confirmed = result.limit;
       select.value = String(confirmed);
       select.disabled = false;
       usage.textContent = section.dataset.usage.replace('{size}', size(result.used));
-      if (result.excess) status.textContent = section.dataset.excess.replace('{size}', size(result.excess));
     }
 
     function refresh() {
@@ -144,10 +174,15 @@
       if (visible) refresh();
     });
     observer.observe(section);
-    life.cleanup(() => observer.disconnect());
+    life.cleanup(() => {
+      observer.disconnect();
+      select.removeAttribute('aria-disabled');
+    });
     life.on(navigator.serviceWorker, 'controllerchange', refresh);
+    life.on(window, 'online', refresh);
     life.on(navigator.serviceWorker, 'message', ({data}) => {
-      if (data?.type === 'oie:offline-history-changed' && (!data.engine || data.engine === engine)) refresh();
+      if (!data || (data.engine && data.engine !== engine)) return;
+      if (data.type === 'oie:offline-history-changed' || data.type === 'oie:offline-keep-changed') refresh();
     });
     life.on(select, 'change', async () => {
       const limit = Number(select.value);
@@ -163,6 +198,10 @@
     });
   });
 
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    const control = keepControl();
+    if (control?.getClientRects().length) void refreshKeep(control);
+  });
   window.addEventListener('drawer:open', event => {
     if (event.detail?.id === 'details') void refreshKeep();
   });

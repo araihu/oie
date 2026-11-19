@@ -94,6 +94,17 @@ async function checkNavigationAuthority(id) {
   assert.equal(notices.length, 1);
   assert.equal(notices[0].engine, engine, 'the already open shells receive the reset of the old engine');
 
+  current = sandbox.verify({...saved, byteLimit: 512 * 1024}, engine, 'invalid');
+  assert.equal(current.engine, '');
+  assert.equal(sandbox.storageLimit(current), 512 * 1024);
+  handlers.get('fetch')({
+    request: {key: 'unbound reset', method: 'POST', url: 'http://test/ui/engine/reset'},
+    respondWith: promise => { reset = promise; },
+  });
+  requests.get('unbound reset').resolve(new Response(null, {status: 204, headers: {'X-Oie-Reset-Engine': engine}}));
+  await reset;
+  assert.equal(sandbox.storageLimit(current), 1024 * 1024, 'reset restores the default with an unbound cache');
+
   const account = id(20), otherAccount = id(21), chat = id(22);
   const through = engine + ':2';
   const snapshot = (account, chat, size = 0) => ({
@@ -395,7 +406,21 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
     await online.goto(base + '/?lang=en&chat=' + chat);
     await until(async () => (await online.evaluate(savedHistory))?.entries.length, 'first chat saved');
     const settings = await openSettings(context);
-    const other = await openSettings(separate);
+    const shellRequest = '**/ui/offline-history?lang=*';
+    await separate.route(shellRequest, route => route.abort('failed'));
+    const other = await separate.newPage();
+    await other.goto(settingsURL);
+    const otherLimit = other.locator('#offline-storage-limit');
+    await otherLimit.scrollIntoViewIfNeeded();
+    const otherFeedback = other.locator('[data-offline-storage] [role=status]');
+    await until(async () => (await otherFeedback.textContent()).includes('Offline storage is unavailable'),
+      'failed worker installation reports the error');
+    assert(await otherLimit.isDisabled());
+    await separate.unroute(shellRequest);
+    await other.getByRole('tab', {name: 'General'}).click();
+    await other.getByRole('tab', {name: 'This device'}).click();
+    await otherLimit.scrollIntoViewIfNeeded();
+    await until(() => otherLimit.isEnabled(), 'returning to device settings retries a failed worker installation');
     const select = settings.locator('#offline-storage-limit');
     const {engine, checkpoint} = await online.evaluate(savedHistory);
     const protectedChat = id(810), oldest = id(811), newest = id(812);
@@ -419,6 +444,8 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
     assert.equal(await select.inputValue(), '1048576');
     assert.equal((await online.evaluate(savedHistory)).entries.filter(e => [oldest, protectedChat, newest].includes(e.chat)).length, 3);
     await pin(oldest, false);
+    await until(async () => (await feedback.textContent()) === '', 'another tab freed enough protected space');
+    assert.equal(await select.inputValue(), '1048576', 'freeing space does not apply a previously refused limit');
     await pin(newest, false);
 
     const composer = online.locator('#message-composer');
@@ -434,10 +461,15 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
     await until(async () => await select.inputValue() === '262144', 'lower limit saved');
     await until(async () => !(await online.evaluate(savedHistory)).entries.some(e => e.chat === oldest), 'oldest ordinary copy evicted');
     await other.reload();
-    const otherLimit = other.locator('#offline-storage-limit');
     await otherLimit.scrollIntoViewIfNeeded();
     await until(() => otherLimit.isEnabled(), 'independent profile reloaded its own limit');
     assert.equal(await otherLimit.inputValue(), '1048576');
+    const stored = await online.evaluate(({engine, account, chat}) => {
+      const read = kind => JSON.parse(localStorage.getItem([kind, engine, account, chat].join(':')));
+      return {draft: read('oie.draft.v1'), send: read('oie.offline-send.v1')};
+    }, {engine, account, chat});
+    assert.equal(stored.draft?.text, 'An unsent draft');
+    assert.equal(stored.send?.text, 'Send when connected');
     assert.equal(await draft.inputValue(), 'An unsent draft');
     assert(await online.locator('[data-pending-send]').getByText('Send when connected', {exact:true}).isVisible());
 
