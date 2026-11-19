@@ -111,7 +111,7 @@ func (s *Server) serveMessageMenu(w http.ResponseWriter, r *http.Request) {
 	s.loadMessageMenuState(ctx, &v, m.IsOwn)
 	menu := dropdown.Dropdown(dropdown.Config{ID: "message-menu-" + id, Label: v.Text.MessageActions, Trigger: messageMenuTrigger(v, id), MenuAlign: dropdown.AlignEnd, Sections: messageActions(v, v.Messages[0])})
 	var body bytes.Buffer
-	if err := menu.Render(presentationContext(ctx, v), &body); err != nil {
+	if err := messageMenuContent(v, v.Messages[0], menu).Render(presentationContext(ctx, v), &body); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

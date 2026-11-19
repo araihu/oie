@@ -778,7 +778,19 @@ window.OieRuntime.register('live', life => {
   if(editKey&&!mock&&!editingSchedule){let saved;try{saved=JSON.parse(localStorage.getItem(editKey)||'null')||inMemory.get(editKey)}catch{saved=inMemory.get(editKey)}if(validEditSession(saved)&&!journal?.pending){editSession=saved;input.value=saved.text;restoreMentions([]);if(saved.submitted)life.timeout(()=>submitEdit(true),0);}}
   renderReply();renderEdit();
   if(editSession&&!editMessageBody(editSession.messageId)){const sourceID=editSession.messageId;life.timeout(async()=>{if(editSession?.messageId!==sourceID)return;await window.OieTimeline?.focus(sourceID,{focus:false});if(!life.signal.aborted)renderEditMarkers();},0);}
-  life.on(document,'oie:actions-refreshed',()=>{renderReply();renderEdit();});
+  let composerActionsReadAt=0;
+  function applyComposerActions(state,startedAt){
+    if(!composer||startedAt<composerActionsReadAt)return;
+    composerActionsReadAt=startedAt;
+    composer.dataset.replyAllowed=state.replyAllowed;
+    composer.dataset.editAllowed=state.editAllowed;
+    if(state.editMessage!==undefined)composer.dataset.latestEditMessage=state.editMessage;
+  }
+  life.on(document,'oie:actions-refreshed',event=>{
+    const state=event.detail?.menuState;
+    if(state)applyComposerActions(state,Number(state.startedAt));
+    renderReply();renderEdit();
+  });
   const validExcerptDigest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
   class ReplySourceUnavailable extends Error {}
   async function fetchReplySource(messageId, requireReview = false) {
@@ -1732,7 +1744,7 @@ window.OieRuntime.register('live', life => {
       const room=document.querySelector('#room-session-status'),nextRoom=page.querySelector('#live-room-session #room-session-status');
       if(room&&nextRoom){
         if(composer){
-          for(const key of ['sendAllowed','composeAllowed','replyAllowed'])composer.dataset[key]=nextRoom.dataset[key]||'false';
+          for(const key of ['sendAllowed','composeAllowed'])composer.dataset[key]=nextRoom.dataset[key]||'false';
           input.disabled=composer.dataset.composeAllowed!=='true'&&!journal?.pending;
         }
         if(room.dataset.version!==nextRoom.dataset.version&&!room.querySelector('input[name="nickname"]')?.matches(':focus')){
@@ -1910,8 +1922,11 @@ window.OieRuntime.register('live', life => {
           mutateDOM(trigger, nextTrigger.innerHTML);
         }
       }
-      if(composer&&regions.dataset.conversationId===body.dataset.conversationId){composer.dataset.latestEditMessage=regions.dataset.editMessage||'';for(const action of document.querySelectorAll('[id^="edit-message-"]'))action.hidden=action.id!=='edit-message-'+composer.dataset.latestEditMessage;renderEdit();}
-      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));document.dispatchEvent(new CustomEvent('oie:reaction-snapshots',{detail:{page,startedAt:reactionStartedAt}}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
+      if(composer&&regions.dataset.conversationId===body.dataset.conversationId){
+        applyComposerActions(regions.dataset,reactionStartedAt);
+        renderReply();renderEdit();
+      }
+      document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent("oie:shared-refresh",{detail:page}));document.dispatchEvent(new CustomEvent('oie:reaction-snapshots',{detail:{page,startedAt:reactionStartedAt}}));applyAvatars();document.dispatchEvent(new CustomEvent("oie:stars-refresh",{detail:{page,generation:starGeneration,startedAt:reactionStartedAt}}));document.dispatchEvent(new CustomEvent("oie:previews-refresh",{detail:page}));localizeTimes();syncRoomLeave();
       appliedCursor=regions.dataset.eventCursor;
       if(inboxEventCursor===appliedCursor)inboxEventCursor='';
     } catch { appliedCursor=''; if(!life.signal.aborted&&!sourceNavigation)announce(text('liveRetry')); }

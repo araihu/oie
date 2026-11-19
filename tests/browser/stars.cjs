@@ -74,6 +74,39 @@ function thumbnail(color,width=8,height=8){
   const a=await context.newPage(),b=await context.newPage();for(const page of [a,b])page.on('pageerror',e=>errors.push(e.message));
   await b.route('**/ui/events*',route=>route.abort());await b.route('**/ui/refresh*',route=>route.abort());const url=`${base}/?chat=${chat}&account=${account}&lang=en&theme=dark`;await a.goto(url);await b.goto(url);
   const first=messages[0].id;
+  const recovery=await context.newPage();
+  await recovery.route('**/ui/refresh*',route=>route.abort());
+  state.batchUnavailable=true;
+  await recovery.goto(url);
+  assert.equal(await recovery.locator('#oie-star-data').getAttribute('data-known'),'false');
+  state.batchUnavailable=false;
+  await openMenu(recovery,first);
+  assert.equal(await star(recovery,first).getAttribute('aria-label'),'Star message');
+  await recovery.keyboard.press('Escape');
+  await star(recovery,first).waitFor({state:'detached'});
+  const requested=Promise.withResolvers(),releaseMenu=Promise.withResolvers();
+  await recovery.route('**/ui/message-menu?*',async route=>{
+   const response=await route.fetch();
+   requested.resolve();
+   await releaseMenu.promise;
+   await route.fulfill({response});
+  });
+  await menu(recovery,first).click();
+  await requested.promise;
+  const originalStar=stars.get(first);
+  stars.set(first,{...originalStar,starred:true,revisionId:id(790),updatedAt:'2026-11-08T12:05:00Z'});
+  const readStart=await recovery.evaluate(()=>performance.now());
+  const fresh=await context.request.get(base+'/ui/refresh?chat='+chat+'&lang=en');
+  assert.equal(fresh.status(),200);
+  await recovery.evaluate(({html,startedAt})=>{
+   const page=new DOMParser().parseFromString(html,'text/html');
+   document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation:0,startedAt}}));
+  },{html:await fresh.text(),startedAt:readStart});
+  releaseMenu.resolve();
+  await star(recovery,first).waitFor({state:'visible'});
+  assert.equal(await star(recovery,first).getAttribute('aria-label'),'Unstar message');
+  stars.set(first,originalStar);
+  await recovery.close();
   const panels=a.locator('[data-message-menu-slot] [role="menu"]');
   assert.equal(await panels.count(),0);
   const menuURL=new URL(await sourceRow(a,first).locator('[data-menu-url]').getAttribute('data-menu-url'),base);
@@ -125,6 +158,7 @@ function thumbnail(color,width=8,height=8){
   await retry.click();await star(a,first).waitFor({state:'visible'});
   await a.unroute('**/ui/message-menu?*');
   await a.keyboard.press('Escape');await panels.waitFor({state:'detached'});
+  await openMenu(b,first);
   await clickStar(a,first);await pressed(a,first,true);assert.equal(state.effects,1);
   await clickStar(b,first);await pressed(b,first,true);assert.equal(state.effects,1);assert((await b.locator('#oie-star-status').textContent()).includes('changed elsewhere'));
   await b.unroute('**/ui/events*');await b.unroute('**/ui/refresh*');await b.reload();await until(()=>streams.size===2,'two live tabs');await clickStar(b,first);await pressed(a,first,false);await pressed(b,first,false);assert.equal(state.effects,2);

@@ -73,6 +73,28 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0'),wait=ms=>new P
   const chip=glyph=>region.locator('[data-reaction-emoji="'+glyph+'"]');
   const removeReaction=async glyph=>{await region.locator('[data-reaction-summary]').click();await chip(glyph).waitFor({state:'visible'});await chip(glyph).click()};
   const own=async(glyph,value)=>await until(async()=>await chip(glyph).count()===Number(value),'own reaction '+glyph+' '+value);
+  const recovery=await context.newPage();
+  await recovery.route('**/ui/refresh*',route=>route.abort());
+  state.noBatch=true;
+  await recovery.goto(route());
+  const recoveryRegion=recovery.locator('[data-reaction-source="'+message+'"]');
+  assert.equal(await recoveryRegion.getAttribute('data-reaction-state'),'null');
+  state.noBatch=false;
+  await recovery.locator('[data-message-menu-trigger="'+message+'"]').click();
+  await recovery.locator('#react-message-'+message).click();
+  await recovery.locator('#oie-reaction-quick [data-reaction-quick-emoji]:visible').first().waitFor();
+  for(const pageEligible of [false,true]){
+   state.eligible=pageEligible;
+   await recovery.reload();
+   assert.equal(JSON.parse(await recoveryRegion.getAttribute('data-reaction-state')).eligible,pageEligible);
+   state.eligible=!pageEligible;
+   await recovery.locator('[data-message-menu-trigger="'+message+'"]').click();
+   const action=recovery.locator('#react-message-'+message);
+   await action.waitFor({state:'visible'});
+   assert.equal(await action.isEnabled(),!pageEligible,'the latest eligibility read controls the menu');
+  }
+  state.eligible=true;
+  await recovery.close();
   await page.goto(route());await until(async()=>await page.evaluate(()=>document.body.dataset.oieLiveReady==='true'),'runtime');await input.fill('Keep this unsent draft 😀');await own('👍',false);
   await openReact();await quick.waitFor({state:'visible'});assert.equal(await modal.isVisible(),false);
   assert.equal(await quick.locator('[data-reaction-quick-emoji]:visible').count(),7);

@@ -116,7 +116,7 @@ window.OieRuntime.register('timeline',life=>{
   if(Math.abs(root.scrollTop-expectedTop)>1)capture();
   correct();
  }
- function hooks(page,generation,startedAt){document.dispatchEvent(new CustomEvent('oie:timeline-content',{detail:{page,startedAt}}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation}}));document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent('oie:actions-refreshed'))}
+ function hooks(page,generation,startedAt){document.dispatchEvent(new CustomEvent('oie:timeline-content',{detail:{page,startedAt}}));document.dispatchEvent(new CustomEvent('oie:stars-refresh',{detail:{page,generation,startedAt}}));document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:page}));document.dispatchEvent(new CustomEvent('oie:navigation-upgrade'));document.dispatchEvent(new CustomEvent('oie:actions-refreshed'))}
  function movedRelease(previous,item){
   return previous.ms!==item.ms&&item.node.hasAttribute('data-timeline-release')&&previous.node.classList.contains('oie-message-own')&&
    ['queued','dispatching'].includes(previous.node.dataset.sendState)&&previous.node.dataset.messageRevision!==item.node.dataset.messageRevision;

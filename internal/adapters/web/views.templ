@@ -231,7 +231,7 @@ if !v.CompactSource {
 }
 <template data-message-template="menu">
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-oie-message-placeholder",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"oie-message-placeholder"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:offlineMenuSections(v)})
-<div data-menu-extra hx-trigger="oie:menu-load" hx-target="this" hx-select="[role=menu] > *" hx-swap="innerHTML settle:0ms show:none" hx-sync="this:queue last" hx-push-url="false"></div>
+<div data-menu-extra hx-trigger="oie:menu-load" hx-target="this" hx-select="[role=menu] > *, [data-menu-state]" hx-swap="innerHTML settle:0ms show:none" hx-sync="this:queue last" hx-push-url="false"></div>
 </template>
 @reactionPicker(v)
 if !v.Preview {
@@ -962,7 +962,7 @@ for _,a:=range v.Accounts {
 }
 
 templ liveRegions(v view){
-<div id="oie-live-regions" data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)
@@ -1279,6 +1279,17 @@ for _,item:=range v.MessageAudio[m.Id] {
 
 }
 
+
+templ messageMenuContent(v view, message messageView, menu templ.Component) {
+{{ id := message.Id }}
+@menu
+<span hidden data-menu-state={id}
+data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))}
+if message.IsOwn {
+data-edit-message={v.latestEditMessage()}
+}
+data-react-allowed={strconv.FormatBool(v.reactionAllowed(id))} data-star-known={strconv.FormatBool(v.StarsKnown)} data-starred={strconv.FormatBool(v.Stars[id].Starred)} data-revision={starRevision(v.Stars[id])}></span>
+}
 
 templ starData(v view){
 <div id="oie-star-data" hidden data-known={strconv.FormatBool(v.StarsKnown)}>

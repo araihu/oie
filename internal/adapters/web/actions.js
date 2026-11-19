@@ -67,6 +67,8 @@ window.OieRuntime.register('actions', life => {
  life.on(document, 'htmx:before:request', ({detail:{ctx}}) => {
   if (!active || ctx.target !== active.extra) return;
   active.request = ctx.request;
+  ctx.oieMenuStartedAt = performance.now();
+  ctx.oieMenuStarGeneration = Number(document.body.dataset.starGeneration || 0);
   ctx.target.setAttribute('aria-busy','true');
  });
  life.on(document, 'htmx:after:request', event => {
@@ -84,7 +86,11 @@ window.OieRuntime.register('actions', life => {
  life.on(document, 'htmx:after:swap', ({detail:{ctx}}) => {
   if (!active || ctx.target !== active.extra) return;
   active.retry.hidden = true;
-  document.dispatchEvent(new CustomEvent('oie:actions-refreshed'));
+  const state = ctx.target.querySelector('[data-menu-state]');
+  if (state) state.dataset.startedAt = String(ctx.oieMenuStartedAt);
+  document.dispatchEvent(new CustomEvent('oie:actions-refreshed', {detail: {
+   menuState: state?.dataset, starGeneration: ctx.oieMenuStarGeneration,
+  }}));
   if (ctx.oieMenuFocus) {
    const previous = document.getElementById(ctx.oieMenuFocus);
    (previous && !previous.disabled && !previous.hidden ? previous : active.root.querySelector('[id^="copy-message-"]')).focus({preventScroll:true});
