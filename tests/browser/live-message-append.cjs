@@ -48,6 +48,17 @@ module.exports = async function liveMessageAppend({open, until, emit, messages, 
     assert((await selected.innerText()).includes(message.originalText));
     assert.equal(await page.locator('#chat-header [data-conversation-preference-state]').getAttribute('data-revision'),conversation.revisionId);
     assert.equal(await page.locator('[data-jump-latest-badge]').textContent(),String(conversation.unreadCount));
+    // The BFF checks the mounted edge independently of the event hint.
+    const validHeaders = response.request().headers();
+    for (const invalid of [
+      {'x-oie-timeline-after': messages[0].id},
+      {'x-oie-timeline-scope': 'obsolete'}
+    ]) {
+      const recovery = await page.request.get(response.url(), {headers: {...validHeaders, ...invalid}});
+      assert.equal(recovery.status(), 200);
+      assert((await recovery.text()).includes('id="oie-live-regions"'));
+      await recovery.dispose();
+    }
     // A rich message at the same edge requires the ordinary decorated refresh.
     replies.length=0;
     const rich=post('https://example.test/document');
