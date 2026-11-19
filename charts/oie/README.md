@@ -1,14 +1,14 @@
 # Oiê Helm chart
 
-See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.23/docs/installation.md#run-on-kubernetes-with-helm)
+See [Run on Kubernetes with Helm](https://github.com/araihu/oie/blob/helm-v0.2.24/docs/installation.md#run-on-kubernetes-with-helm)
 for installation and access via `kubectl port-forward`.
 
-Chart releases use their own version. Chart `0.2.23` defaults to the Oiê image
-`v0.0.1-rc.45`. Install it from GHCR or download the archive and checksum
-from [Helm chart 0.2.23](https://github.com/araihu/oie/releases/tag/helm-v0.2.23).
+Chart releases use their own version. Chart `0.2.24` defaults to the Oiê image
+`v0.0.1-rc.46`. Install it from GHCR or download the archive and checksum
+from [Helm chart 0.2.24](https://github.com/araihu/oie/releases/tag/helm-v0.2.24).
 
 ```sh
-helm upgrade --install oie oci://ghcr.io/araihu/charts/oie --version 0.2.23 \
+helm upgrade --install oie oci://ghcr.io/araihu/charts/oie --version 0.2.24 \
   --namespace oie --create-namespace --wait --timeout 10m
 ```
 
