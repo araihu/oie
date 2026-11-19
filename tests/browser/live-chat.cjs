@@ -29,6 +29,10 @@ const engine=id(1),account=id(2),chat=id(3);
   }
   if(u.pathname==='/api/v1/conversations')return write(200,{items:[conversation()]});
   if(u.pathname==='/api/v1/conversations/'+chat)return state.chatRemoved ? problem(404,'not_found') : write(200,conversation());
+  if(u.pathname.endsWith('/context')){
+   const source=state.messages.find(m=>u.pathname==='/api/v1/conversations/'+chat+'/messages/'+m.id+'/context');
+   return source?write(200,{targetId:source.id,items:[source],hasOlder:false,hasNewer:false}):problem(404,'not_found');
+  }
   if(u.pathname==='/api/v1/conversations/'+chat+'/messages'){
    if(req.method==='GET'){
     const cursor=state.messages.find(m=>m.id===u.searchParams.get('cursor')),newer=u.searchParams.get('direction')==='newer';

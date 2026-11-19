@@ -13,5 +13,14 @@
  }
  function start(){if(active)return;active=true;generation++;for(const [name,init]of modules){const life=scope();scopes.set(name,life);init(life)}document.dispatchEvent(new CustomEvent('oie:route-ready',{detail:{generation}}));}
  function stop(){active=false;for(const life of scopes.values())life.dispose();scopes.clear();}
- window.OieRuntime={memory,request,register(name,init){modules.set(name,init);if(active){scopes.get(name)?.dispose();const life=scope();scopes.set(name,life);init(life)}},start,stop,get generation(){return generation}};
+ // Component IDs, ARIA references and Alpine bindings all refer to the
+ // same message. Populate only a server-rendered template and a safe DOM ID.
+ function messageControls(name,id){
+  const template=document.querySelector('template[data-message-template="'+name+'"]');
+  if(!template||!/^[-a-zA-Z0-9_]+$/.test(id))return;
+  const copy=document.createElement('template');
+  copy.innerHTML=template.innerHTML.replaceAll('oie-message-placeholder',id);
+  return copy.content;
+ }
+ window.OieRuntime={memory,messageControls,request,register(name,init){modules.set(name,init);if(active){scopes.get(name)?.dispose();const life=scope();scopes.set(name,life);init(life)}},start,stop,get generation(){return generation}};
 })();

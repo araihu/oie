@@ -26,13 +26,24 @@ func (s *Server) GetMessageSourceContext(ctx context.Context, r engineapi.GetMes
 		Conversation: conversation(owner),
 		Context:      s.messageContext(ctx, owner, window),
 	}
-	s.sourceConversationMetadata(ctx, &out)
-	s.sourceMessageMetadata(ctx, &out)
+	metadata := s.messagePresentation(ctx, out.Conversation, out.Context.Items)
+	out.Details, out.Capabilities, out.EditTarget = metadata.Details, metadata.Capabilities, metadata.EditTarget
+	out.RoomArchive, out.RoomSession = metadata.RoomArchive, metadata.RoomSession
+	out.Previews, out.Videos, out.Stars, out.Reactions = metadata.Previews, metadata.Videos, metadata.Stars, metadata.Reactions
 	return engineapi.GetMessageSourceContext200JSONResponse(out), nil
 }
 
-func (s *Server) sourceConversationMetadata(ctx context.Context, out *engineapi.MessageSourceContext) {
-	id, account := out.Conversation.Id, out.Conversation.AccountId
+func (s *Server) messagePresentation(ctx context.Context, owner engineapi.Conversation, messages []engineapi.Message) *engineapi.MessagePresentation {
+	var result engineapi.MessagePresentation
+	s.conversationPresentation(ctx, owner, &result)
+	if len(messages) > 0 {
+		s.timelinePresentation(ctx, owner, messages, &result)
+	}
+	return &result
+}
+
+func (s *Server) conversationPresentation(ctx context.Context, owner engineapi.Conversation, out *engineapi.MessagePresentation) {
+	id, account := owner.Id, owner.AccountId
 	if details, err := s.engine.ConversationDetails(ctx, domain.ID(id)); err == nil {
 		value := conversationDetails(details)
 		out.Details = &value
@@ -51,7 +62,7 @@ func (s *Server) sourceConversationMetadata(ctx context.Context, out *engineapi.
 			}
 		}
 	}
-	if out.Conversation.Kind == "room" {
+	if owner.Kind == "room" {
 		if session, err := s.engine.RoomSession(ctx, domain.ID(id)); err == nil {
 			value := roomSession(session)
 			out.RoomSession = &value
@@ -63,10 +74,10 @@ func (s *Server) sourceConversationMetadata(ctx context.Context, out *engineapi.
 	}
 }
 
-func (s *Server) sourceMessageMetadata(ctx context.Context, out *engineapi.MessageSourceContext) {
-	id := domain.ID(out.Conversation.Id)
-	ids := make([]domain.ID, 0, len(out.Context.Items))
-	for _, m := range out.Context.Items {
+func (s *Server) timelinePresentation(ctx context.Context, owner engineapi.Conversation, messages []engineapi.Message, out *engineapi.MessagePresentation) {
+	id := domain.ID(owner.Id)
+	ids := make([]domain.ID, 0, len(messages))
+	for _, m := range messages {
 		ids = append(ids, domain.ID(m.Id))
 	}
 	if previews, err := s.engine.ConversationPreviews(ctx, id, ids); err == nil {
@@ -76,7 +87,7 @@ func (s *Server) sourceMessageMetadata(ctx context.Context, out *engineapi.Messa
 		}
 		out.Previews = &items
 	}
-	if videos, ok := s.sourceVideos(ctx, out.Conversation, ids); ok {
+	if videos, ok := s.sourceVideos(ctx, owner, ids); ok {
 		out.Videos = &videos
 	}
 	if stars, err := s.engine.MessageStars(ctx, id, ids); err == nil {

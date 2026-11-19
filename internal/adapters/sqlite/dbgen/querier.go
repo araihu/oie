@@ -200,6 +200,12 @@ type Querier interface {
 	ListMessageStars(ctx context.Context, arg ListMessageStarsParams) ([]ListMessageStarsRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
+	// Plain sources have no aliases or ambiguous references. Keep the same
+	// ordered, per-source limit as ListCanonicalMessageReferences.
+	ListPlainReactionReferences(ctx context.Context, messageIds string) ([]MessageReference, error)
+	// A page can establish an empty reaction state in bulk. Leave messages with
+	// aliases, projection changes or reaction evidence to the canonical resolver.
+	ListPlainReactionSources(ctx context.Context, arg ListPlainReactionSourcesParams) ([]Message, error)
 	ListPreviewSources(ctx context.Context, messageIds string) ([]ListPreviewSourcesRow, error)
 	ListRecoveredSendRevisions(ctx context.Context, messageID string) ([]RecoveredSendRevision, error)
 	ListRecoveredSends(ctx context.Context) ([]ListRecoveredSendsRow, error)

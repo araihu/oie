@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -198,13 +199,18 @@ type view struct {
 	ScheduleCursor        string
 	ScheduleUnavailable   bool
 
-	InboxOnly        bool
-	ReuseInbox       bool
-	CachedInboxFirst string
-	Role             engineapi.EngineRole
-	CanResetData     bool
-	CompactSource    bool
-	LatestEditTarget *engineapi.MessageEditTarget
+	InboxPageCursor, InboxNext string
+	InboxOnly                  bool
+	ReuseInbox                 bool
+	PagePresentationSupported  bool
+	RefreshUnchanged           bool
+	RefreshInbox               bool
+	RefreshRow                 string
+	CachedInboxFirst           string
+	Role                       engineapi.EngineRole
+	CanResetData               bool
+	CompactSource              bool
+	LatestEditTarget           *engineapi.MessageEditTarget
 
 	SenderInfo                                           *senderInfoView
 	GlobalMessageSearch                                  bool
@@ -686,6 +692,7 @@ type copy struct {
 	OpenNavigation, Close, Details, Participants, MediaEmpty                                                                                                             string
 	ExpandNavigation, CollapseNavigation                                                                                                                                 string
 	MediaBody, SelectChat, SelectChatBody, AccountHelp                                                                                                                   string
+	OlderConversations, NewestConversations, NoArchivedChats                                                                                                             string
 	PreviewOnly, NoChats, NoChatsBody                                                                                                                                    string
 	AddAccount, AccountAddress, AccountLabel, AddressPlaceholder, LabelPlaceholder                                                                                       string
 	RegisterAccount, Password, PasswordHelp, Endpoint, EndpointHelp                                                                                                      string
@@ -910,6 +917,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.setReactions(w, r)
 		return
 	}
+	if r.URL.Path == "/ui/message-menu" {
+		s.serveMessageMenu(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/message-edit-target" {
 		s.prepareMessageEdit(w, r)
 		return
@@ -1106,13 +1117,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/ui/refresh" {
+		w.Header().Set("Cache-Control", "no-store")
+		if v.RefreshUnchanged {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		component := liveRegions(v)
+		if v.RefreshInbox && !v.Unavailable {
+			component = liveInbox(v)
+		}
 		var buf bytes.Buffer
-		if err := liveRegions(v).Render(presentationContext(r.Context(), v), &buf); err != nil {
+		if err := component.Render(presentationContext(r.Context(), v), &buf); err != nil {
 			w.WriteHeader(503)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
+		buf = encodeFragment(w, r, buf)
 		_, _ = buf.WriteTo(w)
 		return
 	}
@@ -1197,6 +1217,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.EngineID = engine.JSON200.Id
 	v.ReadReceiptsSupported = supportsReadReceipts(engine.JSON200.ApiVersion)
+	v.PagePresentationSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 40)
 	v.EventCursor = engine.JSON200.EventCursor
 	if notificationEngine != "" && notificationEngine != v.EngineID {
 		v.NotFound = true
@@ -1206,6 +1227,14 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
 	v.Role = engine.JSON200.Role
+	if r.URL.Path == "/ui/refresh" && v.EventCursor != "" && (v.Section == "chats" || v.Section == "archived") {
+		if r.Header.Get("X-Oie-Refresh-Cursor") == v.EventCursor {
+			v.RefreshUnchanged = true
+			return
+		}
+		v.RefreshInbox = r.Header.Get("X-Oie-Inbox-Event") == v.EventCursor
+		v.RefreshRow = r.Header.Get("X-Oie-Inbox-Row")
+	}
 	if infoOnly && v.InfoView == "participants" {
 		s.loadConversation(ctx, r, v, true, false, true, editor)
 		return
@@ -1217,32 +1246,38 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 		return
 	}
 	v.setAccounts(accounts.JSON200.Items)
+	if v.RefreshInbox {
+		var reads sync.WaitGroup
+		var unread map[string]int
+		reads.Go(func() { unread = s.accountUnread(ctx) })
+		s.loadInbox(ctx, v, editor)
+		reads.Wait()
+		v.AccountUnread = unread
+		return
+	}
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
 		return
 	}
-	if !listOnly && !paneOnly && !scheduledOnly && !accountsOnly && !favoritesOnly {
-		v.AccountUnread = s.accountUnread(ctx)
-	}
-	for _, a := range v.Accounts {
-		if !editorOnly && !scheduledOnly {
-			s.loadAvatars(ctx, v, a.Id)
-		}
-		if listOnly || paneOnly || scheduledOnly || favoritesOnly {
-			continue
-		}
-		if !v.Preview && v.accountScreen() == "detail" && a.Id == v.managedAccountID() {
-			h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
-			if err == nil && h.JSON200 != nil {
-				v.Histories[a.Id] = *h.JSON200
+	showAccounts := !listOnly && !paneOnly && !scheduledOnly && !favoritesOnly
+	s.loadAccountSummaries(ctx, v, !paneOnly && !scheduledOnly, showAccounts, showAccounts && !accountsOnly, editor)
+	if showAccounts {
+		if !v.Preview && v.accountScreen() == "detail" {
+			accountID := v.managedAccountID()
+			for _, a := range v.Accounts {
+				if a.Id != accountID {
+					continue
+				}
+				h, err := s.client.GetAccountHistoryWithResponse(ctx, a.Id, editor)
+				if err == nil && h.JSON200 != nil {
+					v.Histories[a.Id] = *h.JSON200
+				}
+				if prefs, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, a.Id, editor); err == nil {
+					v.AccountCommunication = prefs.JSON200
+				}
+				break
 			}
-			if prefs, err := s.client.GetAccountCommunicationPreferencesWithResponse(ctx, a.Id, editor); err == nil {
-				v.AccountCommunication = prefs.JSON200
-			}
 		}
-		s.loadAccountConnection(ctx, v, a.Id, editor)
-	}
-	if !listOnly && !paneOnly && !scheduledOnly && !favoritesOnly {
 		s.loadCapabilities(ctx, v)
 		if v.accountScreen() == "contacts" {
 			s.loadContacts(ctx, r, v)
@@ -1288,17 +1323,72 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	s.loadScheduleEdit(ctx, v, r.URL.Query().Get("editSchedule"))
 }
 
-func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {
-	connection, err := s.client.GetAccountConnectionWithResponse(ctx, accountID, editor)
-	if err == nil && connection.JSON200 != nil {
-		v.Connections[accountID] = connectionView{Known: true, Value: *connection.JSON200}
+// Fetch independent account summaries with bounded concurrency. Publish in
+// account order so a slow or unavailable page cannot reorder avatar accounts.
+func (s *Server) loadAccountSummaries(ctx context.Context, v *view, avatars, connections, unread bool, editor engineapi.RequestEditorFn) {
+	if !avatars && !connections && !unread {
+		return
 	}
+	type summary struct {
+		avatars    map[avatarIdentity]string
+		connection *engineapi.Connection
+	}
+	results := make([]summary, len(v.Accounts))
+	jobs := make(chan func(), len(results)*2+1)
+	var totals map[string]int
+	if unread {
+		jobs <- func() { totals = s.accountUnread(ctx) }
+	}
+	for i, a := range v.Accounts {
+		if avatars {
+			jobs <- func() { results[i].avatars = s.accountAvatars(ctx, a.Id) }
+		}
+		if connections {
+			jobs <- func() { results[i].connection = s.accountConnection(ctx, a.Id, editor) }
+		}
+	}
+	close(jobs)
+	var workers sync.WaitGroup
+	for range min(4, len(jobs)) {
+		workers.Go(func() {
+			for read := range jobs {
+				read()
+			}
+		})
+	}
+	workers.Wait()
+	if unread {
+		v.AccountUnread = totals
+	}
+	for i, a := range v.Accounts {
+		v.applyAccountAvatars(a.Id, results[i].avatars)
+		if c := results[i].connection; c != nil {
+			v.Connections[a.Id] = connectionView{Known: true, Value: *c}
+		}
+	}
+}
+
+func (s *Server) loadAccountConnection(ctx context.Context, v *view, accountID string, editor engineapi.RequestEditorFn) {
+	if c := s.accountConnection(ctx, accountID, editor); c != nil {
+		v.Connections[accountID] = connectionView{Known: true, Value: *c}
+	}
+}
+
+func (s *Server) accountConnection(ctx context.Context, accountID string, editor engineapi.RequestEditorFn) *engineapi.Connection {
+	connection, err := s.client.GetAccountConnectionWithResponse(ctx, accountID, editor)
+	if err != nil {
+		return nil
+	}
+	return connection.JSON200
 }
 
 func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.RequestEditorFn) bool {
 	limit := 100
 	includeCount := true
 	params := &engineapi.ListConversationsParams{Limit: &limit, IncludeLatestMessagePageCount: &includeCount}
+	if v.InboxPageCursor != "" {
+		params.Cursor = &v.InboxPageCursor
+	}
 	archived := v.Section == "archived"
 	params.Archived = &archived
 	if v.AccountFilter != "" {
@@ -1331,6 +1421,9 @@ func (s *Server) loadInbox(ctx context.Context, v *view, editors ...engineapi.Re
 		return false
 	}
 	v.Chats = chats.JSON200.Items
+	if chats.JSON200.NextCursor != nil {
+		v.InboxNext = *chats.JSON200.NextCursor
+	}
 	return true
 }
 
@@ -1378,6 +1471,15 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 	}
 	v.Selected = c
 	v.ChatID = selected
+	latestPane := paneOnly && r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "conversation" &&
+		v.PagePresentationSupported && !v.Preview && v.requestKind() == "" && c.UnreadCount == 0 &&
+		v.FocusMessage == "" && v.InfoView == "" && v.TimelineCursor == ""
+	if latestPane && s.loadLatestPane(ctx, v, editor) {
+		return
+	}
+	if paneOnly && !editorOnly {
+		s.loadAvatars(ctx, v, c.AccountId)
+	}
 	if v.requestKind() != "" {
 		s.loadAccountConnection(ctx, v, v.Selected.AccountId, editor)
 		if v.requestKind() == "room_invitation" {
@@ -1393,6 +1495,7 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		s.loadMessaging(ctx, v)
 		return
 	}
+
 	s.loadRoomArchive(ctx, v)
 	s.loadConversationDetails(ctx, v)
 	if paneOnly {
@@ -1628,8 +1731,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, v view) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Vary", "HX-Request, X-Oie-Fragment, X-Oie-Inbox-Scope, X-Oie-Inbox-First, X-Oie-Inbox-Cursor")
-	if v.CompactSource {
-		buf = encodeSourceFragment(w, r, buf)
+	if v.CompactSource || r.Header.Get("HX-Request") == "true" && r.Header.Get("X-Oie-Fragment") == "conversation" {
+		buf = encodeFragment(w, r, buf)
 	}
 	if v.OfflineHistory && (r.URL.Path == "/" || r.URL.Path == "/search") {
 		if v.OfflineEngineStatus != "" {
@@ -1705,37 +1808,60 @@ func presentationContext(ctx context.Context, v view) context.Context {
 // currently selected account, search or archive filter. Incomplete totals are
 // hidden rather than presenting a partial count as an exact total.
 func (s *Server) accountUnread(ctx context.Context) map[string]int {
+	// Each filter has its own cursor chain. Merge active first if a conversation
+	// moves between the two lists while the reads are in flight.
+	var active map[string]unreadCount
+	var reads sync.WaitGroup
+	reads.Go(func() { active = s.unreadConversations(ctx, false) })
+	archived := s.unreadConversations(ctx, true)
+	reads.Wait()
+	if active == nil || archived == nil {
+		return nil
+	}
 	totals := map[string]int{}
-	seen := map[string]bool{}
-	limit := 100
-	unread := true
-	for _, archived := range []bool{false, true} {
-		params := &engineapi.ListConversationsParams{Limit: &limit, UnreadOnly: &unread, Archived: &archived}
-		cursors := map[string]bool{}
-		for {
-			response, err := s.client.ListConversationsWithResponse(ctx, params)
-			if err != nil || response.JSON200 == nil {
-				return nil
-			}
-			for _, c := range response.JSON200.Items {
-				if !seen[c.Id] {
-					totals[c.AccountId] += c.UnreadCount
-					seen[c.Id] = true
-				}
-			}
-			next := response.JSON200.NextCursor
-			if next == nil || *next == "" {
-				break
-			}
-			if cursors[*next] {
-				return nil
-			}
-			cursors[*next] = true
-			params.Cursor = next
+	for _, c := range active {
+		totals[c.account] += c.count
+	}
+	for id, c := range archived {
+		if _, counted := active[id]; !counted {
+			totals[c.account] += c.count
 		}
 	}
 	return totals
 }
+
+type unreadCount struct {
+	account string
+	count   int
+}
+
+func (s *Server) unreadConversations(ctx context.Context, archived bool) map[string]unreadCount {
+	limit, unread := 100, true
+	params := &engineapi.ListConversationsParams{Limit: &limit, UnreadOnly: &unread, Archived: &archived}
+	found := map[string]unreadCount{}
+	cursors := map[string]bool{}
+	for {
+		response, err := s.client.ListConversationsWithResponse(ctx, params)
+		if err != nil || response.JSON200 == nil {
+			return nil
+		}
+		for _, c := range response.JSON200.Items {
+			if _, seen := found[c.Id]; !seen {
+				found[c.Id] = unreadCount{account: c.AccountId, count: c.UnreadCount}
+			}
+		}
+		next := response.JSON200.NextCursor
+		if next == nil || *next == "" {
+			return found
+		}
+		if cursors[*next] {
+			return nil
+		}
+		cursors[*next] = true
+		params.Cursor = next
+	}
+}
+
 func (v view) activeAccountName() string {
 	if v.AccountFilter != "" {
 		if a := v.account(v.AccountFilter); a.Id != "" {

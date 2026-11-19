@@ -3,7 +3,7 @@
  const runtime=window.OieRuntime;
  const inbox=window.OieInbox;
  let booted=false,epoch=0,currentURL=location.href,infoReturnScroll=0,infoRequestGeneration=0,inboxScroll=0;
- let restoreFilterFocus=false,filterScroll=0;
+ let restoreFilterFocus=false,focusFirstRow=false,filterScroll=0;
  let pendingConversation, pendingShared, pendingParticipants, settling, historyRequest;
  const sharedPageCounts=new Map();
  let sharedCountEngine;
@@ -253,7 +253,7 @@
   if(!document.getElementById(inboxID)||url.origin!==location.origin||url.pathname!=='/')return false;
   const key=value=>{
    const q=inboxURL(value).searchParams;
-   q.delete('filter');
+   q.delete('filter'); q.delete('inboxCursor');
    for(const name of [...q.keys()])if(!q.get(name))q.delete(name);
    q.set('section',q.get('section')||'chats');
    q.set('lang',q.get('lang')||document.documentElement.lang);
@@ -266,7 +266,7 @@
  function syncFilterLinks(){
   const pane=document.getElementById('conversation-pane'),current=new URL(location.href);
   if(!pane)return;
-  for(const link of document.querySelectorAll('#'+inboxID+' a[data-filter]')){
+  for(const link of document.querySelectorAll('#'+inboxID+' :is(a[data-filter],a[data-inbox-page-link])')){
    const url=new URL(link.href);
    if(pane.dataset.conversationId)url.searchParams.set('chat',pane.dataset.conversationId);
    else url.searchParams.delete('chat');
@@ -292,6 +292,7 @@
    const target=new URL(href,location.href),params=target.searchParams;
    if(target.origin!==location.origin||target.pathname!=='/'||inboxFilter(params)!==previousFilter)continue;
    if(['section','account','q'].some(name=>(params.get(name)||'')!==(url.searchParams.get(name)||'')))continue;
+   if(url.searchParams.has('inboxCursor'))params.set('inboxCursor',url.searchParams.get('inboxCursor'));else params.delete('inboxCursor');
    if(filter==='all')params.delete('filter');else params.set('filter',filter);
    if(link)node.href=target.pathname+target.search+target.hash;
    else node.value=target.pathname+target.search+target.hash;
@@ -447,14 +448,45 @@
   const source=!form&&node.matches('[data-shared-actions] a[id^="shared-source-"],a[id^="favorite-source-"]')&&
    url.searchParams.has('message')&&url.searchParams.has('chat');
   const sourceInPane=source&&conversationRoute(url);
-  const kind=sourceInPane?'conversation-pane':node.matches('a[data-oie-navigation-item]')||source?routeID:scoped||(pane?'conversation-pane':!form&&node.matches('a[data-filter]')?inboxID:'oie-app');
+  const kind=sourceInPane?'conversation-pane':node.matches('a[data-oie-navigation-item]')||source?routeID:scoped||(pane?'conversation-pane':!form&&node.matches('a[data-filter],a[data-inbox-page-link]')?inboxID:'oie-app');
   node.setAttribute('hx-boost','true');node.setAttribute('hx-target','#'+kind);node.setAttribute('hx-select',selectFor(kind));node.setAttribute('hx-swap',swapFor(kind));node.setAttribute(node.id==='favorites-search-form'?'hx-replace-url':'hx-push-url','true');node.setAttribute('hx-headers',JSON.stringify({'X-Oie-Fragment':sourceInPane?'source-pane':source?'source':fragment(kind)}));
  }if(process)window.htmx?.process(root);}
+ // The list and its scroll anchor are still mounted on narrow screens. Dispose
+ // chat-owned work just as a pane swap does, without fetching a hidden timeline.
+ function backToInbox(link){
+  const pane=document.getElementById('conversation-pane');
+  const list=document.getElementById('conversation-list');
+  const empty=document.getElementById('inbox-empty-chat');
+  if(!booted||!pane||!list||!empty||!link.getClientRects().length||
+     !conversationRoute(new URL(link.href))||settling)return false;
+  const row=list.querySelector('a[data-conversation-id="'+CSS.escape(pane.dataset.conversationId)+'"]');
+  epoch++;
+  cancelConversationLoading();
+  remember();
+  closeOverlays();
+  runtime.stop();
+  const skeleton=pane.querySelector('[data-conversation-loading]');
+  const avatarData=pane.querySelector('#oie-avatar-data');
+  const chat=pane.querySelector('.oie-chat-pane');
+  chat.replaceChildren(empty.content.cloneNode(true));
+  pane.replaceChildren(...[avatarData,chat,skeleton].filter(Boolean));
+  for(const field of ['conversationId','accountId','openDrawer','firstUnread','focusMessage','conversationRequest'])pane.dataset[field]='';
+  for(const field of ['openChat','conversationRemoved','contextMissing','contextNewer'])pane.dataset[field]='false';
+  history.pushState({htmx:true},'',link.href);
+  currentURL=location.href;
+  routeState(pane);
+  syncFilterLinks();
+  runtime.start();
+  (row||document.getElementById('conversation-search'))?.focus({preventScroll:true});
+  return true;
+ }
  // The dependency loader can expose HTMX before Alpine finishes loading.
  // Process the clicked navigation link before the event reaches its target,
  // without starting application scopes before the remaining dependencies.
  document.addEventListener('click',event=>{
   if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+  const back=event.target.closest?.('.oie-back-button');
+  if(back&&backToInbox(back)){event.preventDefault();event.stopImmediatePropagation();return;}
   const row=event.target.closest?.('#conversation-list a[data-conversation-id]');
   if(event.target.closest?.('[data-cancel-conversation-loading]')){
    cancelConversationLoading();return;
@@ -616,7 +648,7 @@
   if(ctx.oieKind==='chat-info-content')valid=valid&&ctx.response?.status===200&&next.dataset.detailsConversation===document.body.dataset.conversationId;
   if(ctx.oieKind===inboxID){
    const url=new URL(ctx.request.action,location.href);
-   valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===inboxFilter(url.searchParams);
+   valid=valid&&ctx.response?.status===200&&next.dataset.inboxScope===ctx.target.dataset.inboxScope&&next.dataset.inboxFilter===inboxFilter(url.searchParams)&&next.dataset.inboxPage===(url.searchParams.get('inboxCursor')||'');
   }
   if(!valid){event.preventDefault();ctx.target?.removeAttribute('aria-busy');if(ctx.sourceElement?.id==='shared-content-search'&&sharedFields()===ctx.oieSharedFields)syncSharedAccount(new URL(currentURL).searchParams);if(!ctx.oieRetry&&!ctx.sourceElement?.matches('[data-conversation-schedule-edit]'))showError(ctx);}
  });
@@ -654,6 +686,7 @@
   if(ctx.oieKind===inboxID){
    const filters=ctx.target.querySelector('.oie-filters');
    restoreFilterFocus=filters.contains(document.activeElement);
+   focusFirstRow=!!document.activeElement?.closest('[data-inbox-page-link]');
    filterScroll=filters.scrollLeft;
   }
   if(ctx.oieKind==='favorites-results')window.OieVideos?.release(ctx.target);
@@ -724,6 +757,7 @@
    const scroll=positions.get(location.href)?.['conversation-list']||0;
    root.querySelector('#conversation-list').scrollTop=scroll;
    root.querySelector('.oie-filters').scrollLeft=filterScroll;
+   if(focusFirstRow)(root.querySelector('a[data-conversation-id],a[data-inbox-page-link]')||document.getElementById('conversation-search'))?.focus({preventScroll:true});
    if(restoreFilterFocus)root.querySelector('a[data-filter][aria-current="true"]')?.focus({preventScroll:true});
    document.dispatchEvent(new CustomEvent('oie:inbox-filtered',{detail:{root}}));
   }
@@ -834,12 +868,13 @@
  });
  function go(value,{history=false,latest=false,workspace,noInboxReuse=false}={}){
   const url=new URL(value,location.href);if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||!window.htmx){location.assign(url.href);return}
-  const filterChanged=inboxFilter(url.searchParams)!==inboxFilter(new URL(currentURL).searchParams);
+  const mountedInbox=document.getElementById(inboxID);
+  const listChanged=mountedInbox&&(mountedInbox.dataset.inboxFilter!==inboxFilter(url.searchParams)||mountedInbox.dataset.inboxPage!==(url.searchParams.get('inboxCursor')||''));
   const themeChanged=history&&sameRoute(url,['theme','open'])&&url.searchParams.get('theme')!==document.documentElement.dataset.mode&&url.searchParams.has('theme');
   const current=new URL(currentURL),section=route=>route.searchParams.get('section')||'chats';
   const sectionChanged=url.pathname==='/'&&current.pathname==='/'&&section(url)!==section(current);
   const kind=workspace||(themeChanged?'appearance-settings':scopedKind(url,null,latest))||
-   (filterChanged&&inboxRoute(url)?inboxID:conversationRoute(url)?'conversation-pane':sectionChanged?routeID:'oie-app');
+   (listChanged&&inboxRoute(url)?inboxID:conversationRoute(url)?'conversation-pane':sectionChanged?routeID:'oie-app');
   const requestURL=kind===inboxID?inboxURL(url):new URL(url);
   if(['chat-info-content','message-timeline'].includes(kind)&&!requestURL.searchParams.has('chat'))requestURL.searchParams.set('chat',document.body.dataset.conversationId);
   if(history)historyRequest=requestURL.href;

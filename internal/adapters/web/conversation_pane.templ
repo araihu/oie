@@ -54,10 +54,7 @@ if !v.conversationRemoved() {
 				}
 }
 			} else {
-				<div class="oie-chat-empty">
-					<img src={templ.URL(brandURL("icon-192.png"))} alt="" width="90" height="90"/>
-					@emptystate.EmptyState(emptystate.Config{Title: v.Text.SelectChat, Description: v.Text.SelectChatBody})
-				</div>
+				@emptyChat(v)
 			}
 		</section>
 @conversationSkeleton(v)
@@ -73,6 +70,13 @@ if v.conversationSchedulesAvailable() {
 @messageHistoryDrawer(v)
 }
 </div>
+}
+
+templ emptyChat(v view) {
+<div class="oie-chat-empty">
+					<img src={templ.URL(brandURL("icon-192.png"))} alt="" width="90" height="90"/>
+					@emptystate.EmptyState(emptystate.Config{Title: v.Text.SelectChat, Description: v.Text.SelectChatBody})
+				</div>
 }
 
 templ conversationSkeleton(v view) {

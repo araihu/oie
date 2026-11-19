@@ -11,7 +11,7 @@
     const app = document.getElementById('oie-app');
     return JSON.stringify([
       app?.dataset.engineId, query.get('account') || '', query.get('filter') || 'all',
-      query.get('q') || '', query.get('lang') || app?.dataset.routeLocale,
+      query.get('q') || '', query.get('inboxCursor') || '', query.get('lang') || app?.dataset.routeLocale,
       query.get('theme') || app?.dataset.routeTheme
     ]);
   }
@@ -67,6 +67,11 @@
         if(existing.children[wanted.size-1]!==row)mutateDOM(()=>existing.insertBefore(row,existing.children[wanted.size-1]||null));
       }
       for(const row of rows)if(!wanted.has(row.dataset.conversationRow))mutateDOM(()=>{window.Alpine?.destroyTree(row);row.remove()});
+      const currentPage = list.querySelector('[data-inbox-pagination]');
+      const nextPage = fresh.querySelector('[data-inbox-pagination]');
+      if (nextPage && !currentPage) list.append(nextPage.cloneNode(true));
+      else if (!nextPage) currentPage?.remove();
+      else if (!currentPage.isEqualNode(nextPage)) currentPage.replaceWith(nextPage.cloneNode(true));
     }else replaceContents(list,fresh);
     const anchor=anchors.find(anchor=>list.querySelector(`[data-conversation-row="${CSS.escape(anchor.id)}"]`)),surviving=anchor&&list.querySelector(`[data-conversation-row="${CSS.escape(anchor.id)}"]`);
     list.scrollTop=surviving?scroll+surviving.getBoundingClientRect().top-anchor.top:scroll;

@@ -116,3 +116,36 @@ UPDATE room_reaction_privacy SET public=0 WHERE account_id=? AND public<>0;
 
 -- name: ResetAllRoomReactionPrivacy :exec
 UPDATE room_reaction_privacy SET public=0 WHERE public<>0;
+
+-- name: ListPlainReactionSources :many
+-- A page can establish an empty reaction state in bulk. Leave messages with
+-- aliases, projection changes or reaction evidence to the canonical resolver.
+SELECT m.* FROM messages m
+WHERE m.id IN (SELECT value FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)))
+AND m.conversation_id=sqlc.arg(conversation_id)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases WHERE alias_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases WHERE canonical_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_content_heads WHERE canonical_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM message_reaction_commands WHERE message_id=m.id)
+AND NOT EXISTS (SELECT 1 FROM retained_message_retractions WHERE source_id=m.id AND EXISTS (SELECT 1 FROM message_retractions))
+AND NOT EXISTS (
+ SELECT 1 FROM message_references r
+ WHERE r.message_id=m.id AND (
+  EXISTS (SELECT 1 FROM message_reaction_observations o WHERE o.account_id=m.account_id AND o.address=sqlc.arg(address) AND o.target_id=r.remote_id)
+  OR EXISTS (SELECT 1 FROM room_message_moderation rm WHERE rm.account_id=m.account_id AND rm.room_address=sqlc.arg(address) AND rm.stanza_id=r.remote_id)
+  OR EXISTS (SELECT 1 FROM message_references other CROSS JOIN messages peer ON peer.id=other.message_id
+             WHERE peer.account_id=m.account_id AND peer.conversation_id=m.conversation_id
+             AND other.remote_id=r.remote_id AND other.scope=r.scope
+             AND (other.message_id<>m.id OR other.source_hash<>r.source_hash))
+  OR r.source_hash<>COALESCE(json_extract(m.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(m.payload,'$.OriginalText')))
+ ));
+
+-- name: ListPlainReactionReferences :many
+-- Plain sources have no aliases or ambiguous references. Keep the same
+-- ordered, per-source limit as ListCanonicalMessageReferences.
+SELECT r.message_id,r.scope,r.remote_id,r.author,r.source_hash
+FROM json_each(CAST(sqlc.arg(message_ids) AS TEXT)) AS requested
+CROSS JOIN message_references r ON r.rowid IN (
+ SELECT src.rowid FROM message_references src WHERE src.message_id=CAST(requested.value AS TEXT)
+ ORDER BY src.scope,src.remote_id,src.author LIMIT 64)
+ORDER BY r.message_id,r.scope,r.remote_id,r.author;

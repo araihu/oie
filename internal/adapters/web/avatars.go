@@ -166,6 +166,20 @@ func (v *view) setAccounts(accounts []engineapi.Account) {
 }
 
 func (s *Server) loadAvatars(ctx context.Context, v *view, account string) {
+	v.applyAccountAvatars(account, s.accountAvatars(ctx, account))
+}
+
+func (v *view) applyAccountAvatars(account string, found map[avatarIdentity]string) {
+	if found == nil {
+		return
+	}
+	for identity, hash := range found {
+		v.Avatars[identity] = hash
+	}
+	v.AvatarAccounts = append(v.AvatarAccounts, account)
+}
+
+func (s *Server) accountAvatars(ctx context.Context, account string) map[avatarIdentity]string {
 	limit := 100
 	params := &engineapi.ListAccountAvatarsParams{Limit: &limit}
 	found := map[avatarIdentity]string{}
@@ -173,7 +187,7 @@ func (s *Server) loadAvatars(ctx context.Context, v *view, account string) {
 	for {
 		page, err := s.client.ListAccountAvatarsWithResponse(ctx, account, params)
 		if err != nil || page.JSON200 == nil {
-			return
+			return nil
 		}
 		for _, a := range page.JSON200.Items {
 			if a.AccountId == account && a.Address != "" && (a.ImageHash == "" || validAvatarHash(a.ImageHash)) {
@@ -185,15 +199,12 @@ func (s *Server) loadAvatars(ctx context.Context, v *view, account string) {
 			break
 		}
 		if *next == "" || seen[*next] {
-			return
+			return nil
 		}
 		seen[*next] = true
 		params.After = next
 	}
-	for identity, hash := range found {
-		v.Avatars[identity] = hash
-	}
-	v.AvatarAccounts = append(v.AvatarAccounts, account)
+	return found
 }
 
 // avatarImage serves only retained, hash-verified PNGs from the configured

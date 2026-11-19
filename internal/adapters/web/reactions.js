@@ -3,7 +3,7 @@ window.OieRuntime.register('reactions',life=>{
  const picker=document.querySelector('[data-reaction-picker]'),quick=document.getElementById('oie-reaction-quick'),catalog=document.getElementById('oie-reaction-picker');if(!picker||!quick||!catalog)return;
  const more=quick.querySelector('[data-reaction-more]'),choices=[...quick.querySelectorAll('[data-reaction-quick-emoji]')];
  const body=document.body,scope={engineId:body.dataset.engineId,accountId:body.dataset.accountId,conversationId:body.dataset.conversationId},labels=picker.dataset,csrf=document.querySelector('meta[name="oie-csrf"]')?.content||'';
- const room=!!document.getElementById('room-session-status'),roomRevisions=new Map(),roomSnapshotTimes=new Map();
+ const room=!!document.getElementById('room-session-status'),roomRevisions=new Map(),snapshotTimes=new Map();
  let latestRoomRefresh=0,withdrawnAt=0;
  const memory=window.OieRuntime.memory,key='reaction-journals:'+Object.values(scope).join(':'),journals=memory.get(key)||new Map();memory.set(key,journals);
  const filters=new Map(),snapshots=new Map(),busy=new Set(),polls=new Map(),stored=new Set(),prefix='oie.reaction.v1:'+Object.values(scope).join(':')+':';
@@ -59,13 +59,14 @@ window.OieRuntime.register('reactions',life=>{
   for(const region of root.querySelectorAll('[data-reaction-source][data-reaction-state]')){
    const id=region.dataset.reactionSource;
    if(!uuid(id))continue;
+   restore(id);
    let incoming;
    try{incoming=JSON.parse(region.dataset.reactionState)}catch{}
    const valid=validSnapshot(incoming,id),previous=snapshots.get(id);
    if(!room&&!valid)continue;
    let s=valid?incoming:previous;
    if(room){
-    const previousAt=roomSnapshotTimes.get(id)||0;
+    const previousAt=snapshotTimes.get(id)||0;
     const visibilityAt=Math.max(latestRoomRefresh,withdrawnAt);
     const superseded=startedAt<Math.max(visibilityAt,previousAt);
     if(superseded){
@@ -73,13 +74,15 @@ window.OieRuntime.register('reactions',life=>{
      // replace fresher data or expose previously public profiles.
      s=previous||s;
      if(s&&previousAt<visibilityAt)s={...s,actors:publicActors(s)?undefined:s.actors,eligible:false};
-    }else if(valid)roomSnapshotTimes.set(id,startedAt);
+    }else if(valid)snapshotTimes.set(id,startedAt);
     const missing=!valid&&!superseded;
     if(s&&(missing||withdrawn))s={...s,actors:missing||publicActors(s)?undefined:s.actors,eligible:false};
     publishRoomSnapshot(id,s,previous,!missing);
-   }else snapshots.set(id,s);
+   }else if(startedAt>=(snapshotTimes.get(id)||0)){
+    snapshotTimes.set(id,startedAt);
+    snapshots.set(id,s);
+   }else continue;
    if(!s)continue;
-   restore(id);
    if(s.pendingCommand){
     const intent=commandIntent(s.pendingCommand);
     if(validIntent(intent,id)&&matches(s.pendingCommand,intent)&&!journals.has(id))save(intent);
@@ -106,6 +109,13 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    const id=region.dataset.reactionSource,s=snapshots.get(id);if(!s)continue;restore(id);const pending=journals.get(id),selected=s.items.some(item=>item.emoji===filters.get(id))?filters.get(id):'',active=region.contains(document.activeElement)?document.activeElement:null;
    const activeEmoji=active?.dataset.reactionEmoji,activeFilter=active?.dataset.reactionFilter;
    const signature=JSON.stringify([s.items,s.actors,s.eligible,pending?.operationKey,pending?.command?.state,pending?.missingReceipt,busy.has(id),selected]);if(region.dataset.reactionRendered===signature)continue;
+   if(!region.querySelector('[data-reaction-summary]')){
+    if(!s.items.length&&!pending)continue;
+    const controls=window.OieRuntime.messageControls('reaction-'+region.dataset.own,id);
+    if(!controls)continue;
+    region.append(controls);
+    window.Alpine?.initTree(region);
+   }
    const summary=region.querySelector('[data-reaction-summary]'),total=s.items.reduce((sum,item)=>sum+item.count,0),details=region.querySelector('[data-reaction-details]');
    const waiting=!!pending&&(busy.has(id)||['queued','dispatching'].includes(pending.command?.state));
    const previewEmoji=total===0&&waiting?pending.emojis[0]:'';
@@ -141,10 +151,20 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
    }
   }
   for(const button of document.querySelectorAll('[data-reaction-open]')){const s=snapshots.get(button.dataset.reactionOpen),pending=journals.get(button.dataset.reactionOpen),slot=button.closest('[data-reaction-shortcut-slot]');if(slot)slot.hidden=!s||(!s.eligible&&!pending);if(slot)button.setAttribute('aria-busy',String(busy.has(button.dataset.reactionOpen)))}
-  for(const button of document.querySelectorAll('[id^="react-message-"]')){const id=button.id.slice(14),s=snapshots.get(id),pending=journals.get(id);button.disabled=!s||(!s.eligible&&!pending)||busy.has(id);button.setAttribute('aria-label',pending?labels.check:labels.react);button.title=pending?labels.check:labels.react;let text=button.querySelector('[data-reaction-menu-label]');if(!text){text=document.createElement('span');text.dataset.reactionMenuLabel='';const icon=button.querySelector('svg');button.replaceChildren(...(icon?[icon]:[]),text)}text.textContent=pending?labels.check:labels.react}
+  for(const button of document.querySelectorAll('[id^="react-message-"]')){const id=button.id.slice(14),s=snapshots.get(id),pending=journals.get(id);
+   const menu=button.closest('[data-menu-extra]')?.querySelector('[data-menu-state]')?.dataset;
+   const menuCurrent=menu?.menuState===id&&Number(menu.startedAt)>=Math.max(snapshotTimes.get(id)||0,room?latestRoomRefresh:0);
+   const eligible=menuCurrent?menu.reactAllowed==='true':s?.eligible;
+   const withdrawn=room&&(withdrawnAt!==0||roomState()!=='joined');
+   button.disabled=((!eligible||withdrawn)&&!pending)||busy.has(id);button.setAttribute('aria-label',pending?labels.check:labels.react);button.title=pending?labels.check:labels.react;let text=button.querySelector('[data-reaction-menu-label]');if(!text){text=document.createElement('span');text.dataset.reactionMenuLabel='';const icon=button.querySelector('svg');button.replaceChildren(...(icon?[icon]:[]),text)}text.textContent=pending?labels.check:labels.react}
  }
  function refresh(){document.dispatchEvent(new CustomEvent('oie:refresh-request'))}
- function setCurrent(snapshot){snapshots.set(snapshot.messageId,snapshot);render()}
+ function setCurrent(snapshot,startedAt){
+  if(startedAt<(snapshotTimes.get(snapshot.messageId)||0))return;
+  snapshotTimes.set(snapshot.messageId,startedAt);
+  snapshots.set(snapshot.messageId,snapshot);
+  render();
+ }
  function planPoll(intent){clearTimeout(polls.get(intent.messageId));if(['queued','dispatching'].includes(intent.command?.state))polls.set(intent.messageId,life.timeout(()=>submit(intent,true),1200))}
  function checkUpdatedReceipt(id){
   const intent=journals.get(id);
@@ -174,7 +194,7 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
  async function prepare(id,element,emoji){
   if(!uuid(id)||busy.has(id)||body.dataset.mock==='true')return;if(journals.has(id)){void submit(journals.get(id),true);return}
   const opening=!emoji,controller=new AbortController();
-  const roomRevision=roomRevisions.get(id),presence=roomState();
+  const startedAt=performance.now(),roomRevision=roomRevisions.get(id),presence=roomState();
   if(opening){
    cancelPreparation();
    preparing=controller;
@@ -196,10 +216,12 @@ for(const item of s.items){if(selected&&selected!==item.emoji)continue;const row
     const prior=snapshots.get(id);
     if(prior){
      const {eligible,allowedEmojis,maxEmojis}=value.snapshot;
-     setCurrent({...prior,eligible,allowedEmojis,maxEmojis});
+     setCurrent({...prior,eligible,allowedEmojis,maxEmojis},startedAt);
      if(!sameSet(prior.ownEmojis,value.snapshot.ownEmojis))refresh();
+    }else{
+     setCurrent({...value.snapshot,actors:undefined},startedAt);
     }
-   }else setCurrent(value.snapshot);
+   }else setCurrent(value.snapshot,startedAt);
    if(value.snapshot.pendingCommand){
     const intent=commandIntent(value.snapshot.pendingCommand);
     if(!validIntent(intent,id)||!matches(intent.command,intent))throw Error('pending');

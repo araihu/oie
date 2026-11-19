@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.39.0
+  version: 0.40.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -3176,6 +3176,10 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
       parameters:
+      - name: includePresentation
+        in: query
+        description: Include conversation action state and display metadata scoped to the returned messages. Requires a limit of at most 50.
+        schema: {type: boolean, default: false}
       - name: cursor
         in: query
         description: Retained message UUID anchoring this conversation-scoped page at its current position. A schedule can move to a new position at release. Excludes the anchor. Use the oldest returned item for older and the newest returned item for newer. Required for newer.
@@ -4588,6 +4592,7 @@ components:
           - 0.37.0
           - 0.38.0
           - 0.39.0
+          - 0.40.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -6876,6 +6881,50 @@ components:
         createdAt: '2026-11-07T12:00:00Z'
         isOwn: false
         sendState: received
+    MessagePresentation:
+      type: object
+      description: Optional display and action metadata for one page of up to 50 retained messages. An omitted field means that its state is unknown.
+      additionalProperties: false
+      properties:
+        avatarHashes:
+          type: object
+          description: Retained profile image hashes for the conversation and its owning account, keyed by address.
+          maxProperties: 2
+          additionalProperties: {type: string}
+          example: {}
+        details:
+          $ref: '#/components/schemas/ConversationDetails'
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        editTarget:
+          $ref: '#/components/schemas/MessageEditTarget'
+        roomSession:
+          $ref: '#/components/schemas/RoomSession'
+        roomArchive:
+          $ref: '#/components/schemas/RoomArchive'
+        previews:
+          type: array
+          example: []
+          items:
+            $ref: '#/components/schemas/MessagePreview'
+        videos:
+          type: array
+          maxItems: 150
+          example: []
+          items:
+            $ref: '#/components/schemas/SharedContentItem'
+        stars:
+          type: array
+          maxItems: 50
+          example: []
+          items:
+            $ref: '#/components/schemas/MessageStar'
+        reactions:
+          type: array
+          maxItems: 50
+          example: []
+          items:
+            $ref: '#/components/schemas/MessageReactions'
     MessagePage:
       type: object
       description: Visible logical messages newest first by timelineAt or createdAt at UTC millisecond precision and
@@ -6886,6 +6935,8 @@ components:
       required:
       - items
       properties:
+        presentation:
+          $ref: '#/components/schemas/MessagePresentation'
         items:
           type: array
           items:

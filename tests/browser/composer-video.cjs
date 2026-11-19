@@ -458,7 +458,7 @@ async function launch() {
     if (url.pathname === '/api/v1/conversations') return send(200,{items:conversations});
     if (chat && name === chat.id) return send(200,chat);
     if (chat && name === 'room-session') return send(200,{accountId:account,conversationId:room,active:true,state:'joined',nickname:'Alice',updatedAt:now});
-    if (chat && name === 'messages') {
+    if (chat && (name === 'messages' || name === 'context')) {
       if (request.method === 'POST') {
         const chunks = [];
         request.on('data', chunk => chunks.push(chunk));
@@ -478,6 +478,10 @@ async function launch() {
       const items = clips.filter(clip => clip.message.conversationId === chat.id).map(clip => clip.message);
       if (chat.id === direct) items.unshift(ownText, sentAudio, receivedAudio);
       if (chat.id === direct && acceptedAudio) items.unshift(acceptedAudio);
+      if (name === 'context') {
+        const item = items.find(message => message.id === url.pathname.split('/').at(-2));
+        return item ? send(200,{items:[item],targetId:item.id,hasOlder:false,hasNewer:false}) : send(404,{status:404});
+      }
       return send(200,{items});
     }
     if (name === 'edit-target') return send(200,{messageId:ownText.id,accountId:account,conversationId:direct,

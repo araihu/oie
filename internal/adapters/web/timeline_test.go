@@ -395,3 +395,33 @@ func timelineQueryClone(values url.Values) url.Values {
 	}
 	return out
 }
+
+func TestTimelineFailedPreviewBatchRemainsUnknown(t *testing.T) {
+	// The last message has its own batch. An unavailable response must preserve
+	// its painted previews when the browser reconciles the timeline.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/conversations/"+testChat+"/previews" && len(r.URL.Query()["messageId"]) == 50 {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"items":[]}`))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer backend.Close()
+	server, err := New(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := server.baseView(httptest.NewRequest("GET", "/", nil))
+	v.Selected = &engineapi.Conversation{Id: testChat, AccountId: testAccount}
+	messages := make([]engineapi.Message, 51)
+	for i := range messages {
+		messages[i].Id = fmt.Sprintf("019a5df0-0000-7000-8000-%012d", i)
+	}
+	server.formatTimeline(t.Context(), &v, messages, nil)
+	for i, m := range v.Messages {
+		if m.PresentationKnown != (i < 50) {
+			t.Fatalf("row %d has unexpected preview availability %t", i, m.PresentationKnown)
+		}
+	}
+}

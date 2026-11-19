@@ -275,6 +275,10 @@ func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesReque
 	if r.Params.Limit != nil {
 		limit = *r.Params.Limit
 	}
+	withPresentation := r.Params.IncludePresentation != nil && *r.Params.IncludePresentation
+	if withPresentation && limit > domain.LatestMessagePageSize {
+		return nil, application.ErrInvalid
+	}
 	if r.Params.Cursor != nil {
 		cursor = domain.ID(*r.Params.Cursor)
 	}
@@ -305,6 +309,12 @@ func (s *Server) ListMessages(ctx context.Context, r engineapi.ListMessagesReque
 	a, _ := s.engine.Account(ctx, c.AccountID)
 	for _, m := range list {
 		page.Items = append(page.Items, s.messagePageItem(ctx, a, c, m))
+	}
+	if withPresentation && c.ID != "" {
+		page.Presentation = s.messagePresentation(ctx, conversation(c), page.Items)
+		if hashes, err := s.engine.AvatarHashes(ctx, c.AccountID, []string{c.Address, a.Address}); err == nil && hashes != nil {
+			page.Presentation.AvatarHashes = &hashes
+		}
 	}
 	return engineapi.ListMessages200JSONResponse(page), nil
 }
