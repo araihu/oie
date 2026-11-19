@@ -418,6 +418,15 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
     assert(await otherLimit.isDisabled());
     await separate.unroute(shellRequest);
     await other.getByRole('tab', {name: 'General'}).click();
+    // Return after the browser has observed the device panel leaving the viewport.
+    await otherLimit.evaluate(node => new Promise(resolve => {
+      const observer = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(node);
+    }));
     await other.getByRole('tab', {name: 'This device'}).click();
     await otherLimit.scrollIntoViewIfNeeded();
     await until(() => otherLimit.isEnabled(), 'returning to device settings retries a failed worker installation');
