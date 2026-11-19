@@ -204,9 +204,8 @@ func (s *Server) formatTimeline(ctx context.Context, v *view, items []engineapi.
 	}
 	var reads sync.WaitGroup
 	reads.Go(func() {
-		part := view{Selected: v.Selected, Preview: v.Preview, MessagePreviews: v.MessagePreviews, PreviewsKnown: v.PreviewsKnown}
 		for i := range batches {
-			part.Messages = batches[i].messages
+			part := view{Selected: v.Selected, Preview: v.Preview, MessagePreviews: v.MessagePreviews, Messages: batches[i].messages}
 			s.loadMessagePreviews(ctx, &part)
 			batches[i].previewsKnown = part.PreviewsKnown
 		}
