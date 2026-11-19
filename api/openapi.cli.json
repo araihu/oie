@@ -7749,6 +7749,7 @@
         }
       },
       "AccountUnreadTotals": {
+        "description": "Unread message counts for accounts with at least one unread message.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -7758,6 +7759,9 @@
           "totals": {
             "type": "object",
             "description": "Number of unread messages keyed by account UUID.",
+            "example": {
+              "019a5df0-0000-7000-8000-000000000001": 7
+            },
             "additionalProperties": {
               "type": "integer",
               "minimum": 1
