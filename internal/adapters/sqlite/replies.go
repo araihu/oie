@@ -187,12 +187,31 @@ func expiredReplyReference(ctx context.Context, q *dbgen.Queries, conversation d
 	})
 }
 
+func findReceivedReplyTargets(ctx context.Context, q *dbgen.Queries, target dbgen.FindReplyTargetsParams) ([]dbgen.FindReplyTargetsRow, error) {
+	rows, err := q.FindReplyTargets(ctx, target)
+	room, scoped := strings.CutPrefix(target.Scope, "room:")
+	if err != nil || len(rows) != 0 || !scoped || room == "" {
+		return rows, err
+	}
+	archived, err := q.FindArchivedRoomReplyTarget(ctx, dbgen.FindArchivedRoomReplyTargetParams{
+		AccountID: target.AccountID, ConversationID: target.ConversationID, RoomAddress: room,
+		RemoteID: target.RemoteID, Author: target.Author,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return []dbgen.FindReplyTargetsRow{dbgen.FindReplyTargetsRow(archived)}, nil
+}
+
 func unavailableExpiredQuote(ctx context.Context, q *dbgen.Queries, account, conversation domain.ID, ref domain.MessageReference) (bool, error) {
 	expired, err := expiredReplyReference(ctx, q, conversation, ref)
 	if err != nil || !expired {
 		return false, err
 	}
-	retained, err := q.FindReplyTargets(ctx, dbgen.FindReplyTargetsParams{
+	retained, err := findReceivedReplyTargets(ctx, q, dbgen.FindReplyTargetsParams{
 		AccountID: string(account), ConversationID: string(conversation), RemoteID: ref.ID, Scope: ref.Scope, Author: ref.Author,
 	})
 	return len(retained) == 0, err
@@ -257,7 +276,7 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		body, fallback = domain.ReplyBody(m.OriginalText, ref.Fallback)
 	}
 	m.Reply = &domain.MessageReply{BodyText: body, Excerpt: boundedText(fallback, 512)}
-	rows, err := q.FindReplyTargets(ctx, dbgen.FindReplyTargetsParams{AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author})
+	rows, err := findReceivedReplyTargets(ctx, q, dbgen.FindReplyTargetsParams{AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author})
 	if err != nil {
 		return err
 	}

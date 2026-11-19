@@ -59,6 +59,10 @@ type Querier interface {
 	EnsureDownloadDevice(ctx context.Context, deviceID string) error
 	ExpiryCandidates(ctx context.Context, arg ExpiryCandidatesParams) ([]string, error)
 	ExpirySourceIDs(ctx context.Context, ids string) ([]string, error)
+	// MAM 2 can omit the room's stanza-id inside the forwarded message. Use the
+	// original stored under that room's archive ID when it has no explicit room
+	// reference. A filtered-out or conflicting explicit reference takes precedence.
+	FindArchivedRoomReplyTarget(ctx context.Context, arg FindArchivedRoomReplyTargetParams) (FindArchivedRoomReplyTargetRow, error)
 	FindAvatar(ctx context.Context, arg FindAvatarParams) (Avatar, error)
 	FindAvatarHashes(ctx context.Context, arg FindAvatarHashesParams) ([]FindAvatarHashesRow, error)
 	FindConversation(ctx context.Context, arg FindConversationParams) (Conversation, error)

@@ -145,3 +145,27 @@ func TestReplyArchiveAliasEnrichmentRejectsConversationChanges(t *testing.T) {
 		t.Fatal("archive replay failed to enrich retained identity", err)
 	}
 }
+
+func TestReceivedRoomReplyResolvesArchivedOriginalWithoutInnerStanzaID(t *testing.T) {
+	store, _, chat := outboxFixture(t)
+	engine, chat := promoteBackupRoomFixture(t, store, chat)
+	at := time.Now().UTC()
+	target := domain.MessageReference{Scope: "room:" + chat.Address, Author: chat.Address + "/Bob", ID: "original-in-room-archive"}
+	reply := replySeed(t, store, chat, "> quoted\nanswer", at, nil, &domain.ReplyReference{
+		Target: target, Fallback: []domain.TextRange{{Start: 0, End: 9}},
+	})
+	check := func(id domain.ID, want bool) {
+		t.Helper()
+		got, err := engine.Message(t.Context(), reply.ID)
+		if err != nil || got.Reply == nil || got.Reply.Available != want || got.Reply.MessageID != id ||
+			want && (got.Reply.SenderName != "Bob" || got.Reply.Excerpt != "quoted" || got.Reply.BodyText != "answer") {
+			t.Fatalf("unexpected reply: %+v, %v", got.Reply, err)
+		}
+	}
+	check("", false)
+	original := seedPortableRoomMessage(t, store, chat, at.Add(time.Second), "quoted", "archive-provider", "", target.ID)
+	check(original.ID, true)
+	target.Author = chat.Address + "/Another"
+	reply = replySeed(t, store, chat, "other answer", at, nil, &domain.ReplyReference{Target: target})
+	check("", false)
+}

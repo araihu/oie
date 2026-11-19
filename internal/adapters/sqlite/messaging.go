@@ -485,15 +485,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	}
 	var stanzaOwner string
 	if stanzaID != "" && !m.IsOwn {
-		owners, err := q.FindVerifiedRoomOccurrence(ctx, dbgen.FindVerifiedRoomOccurrenceParams{AccountID: string(c.AccountID), RoomAddress: c.Address, RemoteID: stanzaID})
+		stanzaOwner, err = verifiedRoomOccurrence(ctx, q, c, stanzaID)
 		if err != nil {
 			return err
-		}
-		if len(owners) > 1 {
-			return application.ErrInvalid
-		}
-		if len(owners) == 1 {
-			stanzaOwner = owners[0]
 		}
 	}
 	if !m.ReceivedAt.IsZero() {
@@ -586,6 +580,13 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			archiveAlreadyBound = true
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
+		} else if !m.IsOwn && c.Kind == "room" && m.ArchiveScope == c.Address && stanzaID == "" {
+			// XEP-0313 room results can omit the forwarded stanza-id. The
+			// result ID still identifies the same archived live stanza.
+			stanzaOwner, err = verifiedRoomOccurrence(ctx, q, c, m.ArchiveID)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	check, requestRevision := c.DirectHistoryCheck, c.RevisionID

@@ -35,6 +35,53 @@ func (q *Queries) DeleteMessageReference(ctx context.Context, arg DeleteMessageR
 	return result.RowsAffected()
 }
 
+const findArchivedRoomReplyTarget = `-- name: FindArchivedRoomReplyTarget :one
+SELECT m.id, m.payload, CAST(COALESCE(NULLIF(json_extract(m.payload,'$.WireBodySHA256'),''),
+ oie_source_hash(json_extract(m.payload,'$.OriginalText'))) AS TEXT) AS source_hash
+FROM archive_aliases a
+JOIN messages m ON m.id=a.message_id AND m.account_id=a.account_id
+JOIN conversations c ON c.id=m.conversation_id AND c.account_id=m.account_id
+WHERE a.account_id=?1 AND a.scope=?2 AND a.archive_id=?3
+AND c.id=?4 AND c.address=a.scope AND json_extract(c.payload,'$.Kind')='room'
+AND json_extract(m.payload,'$.ArchiveScope')=a.scope AND json_extract(m.payload,'$.ArchiveID')=a.archive_id
+AND (CAST(?5 AS TEXT)='' OR ?5=a.scope||'/'||json_extract(m.payload,'$.Sender.DisplayName'))
+AND NOT EXISTS (SELECT 1 FROM message_references r WHERE r.message_id=m.id AND r.scope='room:'||a.scope)
+AND NOT EXISTS (
+ SELECT 1 FROM message_references r CROSS JOIN messages other ON other.id=r.message_id
+ WHERE r.remote_id=a.archive_id AND r.scope='room:'||a.scope AND other.conversation_id=c.id
+)
+`
+
+type FindArchivedRoomReplyTargetParams struct {
+	AccountID      string
+	RoomAddress    string
+	RemoteID       string
+	ConversationID string
+	Author         string
+}
+
+type FindArchivedRoomReplyTargetRow struct {
+	ID         string
+	Payload    string
+	SourceHash string
+}
+
+// MAM 2 can omit the room's stanza-id inside the forwarded message. Use the
+// original stored under that room's archive ID when it has no explicit room
+// reference. A filtered-out or conflicting explicit reference takes precedence.
+func (q *Queries) FindArchivedRoomReplyTarget(ctx context.Context, arg FindArchivedRoomReplyTargetParams) (FindArchivedRoomReplyTargetRow, error) {
+	row := q.db.QueryRowContext(ctx, findArchivedRoomReplyTarget,
+		arg.AccountID,
+		arg.RoomAddress,
+		arg.RemoteID,
+		arg.ConversationID,
+		arg.Author,
+	)
+	var i FindArchivedRoomReplyTargetRow
+	err := row.Scan(&i.ID, &i.Payload, &i.SourceHash)
+	return i, err
+}
+
 const findReplyTargets = `-- name: FindReplyTargets :many
 SELECT DISTINCT m.id,m.payload,r.source_hash
 FROM message_references r CROSS JOIN messages m ON m.id=r.message_id

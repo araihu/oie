@@ -311,6 +311,8 @@ window.OieRuntime.register('timeline',life=>{
  }
  function appendEdge(){
   if(disposed||busy||failed||focusPending||!root.clientHeight||!liveAttached||newer||!atBottom()||!latestSnapshot?.scope)return null;
+  // An arriving original can change a reply card already in this window.
+  if(root.querySelector('[data-reply-unavailable]'))return null;
   const tail=edge('newer')?.previousElementSibling;
   return tail?.dataset.messageId===latestSnapshot.id?latestSnapshot:null;
  }

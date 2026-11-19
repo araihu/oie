@@ -99,6 +99,19 @@ func archiveAlias(ctx context.Context, q *dbgen.Queries, m domain.Message, id st
 	return q.InsertArchiveAlias(ctx, dbgen.InsertArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID, MessageID: id})
 }
 
+func verifiedRoomOccurrence(ctx context.Context, q *dbgen.Queries, c domain.Conversation, id string) (string, error) {
+	owners, err := q.FindVerifiedRoomOccurrence(ctx, dbgen.FindVerifiedRoomOccurrenceParams{
+		AccountID: string(c.AccountID), RoomAddress: c.Address, RemoteID: id,
+	})
+	if err != nil || len(owners) == 0 {
+		return "", err
+	}
+	if len(owners) != 1 {
+		return "", application.ErrInvalid
+	}
+	return owners[0], nil
+}
+
 // Check portable exclusions before materializing a conversation or message.
 // A verified replay can supply a second key for already removed content.
 func checkXMPPOccurrence(ctx context.Context, q *dbgen.Queries, c domain.Conversation, m domain.Message) (stanzaID string, excluded bool, err error) {

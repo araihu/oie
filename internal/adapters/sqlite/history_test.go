@@ -196,3 +196,43 @@ func TestVerifiedRoomAuthorReplayKeepsMessageIdentityAndOutboxEmpty(t *testing.T
 		t.Fatal("replay created extra revisions", revisions, err)
 	}
 }
+
+func TestRoomArchiveWithoutInnerStanzaIDKeepsOwnLiveMessage(t *testing.T) {
+	store, _, chat := outboxFixture(t)
+	engine, chat := promoteBackupRoomFixture(t, store, chat)
+	sent := queueBackupFixture(t, engine, chat.ID, "Mensagem da sala", nil)
+	receive := func(in application.Incoming) {
+		t.Helper()
+		if err := engine.Receive(t.Context(), in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const roomID = "room-issued-42"
+	packet := application.Incoming{
+		AccountID: chat.AccountID, Kind: "room", Address: chat.Address, SenderName: "Alice",
+		OriginalText: sent.OriginalText, CreatedAt: time.Now().UTC(), IsOwn: true,
+		CanonicalID: sent.ID, ProviderID: string(sent.ID),
+		References: []domain.MessageReference{{Scope: "room:" + chat.Address, Author: chat.Address + "/Alice", ID: roomID}},
+	}
+	receive(packet)
+	// A semianonymous room returns only the outer MAM ID and occupant nickname.
+	packet.Historical, packet.IsOwn = true, false
+	packet.CanonicalID, packet.ProviderID, packet.References = "", "room:archive-client-id", nil
+	packet.ArchiveScope, packet.ArchiveID = chat.Address, roomID
+	receive(packet)
+	receive(packet)
+	history, err := store.Messages(t.Context(), chat.ID, "", 10)
+	if err != nil || len(history) != 1 || !history[0].IsOwn || history[0].ID != sent.ID {
+		t.Fatalf("room archive replay duplicated the sent message: %d rows, %v", len(history), err)
+	}
+	// A different occurrence of the same text is a separate message.
+	packet.ArchiveID, packet.ProviderID, packet.SenderName = "room-issued-43", "room:other-client-id", "Bob"
+	receive(packet)
+	// The personal archive has a separate ID namespace.
+	packet.ArchiveScope, packet.ArchiveID, packet.ProviderID = "alice@localhost", roomID, "room:personal-archive-id"
+	receive(packet)
+	history, err = store.Messages(t.Context(), chat.ID, "", 10)
+	if err != nil || len(history) != 3 {
+		t.Fatalf("distinct messages lost after replay: %d rows, %v", len(history), err)
+	}
+}

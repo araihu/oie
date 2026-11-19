@@ -18,10 +18,11 @@ module.exports = async function liveMessageAppend({open, until, emit, messages, 
       const url=new URL(response.url());
       if(['/ui/refresh','/ui/timeline'].includes(url.pathname))replies.push(response);
     });
-    const post=(text,paired=true)=>{
+    const post=(text,paired=true,reply)=>{
       const n=messages.length;
       const message={...messages[0],id:id(7900000+n),revisionId:id(7800000+n),originalText:text,
         createdAt:new Date(Date.parse(messages.at(-1).createdAt)+1000).toISOString(),sendState:'received',isOwn:false};
+      if (reply) message.reply=reply;
       messages.push(message);positions.set(message.id,n);
       Object.assign(conversation,{lastMessage:text,revisionId:id(7700000+n),updatedAt:message.createdAt,unreadCount:conversation.unreadCount+1});
       emit('message.created',{message});
@@ -98,6 +99,17 @@ module.exports = async function liveMessageAppend({open, until, emit, messages, 
     }
     await timeline.locator('[data-message-id="'+late.id+'"]').waitFor({state:'attached'});
     assert(!(await page.evaluate(()=>window.lateAppends)).includes(oldCursor));
+    // The next plain arrival can resolve a reply already on screen.
+    const quoted=post('A reply before its original',true,{available:false,excerpt:'Original',bodyText:'A reply before its original'});
+    const quoteRow=timeline.locator('[data-message-id="'+quoted.id+'"]');
+    await quoteRow.locator('[data-reply-unavailable]').waitFor();
+    await page.evaluate(()=>window.OieTimeline.scrollLatest());
+    const source=post('Original');
+    Object.assign(quoted.reply,{available:true,messageId:source.id,senderName:'Bob'});
+    const link=quoteRow.locator('[data-reply-target="'+source.id+'"]');
+    await link.waitFor();
+    await link.click();
+    await page.waitForFunction(id=>document.activeElement?.dataset.messageId===id,source.id);
     assert.equal(await input.inputValue(),'Draft while messages arrive');
   } finally {
     await context.close();
