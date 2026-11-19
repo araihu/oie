@@ -66,7 +66,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    assert.equal(await action.locator('use').getAttribute('href'),'/ui/icons/heroicons-extra.svg#heroicons-pencil-16-solid-pencil');
    await action.click();await editing.waitFor({state:'visible'});assert(await banner.isHidden());assert(await page.locator('[data-live-status]').isHidden());await until(async()=>await input.inputValue()===messages[1].originalText,'edit loaded');
   };
-  const recovery=await context.newPage();
+  const recovery=await browser.newPage();
   await recovery.route('**/ui/refresh*',route=>route.abort());
   state.capabilitiesUnavailable=true;
   await recovery.goto(route());
