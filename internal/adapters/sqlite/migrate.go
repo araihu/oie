@@ -99,11 +99,7 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 		}
 	}
 
-	driver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
-	if err != nil {
-		return err
-	}
-	runner, err := migrate.NewWithInstance("iofs", scripts, "sqlite", driver)
+	runner, err := migrationRunner(db, scripts)
 	if err != nil {
 		return err
 	}
@@ -147,6 +143,14 @@ func migrateDatabase(ctx context.Context, db *sql.DB, dir string) error {
 		return err
 	}
 	return nil
+}
+
+func migrationRunner(db *sql.DB, scripts source.Driver) (*migrate.Migrate, error) {
+	driver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
+	if err != nil {
+		return nil, err
+	}
+	return migrate.NewWithInstance("iofs", scripts, "sqlite", driver)
 }
 
 func lastMigrationVersion(scripts source.Driver) (int, error) {

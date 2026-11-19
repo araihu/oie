@@ -12,7 +12,8 @@ AND NOT EXISTS (
   JOIN message_correction_facts native ON native.message_id=a.canonical_id
     AND native.scope=f.scope AND native.author=f.author AND native.remote_id=f.remote_id
     AND native.target_id=f.target_id AND native.source_hash=f.source_hash
-  WHERE a.alias_id=m.id AND m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID')=a.canonical_id
+  WHERE a.alias_id=m.id AND ((m.is_own=1 AND json_extract(m.payload,'$.OwnOriginID')=a.canonical_id)
+    OR EXISTS (SELECT 1 FROM room_archive_echo_links p WHERE p.echo_id=m.id AND p.original_id=a.canonical_id))
 )
 ORDER BY f.message_id LIMIT 129;
 
@@ -36,6 +37,7 @@ INSERT INTO message_canonical_aliases(alias_id,canonical_id) VALUES(?,?) ON CONF
 DELETE FROM message_canonical_aliases AS a
 WHERE (alias_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT)))
    OR canonical_id IN (SELECT value FROM json_each(CAST(sqlc.arg(ids) AS TEXT))))
+AND NOT EXISTS (SELECT 1 FROM room_archive_echo_links p WHERE p.echo_id=a.alias_id AND p.original_id=a.canonical_id)
 AND NOT EXISTS (
   SELECT 1 FROM messages e JOIN messages m ON m.id=a.canonical_id AND m.id=m.provider_id AND m.is_own=1
     AND m.account_id=e.account_id AND m.conversation_id=e.conversation_id
@@ -80,4 +82,6 @@ AND NOT EXISTS (
  AND tainted.scope=r.scope AND tainted.remote_id=r.remote_id
  AND tainted.source_hash<>COALESCE(json_extract(observed.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(observed.payload,'$.OriginalText')))
 )
+AND NOT EXISTS (SELECT 1 FROM room_archive_reference_conflicts conflict
+ WHERE conflict.message_id=r.message_id AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id)
 ORDER BY (a.alias_id IS NOT NULL),r.scope,r.remote_id,r.author LIMIT 64;

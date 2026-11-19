@@ -54,6 +54,8 @@ DELETE FROM message_stars WHERE message_id IN (
  WHERE root.id=sqlc.arg(message_id) AND root.provider_id LIKE 'room:%'
    AND json_extract(original.payload,'$.ProviderID')=root.provider_id
    AND NOT EXISTS(SELECT 1 FROM message_correction_facts f WHERE f.message_id=alias.id)
+ UNION ALL
+ SELECT echo_id FROM room_archive_echo_links WHERE original_id=sqlc.arg(message_id)
 );
 
 -- name: InsertMessageStarRevision :exec

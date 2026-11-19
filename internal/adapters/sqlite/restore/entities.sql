@@ -105,6 +105,11 @@ SELECT a.account_id,a.scope,a.archive_id,e.witness_id
 FROM backup.archive_aliases a JOIN restore_local_edit_witnesses e ON e.source_id=a.message_id
 JOIN messages witness ON witness.id=e.witness_id AND witness.account_id=a.account_id
 WHERE TRUE ON CONFLICT DO NOTHING;
+INSERT OR IGNORE INTO disputed_room_archive_echoes
+SELECT d.message_id FROM backup.disputed_room_archive_echoes d JOIN restore_messages r ON r.id=d.message_id;
+INSERT OR IGNORE INTO legacy_room_archive_uids
+SELECT legacy.message_id,legacy.archive_id FROM backup.legacy_room_archive_uids legacy
+JOIN restore_messages x ON x.id=legacy.message_id JOIN archive_aliases a ON a.message_id=x.id AND a.archive_id=legacy.archive_id;
 INSERT INTO message_references SELECT r.* FROM backup.message_references r JOIN restore_messages x ON x.id=r.message_id
 WHERE r.message_id NOT IN (SELECT source_id FROM restore_room_original_aliases)
 AND NOT EXISTS (
@@ -113,6 +118,9 @@ AND NOT EXISTS (
 ) ON CONFLICT DO NOTHING;
 INSERT INTO message_replies SELECT r.* FROM backup.message_replies r JOIN restore_messages x ON x.id=r.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
+-- Discovery evidence can already reside in the destination.
+INSERT OR IGNORE INTO message_references(message_id,scope,remote_id,author,source_hash)
+SELECT * FROM verified_legacy_room_reply_targets;
 INSERT INTO message_sender_identities SELECT r.* FROM backup.message_sender_identities r JOIN restore_messages x ON x.id=r.message_id
 WHERE TRUE ON CONFLICT DO NOTHING;
 INSERT INTO message_retractions SELECT r.* FROM backup.message_retractions r JOIN restore_accounts x ON x.id=r.account_id

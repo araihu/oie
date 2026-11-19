@@ -213,6 +213,25 @@ type DiscardedRecoveredSend struct {
 	MessageID string
 }
 
+type DisputedRoomArchiveEcho struct {
+	MessageID string
+}
+
+type DistinctRoomExclusionKey struct {
+	Account  string
+	Chat     string
+	KeyType  string
+	RemoteID string
+}
+
+type DistinctRoomMessageKey struct {
+	MessageID string
+	Account   string
+	Chat      string
+	KeyType   string
+	RemoteID  string
+}
+
 type DownloadCleanupParent struct {
 	DeviceID         string
 	Generation       int64
@@ -320,6 +339,20 @@ type LegacyImageClaim struct {
 	SourceRevision string
 	Hash           string
 	Size           int64
+}
+
+type LegacyRoomArchiveUid struct {
+	MessageID string
+	ArchiveID string
+}
+
+type LegacyRoomReplyCandidate struct {
+	MessageID      string
+	ConversationID string
+	Scope          interface{}
+	RemoteID       string
+	Author         interface{}
+	SourceHash     interface{}
 }
 
 type MediaFile struct {
@@ -514,6 +547,16 @@ type MessageStarRevision struct {
 	CreatedAt string
 }
 
+type ObservedXmppMessageKey struct {
+	MessageID string
+	Account   string
+	Chat      string
+	Kind      interface{}
+	KeyType   string
+	Authority string
+	RemoteID  string
+}
+
 type Operation struct {
 	ID          string
 	Fingerprint string
@@ -544,6 +587,14 @@ type PreviewRevision struct {
 	Parents   string
 	Payload   string
 	CreatedAt string
+}
+
+type ProjectedRoomExpiration struct {
+	Account string
+	Room    string
+	Uid     string
+	Author  string
+	AgeMs   int64
 }
 
 type RecoveredSend struct {
@@ -601,6 +652,28 @@ type RoomArchive struct {
 	ConversationID string
 	Mode           string
 	Progress       string
+}
+
+type RoomArchiveEchoLink struct {
+	EchoID      string
+	OriginalID  string
+	AccountID   string
+	RoomAddress string
+	RoomUid     string
+}
+
+type RoomArchiveEchoPair struct {
+	AccountID   string
+	RoomAddress string
+	RoomUid     string
+	EchoID      string
+	OriginalID  string
+}
+
+type RoomArchiveReferenceConflict struct {
+	MessageID string
+	Scope     string
+	RemoteID  string
 }
 
 type RoomBanNickname struct {
@@ -729,6 +802,14 @@ type UnclaimedLegacyDownloadRestoreAdmission struct {
 	Hash           string
 	Size           int64
 	DownloadedAtMs int64
+}
+
+type VerifiedLegacyRoomReplyTarget struct {
+	MessageID  string
+	Scope      interface{}
+	RemoteID   string
+	Author     interface{}
+	SourceHash interface{}
 }
 
 type XmppMessageExclusion struct {

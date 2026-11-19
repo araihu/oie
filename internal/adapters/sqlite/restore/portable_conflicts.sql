@@ -24,8 +24,7 @@ WHERE NOT (s.is_own=1 AND d.is_own=1 AND s.provider_id=s.id AND d.provider_id=d.
  AND EXISTS(SELECT 1 FROM main.message_correction_facts f WHERE f.message_id=d.id AND f.remote_id=d.id AND f.target_id<>''))
 AND NOT EXISTS (SELECT 1 FROM incoming.message_revisions sr JOIN main.message_revisions dr ON dr.id=sr.id
   WHERE sr.entity_id=s.id AND dr.entity_id=d.id)
-AND NOT EXISTS (SELECT 1 FROM portable_keys k JOIN portable_keys l
- USING(account,chat,kind,key_type,authority,remote_id) WHERE k.incoming=1 AND l.incoming=0 AND k.message_id=s.id AND l.message_id=d.id)
+AND NOT EXISTS (SELECT 1 FROM portable_pairs matched WHERE matched.source=s.id AND matched.destination=d.id)
 UNION ALL
 -- A MAM match cannot reconcile incompatible room SIDs or correction targets.
 SELECT p.source,p.destination FROM portable_message_matches p

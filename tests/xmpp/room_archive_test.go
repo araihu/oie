@@ -163,11 +163,31 @@ func TestRoomArchiveBootstrapAndResume(t *testing.T) {
 	if _, err := engine.ConfigureConnection(ctx, account.Account.ID, application.ConnectionInput{Password: "alice-local-only", Endpoint: xmppEndpoint()}); err != nil {
 		t.Fatal(err)
 	}
+	// The checkpoint is committed after the whole page. Measure a stall from
+	// the last retained message so a busy race runner can still make progress.
 	var first domain.RoomArchive
-	eventually(t, func() bool {
+	imported := 0
+	lastProgress := time.Now()
+	for first.Boundary.IsZero() {
 		first, err = engine.RoomArchive(ctx, c.ID)
-		return err == nil && !first.Boundary.IsZero()
-	})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !first.Boundary.IsZero() {
+			break
+		}
+		n, err := store.CountRoomArchiveMessages(ctx, c.ID, first.WindowStart, first.WindowEnd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n > imported {
+			imported, lastProgress = n, time.Now()
+		}
+		if time.Since(lastProgress) >= 15*time.Second {
+			t.Fatalf("first archive page stalled after %d messages: %+v", imported, first)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 	if first.InitialComplete || first.WindowEnd.Sub(first.WindowStart) != 48*time.Hour {
 		t.Fatalf("unexpected first page state: %+v", first)
 	}

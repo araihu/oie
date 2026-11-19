@@ -152,7 +152,9 @@ func TestVerifyBackupAndRestoreRejectInvalidDatabase(t *testing.T) {
 	}{
 		{name: "required table", sql: "ALTER TABLE message_correction_facts ADD COLUMN unexpected TEXT"},
 		{name: "optional table", sql: "ALTER TABLE recovered_sends ADD COLUMN unexpected TEXT"},
+		{name: "mismatched user version", sql: "PRAGMA user_version=99999"},
 		{name: "multiple versions", sql: "INSERT INTO schema_migrations(version, dirty) VALUES (36, 0)"},
+		{name: "wrong declared schema", sql: "UPDATE schema_migrations SET version=?", args: []any{firstBackupV1Schema}},
 		{name: "missing credentials table", sql: "DROP TABLE room_invitation_credentials"},
 		{name: "stored room password", sql: "INSERT INTO room_invitation_credentials(conversation_id,password) VALUES (?,'fixture')", args: []any{room.ID}},
 		{name: "missing account deletions", sql: "DROP TABLE deleted_account_ids"},
@@ -170,27 +172,7 @@ func TestVerifyBackupAndRestoreRejectInvalidDatabase(t *testing.T) {
 			if err := errors.Join(err, db.Close()); err != nil {
 				t.Fatal(err)
 			}
-			var archive bytes.Buffer
-			zipFile := zip.NewWriter(&archive)
-			entry, err := appendBackupFile(ctx, zipFile, backupDatabaseName, database, "", -1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			manifest.Files = []backupFile{entry}
-			header, err := zipFile.Create(backupManifestName)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := json.NewEncoder(header).Encode(manifest); err != nil {
-				t.Fatal(err)
-			}
-			if err := zipFile.Close(); err != nil {
-				t.Fatal(err)
-			}
-			name := filepath.Join(t.TempDir(), "invalid-database.zip")
-			if err := os.WriteFile(name, archive.Bytes(), 0600); err != nil {
-				t.Fatal(err)
-			}
+			name := repackBackupFixture(t, manifest, database)
 			if _, err := VerifyBackup(ctx, name); err == nil {
 				t.Error("verification accepted an invalid database")
 			}
@@ -202,6 +184,63 @@ func TestVerifyBackupAndRestoreRejectInvalidDatabase(t *testing.T) {
 				t.Errorf("restore initialized a destination for an unsupported archive: %v", err)
 			}
 		})
+	}
+}
+
+func repackBackupFixture(t *testing.T, manifest backupManifest, database string) string {
+	t.Helper()
+	var archive bytes.Buffer
+	zipFile := zip.NewWriter(&archive)
+	entry, err := appendBackupFile(t.Context(), zipFile, backupDatabaseName, database, "", -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Files = []backupFile{entry}
+	header, err := zipFile.Create(backupManifestName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(header).Encode(manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := zipFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(t.TempDir(), "fixture.zip")
+	if err := os.WriteFile(name, archive.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return name
+}
+
+func TestRestoreBackupFromBeforeRoomEchoRepair(t *testing.T) {
+	source, _, chat := outboxFixture(t)
+	original := replySeed(t, source, chat, "retained in original profile", time.Now().UTC(), nil, nil)
+	manifest, database, _ := backupRestoreFixture(t, source, false)
+	db, err := openBackupDatabase(database, "rw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrateFixtureToVersion(t, &Store{db: db}, firstBackupV1Schema)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := repackBackupFixture(t, manifest, database)
+	if _, err := VerifyBackup(t.Context(), archive); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if _, err := RestoreProfileBackup(t.Context(), dir, archive, migrationID()); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := Open(t.Context(), dir, migrationID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = restored.Close() })
+	m, err := restored.Message(t.Context(), original.ID)
+	if err != nil || m.OriginalText != original.OriginalText {
+		t.Fatalf("lost original from legacy backup: %v, %v", m.ID, err)
 	}
 }
 

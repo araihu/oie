@@ -101,11 +101,6 @@ WHERE (d.id IS NOT NULL OR (
   AND NOT EXISTS (
     SELECT 1 FROM restore_xmpp_excluded k WHERE k.message_id IN (m.id,a.canonical_id)
   )
-  AND NOT EXISTS (
-    SELECT 1 FROM expired_message_references e
-    JOIN backup.message_references ref ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
-    WHERE e.conversation_id=m.conversation_id AND ref.message_id IN (m.id,a.canonical_id)
-  )
 ))
 AND (o.state IS NULL OR o.state NOT IN ('queued','dispatching','unknown'))
 AND m.state NOT IN ('queued','dispatching','unknown');
@@ -306,7 +301,9 @@ JOIN messages alias ON alias.id=link.alias_id AND alias.account_id=root.account_
 JOIN conversations chat ON chat.id=root.conversation_id AND json_extract(chat.payload,'$.Kind')='room'
 JOIN message_revisions original ON original.id=alias.revision_id AND original.entity_id=alias.id
 WHERE root.provider_id LIKE 'room:%' AND json_extract(original.payload,'$.ProviderID')=root.provider_id
-  AND NOT EXISTS(SELECT 1 FROM message_correction_facts fact WHERE fact.message_id=alias.id);
+  AND NOT EXISTS(SELECT 1 FROM message_correction_facts fact WHERE fact.message_id=alias.id)
+UNION
+SELECT echo_id,original_id FROM room_archive_echo_links;
 
 -- Carry just the physical rows that establish the path from an archived
 -- unstar to the retained head. Keep the ancestry available for re-export.
@@ -460,11 +457,6 @@ WHERE NOT EXISTS(SELECT 1 FROM messages existing WHERE existing.id=m.id)
   AND NOT EXISTS(SELECT 1 FROM expired_message_ids e WHERE e.id IN (m.id,a.canonical_id))
   AND NOT EXISTS (
     SELECT 1 FROM restore_xmpp_excluded k WHERE k.message_id IN (m.id,a.canonical_id)
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM expired_message_references e JOIN backup.message_references ref
-      ON ref.scope=e.scope AND ref.remote_id=e.remote_id AND ref.author=e.author
-    WHERE e.conversation_id=m.conversation_id AND ref.message_id IN (m.id,a.canonical_id)
   );
 -- A witness can arrive before the original sending profile. Keep its source
 -- row and revisions, but display the logical send under the original ID.

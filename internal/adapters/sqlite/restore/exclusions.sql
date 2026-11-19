@@ -117,6 +117,20 @@ AND NOT EXISTS (
 )
 ON CONFLICT DO NOTHING;
 
+-- Preserve directly observed expiry evidence when profiles disagree about
+-- whether a room reference came only from its archive UID.
+DELETE FROM projected_room_expirations AS p WHERE EXISTS (
+ SELECT 1 FROM backup.expired_message_references e JOIN restore_chats rc ON rc.id=e.conversation_id
+ JOIN conversations c ON c.id=rc.id JOIN accounts a ON a.id=c.account_id
+ WHERE a.address=p.account AND c.address=p.room AND e.scope='room:'||p.room AND e.remote_id=p.uid AND e.author=p.author
+ AND NOT EXISTS (SELECT 1 FROM backup.projected_room_expirations b WHERE b.account=p.account AND b.room=p.room
+                 AND b.uid=p.uid AND b.author=p.author AND b.age_ms=e.age_ms)
+);
+INSERT OR IGNORE INTO projected_room_expirations
+SELECT p.* FROM backup.projected_room_expirations p JOIN accounts a ON a.address=p.account AND a.protocol='xmpp'
+JOIN conversations c ON c.account_id=a.id AND c.address=p.room JOIN restore_chats rc ON rc.id=c.id
+WHERE NOT EXISTS (SELECT 1 FROM expired_message_references e WHERE e.conversation_id=c.id
+                  AND e.scope='room:'||p.room AND e.remote_id=p.uid AND e.author=p.author);
 INSERT INTO expired_message_references
 SELECT e.* FROM backup.expired_message_references e JOIN restore_chats c ON c.id=e.conversation_id
 WHERE TRUE ON CONFLICT DO NOTHING;

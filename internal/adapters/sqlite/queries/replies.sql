@@ -18,6 +18,8 @@ WHERE m.account_id=sqlc.arg(account_id) AND m.conversation_id=sqlc.arg(conversat
 AND r.remote_id=sqlc.arg(remote_id)
 AND (CAST(sqlc.arg(scope) AS TEXT)='' OR r.scope=CAST(sqlc.arg(scope) AS TEXT))
 AND (CAST(sqlc.arg(author) AS TEXT)='' OR r.author=CAST(sqlc.arg(author) AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM room_archive_reference_conflicts conflict
+ WHERE conflict.message_id=r.message_id AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id)
 LIMIT 129;
 
 -- name: MessagesAtOrBeforeTarget :many

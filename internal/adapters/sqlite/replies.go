@@ -257,7 +257,8 @@ func hydrateReply(ctx context.Context, q *dbgen.Queries, m *domain.Message) erro
 		body, fallback = domain.ReplyBody(m.OriginalText, ref.Fallback)
 	}
 	m.Reply = &domain.MessageReply{BodyText: body, Excerpt: boundedText(fallback, 512)}
-	rows, err := q.FindReplyTargets(ctx, dbgen.FindReplyTargetsParams{AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author})
+	rows, err := q.FindReplyTargets(ctx, dbgen.FindReplyTargetsParams{
+		AccountID: string(m.AccountID), ConversationID: string(m.ConversationID), RemoteID: ref.Target.ID, Scope: ref.Target.Scope, Author: ref.Target.Author})
 	if err != nil {
 		return err
 	}

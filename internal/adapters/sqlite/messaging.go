@@ -481,21 +481,31 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		return err
 	}
 	if excluded {
+		if stanzaID != "" {
+			if err := discardOutdatedMessage(ctx, q, c, m); err != nil {
+				return err
+			}
+		}
 		return tx.Commit()
 	}
 	var stanzaOwner string
-	if stanzaID != "" && !m.IsOwn {
-		owners, err := q.FindVerifiedRoomOccurrence(ctx, dbgen.FindVerifiedRoomOccurrenceParams{AccountID: string(c.AccountID), RoomAddress: c.Address, RemoteID: stanzaID})
+	if stanzaID != "" && (!m.IsOwn || m.OwnOriginID == "" && !ownRoomEdit(m)) {
+		stanzaOwner, err = verifiedRoomOccurrence(ctx, q, c, stanzaID)
 		if err != nil {
 			return err
 		}
-		if len(owners) > 1 {
-			return application.ErrInvalid
+	}
+	var conflictingOwner string
+	if stanzaOwner != "" {
+		ok, err := roomSourceAcceptsIdentity(ctx, q, c, m, stanzaOwner, stanzaID)
+		if err != nil {
+			return err
 		}
-		if len(owners) == 1 {
-			stanzaOwner = owners[0]
+		if !ok {
+			conflictingOwner, stanzaOwner = stanzaOwner, ""
 		}
 	}
+
 	if !m.ReceivedAt.IsZero() {
 		days, err := retentionDays(ctx, q, c.AccountID, c.Address, c.Kind)
 		if err != nil {
@@ -526,8 +536,31 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		var existingID string
 		existingID, err = q.GetArchiveAlias(ctx, dbgen.GetArchiveAliasParams{AccountID: string(m.AccountID), Scope: m.ArchiveScope, ArchiveID: m.ArchiveID})
 		if err == nil {
+			disputed, err := disputedRoomArchiveReplay(ctx, q, c, m, existingID, stanzaID)
+			if err != nil {
+				return err
+			}
+			if disputed {
+				return tx.Commit()
+			}
 			if stanzaOwner != "" && stanzaOwner != existingID {
-				return application.ErrInvalid
+				linked, err := q.IsRoomArchiveEchoOf(ctx, dbgen.IsRoomArchiveEchoOfParams{EchoID: existingID, OriginalID: stanzaOwner, RoomUid: stanzaID})
+				if err != nil {
+					return err
+				}
+				if !linked {
+					return application.ErrInvalid
+				}
+				existingID = stanzaOwner
+			}
+			if stanzaID != "" && m.OwnOriginID == "" {
+				compatible, err := roomSourceAcceptsIdentity(ctx, q, c, m, existingID, stanzaID)
+				if err != nil {
+					return err
+				}
+				if !compatible {
+					return tx.Commit()
+				}
 			}
 			retained, err := q.GetMessage(ctx, existingID)
 			if err != nil {
@@ -663,9 +696,28 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		}
 		existingID = existing.ID
 	}
+	if conflictingOwner != "" && existingID == conflictingOwner {
+		return tx.Commit()
+	}
+	// A live reflection can race the room archive. If the archive arrived
+	// first, attach the live identity to its retained source. A native send
+	// keeps its own UUID and links the earlier archive observation below.
+	if existingID == "" && stanzaOwner == "" && stanzaID != "" && m.ArchiveID == "" && !ownRoomEdit(m) {
+		stanzaOwner, err = priorRoomArchiveSource(ctx, q, c, m, stanzaID)
+		if err != nil {
+			return err
+		}
+	}
 	if stanzaOwner != "" {
 		if existingID != "" && existingID != stanzaOwner {
-			return application.ErrInvalid
+			linked, err := q.IsRoomArchiveEchoOf(ctx, dbgen.IsRoomArchiveEchoOfParams{EchoID: existingID, OriginalID: stanzaOwner, RoomUid: stanzaID})
+			if err != nil {
+				return err
+			}
+			if !linked {
+				return application.ErrInvalid
+			}
+			existingID = stanzaOwner
 		}
 		if existingID == "" {
 			row, err := q.GetMessage(ctx, stanzaOwner)
@@ -694,6 +746,14 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 		if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
 			return err
 		}
+		if stanzaID != "" && m.IsOwn {
+			if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
+				return err
+			}
+			if err = linkRoomArchiveEcho(ctx, q, c, stanzaID); err != nil {
+				return err
+			}
+		}
 		return tx.Commit()
 	}
 	if m.ReplyReference != nil && referenceValid(m.ReplyReference.Target) {
@@ -712,6 +772,11 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	}
 	if !archiveAlreadyBound {
 		if err = archiveAlias(ctx, q, m, string(m.ID)); err != nil {
+			return err
+		}
+	}
+	if stanzaID != "" && m.IsOwn {
+		if err = linkRoomArchiveEcho(ctx, q, c, stanzaID); err != nil {
 			return err
 		}
 	}
@@ -1063,7 +1128,7 @@ func (s *Store) RecordConnection(ctx context.Context, c domain.Connection) error
 // Replaying verified room identity metadata updates the retained projection and
 // revision only. It never creates outbox work or replaces historical content.
 func (s *Store) reconcileArchivedAuthor(ctx context.Context, q *dbgen.Queries, id string, c domain.Conversation, in domain.Message, revision domain.ID) error {
-	if !in.Historical || !in.IsOwn || c.Kind != "room" {
+	if !in.IsOwn || c.Kind != "room" {
 		return nil
 	}
 	row, err := q.GetMessage(ctx, id)

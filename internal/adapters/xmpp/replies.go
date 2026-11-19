@@ -84,6 +84,16 @@ func roomStanzaID(from jid.JID, ids []wireID) string {
 	return ""
 }
 
+func missingRoomStanzaID(from jid.JID, ids []wireID) bool {
+	for _, id := range ids {
+		by, err := jid.Parse(id.By)
+		if err != nil || id.By == "" || by.Bare().Equal(from.Bare()) {
+			return false
+		}
+	}
+	return true
+}
+
 // Room IDs are accepted only after discovery confirms the room enforces SID
 // assignment. Direct IDs remain scoped by the authenticated sender, never global.
 func decodeReplyMetadata(meta replyMetadata, body string, from jid.JID, account, peer string, room, stableVerified bool) ([]domain.MessageReference, *domain.ReplyReference) {

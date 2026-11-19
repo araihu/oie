@@ -1,0 +1,10 @@
+DROP TRIGGER recheck_room_echo_reference;
+DROP TRIGGER recheck_room_echo_archive_key;
+DROP TRIGGER recheck_room_echo_sender;
+DROP TRIGGER recheck_room_echo_correction;
+DROP TRIGGER recheck_room_echo_content;
+DELETE FROM room_archive_echo_links;
+DROP VIEW room_archive_echo_pairs;
+DROP TABLE disputed_room_archive_echoes;
+DROP TABLE room_archive_echo_links;
+PRAGMA user_version=55;

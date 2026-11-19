@@ -200,10 +200,16 @@ func archivedIncoming(account domain.Account, scope string, r *archiveResult, tr
 			return in, false, errArchive
 		}
 	}
-	verified := trust.SIDVerified && scope == msg.From.Bare().String()
+	verified := trust.SIDVerified && scope != account.Address && scope == msg.From.Bare().String()
 	occupantVerified := trust.OccupantVerified && scope == msg.From.Bare().String()
 	in.Correction = decodeCorrectionMetadata(msg.correctionMetadata, msg.Message, in.Kind == "room", occupantVerified)
 	in.References, in.Reply = decodeReplyMetadata(msg.replyMetadata, msg.Body, msg.From, account.Address, in.Address, in.Kind == "room", verified)
+	// MAM 2 returns the room-issued stanza ID on the result. The forwarded
+	// message can omit it. Do not replace an ambiguous or malformed room ID.
+	if in.Kind == "room" && verified && len(in.References) == 0 && usableID(r.ID) && missingRoomStanzaID(msg.From, msg.Stable) {
+		in.References = []domain.MessageReference{{Scope: "room:" + scope, ID: r.ID, Author: msg.From.String()}}
+	}
+
 	if in.IsOwn {
 		in.CanonicalID, _ = domain.ParseID(msg.originID())
 		mentions := msg.wireMentionProof(in.Address, body)

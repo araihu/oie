@@ -2,6 +2,17 @@ const assert = require('node:assert/strict');
 
 module.exports = async function liveMessageAppend({open, until, emit, messages, positions, conversation, state, id}) {
   const size = messages.length, original = {...conversation};
+  const post=(text,paired=true,reply)=>{
+    const n=messages.length;
+    const message={...messages[0],id:id(7900000+n),revisionId:id(7800000+n),originalText:text,
+      createdAt:new Date(Date.parse(messages.at(-1).createdAt)+1000).toISOString(),sendState:'received',isOwn:false};
+    if (reply) message.reply=reply;
+    messages.push(message);positions.set(message.id,n);
+    Object.assign(conversation,{lastMessage:text,revisionId:id(7700000+n),updatedAt:message.createdAt,unreadCount:conversation.unreadCount+1});
+    emit('message.created',{message});
+    if(paired)emit('conversation.updated',{conversation});
+    return message;
+  };
   state.appendFixture = true;
   const {page,context} = await open();
   try {
@@ -18,16 +29,6 @@ module.exports = async function liveMessageAppend({open, until, emit, messages, 
       const url=new URL(response.url());
       if(['/ui/refresh','/ui/timeline'].includes(url.pathname))replies.push(response);
     });
-    const post=(text,paired=true)=>{
-      const n=messages.length;
-      const message={...messages[0],id:id(7900000+n),revisionId:id(7800000+n),originalText:text,
-        createdAt:new Date(Date.parse(messages.at(-1).createdAt)+1000).toISOString(),sendState:'received',isOwn:false};
-      messages.push(message);positions.set(message.id,n);
-      Object.assign(conversation,{lastMessage:text,revisionId:id(7700000+n),updatedAt:message.createdAt,unreadCount:conversation.unreadCount+1});
-      emit('message.created',{message});
-      if(paired)emit('conversation.updated',{conversation});
-      return message;
-    };
     // Let the EventSource's initial reconciliation settle before observing a real event.
     await page.waitForTimeout(250);
     replies.length=0;
@@ -98,11 +99,76 @@ module.exports = async function liveMessageAppend({open, until, emit, messages, 
     }
     await timeline.locator('[data-message-id="'+late.id+'"]').waitFor({state:'attached'});
     assert(!(await page.evaluate(()=>window.lateAppends)).includes(oldCursor));
+    // The next plain arrival can resolve a reply already on screen.
+    const quoted=post('A reply before its original',true,{available:false,excerpt:'Original',bodyText:'A reply before its original'});
+    const quoteRow=timeline.locator('[data-message-id="'+quoted.id+'"]');
+    await quoteRow.locator('[data-reply-unavailable]').waitFor();
+    await page.evaluate(()=>window.OieTimeline.scrollLatest());
+    const source=post('Original');
+    Object.assign(quoted.reply,{available:true,messageId:source.id,senderName:'Bob'});
+    const link=quoteRow.locator('[data-reply-target="'+source.id+'"]');
+    await link.waitFor();
+    await link.click();
+    await page.waitForFunction(id=>document.activeElement?.dataset.messageId===id,source.id);
     assert.equal(await input.inputValue(),'Draft while messages arrive');
   } finally {
     await context.close();
     for(const message of messages.splice(size))positions.delete(message.id);
     Object.assign(conversation,original);
     state.appendFixture=false;
+  }
+  // In a room, a full refresh returns 50 rows. The 51st still-mounted row
+  // can hold the reply whose original just arrived.
+  conversation.kind='room';
+  const old=messages[size-50],other=messages[size-49];
+  old.reply={available:false,excerpt:'First original',bodyText:old.originalText};
+  other.reply={available:false,excerpt:'Second original',bodyText:other.originalText};
+  const room=await open();
+  try {
+    const row=id=>room.page.locator('#message-timeline > [data-message-id="'+id+'"]');
+    await row(old.id).locator('[data-reply-unavailable]').waitFor({state:'attached'});
+    await room.page.waitForFunction(()=>window.OieEvents.connected);
+    await room.page.evaluate(()=>window.OieTimeline.scrollLatest());
+    const checks=[];
+    room.page.on('request',r=>{
+      const url=new URL(r.url());
+      if(url.pathname==='/ui/timeline'&&url.searchParams.get('mode')==='window'&&url.searchParams.get('newest')===other.id)
+        checks.push(performance.now());
+    });
+    const source=post('First original');
+    Object.assign(old.reply,{available:true,messageId:source.id,senderName:'Bob'});
+    await row(source.id).waitFor({state:'attached'});
+    await row(old.id).locator('[data-reply-target="'+source.id+'"]').waitFor({state:'attached'});
+    await room.page.waitForFunction(()=>document.querySelector('#message-timeline').dataset.timelineBusy==='false');
+    assert(room.reads.some(read=>read.mode==='window'&&read.oldest===old.id&&read.newest===other.id),
+      'the auxiliary read spans only the pending cards');
+    // A missing card must not force one window read per unrelated arrival.
+    for(let i=0;i<3;i++){
+      const unrelated=post('Unrelated '+i);
+      await row(unrelated.id).waitFor({state:'attached'});
+    }
+    let interrupted=false;
+    await room.page.route('**/ui/timeline?**',route=>{
+      const query=new URL(route.request().url()).searchParams;
+      if(!interrupted&&query.get('mode')==='window'&&query.get('oldest')===other.id){
+        interrupted=true;
+        return route.fulfill({status:503,body:''});
+      }
+      return route.continue();
+    });
+    const second=post('Second original');
+    Object.assign(other.reply,{available:true,messageId:second.id,senderName:'Bob'});
+    await row(other.id).locator('[data-reply-target="'+second.id+'"]').waitFor({state:'attached'});
+    assert(room.reads.some(read=>read.mode==='window'&&read.oldest===other.id&&read.newest===other.id),
+      'recovery of the remaining quote needs only its own row');
+    assert(interrupted,'quote recovery retried after the last arrival');
+    assert(checks.length>=3);
+    for(let i=1;i<checks.length;i++)assert(checks[i]-checks[i-1]>4000,'room arrivals repeatedly reloaded the mounted window');
+  } finally {
+    await room.context.close();
+    delete old.reply;
+    delete other.reply;
+    for(const message of messages.splice(size))positions.delete(message.id);
+    Object.assign(conversation,original);
   }
 };

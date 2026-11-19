@@ -173,3 +173,116 @@ func TestBackupPortableWeakDeletionRequiresReview(t *testing.T) {
 		t.Fatalf("weak exclusion: %v", err)
 	}
 }
+
+func TestRestoreRoomArchiveExclusionAcrossWireFormats(t *testing.T) {
+	for _, tc := range []struct {
+		name, deletedSID, deletedMAM, incomingSID, incomingMAM string
+		keep                                                   bool
+	}{
+		{"deleted MAM, restored live", "", "uid", "uid", "", false},
+		{"deleted live, restored MAM", "uid", "", "", "uid", false},
+		{"distinct explicit MAM", "", "uid", "uid", "other", true},
+		{"distinct explicit SID", "uid", "", "other", "uid", true},
+		{"deleted with distinct explicit MAM", "uid", "other", "", "uid", true},
+		{"deleted with distinct explicit SID", "other", "uid", "uid", "", true},
+		{"archived UID also exposed as SID", "uid", "other", "uid", "uid", true},
+		{"deleted UID also exposed as SID", "uid", "uid", "uid", "other", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dst, _, dc := outboxFixture(t)
+			src, _, sc := outboxFixture(t)
+			_, dc = promoteBackupRoomFixture(t, dst, dc)
+			_, sc = promoteBackupRoomFixture(t, src, sc)
+			at := time.Now().UTC()
+			deleted := seedPortableRoomMessage(t, dst, dc, at, "same text", "local", tc.deletedSID, tc.deletedMAM)
+			if _, err := dst.db.Exec("DELETE FROM messages WHERE id=?", deleted.ID); err != nil {
+				t.Fatal(err)
+			}
+			incoming := seedPortableRoomMessage(t, src, sc, at, "same text", "remote", tc.incomingSID, tc.incomingMAM)
+			manifest, archive, scratch := backupRestoreFixture(t, src, false)
+			if _, err := dst.mergeBackup(t.Context(), archive, scratch, manifest, at); err != nil {
+				t.Fatal(err)
+			}
+			remaining, err := dst.Messages(t.Context(), dc.ID, "", 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.keep {
+				if len(remaining) != 1 || remaining[0].ID != incoming.ID {
+					t.Fatalf("want distinct room occurrence %s, got %d rows", incoming.ID, len(remaining))
+				}
+			} else if len(remaining) != 0 {
+				t.Fatal("restore resurrected the deleted room occurrence")
+			}
+		})
+	}
+}
+
+// A replay suppressed solely by a matching UID cannot establish a second
+// deletion key. A later observation can distinguish the two occurrences.
+func TestInferredRoomExclusionCanBeDisambiguated(t *testing.T) {
+	for _, restore := range []bool{false, true} {
+		path := "receive"
+		if restore {
+			path = "restore"
+		}
+		t.Run(path, func(t *testing.T) {
+			dst, _, chat := outboxFixture(t)
+			_, chat = promoteBackupRoomFixture(t, dst, chat)
+			at := time.Now().UTC()
+			deleted := seedPortableRoomMessage(t, dst, chat, at, "old", "live", "uid", "")
+			if _, err := dst.db.Exec("DELETE FROM messages WHERE id=?", deleted.ID); err != nil {
+				t.Fatal(err)
+			}
+			deliver := func(sid string) {
+				t.Helper()
+				if !restore {
+					seedPortableRoomMessage(t, dst, chat, at, "archive", "archive", sid, "uid")
+					return
+				}
+				src, _, sc := outboxFixture(t)
+				_, sc = promoteBackupRoomFixture(t, src, sc)
+				seedPortableRoomMessage(t, src, sc, at, "archive", "archive", sid, "uid")
+				manifest, archive, scratch := backupRestoreFixture(t, src, false)
+				if _, err := dst.mergeBackup(t.Context(), archive, scratch, manifest, at); err != nil {
+					t.Fatal(err)
+				}
+			}
+			deliver("uid")
+			if rows, err := dst.Messages(t.Context(), chat.ID, "", 10); err != nil || len(rows) != 0 {
+				t.Fatalf("inferred replay became visible: %v, %v", len(rows), err)
+			}
+			deliver("different-sid")
+			if rows, err := dst.Messages(t.Context(), chat.ID, "", 10); err != nil || len(rows) != 1 {
+				t.Fatalf("distinct archive occurrence was lost: %v, %v", len(rows), err)
+			}
+		})
+	}
+}
+
+func TestPortableRoomSIDCannotJoinDifferentArchiveOccurrences(t *testing.T) {
+	left, _, lc := outboxFixture(t)
+	right, _, rc := outboxFixture(t)
+	_, lc = promoteBackupRoomFixture(t, left, lc)
+	_, rc = promoteBackupRoomFixture(t, right, rc)
+	at := time.Now().UTC()
+	// The room's MAM projection fills a missing inner stanza ID with the MAM UID.
+	seedPortableRoomMessage(t, left, lc, at, "hi", "left", "u", "v")
+	seedPortableRoomMessage(t, right, rc, at.Add(time.Minute), "hi", "right", "u", "u")
+	lm, ld, ls := backupRestoreFixture(t, left, false)
+	rm, rd, rs := backupRestoreFixture(t, right, false)
+	for _, tc := range []struct {
+		dest        *Store
+		chat        domain.Conversation
+		manifest    backupManifest
+		db, scratch string
+	}{{left, lc, rm, rd, rs}, {right, rc, lm, ld, ls}} {
+		if _, err := tc.dest.mergeBackup(t.Context(), tc.db, tc.scratch, tc.manifest, at); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := tc.dest.Messages(t.Context(), tc.chat.ID, "", 10)
+		if err != nil || len(rows) != 2 {
+			t.Fatalf("different room MAM occurrences merged: got %d, %v", len(rows), err)
+		}
+	}
+}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/domain"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
 // The restore scripts join an attached, validated snapshot with the live
@@ -21,7 +22,8 @@ import (
 //go:embed restore/*.sql
 var restoreSQL embed.FS
 
-const backupV1Schema = 54
+const firstBackupV1Schema = 54
+const backupV1Schema = 57
 
 type RestoreSummary struct {
 	Accounts      int64 `json:"accountsAdded"`
@@ -49,6 +51,14 @@ func RestoreProfileBackup(ctx context.Context, dir, filename string, newID domai
 	if err := checkRestoreDatabase(ctx, archivePath); err != nil {
 		return RestoreSummary{}, err
 	}
+	// Only the extracted, schema-validated copy is upgraded for the merge.
+	extracted, err := openBackupDatabase(archivePath, "rw")
+	if err != nil {
+		return RestoreSummary{}, err
+	}
+	if err := errors.Join(migrateDatabase(ctx, extracted, scratch), extracted.Close()); err != nil {
+		return RestoreSummary{}, fmt.Errorf("upgrade backup snapshot: %w", err)
+	}
 	store, err := Open(ctx, dir, newID)
 	if err != nil {
 		return RestoreSummary{}, fmt.Errorf("open destination profile: %w", err)
@@ -73,8 +83,15 @@ FROM schema_migrations LIMIT 1`).Scan(&version, &dirty, &versions); err != nil {
 	if versions != 1 {
 		return errors.New("backup database has multiple schema versions")
 	}
-	if dirty || version != backupV1Schema {
+	if dirty || version < firstBackupV1Schema || version > backupV1Schema {
 		return fmt.Errorf("unsupported backup database version %d", version)
+	}
+	var userVersion int
+	if err := source.QueryRowContext(ctx, "PRAGMA user_version").Scan(&userVersion); err != nil {
+		return err
+	}
+	if userVersion != version {
+		return fmt.Errorf("backup database version %d disagrees with migration journal version %d", userVersion, version)
 	}
 	var integrity string
 	if err := source.QueryRowContext(ctx, "PRAGMA quick_check(1)").Scan(&integrity); err != nil {
@@ -94,7 +111,7 @@ FROM schema_migrations LIMIT 1`).Scan(&version, &dirty, &versions); err != nil {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if err := checkRestoreArchiveSchema(ctx, filename); err != nil {
+	if err := checkRestoreArchiveSchema(ctx, filename, version); err != nil {
 		return err
 	}
 	passwords, err := dbgen.New(source).BackupHasRoomPasswords(ctx)
@@ -107,8 +124,8 @@ FROM schema_migrations LIMIT 1`).Scan(&version, &dirty, &versions); err != nil {
 	return nil
 }
 
-func checkRestoreArchiveSchema(ctx context.Context, filename string) (err error) {
-	// Compare against the current migration definitions before opening a real
+func checkRestoreArchiveSchema(ctx context.Context, filename string, version int) (err error) {
+	// Compare against the declared version’s migration definitions before opening a real
 	// profile. Verification and restore accept the same archive schemas.
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
@@ -116,7 +133,16 @@ func checkRestoreArchiveSchema(ctx context.Context, filename string) (err error)
 	}
 	defer func() { err = errors.Join(err, db.Close()) }()
 	db.SetMaxOpenConns(1)
-	if err := migrateDatabase(ctx, db, filepath.Dir(filename)); err != nil {
+	scripts, err := iofs.New(migrations, "migrations")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = scripts.Close() }()
+	runner, err := migrationRunner(db, scripts)
+	if err != nil {
+		return err
+	}
+	if err := runner.Migrate(uint(version)); err != nil {
 		return err
 	}
 	conn, err := db.Conn(ctx)
@@ -223,6 +249,9 @@ func (s *Store) mergeBackup(ctx context.Context, archivePath, scratch string, ma
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("entities")); err != nil {
 		return result, fmt.Errorf("merge backup entities: %w", err)
+	}
+	if err := q.RestoreRoomArchiveEchoLinks(ctx); err != nil {
+		return result, err
 	}
 	if _, err := tx.ExecContext(ctx, restoreScript("stars")); err != nil {
 		return result, fmt.Errorf("merge backup stars: %w", err)

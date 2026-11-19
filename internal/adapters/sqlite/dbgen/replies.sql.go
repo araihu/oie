@@ -42,6 +42,8 @@ WHERE m.account_id=?1 AND m.conversation_id=?2
 AND r.remote_id=?3
 AND (CAST(?4 AS TEXT)='' OR r.scope=CAST(?4 AS TEXT))
 AND (CAST(?5 AS TEXT)='' OR r.author=CAST(?5 AS TEXT))
+AND NOT EXISTS (SELECT 1 FROM room_archive_reference_conflicts conflict
+ WHERE conflict.message_id=r.message_id AND conflict.scope=r.scope AND conflict.remote_id=r.remote_id)
 LIMIT 129
 `
 
