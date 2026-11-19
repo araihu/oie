@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -38,7 +39,7 @@ func TestAccountUnreadIncludesOtherAccountsAndArchivedPages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	totals := ui.accountUnread(context.Background())
+	totals := ui.accountUnread(context.Background(), false)
 	if totals["alice"] != 2 || totals["bob"] != 7 {
 		t.Fatalf("totals=%v", totals)
 	}
@@ -58,8 +59,47 @@ func TestAccountUnreadHidesIncompleteTotals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if totals := ui.accountUnread(context.Background()); totals != nil {
+	if totals := ui.accountUnread(context.Background(), false); totals != nil {
 		t.Fatalf("partial counts must be hidden: %v", totals)
+	}
+}
+
+func TestInboxRefreshReadsUnreadTotalsOnce(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var reads atomic.Int32
+			var fixture liveFixture
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v1/engine":
+					_ = json.NewEncoder(w).Encode(engineapi.Engine{Id: testEngine, ApiVersion: "0.41.0", Role: "local", EventCursor: testEngine + ":1"})
+				case "/api/v1/accounts/unread-totals":
+					reads.Add(1)
+					w.WriteHeader(status)
+					if status == http.StatusOK {
+						_ = json.NewEncoder(w).Encode(engineapi.AccountUnreadTotals{Totals: map[string]int{testAccount: 17}})
+					}
+				default:
+					if r.URL.Query().Get("unreadOnly") == "true" {
+						t.Errorf("unexpected unread page %s", r.URL)
+					}
+					fixture.ServeHTTP(w, r)
+				}
+			}))
+			defer backend.Close()
+			ui, err := New(backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest("GET", "/ui/refresh", nil)
+			req.Header.Set("X-Oie-Inbox-Event", testEngine+":1")
+			v := ui.baseView(req)
+			ui.load(req.Context(), req, &v)
+			if reads.Load() != 1 || status == 200 && v.AccountUnread[testAccount] != 17 || status != 200 && v.AccountUnread != nil {
+				t.Fatalf("reads=%d totals=%v", reads.Load(), v.AccountUnread)
+			}
+		})
 	}
 }
 

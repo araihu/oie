@@ -17,6 +17,8 @@ window.OieRuntime.register('live', life => {
   const initialList = document.getElementById('conversation-list');
   let appliedCursor = initialList?.dataset.inboxCursor === body.dataset.eventCursor && inbox.current(initialList) ? body.dataset.eventCursor : '';
   let inboxEventCursor = '', changedRow = '', fullRefresh = false;
+  let pendingAppend;
+  let lastRefreshStart = -Infinity;
   let sourceNavigation, refreshController;
   let stopped = false, storageDenied = false;
   life.cleanup(()=>{stopped=true;});
@@ -1633,14 +1635,28 @@ window.OieRuntime.register('live', life => {
     let value;
     try { value = JSON.parse(event.data); } catch { return false; }
     const id = value?.message?.conversationId || value?.conversation?.id;
-    if (!canonicalID(id) || id === body.dataset.conversationId) return false;
+    if (!canonicalID(id)) return false;
+    if(!inboxEventCursor)pendingAppend=undefined;
+    if(id===body.dataset.conversationId){
+      const m=value.message;
+      if(type==='message.created'&&!inboxEventCursor&&m?.sendState==='received'&&!m.isOwn&&!m.historical&&
+         m.accountId===body.dataset.accountId&&canonicalID(m.id)&&typeof m.originalText==='string'&&m.originalText&&!m.reply&&!m.retraction&&!m.moderation&&
+         !m.attachments?.length&&!m.audioAttachmentUrls?.length&&!m.videoAttachmentUrls?.length&&
+         !m.originalText.includes('://')&&window.OieTimeline?.appendEdge()){
+        pendingAppend={id:m.id,cursor:event.lastEventId,paired:false};
+      }else if(type==='conversation.updated'&&pendingAppend?.cursor===inboxEventCursor&&!pendingAppend.paired&&
+               value.conversation?.accountId===body.dataset.accountId){
+        // A retained incoming message and its conversation summary commit together.
+        pendingAppend={...pendingAppend,cursor:event.lastEventId,paired:true};
+      }else return false;
+    }else if(pendingAppend)return false;
     changedRow = !inboxEventCursor || changedRow === id ? id : '';
     inboxEventCursor = event.lastEventId;
     scheduleRefresh(true);
     return true;
   }
 
-  function applyInboxUpdate(region, list, generation) {
+  function applyInboxUpdate(region, list, generation, append) {
     const fresh = region.querySelector('#live-list');
     if (!list?.isConnected || !fresh) return false;
     const rows = new Map([...list.querySelectorAll('[data-conversation-row]')].map(row => [row.dataset.conversationRow, row]));
@@ -1649,6 +1665,7 @@ window.OieRuntime.register('live', life => {
       if (!existing || existing.dataset.version !== stub.dataset.version) return false;
       stub.dataset.conversationRow = existing.dataset.conversationRow;
     }
+    if(append&&!append())return false;
     inbox.reconcile(list, fresh);
     list.dataset.version = fresh.dataset.version;
     inbox.track(list, generation, region.dataset.eventCursor);
@@ -1668,6 +1685,7 @@ window.OieRuntime.register('live', life => {
     if (stopped || mock) return;
     if (pendingRequests || refreshing || sourceNavigation) { refreshAgain = true; return; }
     refreshing = true;
+    lastRefreshStart = performance.now();
     const renameEpoch = accountRenameEpoch;
     const starGeneration=Number(body.dataset.starGeneration||0);
     const preferenceGeneration=Number(body.dataset.conversationPreferenceGeneration||0);
@@ -1694,9 +1712,18 @@ window.OieRuntime.register('live', life => {
       !journal?.pending && !sourceNavigation && !recoveringView && !refreshQuery.has('open') &&
       !refreshQuery.has('searchMode') && !refreshQuery.has('chatSearch') &&
       ![...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]:not([hidden])')].some(dialog => dialog.getClientRects().length);
+    const append=pendingAppend?.cursor===inboxEventCursor?pendingAppend:undefined;
     if(conditional && inboxEventCursor){
-      headers['X-Oie-Inbox-Event']=inboxEventCursor;
-      headers['X-Oie-Inbox-Row']=changedRow;
+      const edge=append&&window.OieTimeline?.appendEdge();
+      if(!append||edge){
+        headers['X-Oie-Inbox-Event']=inboxEventCursor;
+        headers['X-Oie-Inbox-Row']=changedRow;
+        if(append){
+          headers['X-Oie-Timeline-Message']=append.id;
+          headers['X-Oie-Timeline-After']=edge.id;
+          headers['X-Oie-Timeline-Scope']=edge.scope;
+        }
+      }
     }else if(conditional && inbox.current(list)){
       headers['X-Oie-Refresh-Cursor']=appliedCursor;
     }
@@ -1716,6 +1743,22 @@ window.OieRuntime.register('live', life => {
       const page = new DOMParser().parseFromString(await response.text(), 'text/html');
       if(life.signal.aborted||controller.signal.aborted)return;
       if(requestedSearch!==location.search || renameEpoch!==accountRenameEpoch){refreshAgain=true;return;}
+      const message=page.getElementById('oie-live-message');
+      if(message){
+        if(message.dataset.engineId!==body.dataset.engineId){engineChanged();return;}
+        const cursor=message.dataset.eventCursor;
+        if(!append||fullRefresh||pendingRequests||journal?.pending||cursor!==append.cursor||cursor!==inboxEventCursor||inboxGeneration!==inbox.generation||
+           preferenceGeneration!==Number(body.dataset.conversationPreferenceGeneration||0)||
+           !applyInboxUpdate(message,list,inboxGeneration,()=>window.OieTimeline?.appendMessage(message,headers['X-Oie-Timeline-After'],append.id,reactionStartedAt,starGeneration))){
+          refreshAgain=true;return;
+        }
+        const state=message.querySelector('#live-header [data-conversation-preference-state]');
+        if(state)rememberConversationForRemoval({id:state.dataset.conversation,accountId:state.dataset.account,revisionId:state.dataset.revision,title:document.querySelector('#chat-header h2')?.textContent});
+        document.dispatchEvent(new CustomEvent('oie:conversation-preferences-refreshed',{detail:{page}}));
+        document.dispatchEvent(new CustomEvent('oie:live-message-appended',{detail:{cursor}}));
+        appliedCursor=cursor;inboxEventCursor='';pendingAppend=undefined;
+        return;
+      }
       const inboxOnly = page.getElementById('oie-live-inbox');
       if(inboxOnly){
         if(inboxOnly.dataset.engineId!==body.dataset.engineId){engineChanged();return;}
@@ -1940,6 +1983,7 @@ window.OieRuntime.register('live', life => {
     if(fragment!=='source'&&fragment!=='source-pane')return;
     sourceNavigation=ctx;
     clearTimeout(refreshTimer);
+    refreshTimer = undefined;
     refreshController?.abort();
   });
   life.on(document,'htmx:finally:request',event=>{
@@ -1983,8 +2027,14 @@ window.OieRuntime.register('live', life => {
     if (stopped || life.signal.aborted) return;
     if (conditional !== true) { fullRefresh = true; inboxEventCursor = ''; }
     if (sourceNavigation) { refreshAgain = true; return; }
-    clearTimeout(refreshTimer);
-    refreshTimer = life.timeout(refresh, 100);
+    if (refreshTimer !== undefined) return;
+    // Give an isolated event one short coalescing window. Under sustained
+    // traffic, keep the same deadline and start at most four reads per second.
+    const delay = Math.max(16, 250 - (performance.now() - lastRefreshStart));
+    refreshTimer = life.timeout(() => {
+      refreshTimer = undefined;
+      void refresh();
+    }, delay);
   }
 
   function needsReplyRefresh(reply) {

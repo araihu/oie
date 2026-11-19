@@ -12,6 +12,18 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+func (s *Store) AccountUnreadTotals(ctx context.Context) (map[string]int, error) {
+	rows, err := s.read.AccountUnreadTotals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	totals := make(map[string]int, len(rows))
+	for _, row := range rows {
+		totals[row.AccountID] = int(row.Total)
+	}
+	return totals, nil
+}
+
 func readState(ctx context.Context, q *dbgen.Queries, c domain.Conversation) (domain.ReadState, error) {
 	state := domain.ReadState{ConversationID: c.ID, AccountID: c.AccountID, UnreadCount: c.UnreadCount}
 	head, err := q.GetConversationReadHead(ctx, string(c.ID))

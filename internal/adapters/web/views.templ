@@ -522,7 +522,6 @@ if v.canRemoveFromChats() {
 templ message(v view,m messageView,grouped,groupEnd bool){
 {{ position := messageTimelineTime(m.Message) }}
 <div class={"oie-message",templ.KV("oie-message-own",m.IsOwn),templ.KV("oie-message-mentioned",m.mentionsYou()),templ.KV("oie-message-grouped",grouped),templ.KV("oie-message-group-end",groupEnd)} tabindex="-1" data-message-id={m.Id} data-read-eligible={strconv.FormatBool(!m.IsOwn&&(m.Historical==nil||!*m.Historical))} data-starred={strconv.FormatBool(v.StarsKnown&&v.Stars[m.Id].Starred)} data-send-state={string(m.SendState)} data-created-at={position.Format("2006-01-02T15:04:05Z07:00")} data-created-ms={strconv.FormatInt(position.UnixMilli(),10)} data-timeline-release?={m.TimelineAt!=nil} data-message-revision={m.RevisionId} data-message-previews-known={strconv.FormatBool(m.PresentationKnown&&m.VideosKnown)} data-message-account={m.AccountId} data-message-conversation={m.ConversationId} data-message-sender={m.Sender.Id} data-message-sender-name={m.Sender.DisplayName} data-message-groupable={strconv.FormatBool(m.Attachment==nil)} data-message-version={v.messageVersion(m)} data-message-source={originalMessageJSON(m.OriginalText)}>
-@viewerSource(v,m)
 if m.Attachment!=nil {
 <div class="oie-media-message">@card.Card(card.Config{Image:m.Attachment.PreviewUrl,ImageAlt:m.Attachment.Title,Title:m.Attachment.Title,Description:m.Attachment.Description,Density:card.DensityCompact,RootClass:"oie-media-card"})</div>
 }else{
@@ -1264,6 +1263,9 @@ if !v.Preview {
 }
 </div>
 <div class="oie-message-previews" data-message-previews={m.Id}>
+if len(v.imagePreviews(m.Id)) > 0 {
+@viewerSource(v,m)
+}
 for _,p:=range v.MessagePreviews[m.Id] {
 @messagePreview(v,p)
 }

@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -148,4 +149,59 @@ func TestReadLatestHTTPRejectsStaleTimelineAndClearsEarlierPages(t *testing.T) {
 			t.Fatal("later arrival or another conversation was cleared", after, err)
 		}
 	}
+}
+
+func TestAccountUnreadTotalsIncludesArchivedAndExcludesRemovedChats(t *testing.T) {
+	ctx := t.Context()
+	e, _, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	first := openTestConversation(t, e, "alice@localhost")
+	second := openTestConversation(t, e, "bob@localhost")
+	client, err := engineapi.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(want map[string]int) {
+		t.Helper()
+		reply, err := client.GetAccountUnreadTotalsWithResponse(ctx)
+		if err != nil || reply.JSON200 == nil || reply.JSON200.Totals == nil || !maps.Equal(reply.JSON200.Totals, want) {
+			t.Fatalf("unread totals: got %+v, want %v, err %v", reply, want, err)
+		}
+	}
+	check(nil)
+	_, err = e.UpdateConversationPreferences(ctx, id(), first.ID, application.ConversationPreferencesInput{
+		AccountID: first.AccountID, ExpectedRevisionID: first.RevisionID, Read: new(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(nil) // The manual reminder has no unread messages.
+	receive := func(c domain.Conversation) domain.Conversation {
+		t.Helper()
+		if err := e.Receive(ctx, application.Incoming{AccountID: c.AccountID, Address: c.Address, OriginalText: "unread message", ProviderID: string(id())}); err != nil {
+			t.Fatal(err)
+		}
+		c, err := e.Conversation(ctx, c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	receive(first)
+	archived, err := e.OpenConversation(ctx, id(), first.AccountID, "archived@localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := receive(archived.Conversation)
+	_, err = e.UpdateConversationPreferences(ctx, id(), c.ID, application.ConversationPreferencesInput{
+		AccountID: c.AccountID, ExpectedRevisionID: c.RevisionID, Archived: new(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second = receive(second)
+	check(map[string]int{string(first.AccountID): 2, string(second.AccountID): 1})
+	if err := e.RemoveDirectFromChats(ctx, id(), second.ID, second.AccountID, second.RevisionID); err != nil {
+		t.Fatal(err)
+	}
+	check(map[string]int{string(first.AccountID): 2})
 }

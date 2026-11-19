@@ -203,9 +203,12 @@ type view struct {
 	InboxOnly                  bool
 	ReuseInbox                 bool
 	PagePresentationSupported  bool
+	UnreadTotalsSupported      bool
 	RefreshUnchanged           bool
 	RefreshInbox               bool
 	RefreshRow                 string
+	AppendAfter                string
+	AppendGrouped              bool
 	CachedInboxFirst           string
 	Role                       engineapi.EngineRole
 	CanResetData               bool
@@ -1124,7 +1127,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		component := liveRegions(v)
 		if v.RefreshInbox && !v.Unavailable {
-			component = liveInbox(v)
+			if v.AppendAfter != "" {
+				component = liveMessage(v)
+			} else {
+				component = liveInbox(v)
+			}
 		}
 		var buf bytes.Buffer
 		if err := component.Render(presentationContext(r.Context(), v), &buf); err != nil {
@@ -1218,6 +1225,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.EngineID = engine.JSON200.Id
 	v.ReadReceiptsSupported = supportsReadReceipts(engine.JSON200.ApiVersion)
 	v.PagePresentationSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 40)
+	v.UnreadTotalsSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 41)
 	v.EventCursor = engine.JSON200.EventCursor
 	if notificationEngine != "" && notificationEngine != v.EngineID {
 		v.NotFound = true
@@ -1249,11 +1257,18 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	if v.RefreshInbox {
 		var reads sync.WaitGroup
 		var unread map[string]int
-		reads.Go(func() { unread = s.accountUnread(ctx) })
+		reads.Go(func() { unread = s.accountUnread(ctx, v.UnreadTotalsSupported) })
 		s.loadInbox(ctx, v, editor)
 		reads.Wait()
 		v.AccountUnread = unread
-		return
+		if r.Header.Get("X-Oie-Timeline-Message") == "" || (!v.Unavailable && unread != nil && s.loadLiveMessage(ctx, r, v, editor)) {
+			return
+		}
+		// A missed edge, changed conversation or unsupported message needs the whole view.
+		v.RefreshInbox = false
+		v.Unavailable = false
+		v.Chats = nil
+		v.InboxNext = ""
 	}
 	if v.NativeMessageSearch {
 		s.loadMessageSearch(ctx, v)
@@ -1337,7 +1352,7 @@ func (s *Server) loadAccountSummaries(ctx context.Context, v *view, avatars, con
 	jobs := make(chan func(), len(results)*2+1)
 	var totals map[string]int
 	if unread {
-		jobs <- func() { totals = s.accountUnread(ctx) }
+		jobs <- func() { totals = s.accountUnread(ctx, v.UnreadTotalsSupported) }
 	}
 	for i, a := range v.Accounts {
 		if avatars {
@@ -1804,10 +1819,17 @@ func presentationContext(ctx context.Context, v view) context.Context {
 	})
 }
 
-// accountUnread composes the existing paginated API without depending on the
-// currently selected account, search or archive filter. Incomplete totals are
-// hidden rather than presenting a partial count as an exact total.
-func (s *Server) accountUnread(ctx context.Context) map[string]int {
+// accountUnread reads all account badges independently of the current inbox filters.
+// Older engines expose unread conversations through paginated lists.
+func (s *Server) accountUnread(ctx context.Context, supportsTotals bool) map[string]int {
+	if supportsTotals {
+		response, err := s.client.GetAccountUnreadTotalsWithResponse(ctx)
+		if err != nil || response.JSON200 == nil {
+			return nil
+		}
+		return response.JSON200.Totals
+	}
+
 	// Each filter has its own cursor chain. Merge active first if a conversation
 	// moves between the two lists while the reads are in flight.
 	var active map[string]unreadCount

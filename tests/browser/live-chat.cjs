@@ -6,6 +6,47 @@ const {spawn}=require('node:child_process');const {once}=require('node:events');
 const artifacts=path.join(__dirname,'artifacts');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 const engine=id(1),account=id(2),chat=id(3);
+async function checkRefreshBurst(browser, url) {
+  const page = await browser.newPage();
+  try {
+    await page.clock.install({time: new Date('2026-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+    await page.goto(url);
+    await page.evaluate(() => {
+      const fetch = window.fetch.bind(window);
+      window.refreshStarts = [];
+      window.fetch = (...args) => {
+        if (new URL(args[0], location.href).pathname !== '/ui/refresh') return fetch(...args);
+        window.refreshStarts.push(performance.now());
+        // Release the slow first read only after the burst fills its trailing slot.
+        const response = () => new Response('', {status: 503});
+        if (window.refreshStarts.length > 1) return Promise.resolve(response());
+        return new Promise(resolve => { window.releaseRefresh = () => resolve(response()); });
+      };
+    });
+    for (let i = 0; i < 16; i++) {
+      await page.evaluate(() => document.dispatchEvent(new Event('oie:refresh-request')));
+      await page.clock.runFor(25);
+    }
+    assert.equal(await page.evaluate(() => window.refreshStarts.length), 1,
+      'a continuous burst starts a refresh and keeps at most one read in flight');
+    await page.evaluate(() => window.releaseRefresh());
+    await page.clock.runFor(50);
+    assert.equal(await page.evaluate(() => window.refreshStarts.length), 2,
+      'invalidations during the slow read get one trailing refresh');
+    for (let i = 0; i < 6; i++) {
+      await page.evaluate(() => document.dispatchEvent(new Event('oie:refresh-request')));
+      await page.clock.runFor(25);
+    }
+    await page.clock.runFor(300);
+    const starts = await page.evaluate(() => window.refreshStarts);
+    assert.equal(starts.length, 3);
+    assert(starts[2] - starts[1] >= 250, 'even fast responses respect the burst rate limit');
+  } finally {
+    await page.close();
+  }
+}
+
 (async()=>{
  const state={messages:[],operations:new Map(),effects:0,cancelEffects:0,seq:0,connection:'not_connected',error:null};const streams=new Set();
  const conversation=()=>({id:chat,revisionId:id(4),accountId:account,kind:state.showRoom?'room':'direct',address:state.showRoom?'saved@conference.localhost':'bob@localhost',title:state.showRoom?'Saved room':'Bob',lastMessage:state.messages.at(-1)?.originalText||'',updatedAt:'2026-11-07T20:00:00Z',unreadCount:0,archived:false,favorite:false});
@@ -77,6 +118,7 @@ const engine=id(1),account=id(2),chat=id(3);
     for(const finding of findings)console.log('PASS: '+finding);
     return;
   }
+  await checkRefreshBurst(browser, base+'/?chat='+chat+'&lang=en');
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'en',timezoneId:'America/Sao_Paulo'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   page.on('dialog', dialog => dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss());
   await page.goto(base+'/?chat='+chat+'&lang=en&theme=dark');await page.locator('#message-composer').waitFor();

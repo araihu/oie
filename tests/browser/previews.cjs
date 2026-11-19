@@ -147,6 +147,9 @@ function thumbnail(color,width=8,height=8){
   assert.equal(await messageRow(23).locator('.oie-bubble').getAttribute('data-mine'),'true');assert.equal(await messageRow(23).locator('.oie-bubble [data-preview-id]').count(),1);assert(!(await messageRow(23).textContent()).includes(messages[23].originalText));
   await messageRow(4).locator('[data-message-menu-trigger]').click();await page.locator('#copy-message-'+messages[4].id).click();await until(async()=>await page.evaluate(()=>copied.length)===1,'caption original copied');assert.equal(await page.evaluate(()=>copied[0]),messages[4].originalText);
   assert.equal(await page.locator('[data-preview-id]').getByRole('button',{name:'Image info',exact:true}).count(),0);
+  assert.equal(await messageRow(2).locator('template[data-viewer-source]').count(),0);
+  assert.equal(await messageRow(16).locator('template[data-viewer-source]').count(),0);
+  assert.equal(await messageRow(18).locator('template[data-viewer-source]').count(),1);
   const late=preview(14,'image');messages[14].originalText=late.url;await page.reload();await until(()=>streams.size>0,'reloaded live stream');
   const originalBody=messageRow(14).locator('[data-rendered-message]');assert((await originalBody.textContent()).includes(late.url));await page.locator('#message-composer').fill('Keep this image metadata draft');await page.locator('#message-composer').focus();await page.evaluate(()=>window.imageRow=document.querySelector('[data-message-id="019a5df0-0000-7000-8000-000000000114"]'));
   previews.push(late);emit('message.preview_changed');await until(async()=>!(await originalBody.textContent()).includes(late.url),'late image projection hides duplicate');assert(await page.evaluate(()=>document.querySelector('[data-message-id="019a5df0-0000-7000-8000-000000000114"]')===window.imageRow));assert(await page.locator('#message-composer').evaluate(el=>document.activeElement===el));assert.equal(await page.locator('#message-composer').inputValue(),'Keep this image metadata draft');
@@ -212,6 +215,43 @@ function thumbnail(color,width=8,height=8){
   findings.push('Received and sent image previews fit the mobile bubble before and after thumbnail decode');
   await scope(page,previews[1]).locator('[data-preview-expand]').first().click();await page.locator('#oie-image-viewer').waitFor({state:'visible'});await page.waitForTimeout(100);
   assert.equal(await page.locator('#oie-image-viewerTitle').textContent(),'Imagem');assert.equal(await page.locator('.oie-viewer-toolbar [data-viewer-info]').count(),1);assert.equal((await page.locator('[data-viewer-info]').textContent()).trim(),'');await page.locator('[data-viewer-info]').click();await page.locator('#oie-image-info').waitFor({state:'visible'});assert.equal(await page.locator('[data-image-source]').getAttribute('href'),previews[1].url);await page.locator('#oie-image-info').waitFor({state:'visible'});await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const accessibility=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));assert.deepEqual(accessibility.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
-  const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,'message-previews-mobile.png')});await page.screenshot({path:path.join(artifacts,'image-info-mobile.png')});await page.keyboard.press('Escape');await page.locator('#oie-image-info').waitFor({state:'hidden'});await page.keyboard.press('Escape');await page.setViewportSize({width:1440,height:1000});await scope(page,previews[0]).scrollIntoViewIfNeeded();await page.waitForTimeout(100);await page.screenshot({path:path.join(artifacts,'message-previews-desktop.png')});await messageRow(18).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(artifacts,'image-message-desktop.png')});await fs.writeFile(path.join(artifacts,'message-previews-report.json'),JSON.stringify({findings,automaticDownloads,downloads:state.downloads,originalReads:state.originalReads,externalBrowserRequests:external,pageErrors:errors},null,2));console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
+  const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await page.screenshot({path:path.join(artifacts,'message-previews-mobile.png')});await page.screenshot({path:path.join(artifacts,'image-info-mobile.png')});await page.keyboard.press('Escape');await page.locator('#oie-image-info').waitFor({state:'hidden'});await page.keyboard.press('Escape');await page.setViewportSize({width:1440,height:1000});await scope(page,previews[0]).scrollIntoViewIfNeeded();await page.waitForTimeout(100);await page.screenshot({path:path.join(artifacts,'message-previews-desktop.png')});await messageRow(18).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(artifacts,'image-message-desktop.png')});await fs.writeFile(path.join(artifacts,'message-previews-report.json'),JSON.stringify({findings,automaticDownloads,downloads:state.downloads,originalReads:state.originalReads,externalBrowserRequests:external,pageErrors:errors},null,2));
+  const inlineImage=preview(10,'image');
+  const inlineRow=messageRow(10);
+  const retainedImage=previews.findIndex(p=>p.id===inlineImage.id);
+  const [removed]=previews.splice(retainedImage,1);
+  emit('message.preview_changed');
+  await until(async()=>await inlineRow.locator('[data-preview-id],template[data-viewer-source]').count()===0,'removed inline image and viewer source');
+  Object.assign(removed,{imageHash:thumbHash,fileHash:originalHash,downloadState:'ready'});
+  previews.splice(retainedImage,0,removed);
+  emit('message.preview_changed');
+  const opener=inlineRow.locator('[data-preview-expand]').first();
+  await opener.click();
+  const viewer=page.locator('#oie-image-viewer');
+  await viewer.waitFor({state:'visible'});
+  assert.equal(await viewer.locator('.oie-viewer-sender strong').textContent(),'Bob');
+  assert.equal(await viewer.locator('[data-viewer-date]').getAttribute('datetime'),messages[10].createdAt.replace('.000Z','Z'));
+  // A bounded historical refresh proves only what it contains. Missing metadata
+  // or a window that excludes the open image must preserve its viewer.
+  async function refreshWindowRow(row, previewsKnown) {
+    await row.evaluate((mounted,known)=>{
+      const windowRows=document.createElement('div');
+      windowRows.id='live-timeline';
+      const fresh=mounted.cloneNode(true);
+      fresh.querySelector('[data-message-presentation]').dataset.presentationKnown=String(known);
+      fresh.querySelector('[data-message-previews]').replaceChildren();
+      windowRows.append(fresh);
+      document.dispatchEvent(new CustomEvent('oie:previews-refresh',{detail:windowRows}));
+    },previewsKnown);
+  }
+  await refreshWindowRow(messageRow(2),true);
+  await refreshWindowRow(inlineRow,false);
+  assert(await viewer.evaluate(dialog=>dialog.open));
+  assert.equal(await inlineRow.locator('template[data-viewer-source]').count(),1);
+  await refreshWindowRow(inlineRow,true);
+  await viewer.waitFor({state:'hidden'});
+  assert.equal(await inlineRow.locator('template[data-viewer-source]').count(),0);
+  await until(()=>inlineRow.evaluate(row=>row===document.activeElement),'focus returns to message after image removal');
+  console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

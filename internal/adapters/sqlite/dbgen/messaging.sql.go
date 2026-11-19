@@ -9,6 +9,41 @@ import (
 	"context"
 )
 
+const accountUnreadTotals = `-- name: AccountUnreadTotals :many
+SELECT account_id, CAST(SUM(unread_count) AS INTEGER) AS total
+FROM conversations
+WHERE unread_count > 0 AND COALESCE(json_extract(payload,'$.RemovedFromChats'),0)=0
+GROUP BY account_id
+`
+
+type AccountUnreadTotalsRow struct {
+	AccountID string
+	Total     int64
+}
+
+func (q *Queries) AccountUnreadTotals(ctx context.Context) ([]AccountUnreadTotalsRow, error) {
+	rows, err := q.db.QueryContext(ctx, accountUnreadTotals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccountUnreadTotalsRow{}
+	for rows.Next() {
+		var i AccountUnreadTotalsRow
+		if err := rows.Scan(&i.AccountID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const acquireWriteLock = `-- name: AcquireWriteLock :exec
 UPDATE engine_identity SET singleton=1 WHERE singleton=1
 `

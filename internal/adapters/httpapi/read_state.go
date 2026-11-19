@@ -11,6 +11,14 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
+func (s *Server) GetAccountUnreadTotals(ctx context.Context, _ engineapi.GetAccountUnreadTotalsRequestObject) (engineapi.GetAccountUnreadTotalsResponseObject, error) {
+	totals, err := s.engine.AccountUnreadTotals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return engineapi.GetAccountUnreadTotals200JSONResponse{Totals: totals}, nil
+}
+
 func readState(s domain.ReadState) engineapi.ConversationReadState {
 	out := engineapi.ConversationReadState{AccountId: string(s.AccountID), ConversationId: string(s.ConversationID), UnreadCount: s.UnreadCount}
 	if s.RevisionID != "" {

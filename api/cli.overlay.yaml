@@ -41,6 +41,11 @@ actions:
     update:
       x-cli-ignore: true
   # accounts
+  - target: $.paths['/api/v1/accounts/unread-totals'].get
+    update:
+      x-cli-group: [accounts]
+      x-cli-name: unread-totals
+      x-cli-description: Show unread message totals by account.
   - target: $.paths['/api/v1/accounts/{accountId}/label'].put
     update:
       x-cli-ignore: true

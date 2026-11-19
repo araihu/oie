@@ -67,7 +67,7 @@ window.OieRuntime.register('previews', life => {
       save.hidden=save.disabled=!scope?.dataset.previewFile;
     }
   });
-  let viewing='',menuOpener=false,viewerOrigin='timeline';
+  let viewing='',menuOpener=false,viewerOrigin=null;
   const source=hash=>typeof hash==='string' && /^[0-9a-f]{64}$/.test(hash)?'/ui/media/'+hash:'';
   const contexts='#forward-message-preview,#info-shared-results,#shared-content-results,#favorites-results,[data-info-stars],#message-timeline';
   const contextOf=scope=>scope.closest(contexts);
@@ -129,11 +129,17 @@ window.OieRuntime.register('previews', life => {
     event.preventDefault();event.stopPropagation();dialog.close();
   });
   life.on(dialog,'close',()=>{
-    const previous=viewing;viewing='';
+    const previous=viewing,origin=viewerOrigin,message=viewer.dataset.viewerMessageId;viewing='';
     if(state(viewer))state(viewer).viewerActive=false;
     // A new message may replace the timeline while the dialog is open. Restore
     // focus to the equivalent surviving action instead of a detached opener.
-    life.timeout(()=>{const scope=find(previous);const target=scope&&(menuOpener?(scope.querySelector('[data-image-menu-trigger]')||scope.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]')):[...scope.querySelectorAll('[data-preview-expand],[data-preview-download]')].find(el=>el.getClientRects().length));target?.focus({preventScroll:true});},0);
+    life.timeout(()=>{
+      if (dialog.open) return;
+      const scope=[...findAll(previous)].find(item=>contextOf(item)===origin);
+      const target=scope&&(menuOpener?(scope.querySelector('[data-image-menu-trigger]')||scope.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]')):[...scope.querySelectorAll('[data-preview-expand],[data-preview-download]')].find(el=>el.getClientRects().length));
+      const row=origin?.querySelector('[data-message-id="' + CSS.escape(message) + '"]');
+      (target||row)?.focus({preventScroll:true});
+    },0);
   });
   function synchronize(root) {
     if(!root||life.signal.aborted)return;
@@ -146,6 +152,35 @@ window.OieRuntime.register('previews', life => {
         current.innerHTML=fresh.innerHTML;current.dataset.presentationVersion=fresh.dataset.presentationVersion;current.dataset.presentationKnown='true';
       }
     }
+    const timeline = document.getElementById('message-timeline');
+    const liveTimeline = root.id === 'live-timeline' ? root : root.querySelector('#live-timeline');
+    if (liveTimeline && timeline) {
+      // A preview can disappear without changing the message text or revision.
+      // Only remove an image after a successful preview read for this row.
+      for (const current of timeline.querySelectorAll('[data-message-previews] > template[data-viewer-source]')) {
+        const container = current.parentElement;
+        const id = container.dataset.messagePreviews;
+        const freshRow = liveTimeline.querySelector('[data-message-id="' + CSS.escape(id) + '"]');
+        if (freshRow?.querySelector('[data-message-presentation]')?.dataset.presentationKnown !== 'true') continue;
+        if (!freshRow.querySelector('template[data-viewer-source]')) current.remove();
+        for (const image of container.querySelectorAll('[data-preview-kind="image"]')) {
+          const selector = '[data-preview-id="' + CSS.escape(image.dataset.previewId) + '"][data-preview-kind="image"]';
+          if (!freshRow.querySelector(selector)) {
+            window.Alpine?.destroyTree(image);
+            image.remove();
+          }
+        }
+      }
+      if (dialog?.open && viewerOrigin === timeline) {
+        const id = viewer.dataset.viewerMessageId;
+        const freshRow = liveTimeline.querySelector('[data-message-id="' + CSS.escape(id) + '"]');
+        const withdrawn = freshRow?.querySelector('[data-message-retracted],[data-message-moderated]');
+        const known = freshRow?.querySelector('[data-message-presentation]')?.dataset.presentationKnown === 'true';
+        if (withdrawn || (known && !freshRow.querySelector('[data-preview-id="' + CSS.escape(viewing) + '"][data-preview-kind="image"]'))) {
+          dialog.close();
+        }
+      }
+    }
     const openMenu=document.querySelector('[data-menu-url] [data-message-menu-trigger][aria-expanded="true"]')?.closest('[data-menu-url]');
     if(openMenu && root.querySelector('#live-timeline [data-message-menu-slot="'+CSS.escape(openMenu.dataset.messageMenuSlot)+'"]')){
       openMenu.dispatchEvent(new CustomEvent('oie:message-menu-updated',{bubbles:true}));
@@ -156,7 +191,14 @@ window.OieRuntime.register('previews', life => {
       const container=message&&document.querySelector(`#message-timeline [data-message-previews="${CSS.escape(message)}"]`);
       if(container&&![...existing].some(scope=>container.contains(scope))) {
         const current=fresh.cloneNode(true);
-        const insert=()=>{container.append(current);window.Alpine?.initTree(current);};
+        const insert=()=>{
+          if (fresh.dataset.previewKind === 'image' && !container.querySelector('template[data-viewer-source]')) {
+            const source = fresh.parentElement.querySelector('template[data-viewer-source]');
+            if (source) container.prepend(source.cloneNode(true));
+          }
+          container.append(current);
+          window.Alpine?.initTree(current);
+        };
         if(window.Alpine?.mutateDom)window.Alpine.mutateDom(insert);else insert();
       }
       for(const scope of findAll(fresh.dataset.previewId))apply(scope,fresh.dataset);

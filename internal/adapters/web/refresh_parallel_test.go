@@ -41,7 +41,7 @@ func TestRefreshUnreadReadsOverlapAndDeduplicateAcrossFilters(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	if totals := server.accountUnread(ctx); totals[testAccount] != 3 {
+	if totals := server.accountUnread(ctx, false); totals[testAccount] != 3 {
 		t.Fatalf("overlapping reads must count the conversation once, got %v", totals)
 	}
 }

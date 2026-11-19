@@ -233,10 +233,6 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = viewerSource(v, source).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
 		{
 			templ_7745c5c3_ElementWriter := templ_7745c5c3_Buffer
 			templ_7745c5c3_Buffer := templ.GetBuffer()
@@ -293,7 +289,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ForwardNoRooms)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 34, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 33, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -315,7 +311,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ForwardChooseRooms)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 38, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 37, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -336,7 +332,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(room.Address).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 42, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 41, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
@@ -357,7 +353,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(id).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 44, Col: 22}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 43, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 				if templ_7745c5c3_Err != nil {
@@ -378,7 +374,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(labelID).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 49, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 48, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
@@ -391,7 +387,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(room.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 49, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 48, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
@@ -404,7 +400,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templruntime.NewAttributeExpression(infoID).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 50, Col: 26}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 49, Col: 26}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 				if templ_7745c5c3_Err != nil {
@@ -422,7 +418,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 					var templ_7745c5c3_Var24 string
 					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(room.Address)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 52, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 51, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 					if templ_7745c5c3_Err != nil {
@@ -441,7 +437,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.NewAttributeExpression(room.Topic).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 55, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 54, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 					if templ_7745c5c3_Err != nil {
@@ -454,7 +450,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(room.Topic)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 55, Col: 76}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 54, Col: 76}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -472,7 +468,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(v.accountLabel(room.AccountId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 57, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 56, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -490,7 +486,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ForwardNoRoomsFound)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 66, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 65, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -515,7 +511,7 @@ func forwardForm(v view, source messageView, rooms []forwardRoom) templ.Componen
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Forward)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 68, Col: 208}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/forwarding.templ`, Line: 67, Col: 208}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
