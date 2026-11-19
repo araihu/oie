@@ -56,30 +56,42 @@ WHERE json_extract(c.payload,'$.Kind')='room'
   AND NOT EXISTS (SELECT 1 FROM message_canonical_aliases edge WHERE edge.alias_id=sent.id OR edge.canonical_id=copy.id
                   OR (edge.alias_id=copy.id AND NOT EXISTS (SELECT 1 FROM room_archive_echo_links held
                       WHERE held.echo_id=copy.id AND held.original_id=sent.id AND edge.canonical_id=sent.id)));
--- Recheck only links reached by the new evidence. Removing the derived
--- alias exposes both retained sources if the room supplied conflicting facts.
-CREATE TRIGGER recheck_room_echo_reference AFTER INSERT ON message_references BEGIN
- DELETE FROM room_archive_echo_links WHERE (echo_id=NEW.message_id OR original_id=NEW.message_id OR
-  (account_id=(SELECT account_id FROM messages WHERE id=NEW.message_id) AND room_address=substr(NEW.scope,6) AND room_uid=NEW.remote_id))
- AND NOT EXISTS (SELECT 1 FROM room_archive_echo_pairs p WHERE p.echo_id=room_archive_echo_links.echo_id
-                 AND p.original_id=room_archive_echo_links.original_id);
+-- Revoke only the established link contradicted by the newly inserted
+-- fact. Keep archive imports from rebuilding the full proof on each row.
+CREATE TRIGGER recheck_room_echo_reference AFTER INSERT ON message_references WHEN substr(NEW.scope,1,5)='room:' BEGIN
+ DELETE FROM room_archive_echo_links
+ WHERE room_address=substr(NEW.scope,6)
+ AND ((room_uid=NEW.remote_id AND echo_id<>NEW.message_id AND original_id<>NEW.message_id
+       AND account_id=(SELECT account_id FROM messages WHERE id=NEW.message_id)
+       AND (SELECT conversation_id FROM messages WHERE id=NEW.message_id)
+           =(SELECT conversation_id FROM messages WHERE id=original_id))
+   OR ((echo_id=NEW.message_id OR original_id=NEW.message_id)
+        AND (room_uid<>NEW.remote_id OR NOT EXISTS (
+             SELECT 1 FROM messages copy WHERE copy.id=echo_id
+             AND NEW.author=room_address||'/'||json_extract(copy.payload,'$.Sender.DisplayName')
+             AND NEW.source_hash=COALESCE(NULLIF(json_extract(copy.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(copy.payload,'$.OriginalText')))
+        ))));
 END;
 CREATE TRIGGER recheck_room_echo_archive_key AFTER INSERT ON archive_aliases BEGIN
  DELETE FROM room_archive_echo_links WHERE (echo_id=NEW.message_id OR original_id=NEW.message_id)
- AND NOT EXISTS (SELECT 1 FROM room_archive_echo_pairs p WHERE p.echo_id=room_archive_echo_links.echo_id
-                 AND p.original_id=room_archive_echo_links.original_id);
+ AND room_address=NEW.scope AND room_uid<>NEW.archive_id;
 END;
 CREATE TRIGGER recheck_room_echo_sender AFTER INSERT ON message_sender_identities BEGIN
  DELETE FROM room_archive_echo_links WHERE (echo_id=NEW.message_id OR original_id=NEW.message_id)
- AND NOT EXISTS (SELECT 1 FROM room_archive_echo_pairs p WHERE p.echo_id=room_archive_echo_links.echo_id
-                 AND p.original_id=room_archive_echo_links.original_id);
+ AND NEW.personal_address<>(SELECT address FROM accounts WHERE id=room_archive_echo_links.account_id);
 END;
-CREATE TRIGGER recheck_room_echo_correction AFTER INSERT ON message_correction_facts BEGIN
- DELETE FROM room_archive_echo_links WHERE (echo_id=NEW.message_id OR original_id=NEW.message_id)
- AND NOT EXISTS (SELECT 1 FROM room_archive_echo_pairs p WHERE p.echo_id=room_archive_echo_links.echo_id
-                 AND p.original_id=room_archive_echo_links.original_id);
+CREATE TRIGGER recheck_room_echo_correction AFTER INSERT ON message_correction_facts WHEN NEW.target_id<>'' BEGIN
+ DELETE FROM room_archive_echo_links WHERE echo_id=NEW.message_id OR original_id=NEW.message_id;
 END;
-CREATE TRIGGER recheck_room_echo_content AFTER UPDATE OF payload ON messages BEGIN
+-- Changes to send state and other unrelated payload fields do not alter
+-- a proved link. Re-evaluate its full proof only for identity changes.
+CREATE TRIGGER recheck_room_echo_content AFTER UPDATE OF payload ON messages
+WHEN OLD.is_own<>NEW.is_own OR OLD.provider_id<>NEW.provider_id
+ OR json_extract(OLD.payload,'$.Sender.DisplayName','$.Sender.PersonalAddress','$.Historical','$.ArchiveScope','$.ArchiveID','$.OwnOriginID')
+ <>json_extract(NEW.payload,'$.Sender.DisplayName','$.Sender.PersonalAddress','$.Historical','$.ArchiveScope','$.ArchiveID','$.OwnOriginID')
+ OR COALESCE(NULLIF(json_extract(OLD.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(OLD.payload,'$.OriginalText')))
+ <>COALESCE(NULLIF(json_extract(NEW.payload,'$.WireBodySHA256'),''),oie_source_hash(json_extract(NEW.payload,'$.OriginalText')))
+BEGIN
  DELETE FROM room_archive_echo_links WHERE (echo_id=NEW.id OR original_id=NEW.id)
  AND NOT EXISTS (SELECT 1 FROM room_archive_echo_pairs p WHERE p.echo_id=room_archive_echo_links.echo_id
                  AND p.original_id=room_archive_echo_links.original_id);
