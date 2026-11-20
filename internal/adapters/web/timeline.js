@@ -20,8 +20,9 @@ window.OieRuntime.register('timeline',life=>{
   if(hiddenRevisions.size>200)hiddenRevisions.delete(hiddenRevisions.keys().next().value);
  }
  const remoteOlder=()=>{
-  const first=rows()[0]?.dataset.messageId;
-  return !!first&&first!==exhaustedArchiveEdge&&window.OieRoomArchive?.older()===true;
+  if(window.OieRoomArchive?.older()!==true)return false;
+  const first=root.querySelector(':scope>[data-message-id][data-message-source]')?.dataset.messageId;
+  return !!first&&first!==exhaustedArchiveEdge;
  };
  const edge=direction=>root.querySelector(`[data-timeline-edge="${direction}"]`);
  // scrollTop can be fractional while scrollHeight and clientHeight are rounded.
@@ -58,14 +59,39 @@ window.OieRuntime.register('timeline',life=>{
  function protectedRow(node){const viewport=root.getBoundingClientRect(),box=node.getBoundingClientRect();return box.bottom>viewport.top&&box.top<viewport.bottom||node.contains(document.activeElement)||interactionProtected(node)}
  function capacity(direction,count=50){const existing=current(),need=Math.max(0,existing.length+count-200),candidates=direction==='older'?existing.slice(-need).reverse():existing.slice(0,need);return !need||candidates.every(item=>!protectedRow(item.node))}
  function setFeedback(direction,state=''){
-  const control=edge(direction);if(!control)return;control.dataset.state=state;const status=control.querySelector('[data-timeline-status]'),button=control.querySelector('[data-timeline-load]');status.textContent=state==='loading'?control.dataset.loading:state==='failed'?control.dataset.failed:state==='paused'?control.dataset.paused:'';status.setAttribute('role',state==='failed'?'alert':'status');button.hidden=!(direction==='older'?older||remoteOlder():newer)&&!state;button.setAttribute('aria-disabled',String(busy));const boundary=direction==='older'?current()[0]:current().at(-1);if(boundary){const href=new URL(button.href,location.href);if(href.origin===location.origin&&href.pathname==='/'){href.searchParams.set('timelineCursor',boundary.id);href.searchParams.set('timelineDirection',direction);button.href=href.pathname+href.search}}if(state==='failed'||state==='paused')button.textContent=control.dataset.retry;
+  const control=edge(direction);
+  if(!control)return;
+  control.dataset.state=state;
+  const status=control.querySelector('[data-timeline-status]'),button=control.querySelector('[data-timeline-load]');
+  status.textContent=state==='loading'?control.dataset.loading:state==='failed'?control.dataset.failed:state==='paused'?control.dataset.paused:'';
+  status.setAttribute('role',state==='failed'?'alert':'status');
+  button.hidden=!(direction==='older'?older||remoteOlder():newer)&&!state;
+  button.setAttribute('aria-disabled',String(busy));
+  const boundary=direction==='older'?root.querySelector(':scope>[data-message-id][data-message-source]'):rows().at(-1);
+  if(boundary){
+   const href=new URL(button.href,location.href);
+   if(href.origin===location.origin&&href.pathname==='/'){
+    href.searchParams.set('timelineCursor',boundary.dataset.messageId);
+    href.searchParams.set('timelineDirection',direction);
+    button.href=href.pathname+href.search;
+   }
+  }
+  if(state==='failed'||state==='paused')button.textContent=control.dataset.retry;
  }
- function controls(){capture();setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');root.dataset.timelineBusy=String(busy);root.dataset.timelineOlder=String(older);root.dataset.timelineNewer=String(newer);correct()}
+ function renderControls(){
+  setFeedback('older',failed&&retryDirection==='older'?failed:busy&&retryDirection==='older'?'loading':'');
+  setFeedback('newer',failed&&retryDirection==='newer'?failed:busy&&retryDirection==='newer'?'loading':'');
+  root.dataset.timelineBusy=String(busy);
+  root.dataset.timelineOlder=String(older);
+  root.dataset.timelineNewer=String(newer);
+ }
+ function controls(){capture();renderControls();correct()}
  function capture(){
   measuredScrollTop=root.scrollTop;
+  follow=liveAttached&&atBottom();
+  if(follow){anchor=null;return}
   const viewport=root.getBoundingClientRect(),item=rows().find(row=>row.getBoundingClientRect().bottom>viewport.top);
   anchor=item?{id:item.dataset.messageId,top:item.getBoundingClientRect().top}:null;
-  follow=liveAttached&&atBottom();
  }
  const needsLatestPage=()=>!liveAttached||newer&&!!failed;
  const activeSource=()=>sourceSelected?document.body.dataset.focusMessage:'';
@@ -101,10 +127,14 @@ window.OieRuntime.register('timeline',life=>{
  function correct(){
   if(disposed||!root.isConnected)return;
   const previousTop=root.scrollTop;
-  if(follow)root.scrollTop=root.scrollHeight;
-  else if(anchor){
-   const node=rows().find(row=>row.dataset.messageId===anchor.id);
-   if(node)root.scrollTop+=node.getBoundingClientRect().top-anchor.top;
+  if(follow){
+   if(!atBottom())root.scrollTop=root.scrollHeight;
+  }else if(anchor){
+   const node=root.querySelector(`:scope>[data-message-id="${CSS.escape(anchor.id)}"][data-message-source]`);
+   if(node){
+    const offset=node.getBoundingClientRect().top-anchor.top;
+    if(offset!==0)root.scrollTop=previousTop+offset;
+   }
   }
   measuredScrollTop=root.scrollTop;
   if(measuredScrollTop!==previousTop)correctedScrollTop=measuredScrollTop;
@@ -451,5 +481,5 @@ window.OieRuntime.register('timeline',life=>{
  life.on(document,'oie:actions-refreshed',()=>{if(!busy&&!failed)observe()});
  life.on(document,'keydown',event=>{if(event.key==='Escape'&&failed==='paused')life.timeout(()=>{failed='';controls();observe()},200)});
  life.cleanup(()=>{disposed=true;focusEpoch++;epoch++;controller?.abort();observer?.disconnect();resizer?.disconnect();if(window.OieTimeline===api)delete window.OieTimeline});
- avatarGroups();controls();life.raf(()=>{capture();observe()});
+ avatarGroups();renderControls();life.raf(()=>{capture();observe()});
 });

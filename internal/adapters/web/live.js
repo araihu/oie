@@ -1,4 +1,4 @@
-window.OieRuntime.register('live', life => {
+window.OieRuntime.register('live', (life, route) => {
   'use strict';
   const body = document.body;
   body.dataset.oieLiveReady='true';
@@ -1165,10 +1165,14 @@ window.OieRuntime.register('live', life => {
     }
   });
   localizeTimes();
-  const firstUnread=body.dataset.firstUnread&&document.querySelector(`#message-timeline [data-message-id="${CSS.escape(body.dataset.firstUnread)}"]`);
-  if(firstUnread)firstUnread.scrollIntoView({block:'start',behavior:'instant'});
-  else if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();
-  window.OieTimeline?.syncJump();
+  const timelineOnOpen=document.getElementById('message-timeline');
+  if(timelineOnOpen){
+    const firstUnread=body.dataset.firstUnread&&timelineOnOpen.querySelector(`[data-message-id="${CSS.escape(body.dataset.firstUnread)}"]`);
+    if(route?.timelineTop!==undefined)timelineOnOpen.scrollTop=route.timelineTop;
+    else if(firstUnread)firstUnread.scrollIntoView({block:'start',behavior:'instant'});
+    else if(!body.dataset.focusMessage||!focusMessage(body.dataset.focusMessage))scrollLatest();
+    window.OieTimeline?.syncJump();
+  }
 
   life.on(scheduleRetry,'click',()=>composer.requestSubmit());
   function applyScheduleEditor(editor, nextKey = editor.dataset.operationKey) {

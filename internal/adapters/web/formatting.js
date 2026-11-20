@@ -3,12 +3,11 @@ window.OieRuntime.register('formatting', life => {
   const key='oie.device.render-markdown.v1';
   let enabled=true,storageDenied=false;
   try {enabled=localStorage.getItem(key)!=='false';}catch{storageDenied=true;enabled=window.OieRuntime.memory.get(key)!==false;}
-  document.documentElement.dataset.messageMarkdown=String(enabled);
   function applyPreference(preserve=true) {
-    const timeline=document.querySelector('#message-timeline');
+    const timeline=preserve&&document.querySelector('#message-timeline');
     const follow=timeline&&timeline.scrollHeight-timeline.scrollTop-timeline.clientHeight<60;
-    const anchor=timeline&&[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);
-    const top=anchor?.getBoundingClientRect().top;
+    const anchor=timeline&&!follow&&[...timeline.querySelectorAll('[data-message-id]')].find(el=>el.getBoundingClientRect().bottom>=timeline.getBoundingClientRect().top);
+    const top=anchor && anchor.getBoundingClientRect().top;
     document.documentElement.dataset.messageMarkdown=String(enabled);
     for(const input of document.querySelectorAll('[data-render-markdown]'))input.checked=enabled;
     if(storageDenied){const warning=document.querySelector('[data-device-preference-warning]');if(warning)warning.hidden=false;}

@@ -117,6 +117,62 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const click=async(chat)=>{const row=page.locator('#conversation-list a[data-conversation-id="'+chat.id+'"]');await row.scrollIntoViewIfNeeded();const top=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);const generation=await page.evaluate(()=>window.OieRuntime.generation);await row.click();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'conversation settled');await ready(chat);if(await page.locator('#conversation-list').isVisible())assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),top);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')&&window.savedApp===document.getElementById('oie-app')&&window.savedSidebar===document.querySelector('.oie-sidebar')));assert.equal(await row.getAttribute('aria-current'),'true');assert.equal(await page.locator('#oie-avatar-data').count(),1);assert.equal(await page.locator('#oie-star-data').count(),1);assert.equal(await page.locator('#chat-info-content').getAttribute('data-details-conversation'),chat.id);return top};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF ready');
+  // HTMX can settle multiple conversations while Alpine is still loading.
+  for(const releaseDuringSwap of [false,true]){
+   const early=await fresh();
+   const earlyPage=early.page;
+   let releaseAlpine;
+   const alpineGate=new Promise(resolve=>{releaseAlpine=resolve});
+   await earlyPage.route('**/assets/js/runtime/alpinejs/*/alpine.min.js',async route=>{
+    await alpineGate;
+    await route.continue().catch(()=>{});
+   });
+   try{
+    await earlyPage.goto(base+'/?chat='+a.id+'&lang=en&theme=dark',{waitUntil:'commit'});
+    await until(()=>earlyPage.evaluate(()=>!!window.OieNavigation&&!!window.htmx&&window.OieRuntime?.generation===0),'early navigation ready');
+    const openEarly=async chat=>{
+     await earlyPage.locator('#conversation-list a[data-conversation-id="'+chat.id+'"]').click();
+     await until(()=>earlyPage.evaluate(id=>document.body.dataset.conversationId===id&&window.OieRuntime.generation===0,chat.id),'early conversation settled');
+    };
+    const earlyTimeline=earlyPage.locator('#message-timeline');
+    await openEarly(c);
+    const saved=await earlyTimeline.evaluate(node=>{node.scrollTop=510;return node.scrollTop});
+    assert.equal(saved,510);
+    await openEarly(b);
+    let expected=saved;
+    if(releaseDuringSwap){
+     await earlyPage.evaluate(id=>{
+      const htmx=window.htmx,normalDelay=htmx.config.defaultSettleDelay,timeout=htmx.timeout;
+      const fixtureDelay=54321;
+      htmx.config.defaultSettleDelay=fixtureDelay;
+      htmx.timeout=function(delay){
+       if(delay!==fixtureDelay)return timeout.call(this,delay);
+       htmx.timeout=timeout;
+       htmx.config.defaultSettleDelay=normalDelay;
+       return new Promise(resolve=>{window.resumeWorkspaceSettle=resolve});
+      };
+      const link=document.querySelector('#conversation-list a[data-conversation-id="'+id+'"]');
+      window.OieNavigation.go(link.href,{workspace:'oie-app'});
+     },c.id);
+     await until(()=>earlyPage.evaluate(()=>!!window.resumeWorkspaceSettle),'workspace paused during settle');
+     releaseAlpine();
+     await earlyPage.waitForLoadState('domcontentloaded');
+     await earlyPage.evaluate(()=>window.goshtosoDependencies?.ready);
+     await earlyPage.evaluate(()=>window.resumeWorkspaceSettle());
+    }else{
+     await openEarly(c);
+     assert.equal(await earlyTimeline.evaluate(node=>node.scrollTop),saved,'early navigation restores the saved offset');
+     expected=await earlyTimeline.evaluate(node=>{node.scrollTop-=80;return node.scrollTop});
+     releaseAlpine();
+    }
+    await until(()=>earlyPage.evaluate(()=>window.OieRuntime.generation===1&&!!window.OieTimeline),'timeline started');
+    await earlyPage.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    assert.equal(await earlyTimeline.evaluate(node=>node.scrollTop),expected,'startup keeps the restored timeline position');
+   }finally{
+    releaseAlpine();
+    await early.context.close();
+   }
+  }
   let opened=await fresh();page=opened.page;await page.goto(base+'/?chat='+a.id+'&lang=en&theme=dark');await ready(a);await page.setViewportSize({width:1530,height:1220});assert.equal((await layout()).timelineContent,(await layout()).timelineHeight);await page.setViewportSize({width:900,height:950});await layout();await page.setViewportSize({width:1440,height:950});const token=await page.evaluate(()=>window.documentToken);const startDocuments=requests.filter(request=>request.kind==='document').length;
   const currentRow=page.locator('#conversation-list a[aria-current=true]');
   const nextRow=page.locator('#conversation-list a[aria-current=false]').first();
@@ -150,7 +206,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(async()=>await page.locator('[data-message-search-root]').getAttribute('data-search-query')==='unfinished filter'&&await page.locator('[data-message-search-root]').getAttribute('data-search-state')==='ready','unified global query settled');
   assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'unfinished filter');assert.equal(new URL(page.url()).searchParams.get('q'),originalTitleParameter);assert.equal(await page.locator('#conversation-search').inputValue(),'unfinished filter');assert(await page.locator('#conversation-search').evaluate(node=>document.activeElement===node));assert(await page.locator('#conversation-list-default').isHidden());assert(await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').isHidden());assert.equal(await page.locator('[data-message-search-conversation]').count(),0);assert.equal(await page.locator('[data-message-search-hit]').count(),0);assert.equal(await page.locator('#message-composer').inputValue(),'Draft A');assert.equal(await page.evaluate(()=>window.OieRuntime.generation),searchGeneration);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')&&window.savedGlobalInput===document.getElementById('conversation-search')&&window.savedNavigationRows.every((node,index)=>node.isConnected&&node===document.querySelectorAll('#conversation-list a[data-conversation-id]')[index])));
   await page.locator('[data-message-search-close]').click();await page.locator('#conversation-list-default').waitFor({state:'visible'});assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),searchTop);assert(await page.locator('#conversation-search').evaluate(node=>document.activeElement===node));assert.equal(new URL(page.url()).searchParams.get('searchMode'),null);
-  await click(b);assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#message-composer').inputValue(),'');await page.locator('#message-composer').fill('Draft B');await openConversationDetails(page);await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'visible'});assert((await page.locator('.oie-details-identity').textContent()).includes(b.title));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await click(a);await until(async()=>await page.locator('#message-composer').inputValue()==='Draft A','A draft');
+  await page.evaluate(()=>{
+   window.selectionWrites=[];
+   window.selectionObserver=new MutationObserver(records=>{
+    for(const record of records)window.selectionWrites.push(record.target.dataset.conversationId);
+   });
+   window.selectionObserver.observe(document.getElementById('conversation-list'),{subtree:true,attributes:true,attributeFilter:['aria-current']});
+  });
+  await click(b);
+  const selectionWrites=await page.evaluate(()=>{window.selectionObserver.disconnect();return window.selectionWrites;});
+  assert.deepEqual(selectionWrites.sort(),[a.id,b.id].sort(),'switch only changes the previous and current inbox links');
+  assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#message-composer').inputValue(),'');await page.locator('#message-composer').fill('Draft B');await openConversationDetails(page);await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'visible'});assert((await page.locator('.oie-details-identity').textContent()).includes(b.title));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await click(a);await until(async()=>await page.locator('#message-composer').inputValue()==='Draft A','A draft');
   const top=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);let generation=await page.evaluate(()=>window.OieRuntime.generation);await page.goBack();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'Back settled');await ready(b);assert.equal(await page.locator('#message-composer').inputValue(),'Draft B');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),top);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));
   generation=await page.evaluate(()=>window.OieRuntime.generation);await page.goForward();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'Forward settled');await ready(a);assert.equal(await page.locator('#message-composer').inputValue(),'Draft A');
   await click(b);await page.locator('[data-sidebar-toggle]').click();await page.locator('.oie-list-account').waitFor();
@@ -207,7 +273,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   });
   await click(b);
   await recordTimelineFrames(c);
+  await page.evaluate(()=>{
+   document.addEventListener('oie:route-ready',()=>{
+    window.historyTimelineTop=document.getElementById('message-timeline').scrollTop;
+   },{once:true});
+  });
   await page.goBack();await ready(c);
+  assert(Math.abs(await page.evaluate(()=>window.historyTimelineTop)-savedChatScroll)<=1,'route-ready includes the restored timeline position');
   for(const sample of await timelineFrames())assert(sample.ready&&Math.abs(sample.scroll-savedChatScroll)<=1,JSON.stringify(sample));
   await page.evaluate(delay=>{window.htmx.config.defaultSettleDelay=delay;},settleDelay);
   const countRow=page.locator(`[data-conversation-row="${b.id}"]`);
