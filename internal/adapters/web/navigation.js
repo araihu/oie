@@ -7,6 +7,7 @@
  let pendingConversation, pendingShared, pendingParticipants, settling, historyRequest;
  const sharedPageCounts=new Map();
  let sharedCountEngine;
+ let earlyRestoredTimeline;
  const positions=new Map(),app=()=>document.getElementById('oie-app');
  const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','favorites-scroll','details-body','accounts-body','account-detail-scroll','workspace'];
  const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','firstUnread','focusMessage','contextNewer','contextMissing','mock'];
@@ -830,6 +831,7 @@
    upgrade(root);
   }
   else if(root.id==='message-timeline'){
+   earlyRestoredTimeline=null;
    // The timeline itself stays mounted. Initialize its new children before
    // the live hooks read their Alpine state.
    for(const child of root.children)window.Alpine?.initTree(child);
@@ -859,7 +861,13 @@
    const scheduleEditor=root.querySelector('[data-editing-schedule] #message-composer');
    const savedTimelineTop=saved?.['message-timeline']??(scheduleEditor?positions.get(previousURL)?.['message-timeline']:undefined);
    const restoreTimeline=(ctx?.oieHistory||!document.body.dataset.firstUnread)&&!new URL(location.href).searchParams.has('message');
-   if(booted)runtime.start({timelineTop:restoreTimeline?savedTimelineTop:undefined});
+   const timelineTop=restoreTimeline?savedTimelineTop:undefined;
+   if(booted)runtime.start({timelineTop});
+   else{
+    // HTMX is ready before Alpine. Restore now so the reader can keep scrolling.
+    earlyRestoredTimeline=timelineTop===undefined?null:document.getElementById('message-timeline');
+    if(earlyRestoredTimeline)earlyRestoredTimeline.scrollTop=timelineTop;
+   }
    if(scheduleEditor)scheduleEditor.focus({preventScroll:true});
    requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved&&replacesWorkspace(root.id))for(const [id,top]of Object.entries(saved)){if(id==='message-timeline'||id==='conversation-list'&&ctx?.oieInbox)continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
   }
@@ -977,6 +985,18 @@
      event.detail.querySelector('#oie-live-regions')?.dataset.conversationId===document.body.dataset.conversationId)rememberSharedPage(info,true);
  });
  reducedMotion.addEventListener('change',()=>upgrade(app()));
- async function ready(){inbox.seed(document.getElementById('conversation-list'));await window.goshtosoDependencies?.ready;booted=true;routeState();rememberSharedPage(document.querySelector('#shared-content-pagination [data-shared-page]'));rememberInfoSharedPage(document);syncFilterLinks();upgrade(app());runtime.start();}
+ async function ready(){
+  inbox.seed(document.getElementById('conversation-list'));
+  await window.goshtosoDependencies?.ready;
+  booted=true;
+  routeState();
+  rememberSharedPage(document.querySelector('#shared-content-pagination [data-shared-page]'));
+  rememberInfoSharedPage(document);
+  syncFilterLinks();
+  upgrade(app());
+  const timelineTop=earlyRestoredTimeline?.isConnected?earlyRestoredTimeline.scrollTop:undefined;
+  earlyRestoredTimeline=null;
+  runtime.start({timelineTop});
+ }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready,{once:true});else ready();
 })();

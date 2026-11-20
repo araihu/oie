@@ -117,6 +117,38 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const click=async(chat)=>{const row=page.locator('#conversation-list a[data-conversation-id="'+chat.id+'"]');await row.scrollIntoViewIfNeeded();const top=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);const generation=await page.evaluate(()=>window.OieRuntime.generation);await row.click();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'conversation settled');await ready(chat);if(await page.locator('#conversation-list').isVisible())assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),top);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')&&window.savedApp===document.getElementById('oie-app')&&window.savedSidebar===document.querySelector('.oie-sidebar')));assert.equal(await row.getAttribute('aria-current'),'true');assert.equal(await page.locator('#oie-avatar-data').count(),1);assert.equal(await page.locator('#oie-star-data').count(),1);assert.equal(await page.locator('#chat-info-content').getAttribute('data-details-conversation'),chat.id);return top};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF ready');
+  // HTMX can settle multiple conversations while Alpine is still loading.
+  const early=await fresh();
+  const earlyPage=early.page;
+  let releaseAlpine;
+  const alpineGate=new Promise(resolve=>{releaseAlpine=resolve});
+  await earlyPage.route('**/assets/js/runtime/alpinejs/*/alpine.min.js',async route=>{
+   await alpineGate;
+   await route.continue().catch(()=>{});
+  });
+  try{
+   await earlyPage.goto(base+'/?chat='+a.id+'&lang=en&theme=dark',{waitUntil:'commit'});
+   await until(()=>earlyPage.evaluate(()=>!!window.OieNavigation&&!!window.htmx&&window.OieRuntime?.generation===0),'early navigation ready');
+   const openEarly=async chat=>{
+    await earlyPage.locator('#conversation-list a[data-conversation-id="'+chat.id+'"]').click();
+    await until(()=>earlyPage.evaluate(id=>document.body.dataset.conversationId===id&&window.OieRuntime.generation===0,chat.id),'early conversation settled');
+   };
+   const earlyTimeline=earlyPage.locator('#message-timeline');
+   await openEarly(c);
+   const saved=await earlyTimeline.evaluate(node=>{node.scrollTop=510;return node.scrollTop});
+   assert.equal(saved,510);
+   await openEarly(b);
+   await openEarly(c);
+   assert.equal(await earlyTimeline.evaluate(node=>node.scrollTop),saved,'early navigation restores the saved offset');
+   const adjusted=await earlyTimeline.evaluate(node=>{node.scrollTop-=80;return node.scrollTop});
+   releaseAlpine();
+   await until(()=>earlyPage.evaluate(()=>window.OieRuntime.generation===1&&!!window.OieTimeline),'timeline started');
+   await earlyPage.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   assert.equal(await earlyTimeline.evaluate(node=>node.scrollTop),adjusted,'startup keeps a later scroll on the restored timeline');
+  }finally{
+   releaseAlpine();
+   await early.context.close();
+  }
   let opened=await fresh();page=opened.page;await page.goto(base+'/?chat='+a.id+'&lang=en&theme=dark');await ready(a);await page.setViewportSize({width:1530,height:1220});assert.equal((await layout()).timelineContent,(await layout()).timelineHeight);await page.setViewportSize({width:900,height:950});await layout();await page.setViewportSize({width:1440,height:950});const token=await page.evaluate(()=>window.documentToken);const startDocuments=requests.filter(request=>request.kind==='document').length;
   const currentRow=page.locator('#conversation-list a[aria-current=true]');
   const nextRow=page.locator('#conversation-list a[aria-current=false]').first();
