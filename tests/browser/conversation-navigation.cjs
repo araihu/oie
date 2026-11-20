@@ -150,7 +150,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(async()=>await page.locator('[data-message-search-root]').getAttribute('data-search-query')==='unfinished filter'&&await page.locator('[data-message-search-root]').getAttribute('data-search-state')==='ready','unified global query settled');
   assert.equal(new URL(page.url()).searchParams.get('searchQuery'),'unfinished filter');assert.equal(new URL(page.url()).searchParams.get('q'),originalTitleParameter);assert.equal(await page.locator('#conversation-search').inputValue(),'unfinished filter');assert(await page.locator('#conversation-search').evaluate(node=>document.activeElement===node));assert(await page.locator('#conversation-list-default').isHidden());assert(await page.locator('#conversation-list a[data-conversation-id="'+b.id+'"]').isHidden());assert.equal(await page.locator('[data-message-search-conversation]').count(),0);assert.equal(await page.locator('[data-message-search-hit]').count(),0);assert.equal(await page.locator('#message-composer').inputValue(),'Draft A');assert.equal(await page.evaluate(()=>window.OieRuntime.generation),searchGeneration);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')&&window.savedGlobalInput===document.getElementById('conversation-search')&&window.savedNavigationRows.every((node,index)=>node.isConnected&&node===document.querySelectorAll('#conversation-list a[data-conversation-id]')[index])));
   await page.locator('[data-message-search-close]').click();await page.locator('#conversation-list-default').waitFor({state:'visible'});assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),searchTop);assert(await page.locator('#conversation-search').evaluate(node=>document.activeElement===node));assert.equal(new URL(page.url()).searchParams.get('searchMode'),null);
-  await click(b);assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#message-composer').inputValue(),'');await page.locator('#message-composer').fill('Draft B');await openConversationDetails(page);await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'visible'});assert((await page.locator('.oie-details-identity').textContent()).includes(b.title));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await click(a);await until(async()=>await page.locator('#message-composer').inputValue()==='Draft A','A draft');
+  await page.evaluate(()=>{
+   window.selectionWrites=[];
+   window.selectionObserver=new MutationObserver(records=>{
+    for(const record of records)window.selectionWrites.push(record.target.dataset.conversationId);
+   });
+   window.selectionObserver.observe(document.getElementById('conversation-list'),{subtree:true,attributes:true,attributeFilter:['aria-current']});
+  });
+  await click(b);
+  const selectionWrites=await page.evaluate(()=>{window.selectionObserver.disconnect();return window.selectionWrites;});
+  assert.deepEqual(selectionWrites.sort(),[a.id,b.id].sort(),'switch only changes the previous and current inbox links');
+  assert.equal(await page.locator('#conversation-search').inputValue(),originalQuery);assert.equal(await page.locator('#message-composer').inputValue(),'');await page.locator('#message-composer').fill('Draft B');await openConversationDetails(page);await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'visible'});assert((await page.locator('.oie-details-identity').textContent()).includes(b.title));await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});await click(a);await until(async()=>await page.locator('#message-composer').inputValue()==='Draft A','A draft');
   const top=await page.locator('#conversation-list').evaluate(node=>node.scrollTop);let generation=await page.evaluate(()=>window.OieRuntime.generation);await page.goBack();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'Back settled');await ready(b);assert.equal(await page.locator('#message-composer').inputValue(),'Draft B');assert.equal(await page.locator('#conversation-list').evaluate(node=>node.scrollTop),top);assert(await page.evaluate(()=>window.savedList===document.getElementById('conversation-list')));
   generation=await page.evaluate(()=>window.OieRuntime.generation);await page.goForward();await until(async()=>await page.evaluate(()=>window.OieRuntime.generation)>generation,'Forward settled');await ready(a);assert.equal(await page.locator('#message-composer').inputValue(),'Draft A');
   await click(b);await page.locator('[data-sidebar-toggle]').click();await page.locator('.oie-list-account').waitFor();
@@ -207,7 +217,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   });
   await click(b);
   await recordTimelineFrames(c);
+  await page.evaluate(()=>{
+   document.addEventListener('oie:route-ready',()=>{
+    window.historyTimelineTop=document.getElementById('message-timeline').scrollTop;
+   },{once:true});
+  });
   await page.goBack();await ready(c);
+  assert(Math.abs(await page.evaluate(()=>window.historyTimelineTop)-savedChatScroll)<=1,'route-ready includes the restored timeline position');
   for(const sample of await timelineFrames())assert(sample.ready&&Math.abs(sample.scroll-savedChatScroll)<=1,JSON.stringify(sample));
   await page.evaluate(delay=>{window.htmx.config.defaultSettleDelay=delay;},settleDelay);
   const countRow=page.locator(`[data-conversation-row="${b.id}"]`);

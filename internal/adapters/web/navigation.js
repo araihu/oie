@@ -181,7 +181,15 @@
  function remember(){const state={};for(const id of scrollIDs){const node=document.getElementById(id);if(node){state[id]=node.scrollTop;if(id==='conversation-list'&&node.clientHeight>0)inboxScroll=node.scrollTop}}positions.set(currentURL,state);if(positions.size>100)positions.delete(positions.keys().next().value)}
  function routeState(pane){
   const root=app();if(!root)return;
-  if(pane){for(const name of [...routeFields,'routeLocale','routeTheme','csrf'])root.dataset[name]=pane.dataset[name]||'';document.getElementById('workspace')?.classList.toggle('oie-chat-open',pane.dataset.openChat==='true');root.querySelector('[data-open-chat]')?.setAttribute('data-open-chat',pane.dataset.openChat||'false');const list=document.getElementById('conversation-list');if(list){if(list.clientHeight>0)list.scrollTop=inboxScroll;}for(const row of root.querySelectorAll('#conversation-list a[data-conversation-id]'))row.setAttribute('aria-current',String(pane.dataset.openChat==='true'&&row.dataset.conversationId===pane.dataset.conversationId));}
+  if(pane){
+   const open=pane.dataset.openChat==='true';
+   for(const name of [...routeFields,'routeLocale','routeTheme','csrf'])root.dataset[name]=pane.dataset[name]||'';
+   document.getElementById('workspace')?.classList.toggle('oie-chat-open',open);
+   root.querySelector('[data-open-chat]')?.setAttribute('data-open-chat',String(open));
+   const list=document.getElementById('conversation-list');
+   inbox.selectConversation(list,open?pane.dataset.conversationId:'');
+   if(list&&list.scrollTop!==inboxScroll&&list.clientHeight)list.scrollTop=inboxScroll;
+  }
   for(const name of routeFields)document.body.dataset[name]=root.dataset[name]||'';
   document.body.dataset.starGeneration='0';document.documentElement.lang=root.dataset.routeLocale;document.documentElement.dataset.mode=root.dataset.routeTheme;document.documentElement.classList.toggle('dark',root.dataset.routeTheme==='dark'||root.dataset.routeTheme==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.querySelector('meta[name="oie-csrf"]')?.setAttribute('content',root.dataset.csrf||'');
  }
@@ -847,14 +855,11 @@
    // Alpine's HTMX hook flushes after settle. Initialize the new pane now
    // so the first scroll calculation already includes revealed previews.
    if(pane||root.id===routeID)window.Alpine?.initTree(root);
-   if(booted)runtime.start();
    const saved=positions.get(location.href);
    const scheduleEditor=root.querySelector('[data-editing-schedule] #message-composer');
    const savedTimelineTop=saved?.['message-timeline']??(scheduleEditor?positions.get(previousURL)?.['message-timeline']:undefined);
-   if(savedTimelineTop!==undefined&&(ctx?.oieHistory||!document.body.dataset.firstUnread)&&!new URL(location.href).searchParams.has('message')){
-    const timeline=document.getElementById('message-timeline');
-    if(timeline)timeline.scrollTop=savedTimelineTop;
-   }
+   const restoreTimeline=(ctx?.oieHistory||!document.body.dataset.firstUnread)&&!new URL(location.href).searchParams.has('message');
+   if(booted)runtime.start({timelineTop:restoreTimeline?savedTimelineTop:undefined});
    if(scheduleEditor)scheduleEditor.focus({preventScroll:true});
    requestAnimationFrame(()=>{if(!root.isConnected||root!==document.getElementById(root.id))return;if(saved&&replacesWorkspace(root.id))for(const [id,top]of Object.entries(saved)){if(id==='message-timeline'||id==='conversation-list'&&ctx?.oieInbox)continue;const node=document.getElementById(id);if(node)node.scrollTop=top}const info=document.getElementById('chat-info-content');if(info)document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root:info,generation:Number(document.body.dataset.starGeneration||0)}}));});
   }
@@ -893,7 +898,7 @@
   url.searchParams.set('chat',id);url.searchParams.delete('inbox');history.replaceState(history.state,'',url.pathname+url.search+url.hash);currentURL=location.href;if(saved)positions.set(currentURL,saved);
   pane.dataset.openChat='true';document.getElementById('workspace')?.classList.add('oie-chat-open');
   syncFilterLinks();
-  if(root)for(const row of root.querySelectorAll('#conversation-list a[data-conversation-id]'))row.setAttribute('aria-current',String(row.dataset.conversationId===id));
+  inbox.selectConversation(root?.querySelector('#conversation-list'),id);
   return true;
  }
  document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,{history:true});});

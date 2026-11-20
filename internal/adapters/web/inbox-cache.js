@@ -32,6 +32,15 @@
     else list.remove();
   }
 
+  function selectConversation(list, id) {
+    if (!list) return;
+    for (const row of list.querySelectorAll('a[data-conversation-id][aria-current="true"]')) {
+      if (row.dataset.conversationId !== id) row.setAttribute('aria-current', 'false');
+    }
+    const next = id && list.querySelector('a[data-conversation-id="' + CSS.escape(id) + '"]');
+    if (next && next.getAttribute('aria-current') !== 'true') next.setAttribute('aria-current', 'true');
+  }
+
   function restore(entry, placeholder, conversation, fresh) {
     if (parked === entry) parked = undefined;
     const list = entry.list;
@@ -42,9 +51,7 @@
       reconcile(list, placeholder);
       list.dataset.version = placeholder.dataset.version;
     }
-    for (const row of list.querySelectorAll('a[data-conversation-id]')) {
-      row.setAttribute('aria-current', String(row.dataset.conversationId === conversation));
-    }
+    selectConversation(list, conversation);
     return list;
   }
 
@@ -99,6 +106,7 @@
     park,
     restore,
     reconcile,
+    selectConversation,
     seed(list) {
       if (list && !snapshots.has(list)) snapshots.set(list, generation);
     },
