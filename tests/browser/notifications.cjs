@@ -715,6 +715,49 @@ async function run() {
     }), 'the hidden native window plays the selected tone');
     await nativeProfile.close();
 
+    const iphone = await browser.newContext({userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'});
+    const iphonePage = await iphone.newPage();
+    await iphonePage.addInitScript(() => {
+      window.outputContexts = 0;
+      window.AudioContext = class extends AudioContext {
+        constructor(...args) { super(...args); window.outputContexts++; }
+      };
+      Object.defineProperty(navigator, 'audioSession', {value: {type: 'auto', state: 'inactive'}});
+      window.playedTones = [];
+      const play = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function () {
+        const sessionType = navigator.audioSession.type;
+        return play.call(this).then(() => window.playedTones.push({src: this.currentSrc, sessionType}));
+      };
+    });
+    const iphoneToneRequests = [];
+    iphonePage.on('request', request => {
+      if (new URL(request.url()).pathname === '/ui/notification.wav') iphoneToneRequests.push(request);
+    });
+    await iphonePage.goto(base + '/?chat=' + chat);
+    await iphonePage.waitForFunction(() => window.OieEvents.connected);
+    const iphoneComposer = iphonePage.locator('#message-composer');
+    await iphoneComposer.click();
+    await iphoneComposer.press('a');
+    await iphonePage.evaluate(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    assert.equal(await iphonePage.evaluate(() => window.outputContexts), 0, 'opening, tapping and typing leave audio output idle on iPhone');
+    assert.deepEqual(await iphonePage.evaluate(() => window.playedTones), []);
+    assert.equal(iphoneToneRequests.length, 0);
+    push();
+    await iphonePage.waitForFunction(() => window.playedTones.some(tone => tone.src.endsWith('/ui/notification.wav') && tone.sessionType === 'ambient'));
+    await iphonePage.waitForFunction(() => navigator.audioSession.type === 'auto');
+
+    await iphonePage.goto(toneURL);
+    await iphonePage.locator('[data-notification-tone-file]').setInputFiles(file);
+    await iphonePage.waitForFunction(name => document.querySelector('[data-notification-tone-name]').textContent === name, file.name);
+    await iphonePage.locator('[data-notification-preview]').click();
+    await iphonePage.waitForFunction(() => window.playedTones.some(tone => tone.src.startsWith('blob:') && tone.sessionType === 'ambient'));
+    await iphonePage.waitForFunction(() => navigator.audioSession.type === 'auto');
+    await iphone.close();
+
     const dndProfile = await browser.newContext();
     const dndPage = await dndProfile.newPage();
     await dndPage.addInitScript(() => {
