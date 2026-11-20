@@ -7,7 +7,8 @@
  let pendingConversation, pendingShared, pendingParticipants, settling, historyRequest;
  const sharedPageCounts=new Map();
  let sharedCountEngine;
- let earlyRestoredTimeline;
+ let earlyRestoredTimeline,dependenciesReady=false;
+ const startupSwaps=new Set();
  const positions=new Map(),app=()=>document.getElementById('oie-app');
  const scrollIDs=['conversation-list','message-timeline','shared-content-scroll','favorites-scroll','details-body','accounts-body','account-detail-scroll','workspace'];
  const routeFields=['openDrawer','engineId','eventCursor','conversationId','accountId','firstUnread','focusMessage','contextNewer','contextMissing','mock'];
@@ -666,6 +667,9 @@
   if(pendingShared?.ctx===event.detail.ctx)stopSharedLoading();
   if(pendingParticipants?.ctx===event.detail.ctx)stopParticipantsLoading();
  });
+ document.addEventListener('htmx:finally:swap',event=>{
+  if(startupSwaps.delete(event.detail.ctx))startWhenReady();
+ });
  document.addEventListener('htmx:before:swap',event=>{
   const ctx=event.detail.ctx;if(!ctx?.oieKind)return;
   if(ctx.oieInfoCancelled||ctx.oieEpoch!==epoch||!document.getElementById(ctx.oieKind)||ctx.oieSharedFields!==undefined&&sharedFields()!==ctx.oieSharedFields||ctx.oieFavoritesQuery!==undefined&&document.getElementById('favorites-search')?.value!==ctx.oieFavoritesQuery){
@@ -707,6 +711,7 @@
   }
 
   if(replacesWorkspace(ctx.oieKind)||ctx.oieKind==='conversation-pane'){
+   if(!booted)startupSwaps.add(ctx);
    if(ctx.oieKind!=='oie-app')closeOverlays();
    runtime.stop();
    if(ctx.oieKind===routeID)keepSourceRegions(ctx);
@@ -988,6 +993,12 @@
  async function ready(){
   inbox.seed(document.getElementById('conversation-list'));
   await window.goshtosoDependencies?.ready;
+  dependenciesReady=true;
+  startWhenReady();
+ }
+ function startWhenReady(){
+  // A workspace swap installs its route and saved offset during settle.
+  if(booted||!dependenciesReady||startupSwaps.size)return;
   booted=true;
   routeState();
   rememberSharedPage(document.querySelector('#shared-content-pagination [data-shared-page]'));
