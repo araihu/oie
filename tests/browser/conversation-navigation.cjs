@@ -141,18 +141,24 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     await openEarly(b);
     let expected=saved;
     if(releaseDuringSwap){
-     await earlyPage.exposeFunction('releaseAlpine',releaseAlpine);
      await earlyPage.evaluate(id=>{
+      const htmx=window.htmx,normalDelay=htmx.config.defaultSettleDelay,timeout=htmx.timeout;
+      const fixtureDelay=54321;
+      htmx.config.defaultSettleDelay=fixtureDelay;
+      htmx.timeout=function(delay){
+       if(delay!==fixtureDelay)return timeout.call(this,delay);
+       htmx.timeout=timeout;
+       htmx.config.defaultSettleDelay=normalDelay;
+       return new Promise(resolve=>{window.resumeWorkspaceSettle=resolve});
+      };
       const link=document.querySelector('#conversation-list a[data-conversation-id="'+id+'"]');
-      window.htmx.config.defaultSettleDelay=1200;
-      document.addEventListener('htmx:before:swap',()=>{void window.releaseAlpine()},{once:true});
-      document.addEventListener('htmx:after:settle',event=>{
-       if(event.detail.task?.target.id==='oie-app')window.loadedBeforeSettle=!!window.Alpine;
-      });
       window.OieNavigation.go(link.href,{workspace:'oie-app'});
      },c.id);
-     await until(()=>earlyPage.evaluate(()=>window.loadedBeforeSettle!==undefined),'workspace settled');
-     assert.equal(await earlyPage.evaluate(()=>window.loadedBeforeSettle),true);
+     await until(()=>earlyPage.evaluate(()=>!!window.resumeWorkspaceSettle),'workspace paused during settle');
+     releaseAlpine();
+     await earlyPage.waitForLoadState('domcontentloaded');
+     await earlyPage.evaluate(()=>window.goshtosoDependencies?.ready);
+     await earlyPage.evaluate(()=>window.resumeWorkspaceSettle());
     }else{
      await openEarly(c);
      assert.equal(await earlyTimeline.evaluate(node=>node.scrollTop),saved,'early navigation restores the saved offset');
