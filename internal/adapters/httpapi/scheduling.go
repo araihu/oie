@@ -172,7 +172,7 @@ func (s *Server) ListScheduledMessages(ctx context.Context, r engineapi.ListSche
 	if err != nil {
 		return nil, err
 	}
-	query := application.ScheduledQuery{Limit: 50}
+	query := application.ScheduledQuery{Limit: 50, IncludeDestinations: r.Params.IncludeDestinations != nil && *r.Params.IncludeDestinations}
 	if r.Params.Limit != nil {
 		query.Limit = *r.Params.Limit
 	}
@@ -207,11 +207,19 @@ func (s *Server) ListScheduledMessages(ctx context.Context, r engineapi.ListSche
 		}
 		query.AfterTime, query.AfterID = previous.Time, previous.ID
 	}
-	items, err := s.engine.ScheduledMessages(ctx, query)
+	result, err := s.engine.ScheduledMessages(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+	items := result.Items
 	page := engineapi.ScheduledMessagePage{EngineId: string(snapshot.ID), Items: make([]engineapi.ScheduledMessageItem, 0, min(query.Limit, len(items)))}
+	if query.IncludeDestinations {
+		options := make([]engineapi.ScheduledDestination, 0, len(result.Destinations))
+		for _, d := range result.Destinations {
+			options = append(options, engineapi.ScheduledDestination{Id: string(d.ID), AccountId: string(d.AccountID), Title: d.Title})
+		}
+		page.Destinations = &options
+	}
 	if len(items) > query.Limit {
 		last := items[query.Limit-1].Message
 		key.Time, key.ID = *last.ScheduledAt, last.ID

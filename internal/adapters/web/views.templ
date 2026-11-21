@@ -965,6 +965,11 @@ templ liveRegions(v view){
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)
+<template data-live-schedule-destinations>
+ for _, option := range scheduleConversationCombobox(v).Source.Static {
+  <option value={ option.Value }>{ option.Label }</option>
+ }
+</template>
 }
 if v.Section=="favorites" && v.FavoritesPage!=nil {
 @favoritesResults(v)

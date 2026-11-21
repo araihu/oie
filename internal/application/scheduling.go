@@ -22,10 +22,11 @@ var ErrAttachmentTooLarge = errors.New("attachment too large")
 var ErrReplySourceChanged = errors.New("reply source changed")
 
 type ScheduledQuery struct {
-	ConversationIDs []domain.ID
-	AfterTime       time.Time
-	AfterID         domain.ID
-	Limit           int
+	IncludeDestinations bool
+	ConversationIDs     []domain.ID
+	AfterTime           time.Time
+	AfterID             domain.ID
+	Limit               int
 }
 
 const MaxScheduledConversationFilters = 200
@@ -33,6 +34,16 @@ const MaxScheduledConversationFilters = 200
 type ScheduledMessage struct {
 	Message      domain.Message
 	Conversation domain.Conversation
+}
+
+type ScheduledDestination struct {
+	ID, AccountID domain.ID
+	Title         string
+}
+
+type ScheduledPage struct {
+	Items        []ScheduledMessage
+	Destinations []ScheduledDestination
 }
 
 type PendingMutation struct {
@@ -62,7 +73,7 @@ type SchedulingRepository interface {
 	ReplayMessageMutation(context.Context, domain.ID, string, string) (*domain.Message, error)
 	RecordOriginalWireAttempt(context.Context, domain.ID, domain.ID, Outgoing, string, ...domain.WireMentionProof) error
 	UpdatePendingMessage(context.Context, PendingMutation) (MessageResult, error)
-	ScheduledMessages(context.Context, ScheduledQuery) ([]ScheduledMessage, error)
+	ScheduledMessages(context.Context, ScheduledQuery) (ScheduledPage, error)
 	StageAttachment(context.Context, domain.ID, domain.StagedAttachment, io.Reader) (domain.StagedAttachment, bool, error)
 	StagedAttachment(context.Context, domain.ID, domain.ID) (domain.StagedAttachment, error)
 	OpenStagedAttachment(context.Context, domain.ID, domain.ID) (domain.StagedAttachment, io.ReadCloser, error)
@@ -317,23 +328,23 @@ func (e *Engine) UpdatePendingMessageWithReplyReview(ctx context.Context, key, i
 	return out, err
 }
 
-func (e *Engine) ScheduledMessages(ctx context.Context, query ScheduledQuery) ([]ScheduledMessage, error) {
+func (e *Engine) ScheduledMessages(ctx context.Context, query ScheduledQuery) (ScheduledPage, error) {
 	if query.Limit < 1 || query.Limit > 100 || len(query.ConversationIDs) > MaxScheduledConversationFilters || (!query.AfterTime.IsZero() && !validID(query.AfterID)) {
-		return nil, ErrInvalid
+		return ScheduledPage{}, ErrInvalid
 	}
 	seen := make(map[domain.ID]bool, len(query.ConversationIDs))
 	for _, id := range query.ConversationIDs {
 		if seen[id] {
-			return nil, ErrInvalid
+			return ScheduledPage{}, ErrInvalid
 		}
 		seen[id] = true
 		if _, err := e.Conversation(ctx, id); err != nil {
-			return nil, err
+			return ScheduledPage{}, err
 		}
 	}
 	repo, err := e.scheduling()
 	if err != nil {
-		return nil, err
+		return ScheduledPage{}, err
 	}
 	query.Limit++
 	return repo.ScheduledMessages(ctx, query)

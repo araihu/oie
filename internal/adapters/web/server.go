@@ -194,26 +194,27 @@ type view struct {
 
 	SchedulePage          *engineapi.ScheduledMessagePage
 	ScheduleEdit          *engineapi.Message
-	ScheduleDestinations  []engineapi.Conversation
+	ScheduleDestinations  []engineapi.ScheduledDestination
 	ScheduleConversations []string
 	ScheduleCursor        string
 	ScheduleUnavailable   bool
 
-	InboxPageCursor, InboxNext string
-	InboxOnly                  bool
-	ReuseInbox                 bool
-	PagePresentationSupported  bool
-	UnreadTotalsSupported      bool
-	RefreshUnchanged           bool
-	RefreshInbox               bool
-	RefreshRow                 string
-	AppendAfter                string
-	AppendGrouped              bool
-	CachedInboxFirst           string
-	Role                       engineapi.EngineRole
-	CanResetData               bool
-	CompactSource              bool
-	LatestEditTarget           *engineapi.MessageEditTarget
+	InboxPageCursor, InboxNext     string
+	InboxOnly                      bool
+	ReuseInbox                     bool
+	PagePresentationSupported      bool
+	UnreadTotalsSupported          bool
+	ScheduledDestinationsSupported bool
+	RefreshUnchanged               bool
+	RefreshInbox                   bool
+	RefreshRow                     string
+	AppendAfter                    string
+	AppendGrouped                  bool
+	CachedInboxFirst               string
+	Role                           engineapi.EngineRole
+	CanResetData                   bool
+	CompactSource                  bool
+	LatestEditTarget               *engineapi.MessageEditTarget
 
 	SenderInfo                                           *senderInfoView
 	GlobalMessageSearch                                  bool
@@ -1228,6 +1229,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	v.ReadReceiptsSupported = supportsReadReceipts(engine.JSON200.ApiVersion)
 	v.PagePresentationSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 40)
 	v.UnreadTotalsSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 41)
+	v.ScheduledDestinationsSupported = supportsEngineMinor(engine.JSON200.ApiVersion, 42)
 	v.EventCursor = engine.JSON200.EventCursor
 	if notificationEngine != "" && notificationEngine != v.EngineID {
 		v.NotFound = true

@@ -1919,6 +1919,8 @@ window.OieRuntime.register('live', (life, route) => {
         }
       }
       const schedules=document.getElementById('scheduled-results'),newSchedules=page.querySelector('#scheduled-results');
+      const destinations=page.querySelector('template[data-live-schedule-destinations]');
+      if(schedules&&destinations)document.dispatchEvent(new CustomEvent('oie:agenda-options',{detail:destinations.content}));
       if(schedules&&newSchedules&&!schedules.inert&&schedules.dataset.version!==newSchedules.dataset.version&&!schedules.contains(document.activeElement)&&!document.querySelector('[data-schedule-dialog][open]')){
         mutateDOM(schedules,newSchedules.innerHTML);schedules.dataset.version=newSchedules.dataset.version;
       }

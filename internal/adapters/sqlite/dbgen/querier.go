@@ -218,6 +218,7 @@ type Querier interface {
 	ListRoomArchiveConversations(ctx context.Context, accountID string) ([]Conversation, error)
 	ListRoomBannedNicknames(ctx context.Context, conversationID string) ([]ListRoomBannedNicknamesRow, error)
 	ListRoomIntents(ctx context.Context) ([]RoomIntent, error)
+	ListScheduledDestinations(ctx context.Context) ([]ListScheduledDestinationsRow, error)
 	ListScheduledMessages(ctx context.Context, arg ListScheduledMessagesParams) ([]ListScheduledMessagesRow, error)
 	// Filter against the retained message in the same snapshot. Deleted IDs can
 	// still need index maintenance, but cannot contribute a search result.

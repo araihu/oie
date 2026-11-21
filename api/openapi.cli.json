@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.41.0",
+    "version": "0.42.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -6701,6 +6701,15 @@
             }
           },
           {
+            "name": "includeDestinations",
+            "in": "query",
+            "description": "Include one filter option per conversation with pending schedules across the engine, independent of the requested page or conversation filter.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "description": "Opaque continuation bound to this engine and conversation filter.",
@@ -7646,7 +7655,8 @@
               "0.38.0",
               "0.39.0",
               "0.40.0",
-              "0.41.0"
+              "0.41.0",
+              "0.42.0"
             ]
           },
           "eventCursor": {
@@ -12394,12 +12404,42 @@
             },
             "example": []
           },
+          "destinations": {
+            "type": "array",
+            "description": "Returned when includeDestinations is true. Contains one entry per pending destination.",
+            "example": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduledDestination"
+            }
+          },
           "nextCursor": {
             "type": "string",
             "minLength": 1,
             "maxLength": 8192,
             "description": "Omitted at the end of the list.",
             "example": "opaque-schedule-cursor"
+          }
+        }
+      },
+      "ScheduledDestination": {
+        "type": "object",
+        "description": "A conversation with a pending scheduled message on this engine.",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "accountId",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/ID"
+          },
+          "title": {
+            "type": "string",
+            "example": "Alice"
           }
         }
       },

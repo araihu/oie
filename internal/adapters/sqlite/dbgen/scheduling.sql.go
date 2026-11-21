@@ -80,6 +80,45 @@ func (q *Queries) InsertStagedAttachment(ctx context.Context, arg InsertStagedAt
 	return err
 }
 
+const listScheduledDestinations = `-- name: ListScheduledDestinations :many
+SELECT c.id, c.account_id, CAST(COALESCE(json_extract(c.payload, '$.Title'), c.address) AS TEXT) AS title
+FROM conversations AS c
+WHERE c.id IN (
+    SELECT m.conversation_id FROM outbox AS o JOIN messages AS m ON m.id = o.message_id
+    WHERE o.state = 'queued' AND o.scheduled_at <> ''
+)
+ORDER BY title, c.id
+`
+
+type ListScheduledDestinationsRow struct {
+	ID        string
+	AccountID string
+	Title     string
+}
+
+func (q *Queries) ListScheduledDestinations(ctx context.Context) ([]ListScheduledDestinationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listScheduledDestinations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledDestinationsRow{}
+	for rows.Next() {
+		var i ListScheduledDestinationsRow
+		if err := rows.Scan(&i.ID, &i.AccountID, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScheduledMessages = `-- name: ListScheduledMessages :many
 SELECT m.id, m.revision_id, m.account_id, m.conversation_id, m.provider_id, m.is_own, m.state, m.payload, m.created_at_ms, m.timeline_at_ms, m.submitted_at_ms, c.id, c.revision_id, c.account_id, c.address, c.peer_id, c.payload, c.activity_sequence, c.unread_count, c.archived, c.favorite
 FROM outbox AS o

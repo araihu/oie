@@ -77,6 +77,22 @@ window.OieRuntime.register('scheduling', life => {
       for (const value of values) url.searchParams.append(name, value);
       void updateAgenda(url, values);
     });
+    life.on(document, 'oie:agenda-options', ({detail}) => {
+      const picker = filter.querySelector('[data-combobox]');
+      const options = [...detail.querySelectorAll('option')].map(node => ({value:node.value, label:node.textContent}));
+      const rows = picker.querySelectorAll('[data-combobox-option]');
+      if (rows.length === options.length && options.every((option, i) =>
+        option.value === rows[i].dataset.value && option.label === rows[i].querySelector('[data-combobox-option-label]').textContent)) return;
+      const focused = document.activeElement?.closest('[data-combobox-option]');
+      const list = picker.querySelector('[role=listbox]');
+      const top = list.scrollTop;
+      picker.dispatchEvent(new CustomEvent('combobox:load', {bubbles:true, detail:{id, options}}));
+      list.scrollTop = top;
+      if (focused && !focused.isConnected) {
+        (picker.querySelector('[data-combobox-option]:not([hidden])[data-value="' + CSS.escape(focused.dataset.value) + '"]') ||
+          picker.querySelector('[data-combobox-search]')).focus({preventScroll:true});
+      }
+    });
     life.on(document,'oie:agenda-refresh',event=>void updateAgenda(new URL(location.href),committed,event.detail.form));
     life.on(document,'oie:agenda-settled',event=>{
       request?.abort();

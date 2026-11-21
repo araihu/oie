@@ -87,6 +87,7 @@ integration() {
   run_case composer-video
   run_case documents
   run_case shared-search
+  run_case scheduled-filter
   run message-search with_presentation_matrix node tests/browser/message-search.cjs
   run_case chat-info
   run_case fragment-navigation
