@@ -60,6 +60,18 @@ const {startOie} = require('./fixtures/oie-server.cjs');
     await picker.locator('input[name="scheduleConversation"][value="' + old.id + '"]').waitFor({state:'attached'});
     assert.equal(await results.count(), 1);
     assert.match(await results.first().innerText(), /Scheduled while the filter is open/);
+    await picker.getByRole('combobox').click();
+    await search.fill(account.label);
+    await lateOption.focus();
+    const accountURL = server.url + '/api/v1/accounts/' + account.id;
+    const currentAccount = await (await fetch(accountURL)).json();
+    const rename = await fetch(accountURL + '/label', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({label:'Renamed', expectedRevisionId:currentAccount.revisionId}),
+    });
+    assert(rename.ok);
+    await lateOption.waitFor({state:'hidden'});
+    assert(await search.evaluate(input => document.activeElement === input));
     console.log('PASS: earlier scheduled recipients, filtered agenda and live picker updates');
   } finally {
     await browser.close();

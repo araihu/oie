@@ -89,7 +89,7 @@ window.OieRuntime.register('scheduling', life => {
       picker.dispatchEvent(new CustomEvent('combobox:load', {bubbles:true, detail:{id, options}}));
       list.scrollTop = top;
       if (focused && !focused.isConnected) {
-        (picker.querySelector('[data-value="' + CSS.escape(focused.dataset.value) + '"]') ||
+        (picker.querySelector('[data-combobox-option]:not([hidden])[data-value="' + CSS.escape(focused.dataset.value) + '"]') ||
           picker.querySelector('[data-combobox-search]')).focus({preventScroll:true});
       }
     });
