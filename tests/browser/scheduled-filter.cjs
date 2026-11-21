@@ -18,7 +18,7 @@ const {startOie} = require('./fixtures/oie-server.cjs');
     return response.json();
   }
   try {
-    const account = await post('accounts', {protocol:'xmpp', address:'agenda@fixture.invalid', label:'Agenda'});
+    const account = await post('accounts', {protocol:'xmpp', address:'agenda@fixture.invalid', label:'Personal reminders'});
     const chat = name => post('conversations', {accountId:account.id, address:name + '@fixture.invalid'});
     const schedule = (id, text, hours) => post('conversations/' + id + '/messages', {
       originalText:text, scheduledAt:new Date(Date.now() + hours * 3600000).toISOString(),
