@@ -11,6 +11,15 @@ AND (CAST(sqlc.arg(conversation_ids) AS TEXT) = '[]' OR m.conversation_id IN (SE
 AND (o.scheduled_at, o.message_id) > (sqlc.arg(after_time), sqlc.arg(after_id))
 ORDER BY o.scheduled_at, o.message_id LIMIT sqlc.arg(page_limit);
 
+-- name: ListScheduledDestinations :many
+SELECT c.id, c.account_id, CAST(COALESCE(json_extract(c.payload, '$.Title'), c.address) AS TEXT) AS title
+FROM conversations AS c
+WHERE c.id IN (
+    SELECT m.conversation_id FROM outbox AS o JOIN messages AS m ON m.id = o.message_id
+    WHERE o.state = 'queued' AND o.scheduled_at <> ''
+)
+ORDER BY title, c.id;
+
 -- name: GetStagedAttachment :one
 SELECT * FROM staged_attachments WHERE id = ?;
 

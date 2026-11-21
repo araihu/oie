@@ -335,7 +335,12 @@
   if(sameChat&&(params.get('open')==='details'&&localInfo||detailsHistory))return 'chat-info-content';
   if(document.getElementById('account-workspace')&&(params.get('open')==='accounts'||!node&&current.get('open')==='accounts'&&!params.has('open'))&&sameRoute(url,['open','accountPage','managedAccount','accountFocus','contactCursor']))return 'account-workspace';
   if(sameChat&&document.getElementById('schedule-editor')&&params.get('editSchedule')!==current.get('editSchedule')&&sameRoute(url,['editSchedule','open']))return 'schedule-editor';
-  if(document.getElementById('scheduled-results')&&params.get('section')==='scheduled'&&(!node||node.matches('[data-agenda-next]'))&&sameRoute(url,['scheduleCursor','scheduleConversation']))return 'scheduled-results';
+  if(document.getElementById('scheduled-results')&&params.get('section')==='scheduled'&&(!node||node.matches('[data-agenda-next]'))&&sameRoute(url,['scheduleCursor','scheduleConversation'])){
+   // A live refresh may have removed an older history entry's recipient.
+   const picker=document.getElementById('schedule-conversation');
+   if(params.getAll('scheduleConversation').every(id=>picker?.querySelector('[data-combobox-option][data-value="'+CSS.escape(id)+'"]')))return 'scheduled-results';
+   return 'oie-app';
+  }
   if(document.getElementById('favorites-results')&&params.get('section')==='favorites'&&(!node||node.closest('#favorites-results'))&&sameRoute(url,['favoritesQuery','favoritesCursor']))return 'favorites-results';
   if(sharedRoute(url,['q','account','contentAccount','contentConversation'])&&(!node||node.id==='shared-content-search'||node.closest('#shared-search-results'))){
    return sharedRoute(url,node?.matches('[data-shared-tab]')?['q']:[])?'shared-content-scroll':'shared-search-results';

@@ -407,7 +407,8 @@ func TestSchedulingPreviewMigratesWithoutDiscardingData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = upgraded.Close() }()
-	items, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10})
+	page, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10})
+	items := page.Items
 	if err != nil || len(items) != 1 || items[0].Message.ID != result.Message.ID || items[0].Message.OriginalText != body ||
 		items[0].Message.ScheduledAt == nil || !items[0].Message.ScheduledAt.Equal(when) {
 		t.Fatalf("schedule changed during migration: %+v %v", items, err)
@@ -463,7 +464,7 @@ func TestReactionLookupPreviewMigratesWithoutDiscardingData(t *testing.T) {
 	if err != nil || len(reactions.Snapshot.Items) != 1 || reactions.Snapshot.Items[0].Emoji != "👍" {
 		t.Fatalf("reaction changed during upgrade: %+v %v", reactions.Snapshot, err)
 	}
-	if scheduled, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10}); err != nil || len(scheduled) != 0 {
+	if scheduled, err := upgraded.ScheduledMessages(ctx, application.ScheduledQuery{Limit: 10}); err != nil || len(scheduled.Items) != 0 {
 		t.Fatalf("scheduling schema unavailable after upgrade: %+v %v", scheduled, err)
 	}
 	var version int

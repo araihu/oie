@@ -30,14 +30,14 @@ func eligibleAt(m domain.Message, next time.Time) string {
 	return stamp(next)
 }
 
-func (s *Store) ScheduledMessages(ctx context.Context, in application.ScheduledQuery) ([]application.ScheduledMessage, error) {
+func (s *Store) ScheduledMessages(ctx context.Context, in application.ScheduledQuery) (application.ScheduledPage, error) {
 	var after string
 	if !in.AfterTime.IsZero() {
 		after = stamp(in.AfterTime)
 	}
-	tx, q, err := begin(ctx, s)
+	tx, q, err := beginRead(ctx, s)
 	if err != nil {
-		return nil, err
+		return application.ScheduledPage{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	conversations := "[]"
@@ -46,24 +46,35 @@ func (s *Store) ScheduledMessages(ctx context.Context, in application.ScheduledQ
 	}
 	rows, err := q.ListScheduledMessages(ctx, dbgen.ListScheduledMessagesParams{ConversationIds: conversations, AfterTime: after, AfterID: string(in.AfterID), PageLimit: int64(in.Limit)})
 	if err != nil {
-		return nil, err
+		return application.ScheduledPage{}, err
 	}
 	out := make([]application.ScheduledMessage, 0, len(rows))
 	for _, row := range rows {
 		m, err := decodeMessage(row.Message)
 		if err != nil {
-			return nil, err
+			return application.ScheduledPage{}, err
 		}
 		if err = hydrateReply(ctx, q, &m); err != nil {
-			return nil, err
+			return application.ScheduledPage{}, err
 		}
 		c, err := decodeConversation(row.Conversation)
 		if err != nil {
-			return nil, err
+			return application.ScheduledPage{}, err
 		}
 		out = append(out, application.ScheduledMessage{Message: m, Conversation: c})
 	}
-	return out, tx.Commit()
+	page := application.ScheduledPage{Items: out}
+	if in.IncludeDestinations {
+		destinations, err := q.ListScheduledDestinations(ctx)
+		if err != nil {
+			return application.ScheduledPage{}, err
+		}
+		page.Destinations = make([]application.ScheduledDestination, 0, len(destinations))
+		for _, d := range destinations {
+			page.Destinations = append(page.Destinations, application.ScheduledDestination{ID: domain.ID(d.ID), AccountID: domain.ID(d.AccountID), Title: d.Title})
+		}
+	}
+	return page, tx.Commit()
 }
 
 func (s *Store) UpdatePendingMessage(ctx context.Context, in application.PendingMutation) (application.MessageResult, error) {
