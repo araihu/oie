@@ -54,6 +54,9 @@ async function assertDisplay(page, value) {
         const context = await browser.newContext({
           viewport:{width, height:900}, locale, reducedMotion:'reduce',
         });
+        if (width === 390) await context.addInitScript(() => {
+          Object.defineProperty(globalThis, 'Temporal', {value: undefined, configurable:true});
+        });
         const page = await context.newPage();
         await page.clock.setFixedTime(new Date('2026-01-15T12:00:00Z'));
         const session = await context.newCDPSession(page);
@@ -66,6 +69,7 @@ async function assertDisplay(page, value) {
         await dialog.waitFor();
         const trigger = dialog.getByRole('combobox', {name:locale === 'en' ? 'Display time zone' : 'Fuso horário de exibição'});
         assert.equal(await zoneValue(page).inputValue(), '');
+        assert.equal(await dialog.locator('#settings-time-zone [role=option]').count(), 1, 'opening Settings only mounts the current display zone');
         assert.match(await trigger.textContent(), /\(UTC-05:00\)/);
         const system = await expected(page, 'America/New_York');
         const preferred = await expected(page, explicitZone);
@@ -74,7 +78,7 @@ async function assertDisplay(page, value) {
 
         await dialog.locator('input[name="theme"]:checked:focus').waitFor({state:'attached'});
         await trigger.focus();
-        await trigger.click();
+        await trigger.press('ArrowDown');
         const search=dialog.getByRole('textbox',{name:locale==='en'?'Search time zones':'Buscar fusos horários'});
         await search.fill('UTC+09:00');
         await dialog.getByRole('option',{name:'Yakutsk · Asia (UTC+09:00)',exact:true}).waitFor();

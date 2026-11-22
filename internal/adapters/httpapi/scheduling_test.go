@@ -139,7 +139,7 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	}
 	limit := 1
 	page, err := client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{Limit: &limit})
-	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Conversation.Id != room || page.JSON200.NextCursor == nil {
+	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Conversation.Id != room || page.JSON200.NextCursor == nil || page.JSON200.Destinations != nil {
 		t.Fatalf("first scheduled page: %+v %v", page, err)
 	}
 	cursor := page.JSON200.NextCursor
@@ -147,9 +147,23 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Message.Id != second.Id {
 		t.Fatalf("next scheduled page: %+v %v", page, err)
 	}
-	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationId: &room})
+	includeDestinations := true
+	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationId: &room, Limit: &limit, IncludeDestinations: &includeDestinations})
 	if err != nil || page.JSON200 == nil || len(page.JSON200.Items) != 1 || page.JSON200.Items[0].Message.Id != first.Id {
 		t.Fatalf("scoped scheduled page: %+v %v", page, err)
+	}
+	if page.JSON200.Destinations == nil || len(*page.JSON200.Destinations) != 2 {
+		t.Fatalf("expected both pending destinations outside the page filter: %+v", page.JSON200.Destinations)
+	}
+	destinations := map[string]bool{}
+	for _, option := range *page.JSON200.Destinations {
+		if option.Title == "" || option.AccountId == "" {
+			t.Fatalf("incomplete scheduled destination: %+v", option)
+		}
+		destinations[option.Id] = true
+	}
+	if !destinations[room] || !destinations[other] {
+		t.Fatalf("missing pending destination: %+v", destinations)
 	}
 	selected := []string{room, other}
 	page, err = client.ListScheduledMessagesWithResponse(ctx, &engineapi.ListScheduledMessagesParams{ConversationIds: &selected, Limit: &limit})

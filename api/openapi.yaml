@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.41.0
+  version: 0.42.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -4046,6 +4046,10 @@ paths:
             uniqueItems: true
             items:
               $ref: '#/components/schemas/ID'
+        - name: includeDestinations
+          in: query
+          description: Include one filter option per conversation with pending schedules across the engine, independent of the requested page or conversation filter.
+          schema: {type: boolean, default: false}
         - name: cursor
           in: query
           description: Opaque continuation bound to this engine and conversation filter.
@@ -4614,6 +4618,7 @@ components:
           - 0.39.0
           - 0.40.0
           - 0.41.0
+          - 0.42.0
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -7604,12 +7609,29 @@ components:
           items:
             $ref: '#/components/schemas/ScheduledMessageItem'
           example: []
+        destinations:
+          type: array
+          description: Returned when includeDestinations is true. Contains one entry per pending destination.
+          example: []
+          items:
+            $ref: '#/components/schemas/ScheduledDestination'
         nextCursor:
           type: string
           minLength: 1
           maxLength: 8192
           description: Omitted at the end of the list.
           example: opaque-schedule-cursor
+    ScheduledDestination:
+      type: object
+      description: A conversation with a pending scheduled message on this engine.
+      additionalProperties: false
+      required: [id, accountId, title]
+      properties:
+        id:
+          $ref: '#/components/schemas/ID'
+        accountId:
+          $ref: '#/components/schemas/ID'
+        title: {type: string, example: Alice}
     ScheduledMessageItem:
       type: object
       description: The current queued message, including scheduledAt and composition, and its destination.

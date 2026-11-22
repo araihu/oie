@@ -84,6 +84,9 @@ func (s *Server) loadScheduled(ctx context.Context, v *view, includeDestinations
 		return
 	}
 	p := &engineapi.ListScheduledMessagesParams{}
+	if includeDestinations && v.ScheduledDestinationsSupported {
+		p.IncludeDestinations = &includeDestinations
+	}
 	switch len(v.ScheduleConversations) {
 	case 0:
 	case 1:
@@ -103,24 +106,42 @@ func (s *Server) loadScheduled(ctx context.Context, v *view, includeDestinations
 	if !includeDestinations {
 		return
 	}
+	// Keep recent conversations available, including those without a pending send.
+	seen := make(map[string]bool)
+	add := func(d engineapi.ScheduledDestination) {
+		if !seen[d.Id] {
+			seen[d.Id] = true
+			v.ScheduleDestinations = append(v.ScheduleDestinations, d)
+		}
+	}
+	addConversation := func(c engineapi.Conversation) {
+		add(engineapi.ScheduledDestination{Id: c.Id, AccountId: c.AccountId, Title: c.Title})
+	}
 	limit := 100
 	conversations, err := s.client.ListConversationsWithResponse(ctx, &engineapi.ListConversationsParams{Limit: &limit})
 	if err == nil && conversations.JSON200 != nil {
-		v.ScheduleDestinations = conversations.JSON200.Items
-	}
-	for _, item := range v.SchedulePage.Items {
-		if !slices.ContainsFunc(v.ScheduleDestinations, func(c engineapi.Conversation) bool { return c.Id == item.Conversation.Id }) {
-			v.ScheduleDestinations = append(v.ScheduleDestinations, item.Conversation)
+		for _, c := range conversations.JSON200.Items {
+			addConversation(c)
 		}
 	}
-	for _, filter := range v.ScheduleConversations {
-		if slices.ContainsFunc(v.ScheduleDestinations, func(c engineapi.Conversation) bool { return c.Id == filter }) {
+	if destinations := v.SchedulePage.Destinations; destinations != nil {
+		for _, d := range *destinations {
+			add(d)
+		}
+	} else {
+		for _, item := range v.SchedulePage.Items {
+			addConversation(item.Conversation)
+		}
+	}
+	for _, id := range v.ScheduleConversations {
+		if seen[id] {
 			continue
 		}
-		if c, err := s.client.GetConversationWithResponse(ctx, filter); err == nil && c.JSON200 != nil {
-			v.ScheduleDestinations = append(v.ScheduleDestinations, *c.JSON200)
+		if c, err := s.client.GetConversationWithResponse(ctx, id); err == nil && c.JSON200 != nil {
+			addConversation(*c.JSON200)
 		}
 	}
+
 }
 
 func (s *Server) loadScheduleEdit(ctx context.Context, v *view, id string) {
