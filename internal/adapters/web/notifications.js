@@ -1,6 +1,8 @@
 (() => {
   'use strict';
 
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const prefix = 'oie.notifications.';
   const Audio = window.AudioContext || window.webkitAudioContext;
   const OfflineAudio = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -25,7 +27,7 @@
   const muteKey = (engine, chat) => prefix + 'mute.' + engine + '.' + chat;
   const focusKey = prefix + 'focus';
   const tab = Math.random().toString(36).slice(2);
-  let context, database, worker, pending = false, notice = '';
+  let context, iosPlayer, database, worker, pending = false, notice = '';
   let customSound, toneReady, toneChanges, editingTone = false;
   let pushStatus, pushManager, pushCheck, pushPending = false;
   let pushWrites = Promise.resolve();
@@ -208,8 +210,45 @@
     return {name: file.name, wav, trimmed};
   }
 
+  function prepareIOSPlayer() {
+    const media = document.createElement('audio');
+    // A sourceless load during a gesture authorizes later playback in WebKit.
+    media.preload = 'none';
+    media.load();
+    let selected, ambient = false;
+    const session = navigator.audioSession;
+    function restoreSession() {
+      if (ambient && session.type === 'ambient') session.type = 'auto';
+      ambient = false;
+    }
+    media.addEventListener('ended', restoreSession);
+    media.addEventListener('pause', () => { if (media.paused) restoreSession(); });
+    media.addEventListener('error', restoreSession);
+    return async sound => {
+      if (selected !== sound) {
+        if (selected?.wav) URL.revokeObjectURL(media.src);
+        media.src = sound.wav ? URL.createObjectURL(new Blob([sound.wav], {type: 'audio/wav'})) : '/ui/notification.wav';
+        selected = sound;
+      } else {
+        media.currentTime = 0;
+      }
+      // A notification can arrive while music is playing in another app.
+      if (session?.type === 'auto' && session.state !== 'active') {
+        session.type = 'ambient';
+        ambient = true;
+      }
+      try {
+        await media.play();
+      } catch (error) {
+        if (media.paused) restoreSession();
+        throw error;
+      }
+    };
+  }
+
   async function unlockSound() {
-    if (desktop()?.playSound) {
+    if (ios && !desktop()?.playSound) iosPlayer ??= prepareIOSPlayer();
+    if (iosPlayer || desktop()?.playSound) {
       await toneReady;
       return currentSound();
     }
@@ -247,6 +286,7 @@
       }
       return nativeSound(sound.nativeWAV ?? null);
     }
+    if (iosPlayer) return iosPlayer(sound);
     if (context?.state !== 'running' || !sound.buffer) return;
     const source = context.createBufferSource();
     source.buffer = sound.buffer;
@@ -289,8 +329,6 @@
   }
 
   function canPush() {
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     return Boolean(settings()?.querySelector('[data-notification-background]') && window.isSecureContext &&
       navigator.serviceWorker && (window.PushManager || window.pushManager) &&
       (!ios || navigator.standalone || matchMedia('(display-mode: standalone)').matches));
@@ -657,7 +695,7 @@
     const sound = currentSound();
     const withinWindow = () => receivedAt < Number(read(lastSoundKey)) + soundInterval;
     const ready = () => soundEnabled() && loadedTone === toneReady && sound === currentSound() &&
-      (desktop()?.playSound || sound.buffer && context?.state === 'running');
+      (desktop()?.playSound || iosPlayer || sound.buffer && context?.state === 'running');
     if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
     try {
       const conversation = await notificationContext(engine, message);
@@ -691,7 +729,7 @@
     if (!root) return;
     const banners = root.querySelector('[data-notification-banners]');
     const sound = root.querySelector('[data-notification-sound]');
-    const canSound = Boolean(Audio || desktop()?.playSound);
+    const canSound = Boolean(ios || Audio || desktop()?.playSound);
     banners.checked = wantsBanner();
     banners.disabled = pending || pushPending || !canBanner();
     const background = root.querySelector('[data-notification-background]');
