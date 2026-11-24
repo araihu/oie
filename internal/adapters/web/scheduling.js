@@ -771,6 +771,7 @@ window.OieRuntime.register('scheduling', life => {
         errorToast(message);
       };
       composer.setAttribute('data-capturing-audio', '');
+      composer.dispatchEvent(new Event('oie:recording-requested', {bubbles: true}));
       showAudioTime(0);
       syncPending();
       try {

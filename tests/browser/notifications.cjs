@@ -717,6 +717,7 @@ async function run() {
 
     const iphone = await browser.newContext({userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'});
     const iphonePage = await iphone.newPage();
+    iphonePage.on('pageerror', error => errors.push(error.message));
     await iphonePage.addInitScript(() => {
       window.outputContexts = 0;
       window.AudioContext = class extends AudioContext {
@@ -724,9 +725,18 @@ async function run() {
       };
       Object.defineProperty(navigator, 'audioSession', {value: {type: 'auto', state: 'inactive'}});
       window.playedTones = [];
+      window.primes = [];
+      const load = HTMLMediaElement.prototype.load;
+      HTMLMediaElement.prototype.load = function () {
+        if (this instanceof HTMLAudioElement && !this.isConnected && !this.hasAttribute('src')) {
+          window.primes.push(localStorage.getItem('oie.notifications.sound'));
+        }
+        return load.call(this);
+      };
       const play = HTMLMediaElement.prototype.play;
       HTMLMediaElement.prototype.play = function () {
         const sessionType = navigator.audioSession.type;
+        window.lastTonePlayer = this;
         return play.call(this).then(() => window.playedTones.push({src: this.currentSrc, sessionType}));
       };
     });
@@ -746,16 +756,97 @@ async function run() {
     assert.equal(await iphonePage.evaluate(() => window.outputContexts), 0, 'opening, tapping and typing leave audio output idle on iPhone');
     assert.deepEqual(await iphonePage.evaluate(() => window.playedTones), []);
     assert.equal(iphoneToneRequests.length, 0);
+    async function holdDefaultTone(requestTone) {
+      let held;
+      await iphonePage.route('**/ui/notification.wav', route => { held = route; }, {times: 1});
+      await requestTone();
+      await until(() => held, 'notification tone request reached the server');
+      return held;
+    }
+    await iphonePage.evaluate(() => {
+      Object.defineProperty(document, 'hidden', {configurable: true, value: true});
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
     push();
-    await iphonePage.waitForFunction(() => window.playedTones.some(tone => tone.src.endsWith('/ui/notification.wav') && tone.sessionType === 'ambient'));
+    await iphonePage.waitForFunction(cursor => window.OieEvents.latest('') === cursor, engine + ':' + seq);
+    await pause(350);
+    assert.equal(iphoneToneRequests.length, 0, 'a primed hidden tab leaves the live tone for a visible tab');
+    assert.equal(await iphonePage.evaluate(() => localStorage.getItem('oie.notifications.last-sound-at')), null);
+    await iphonePage.evaluate(() => {
+      delete document.hidden;
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    const failedTone = await holdDefaultTone(push);
+    const failedResponse = iphonePage.waitForResponse(response => response.url().endsWith('/ui/notification.wav') && response.status() === 503);
+    await failedTone.fulfill({status: 503, body: ''});
+    await (await failedResponse).finished();
+
+    const staleTone = await holdDefaultTone(push);
+    await quietWindow();
+    await staleTone.continue();
+    await pause(350);
+    assert.deepEqual(await iphonePage.evaluate(() => window.playedTones), [], 'a late fetch cannot queue an alert');
+    assert.equal(await iphonePage.evaluate(() => localStorage.getItem('oie.notifications.last-sound-at')), null,
+      'failed and expired tones leave the cooldown available');
+    push();
+    await iphonePage.waitForFunction(() => window.playedTones.some(tone => tone.src.startsWith('blob:') && tone.sessionType === 'ambient'));
     await iphonePage.waitForFunction(() => navigator.audioSession.type === 'auto');
 
     await iphonePage.goto(toneURL);
+    const iphoneSound = iphonePage.locator('[data-notification-sound]');
+    const iphonePreview = iphonePage.locator('[data-notification-preview]');
+    await iphonePreview.focus();
+    await iphonePage.keyboard.press('Tab');
+    await iphonePage.waitForFunction(() => window.OieEvents.connected);
+    await quietWindow();
+    const mutedTone = await holdDefaultTone(push);
+    await iphoneSound.press('Space');
+    await iphonePage.waitForFunction(() => localStorage.getItem('oie.notifications.sound') === '0');
+    await mutedTone.continue();
+    await pause(350);
+    assert.deepEqual(await iphonePage.evaluate(() => window.playedTones), [], 'disabling alerts cancels a tone that is still loading');
+
+    await iphonePage.reload();
+    await iphoneSound.press('Space');
+    await iphonePage.waitForFunction(() => localStorage.getItem('oie.notifications.sound') === '1');
+    assert.deepEqual(await iphonePage.evaluate(() => window.primes), ['0'],
+      'enabling sound primes the empty element before waiting for preference persistence');
     await iphonePage.locator('[data-notification-tone-file]').setInputFiles(file);
     await iphonePage.waitForFunction(name => document.querySelector('[data-notification-tone-name]').textContent === name, file.name);
-    await iphonePage.locator('[data-notification-preview]').click();
+    await iphonePreview.click();
     await iphonePage.waitForFunction(() => window.playedTones.some(tone => tone.src.startsWith('blob:') && tone.sessionType === 'ambient'));
+
+    const startCapture = () => iphonePage.evaluate(() => {
+      const composer = document.querySelector('[data-schedule-composer]');
+      composer.setAttribute('data-capturing-audio', '');
+      composer.dispatchEvent(new Event('oie:recording-requested', {bubbles: true}));
+      return {paused: window.lastTonePlayer.paused, session: navigator.audioSession.type};
+    });
+    assert.deepEqual(await startCapture(), {paused: true, session: 'auto'}, 'a microphone request releases a playing tone synchronously');
+    push();
+    await iphonePreview.click();
+    await pause(350);
+    await iphonePage.evaluate(() => document.querySelector('[data-schedule-composer]').removeAttribute('data-capturing-audio'));
+    await quietWindow();
+    assert.equal(await iphonePage.evaluate(() => window.playedTones.length), 1, 'alerts and previews during capture never replay after it ends');
+    push();
+    await iphonePage.waitForFunction(() => window.playedTones.length === 2);
     await iphonePage.waitForFunction(() => navigator.audioSession.type === 'auto');
+
+    await iphonePage.reload();
+    await iphonePage.locator('[data-notification-tone-reset]').click();
+    await iphonePage.waitForFunction(() => document.querySelector('[data-notification-tone-name]').textContent === 'Oiê');
+    const hiddenPreview = await holdDefaultTone(() => iphonePreview.click());
+    await iphonePage.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}));
+      window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+    });
+    await hiddenPreview.continue();
+    await pause(350);
+    assert.deepEqual(await iphonePage.evaluate(() => window.playedTones), [], 'restoring the page cannot restart a pending preview');
+    await iphonePreview.click();
+    await iphonePage.waitForFunction(() => window.playedTones.length === 1);
     await iphone.close();
 
     const dndProfile = await browser.newContext();

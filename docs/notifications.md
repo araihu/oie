@@ -17,7 +17,9 @@ saves a short mono PCM WAV in IndexedDB. Cooperating views share the choice
 within their browser profile and app origin. Browser and Linux WebView
 autoplay policy may require an interaction with the app after opening it.
 On iPhone and iPad, that interaction prepares an empty audio element. Oiê
-requests playback only for an eligible notification or a tone preview.
+requests playback only for an eligible notification or a tone preview. Hidden
+iOS windows leave the in-app tone to a visible window. Background alerts on
+iOS use Web Push. Starting a voice recording stops the in-app tone.
 
 Conversation details offer a mute on this device. Mutes use the engine and
 conversation IDs and apply to direct chats and rooms, including archived

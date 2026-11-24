@@ -212,42 +212,92 @@
 
   function prepareIOSPlayer() {
     const media = document.createElement('audio');
-    // A sourceless load during a gesture authorizes later playback in WebKit.
-    media.preload = 'none';
-    media.load();
-    let selected, ambient = false;
     const session = navigator.audioSession;
+    media.preload = 'none';
+    let primed = false, ambient = false, generation = 0, bundled, selected, startDeadline;
+
     function restoreSession() {
+      clearTimeout(startDeadline);
       if (ambient && session.type === 'ambient') session.type = 'auto';
       ambient = false;
     }
-    media.addEventListener('ended', restoreSession);
+    function stop() {
+      generation++;
+      media.pause();
+      restoreSession();
+    }
+    function available() {
+      return primed && !document.hidden && !document.querySelector('[data-capturing-audio]');
+    }
+
+    document.addEventListener('oie:recording-requested', stop);
+    window.addEventListener('pagehide', stop);
+    media.addEventListener('ended', () => { if (media.ended) restoreSession(); });
     media.addEventListener('pause', () => { if (media.paused) restoreSession(); });
-    media.addEventListener('error', restoreSession);
-    return async sound => {
-      if (selected !== sound) {
-        if (selected?.wav) URL.revokeObjectURL(media.src);
-        media.src = sound.wav ? URL.createObjectURL(new Blob([sound.wav], {type: 'audio/wav'})) : '/ui/notification.wav';
-        selected = sound;
-      } else {
-        media.currentTime = 0;
-      }
-      // A notification can arrive while music is playing in another app.
-      if (session?.type === 'auto' && session.state !== 'active') {
-        session.type = 'ambient';
-        ambient = true;
-      }
-      try {
-        await media.play();
-      } catch (error) {
-        if (media.paused) restoreSession();
-        throw error;
-      }
+    media.addEventListener('error', () => {
+      if (!media.error) return;
+      bundled = undefined;
+      restoreSession();
+    });
+    return {
+      get generation() { return generation; },
+      available,
+      prime() {
+        if (primed || navigator.userActivation?.isActive === false) return;
+        // WebKit authorizes the element inside a gesture, without opening audio output.
+        if (media.hasAttribute('src')) {
+          URL.revokeObjectURL(media.src);
+          media.removeAttribute('src');
+          selected = undefined;
+        }
+        media.load();
+        primed = true;
+      },
+      prepare(sound) {
+        if (sound.wav) return sound.iosBlob ??= new Blob([sound.wav], {type: 'audio/wav'});
+        // Fetch without activating audio. Live alerts check their age and preferences
+        // after this read, and a later alert can retry a failed request.
+        return bundled ??= window.OieRuntime.request('/ui/notification.wav', {signal: AbortSignal.timeout(10000)})
+          .then(response => {
+            if (!response.ok) throw Error('Notification sound unavailable');
+            return response.blob();
+          }).catch(error => { bundled = undefined; throw error; });
+      },
+      async play(blob, expires) {
+        if (!available() || (expires && Date.now() >= expires)) return;
+        clearTimeout(startDeadline);
+        if (selected !== blob || media.error) {
+          if (media.hasAttribute('src')) URL.revokeObjectURL(media.src);
+          media.src = URL.createObjectURL(blob);
+          selected = blob;
+        } else {
+          media.currentTime = 0;
+        }
+        if (session?.type === 'auto' && session.state !== 'active') {
+          session.type = 'ambient';
+          ambient = true;
+        }
+        // A ready blob can still wait for the operating system's audio device.
+        const timer = expires && setTimeout(stop, expires - Date.now());
+        startDeadline = timer;
+        try {
+          await media.play();
+        } catch (error) {
+          if (error.name === 'NotAllowedError') primed = false;
+          if (media.paused) restoreSession();
+          throw error;
+        } finally {
+          clearTimeout(timer);
+        }
+      },
     };
   }
 
   async function unlockSound() {
-    if (ios && !desktop()?.playSound) iosPlayer ??= prepareIOSPlayer();
+    if (ios && !desktop()?.playSound) {
+      iosPlayer ??= prepareIOSPlayer();
+      iosPlayer.prime();
+    }
     if (iosPlayer || desktop()?.playSound) {
       await toneReady;
       return currentSound();
@@ -273,7 +323,7 @@
     } catch {}
   }
 
-  function playSound(sound) {
+  function playSound(sound, iosBlob, expires) {
     const nativeSound = desktop()?.playSound;
     if (nativeSound) {
       if (sound.wav && !sound.nativeWAV) {
@@ -286,7 +336,7 @@
       }
       return nativeSound(sound.nativeWAV ?? null);
     }
-    if (iosPlayer) return iosPlayer(sound);
+    if (iosPlayer) return iosPlayer.play(iosBlob, expires);
     if (context?.state !== 'running' || !sound.buffer) return;
     const source = context.createBufferSource();
     source.buffer = sound.buffer;
@@ -690,12 +740,14 @@
 
   async function playMessageSound(engine, message, eligible) {
     const receivedAt = Date.now();
+    if (iosPlayer && !iosPlayer.available()) return;
+    const generation = iosPlayer?.generation;
     const loadedTone = toneReady;
     await loadedTone;
     const sound = currentSound();
     const withinWindow = () => receivedAt < Number(read(lastSoundKey)) + soundInterval;
     const ready = () => soundEnabled() && loadedTone === toneReady && sound === currentSound() &&
-      (desktop()?.playSound || iosPlayer || sound.buffer && context?.state === 'running');
+      (desktop()?.playSound || (iosPlayer?.available() && iosPlayer.generation === generation) || sound.buffer && context?.state === 'running');
     if (!ready() || withinWindow() || (!soundScopeEnabled('direct') && roomSound() === 'off')) return;
     try {
       const conversation = await notificationContext(engine, message);
@@ -708,12 +760,14 @@
           (message.mentionsYou === true || current.replyToYou === true));
       };
       if (!permitsSound(conversation)) return;
+      const iosBlob = iosPlayer && await iosPlayer.prepare(sound);
+      if (!ready() || !eligible() || withinWindow()) return;
       const claimedAt = await claim(engine, message.id, receivedAt);
       if (!claimedAt || !ready() || !eligible()) return;
       const current = await notificationContext(engine, message, true);
       if (current && !current.doNotDisturb && ready() && eligible() && permitsSound(current)) {
         write(lastSoundKey, String(claimedAt));
-        await playSound(sound);
+        await playSound(sound, iosBlob, receivedAt + soundInterval);
       }
     } catch {}
   }
@@ -781,8 +835,8 @@
       return;
     }
     if (control.matches('[data-notification-sound]')) {
-      notice = await writeNotificationPreference(soundKey, desired ? '1' : '0') ? '' : 'soundUnavailable';
       if (desired) void unlockSound();
+      notice = await writeNotificationPreference(soundKey, desired ? '1' : '0') ? '' : 'soundUnavailable';
       renderSettings();
       return;
     }
@@ -878,10 +932,14 @@
 
   async function previewSound() {
     try {
-      const sound = await unlockSound();
+      const unlocked = unlockSound();
+      if (iosPlayer && !iosPlayer.available()) return;
+      const generation = iosPlayer?.generation;
+      const sound = await unlocked;
       if (!sound) throw Error('Notification sound unavailable');
-      if (sound !== currentSound()) return;
-      await playSound(sound);
+      const iosBlob = iosPlayer && await iosPlayer.prepare(sound);
+      if (sound !== currentSound() || generation !== iosPlayer?.generation) return;
+      await playSound(sound, iosBlob);
       notice = '';
     } catch { notice = 'soundUnavailable'; }
     renderSettings();
