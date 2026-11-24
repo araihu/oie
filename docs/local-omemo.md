@@ -129,7 +129,9 @@ archives. Both peers displayed new encrypted text after restarting the Oiê
 engine with the same profile.
 
 The restored hosted fixture exposed the original device ID and fingerprint to
-two independent owner credentials. Both clients received a new encrypted message
+two independent owner credentials. Two isolated Chromium browser contexts (desktop
+and mobile viewports) also signed in independently via the hosted OIDC flow.
+Both displayed the same fingerprint and recovered conversation. Both XMPP clients received a new encrypted message
 from that device and sent an encrypted reply that the other owner credential
 could read. Gajim recorded OMEMO on both messages. Conversations displayed the
 incoming text and sent from its encrypted composer. A second history import added
