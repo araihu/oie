@@ -17,6 +17,20 @@
 :is(.oie-shared-menu-trigger,.oie-shared-star):focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-shared-action-status{position:absolute;inset-inline-end:8px;top:42px;z-index:3;width:max-content;max-width:calc(100% - 16px);margin:0;padding:8px 10px;border:1px solid var(--oie-border);border-radius:8px;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 2px 8px #0002;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .oie-shared-action-status[hidden]{display:none}
+/* Keep the title clear of the menu and give controls the whole content width. */
+.oie-shared-item > .oie-audio-card {
+  container-type: inline-size;
+  inline-size: 100%;
+  padding: .375rem .625rem .625rem;
+}
+.oie-shared-item > .oie-audio-card > strong {
+  order: -1;
+  line-height: 1.875rem;
+  padding-inline-end: 2rem;
+}
+.oie-shared-item:has(> .oie-shared-actions > .oie-shared-star) > .oie-audio-card > strong {
+  padding-inline-start: 2rem;
+}
 .oie-shared-item>.oie-shared-reference{padding-inline-end:38px}
 .oie-shared-item:has(>.oie-shared-actions>.oie-shared-star)>.oie-shared-reference{padding-inline-start:38px}
 .oie-shared-item:has(>.oie-shared-actions>.oie-shared-star) :is(.oie-link-card-compact,.oie-document-card[data-document-format=unsupported]) .oie-preview-summary{padding-inline:26px}
