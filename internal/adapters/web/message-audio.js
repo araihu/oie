@@ -159,6 +159,13 @@ window.OieRuntime.register('message-audio', life => {
     }
   }
 
+  function useBufferedAudio(player) {
+    // Suspending an unindexed WebM after metadata can break playback on resume.
+    // The complete blob is already local, so loading it adds no network traffic.
+    player.media.preload = 'auto';
+    player.media.src = player.url;
+  }
+
   async function playbackError(player) {
     if (!current(player) || player.recovering) return;
     const {media, source} = player;
@@ -171,8 +178,7 @@ window.OieRuntime.register('message-audio', life => {
       if (!current(player)) return;
       player.recovering = false;
       if (player.url) {
-        media.preload = 'metadata';
-        media.src = player.url;
+        useBufferedAudio(player);
         // A seek before metadata sets the new resource's playback start position.
         if (position > 0) media.currentTime = position;
         if (active === player && player.playRequested) void play(player);
@@ -192,10 +198,7 @@ window.OieRuntime.register('message-audio', life => {
       if (!blob || !current(player)) return null;
       player.url = URL.createObjectURL(blob);
       // Reuse the fetched bytes when playback has yet to select a source.
-      if (!media.hasAttribute('src')) {
-        media.preload = 'metadata';
-        media.src = player.url;
-      }
+      if (!media.hasAttribute('src')) useBufferedAudio(player);
       return blob;
     } finally {
       clearTimeout(fetchTimeout);

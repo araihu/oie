@@ -10,6 +10,12 @@ white rectangle. Its duration is about 1.385 seconds and its size is 1,502 bytes
 Browser tests use the committed clip to verify actual decoding and playback.
 They do not need FFmpeg, network media, or any external fixture service.
 
+`unindexed-opus.weba` contains a two-second synthetic 660 Hz tone encoded
+with FFmpeg's libopus at 12 kbps. Its WebM clusters have unknown sizes, omit
+cues, and contain audio blocks with the keyframe flag cleared. This exercises
+playback of recordings where the browser can read sequentially but cannot
+seek back to the beginning after loading metadata.
+
 `tiny-document.txt` and `tiny-document.pdf` are original fixtures covered by
 the [repository's license](../../../LICENSE). The UTF-8 text includes literal HTML and
 Unicode to check escaping. The PDF is a handcrafted, two-page PDF 1.4 file

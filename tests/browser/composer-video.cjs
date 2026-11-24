@@ -712,6 +712,23 @@ async function launch() {
       }
     }
     if (!useWebKit) {
+      const audioPage = await browser.newPage({serviceWorkers:'block'});
+      try {
+        await audioPage.route(url => url.pathname.endsWith('/' + audioItem.id + '/content'), route =>
+          route.fulfill({contentType:'audio/webm',path:path.join(__dirname,'fixtures/unindexed-opus.weba')}));
+        await audioPage.goto(base + '/?chat=' + direct + '&lang=en');
+        const player = audioPage.locator('[data-message-id="' + receivedAudio.id + '"] [data-message-audio]');
+        await player.scrollIntoViewIfNeeded();
+        const audio = await player.locator('audio').elementHandle();
+        await audioPage.waitForFunction(node => node.currentSrc.startsWith('blob:') && node.readyState >= 2, audio);
+        assert(await audio.evaluate(node => node.paused && node.currentTime === 0));
+        await player.getByRole('button',{name:/^Play audio/}).click();
+        await audioPage.waitForFunction(node => node.currentTime > 0.5, audio);
+        await audioPage.waitForFunction(node => node.ended, audio);
+        assert(await audio.evaluate(node => !node.error && node.currentTime >= 1.9));
+      } finally {
+        await audioPage.close();
+      }
       for (const [locale, width, playLabel, positionLabel, downloadLabel, theme] of [
         ['en', 1440, 'Play audio', 'Audio position', 'Download audio', 'light'],
         ['pt-BR', 390, 'Reproduzir áudio', 'Posição do áudio', 'Baixar áudio', 'dark'],
