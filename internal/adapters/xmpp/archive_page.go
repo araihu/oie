@@ -22,6 +22,7 @@ type archivePageRequest struct {
 	Before, After, Search, With string
 	Backward                    bool
 	Prepend                     bool
+	RecoverOMEMO                bool
 	Limit                       int
 	ReactionAnchor              domain.ArchiveReactionAnchor
 }
@@ -84,7 +85,7 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 		}
 	}
 
-	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End}
+	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End, With: request.With, RecoverOMEMO: request.RecoverOMEMO}
 	if q.ID == "" {
 		return archivePage{}, errArchive
 	}

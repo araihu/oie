@@ -210,19 +210,11 @@ func (m *Manager) acceptEncrypted(ctx context.Context, e *entry, p omemo.Pending
 			return nil
 		}
 		_, requests := m.host.(application.ConversationRequestHost)
-		receiveErr = m.host.Receive(ctx, application.Incoming{Encrypted: true, AccountID: e.account.ID, Kind: "direct", Address: p.Peer, ProviderID: p.StanzaID, OriginalText: text, CreatedAt: p.At, CheckDirectHistory: requests})
+		receiveErr = m.host.Receive(ctx, application.Incoming{Encrypted: true, AccountID: e.account.ID, Kind: "direct", Address: p.Peer, ProviderID: p.Envelope.ProviderID(), OriginalText: text, CreatedAt: p.At, CheckDirectHistory: requests})
 		return receiveErr
 	})
 	if err == nil {
-		for _, key := range p.Envelope.Header.Keys {
-			if key.PreKey {
-				select {
-				case e.omemoRefresh <- struct{}{}:
-				default:
-				}
-				break
-			}
-		}
+		m.refreshOMEMOPreKeys(e, p.Envelope)
 	}
 	if receiveErr != nil && !errors.Is(receiveErr, application.ErrInvalid) {
 		return receiveErr
@@ -246,4 +238,16 @@ func (m *Manager) acceptEncrypted(ctx context.Context, e *entry, p omemo.Pending
 		return e.omemoDevice.Discard(p)
 	}
 	return nil
+}
+
+func (m *Manager) refreshOMEMOPreKeys(e *entry, env omemo.Envelope) {
+	for _, key := range env.Header.Keys {
+		if key.PreKey {
+			select {
+			case e.omemoRefresh <- struct{}{}:
+			default:
+			}
+			return
+		}
+	}
 }

@@ -103,7 +103,7 @@ AND (CAST(sqlc.arg(author) AS TEXT)='' OR d.author=CAST(sqlc.arg(author) AS TEXT
 
 -- name: ResetAccountDiscoveryCheckpoints :exec
 DELETE FROM archive_checkpoints WHERE EXISTS (
- SELECT 1 FROM accounts a WHERE a.id=archive_checkpoints.account_id AND a.address=archive_checkpoints.scope
+ SELECT 1 FROM accounts a WHERE a.id=archive_checkpoints.account_id AND (a.address=archive_checkpoints.scope OR 'omemo:'||a.address=archive_checkpoints.scope)
 );
 
 -- name: ListRetentionAccountScopes :many

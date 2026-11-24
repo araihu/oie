@@ -468,6 +468,15 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	if expected, guarded := application.ArchiveRetentionRevisionFrom(ctx); guarded && m.Historical && m.DirectEncryption == "omemo" {
+		actual, err := q.GetArchiveRetentionRevision(ctx, string(c.AccountID))
+		if err != nil {
+			return err
+		}
+		if actual != expected {
+			return application.ErrStateConflict
+		}
+	}
 	// Existing chats can retain own transmission evidence independently of
 	// the message, including when the retention cutoff discards its body.
 	if err := rememberOwnOrigin(ctx, q, c, m); err != nil {

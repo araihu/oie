@@ -99,6 +99,16 @@ func (m *Manager) DecideOMEMO(_ context.Context, a domain.Account, peer string, 
 		if errors.Is(err, omemo.ErrChanged) {
 			return application.ErrStateConflict
 		}
+		if err == nil && choice.Action == "verify" {
+			m.mu.RLock()
+			entry := m.entries[a.ID]
+			m.mu.RUnlock()
+			if entry != nil {
+				entry.mu.RLock()
+				wakeRoomArchiveLocked(entry)
+				entry.mu.RUnlock()
+			}
+		}
 		return err
 	default:
 		return application.ErrInvalid

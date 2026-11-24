@@ -5,8 +5,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"math/big"
 	"slices"
@@ -56,6 +58,22 @@ type Envelope struct {
 	XMLName xml.Name `xml:"eu.siacs.conversations.axolotl encrypted"`
 	Header  Header   `xml:"eu.siacs.conversations.axolotl header"`
 	Payload string   `xml:"eu.siacs.conversations.axolotl payload"`
+}
+
+// ProviderID identifies the same authenticated envelope in live delivery and MAM.
+func (e Envelope) ProviderID() string {
+	e.XMLName = xml.Name{}
+	raw, _ := json.Marshal(e)
+	digest := sha256.Sum256(raw)
+	return "omemo:" + hex.EncodeToString(digest[:])
+}
+
+func (e Envelope) Size() int {
+	size := len(e.Payload) + len(e.Header.IV)
+	for _, key := range e.Header.Keys {
+		size += len(key.Value) + 16
+	}
+	return size
 }
 
 var b64 = base64.StdEncoding

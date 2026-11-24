@@ -57,9 +57,29 @@ The local timeline, search index and outgoing queue can contain readable text.
 Use OS account permissions and disk encryption to protect the profile.
 Automatic link preview fetching and conventional Oiê ZIP export are disabled
 in this profile. Encrypted direct text has an OMEMO label in the timeline. Direct attachments,
-structured replies, edits, reactions, XMPP archive catch-up and copies from other
-XMPP devices are outside the tested direct-text exchange. The engine accepts
+structured replies, edits and reactions are outside the tested direct-text exchange. The engine accepts
 unencrypted direct text only when the user explicitly enables it for that peer.
+
+## Recover direct messages from the XMPP server
+
+On connection or reconnection, the local or hosted engine retrieves encrypted
+direct text from the XMPP account's archive (XEP-0313). The engine needs this
+device's session or prekeys and the verified sender identity. Recovered messages
+retain their archive timestamp and appear in the conversation with the OMEMO
+label. Live delivery and archive replay share the same message identity.
+
+If Oiê cannot decrypt an archived message, the account reports that part of its
+history is unavailable. The engine continues through later messages and retries
+from the gap on subsequent passes. Verify an unfamiliar sender's fingerprint in
+the OMEMO settings to let Oiê retry. An archive entry encrypted exclusively for
+another device, or whose message key has been lost, remains unavailable. A fresh
+installation or a private identity export alone may have no usable session for
+old messages. A password-protected Oiê history backup can recover previously
+retained text in those cases. The server's archive retention controls which
+records it can return. Oiê also applies its own retention policy.
+
+The archive import covers the legacy OMEMO namespace. In an OMEMO profile this
+pass selects encrypted direct messages. Rooms use their separate archive path.
 
 ## Migrate an identity or recover history
 
@@ -142,3 +162,12 @@ In a direct conversation with Gajim, a new protected send stayed queued through
 a switch to plaintext. Reverification released the original message. The Prosody
 archives contained the separate explicitly authorized plaintext control and
 none of the protected text from the hosted exchanges.
+
+For XMPP archive recovery, Prosody 13.0.4 ran with offline delivery disabled.
+With Oiê stopped, Gajim 2.4.3 and Conversations 2.21.4 each sent an encrypted
+direct message. The local engine recovered both when it connected. The test
+then repeated both sends with the hosted engine stopped. An authenticated
+hosted session read all four archived messages once, with the original Oiê
+IDs preserved on replay. An additional Gajim message received live retained
+its ID after a restart and archive catch-up. The five message bodies were
+absent from the Prosody archive.

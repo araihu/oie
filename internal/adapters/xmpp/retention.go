@@ -48,9 +48,13 @@ func (m *Manager) checkArchiveRetention(ctx context.Context, account domain.ID) 
 }
 
 func (m *Manager) recoverDirectArchives(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session) error {
+	checkpointPrefix := ""
+	if e.omemoDevice != nil {
+		checkpointPrefix = "omemo:"
+	}
 	retention, ok := m.host.(application.RetentionHost)
 	if !ok {
-		return m.recoverArchive(ctx, host, e, s, e.account.Address)
+		return m.recoverArchiveRange(ctx, host, e, s, e.account.Address, checkpointPrefix+e.account.Address, "", nil)
 	}
 	ctx, err := m.beginArchiveRetention(ctx, e.account.ID)
 	if err != nil {
@@ -66,7 +70,7 @@ func (m *Manager) recoverDirectArchives(ctx context.Context, host application.Hi
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		checkpoint := "retention-peer:" + strconv.Itoa(peer.Days) + ":" + peer.Address
+		checkpoint := "retention-peer:" + strconv.Itoa(peer.Days) + ":" + checkpointPrefix + peer.Address
 		scoped := context.WithValue(ctx, archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: peer.Days, now: time.Now().UTC()})
 		err := m.recoverArchiveRange(scoped, host, e, s, e.account.Address, checkpoint, peer.Address, nil)
 		if errors.Is(err, application.ErrStateConflict) {
@@ -74,14 +78,18 @@ func (m *Manager) recoverDirectArchives(ctx context.Context, host application.Hi
 		}
 		if err != nil {
 			failures = errors.Join(failures, err)
-		} else {
+		}
+		if err == nil || errors.Is(err, errOMEMOHistoryIncomplete) {
 			known[peer.Address] = true
 		}
 	}
-	return errors.Join(failures, m.recoverArchiveRange(ctx, host, e, s, e.account.Address, e.account.Address, "", known))
+	return errors.Join(failures, m.recoverArchiveRange(ctx, host, e, s, e.account.Address, checkpointPrefix+e.account.Address, "", known))
 }
 
 func filterKnownDirectPeers(page *archivePage, known map[string]bool) {
+	page.Query.OMEMO = slices.DeleteFunc(page.Query.OMEMO, func(record archivedOMEMO) bool {
+		return known[record.in.Address]
+	})
 	page.Query.Messages = slices.DeleteFunc(page.Query.Messages, func(in application.Incoming) bool {
 		if in.Reaction != nil {
 			return in.Reaction.Kind == "direct" && known[in.Reaction.Address]
