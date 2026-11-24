@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,6 +128,15 @@ func validateMediaResponse(response *http.Response, request application.MediaRea
 		return out, application.MediaFailure{Code: "media_fetch_failed"}
 	}
 	out.MediaType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
+	// Some providers serve downloadable MP4s as generic binary data, including
+	// on short or nonzero ranges where the container cannot be inspected.
+	if out.MediaType == "application/octet-stream" && (request.Format == "" || request.Format == "video") &&
+		response.Request != nil && response.Request.URL != nil {
+		switch strings.ToLower(path.Ext(response.Request.URL.Path)) {
+		case ".mp4", ".m4v":
+			out.MediaType = "video/mp4"
+		}
+	}
 	if request.Format.MediaType(out.MediaType) == "" {
 		return out, application.MediaFailure{Code: "media_unsupported"}
 	}
