@@ -10,6 +10,10 @@ white rectangle. Its duration is about 1.385 seconds and its size is 1,502 bytes
 Browser tests use the committed clip to verify actual decoding and playback.
 They do not need FFmpeg, network media, or any external fixture service.
 
+`covered-tone.mp3` is an original one-second 660 Hz tone with a solid-color
+16×16 PNG cover, title, artist and custom ID3 text tag. It exercises sending
+compatible MP3 originals and preparing M4A with embedded artwork and metadata.
+
 `unindexed-opus.weba` contains a two-second synthetic 660 Hz tone encoded
 with FFmpeg's libopus at 12 kbps. Its WebM clusters have unknown sizes, omit
 cues, and contain audio blocks with the keyframe flag cleared. This exercises

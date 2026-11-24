@@ -36,7 +36,10 @@ committed before cancellation can remain in storage. Cleanup is tracked in O09.
 
 Use **Audio or video** for SD, HD or a compatible original. The device default
 is SD. A recording, pasted media or dropped media uses the same quality dialog.
-**File** attaches the original. Choosing a quality prepares the bytes on the
+An MP3 with an embedded PNG or JPEG cover qualifies as audio. HD and OG keep
+the compatible MP3 when it fits. SD can produce a smaller AAC/M4A with its
+cover and descriptive tags, subject to the same 10% savings rule as other
+compatible originals. **File** attaches the original. Choosing a quality prepares the bytes on the
 device before staging, including for scheduled messages. A draft can contain
 up to 16 attachments. The account’s XMPP upload service sets the per-file
 limit. Discovery reports a limit only when all eligible services advertise one. The XMPP adapter uploads accepted

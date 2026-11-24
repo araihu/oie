@@ -8,6 +8,9 @@ async function outgoingMedia(browser, href, state, sends) {
     ['en', 1000, 'alternate-audio.mkv', 'SD'],
     ['pt-BR', 390, 'alternate-audio.mkv', 'HD'],
     ['en', 1000, 'styled-subtitles.mkv', 'file'],
+    ['pt-BR', 390, 'covered-tone.mp3', 'SD'],
+    ['en', 1000, 'covered-tone.mp3', 'HD'],
+    ['pt-BR', 390, 'covered-tone.mp3', 'OG'],
   ];
   let compatible;
   for (const [locale, width, name, quality] of cases) {
@@ -28,6 +31,7 @@ async function outgoingMedia(browser, href, state, sends) {
         await (await picking).setFiles(file);
       }
       const file = path.join(fixtures, name);
+      const mp3 = name === 'covered-tone.mp3';
       const wasm = '**/media-encoder/*/ffmpeg-core.wasm';
       let releaseCodec;
       const gate = new Promise(resolve => { releaseCodec = resolve; });
@@ -66,7 +70,7 @@ async function outgoingMedia(browser, href, state, sends) {
       } else {
         await dialog.locator('[data-prepare-media]:enabled').waitFor();
         assert(await dialog.locator('[value=SD]').isChecked());
-        assert(await dialog.locator('[value=OG]').isDisabled());
+        assert.equal(await dialog.locator('[value=OG]').isEnabled(), mp3);
         await dialog.locator('[value=' + quality + ']').check();
       }
       const staged = page.waitForResponse(r => r.url().includes('/ui/scheduling/stage?'));
@@ -76,6 +80,24 @@ async function outgoingMedia(browser, href, state, sends) {
       const receipt = await response.json();
       const bytes = await (await page.request.get(response.url().replace('/stage?', '/file?'))).body();
       assert.equal(bytes.length, receipt.size);
+      if (mp3) {
+        const source = await fs.readFile(file);
+        if (quality === 'SD') {
+          assert.equal(receipt.fileName, 'covered-tone.m4a');
+          assert.equal(receipt.mediaType, 'audio/mp4');
+          assert(bytes.length <= source.length * 0.9);
+          const png = source.indexOf(Buffer.from('89504e470d0a1a0a','hex'));
+          const end = source.indexOf('IEND', png);
+          assert(png >= 0 && end > png && bytes.includes(source.subarray(png, end + 8)), 'preserves the complete PNG cover');
+          for (const tag of ['Fixture tone', 'Fixture artist', 'fixture_note', 'Keep this custom tag']) assert(bytes.includes(tag));
+        } else {
+          assert.equal(receipt.fileName, name);
+          assert.equal(receipt.mediaType, 'audio/mpeg');
+          assert.deepEqual(bytes, source);
+        }
+        await page.locator('[data-remove-attachment]').click();
+        continue;
+      }
       if (quality === 'file') assert.deepEqual(bytes, await fs.readFile(file));
       else {
         assert.equal(receipt.fileName, 'alternate-audio.mp4');
