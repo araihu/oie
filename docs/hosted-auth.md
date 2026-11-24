@@ -6,7 +6,8 @@ messages, changing protocol accounts, and resetting engine data. The owner
 can create keys from Settings in the hosted workspace. Host commands run
 as the Oiê service user.
 
-When OMEMO is enabled, the hosted engine encrypts and decrypts direct text.
+When OMEMO is enabled, the hosted engine encrypts and decrypts text and
+attachments in direct chats and eligible private rooms.
 All signed-in browsers share one device identity per XMPP account. Anyone with
 owner access to this installation can read its retained history or change
 verification decisions. [Enable OMEMO and recover a profile](local-omemo.md).

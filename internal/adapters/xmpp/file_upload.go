@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -51,6 +52,7 @@ func (p attachmentUploadProgress) reusable(out application.Outgoing, service str
 var errUploadRejected = errors.New("upload rejected")
 
 func recordUploadLimit(e *entry, session *mx.Session, service string, info disco.Info) {
+	var limit int64
 	for _, form := range info.Form {
 		kind, ok := form.Raw("FORM_TYPE")
 		if !ok || len(kind) != 1 || kind[0] != uploadNamespace {
@@ -64,16 +66,41 @@ func recordUploadLimit(e *entry, session *mx.Session, service string, info disco
 		if err != nil || maxSize <= 0 {
 			continue
 		}
-		e.mu.Lock()
-		if e.session == session {
-			if e.uploadLimits == nil {
-				e.uploadLimits = make(map[string]int64)
-			}
-			e.uploadLimits[service] = maxSize
-		}
-		e.mu.Unlock()
+		limit = maxSize
+		break
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.session != session {
 		return
 	}
+	if limit == 0 {
+		delete(e.uploadLimits, service)
+		return
+	}
+	if e.uploadLimits == nil {
+		e.uploadLimits = make(map[string]int64)
+	}
+	e.uploadLimits[service] = limit
+}
+
+// advertisedUploadLimit is called with e.mu held.
+func advertisedUploadLimit(e *entry) int64 {
+	if e.discovery.State != "complete" {
+		return 0
+	}
+	var largest int64
+	for _, service := range e.discovery.Services {
+		if !serverServiceSupports(service, uploadNamespace) {
+			continue
+		}
+		limit := e.uploadLimits[service.Address]
+		if limit == 0 {
+			return 0
+		}
+		largest = max(largest, limit)
+	}
+	return largest
 }
 
 // uploadService is called with e.mu held.
@@ -202,7 +229,11 @@ func sendUpload(ctx context.Context, client *http.Client, slot uploadSlot, file 
 func attachmentUploadTimeout(size int64) time.Duration {
 	// Give each file its own allowance for connection setup and a slow uplink.
 	const bytesPerSecond = 64 << 10
-	return 30*time.Second + time.Duration(size)*time.Second/bytesPerSecond
+	seconds := size / bytesPerSecond
+	if seconds >= math.MaxInt64/int64(time.Second)-30 {
+		return time.Duration(math.MaxInt64)
+	}
+	return 30*time.Second + time.Duration(seconds)*time.Second + time.Duration(size%bytesPerSecond)*time.Second/bytesPerSecond
 }
 
 // attachmentUploadCurrent is called with e.mu held.

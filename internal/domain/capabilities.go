@@ -14,9 +14,10 @@ type DiscoveredService struct {
 	Identities                       []ServiceIdentity
 }
 type CapabilityDiscovery struct {
-	State     string
-	CheckedAt time.Time
-	Services  []DiscoveredService
+	UploadMaxBytes int64
+	State          string
+	CheckedAt      time.Time
+	Services       []DiscoveredService
 }
 type CapabilityEvidence struct {
 	Features  []CapabilityFeature

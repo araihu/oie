@@ -6772,7 +6772,7 @@
             "$ref": "#/components/responses/Conflict"
           },
           "413": {
-            "description": "File exceeds the engine's attachment staging limit.",
+            "description": "The deployment rejected the request body as too large. Oiê sets no per-file staging limit.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8229,6 +8229,12 @@
               "partial",
               "failed"
             ]
+          },
+          "uploadMaxBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Largest advertised per-file limit across eligible upload services when discovery is complete and every eligible service reports a limit. Otherwise absent."
           },
           "checkedAt": {
             "type": "string",

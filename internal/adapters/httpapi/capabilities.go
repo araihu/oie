@@ -16,6 +16,9 @@ func (s *Server) GetAccountCapabilities(ctx context.Context, r engineapi.GetAcco
 
 func capabilities(report domain.Capabilities) engineapi.Capabilities {
 	out := engineapi.Capabilities{AccountId: string(report.AccountID), State: engineapi.CapabilitiesState(report.State), Reason: engineapi.CapabilitiesReason(report.Reason), Features: []engineapi.CapabilityFeature{}, Discovery: engineapi.CapabilityDiscovery{State: engineapi.CapabilityDiscoveryState(report.Discovery.State), Services: []engineapi.DiscoveredService{}}}
+	if report.Discovery.UploadMaxBytes > 0 {
+		out.Discovery.UploadMaxBytes = new(report.Discovery.UploadMaxBytes)
+	}
 	if report.DirectText {
 		out.DirectText = &report.DirectText
 	}

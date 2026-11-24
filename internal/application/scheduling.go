@@ -15,7 +15,6 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-const MaxStagedAttachmentSize = 20 << 20
 const MaxMessageAttachments = 16
 
 var ErrAttachmentTooLarge = errors.New("attachment too large")

@@ -38,6 +38,7 @@ type runtimeService struct {
 	cookies     *nativeCookies
 	labels      labels
 	dialogMu    sync.Mutex
+	media       portalMedia
 	alerts      desktopNotifications
 	diagnostics *diagnostics.Logger
 }

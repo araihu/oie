@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -206,6 +207,67 @@ func rasterAttachment(contentType string) bool {
 	return false
 }
 
+// Restore the same video type used by the picker for files staged with a generic MIME.
+func stagedVideoType(header http.Header) string {
+	kind, _, _ := mime.ParseMediaType(header.Get("X-Oie-Attachment-Type"))
+	if kind == "" || kind == "application/octet-stream" {
+		_, params, _ := mime.ParseMediaType(header.Get("Content-Disposition"))
+		// Keep this aligned with draftVideoType even on hosts without a MIME database.
+		switch strings.ToLower(path.Ext(params["filename"])) {
+		case ".mp4", ".m4v":
+			return "video/mp4"
+		case ".mov":
+			return "video/quicktime"
+		case ".webm":
+			return "video/webm"
+		case ".ogv":
+			return "video/ogg"
+		case ".mkv":
+			return "video/x-matroska"
+		case ".avi":
+			return "video/x-msvideo"
+		}
+	}
+	switch kind {
+	case "video/x-m4v":
+		return "video/mp4"
+	case "video/mp4", "video/ogg", "video/webm", "video/quicktime", "video/x-matroska", "video/x-msvideo", "video/avi":
+		return kind
+	}
+	return ""
+}
+
+// Reset the idle deadline as the upstream transport consumes the multipart body.
+type stageUploadReader struct {
+	io.Reader
+	connection *http.ResponseController
+	deadline   *time.Timer
+	idle       time.Duration
+}
+
+func (r stageUploadReader) Read(p []byte) (int, error) {
+	// A stalled HTTP/1 body read must be interrupted at the socket. Canceling
+	// the upstream request alone leaves its transport waiting for this read.
+	_ = r.connection.SetReadDeadline(time.Now().Add(r.idle))
+	n, err := r.Reader.Read(p)
+	if n > 0 {
+		r.deadline.Reset(r.idle)
+	}
+	return n, err
+}
+
+// Time only reads from the engine, so a paused player can keep its connection.
+type stageDownloadReader struct {
+	io.Reader
+	deadline *time.Timer
+}
+
+func (r stageDownloadReader) Read(p []byte) (int, error) {
+	r.deadline.Reset(90 * time.Second)
+	defer r.deadline.Stop()
+	return r.Reader.Read(p)
+}
+
 func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 	stage := r.URL.Path == "/ui/scheduling/stage"
 	method := http.MethodGet
@@ -229,8 +291,7 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
-	defer cancel()
+	ctx := r.Context()
 	engine, err := s.client.GetEngineWithResponse(ctx)
 	if err != nil || engine.JSON200 == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -245,7 +306,14 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 			return
 		}
-		response, err := s.archiveClient.StageMessageAttachmentWithBodyWithResponse(ctx, conversation, attachment, r.Header.Get("Content-Type"), http.MaxBytesReader(w, r.Body, (20<<20)+(64<<10)))
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		const idle = 90 * time.Second
+		connection := http.NewResponseController(w)
+		defer func() { _ = connection.SetReadDeadline(time.Time{}) }()
+		deadline := time.AfterFunc(idle, cancel)
+		defer deadline.Stop()
+		response, err := s.archiveClient.StageMessageAttachmentWithBodyWithResponse(ctx, conversation, attachment, r.Header.Get("Content-Type"), stageUploadReader{r.Body, connection, deadline, idle})
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -266,6 +334,8 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 	if value := r.Header.Get("Range"); !q.Has("download") && value != "" && !strings.Contains(value, ",") {
 		params.Range = &value
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	response, err := s.streamClient.GetStagedMessageAttachment(ctx, conversation, attachment, params)
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -280,17 +350,27 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A staged filename and its declared media type come from the uploader.
-	// Inline types are limited to recognized raster images and supported audio.
-	body := bufio.NewReaderSize(response.Body, 512)
+	// Inline types are limited to recognized raster images, supported audio and explicitly requested video.
+	deadline := time.AfterFunc(90*time.Second, cancel)
+	defer deadline.Stop()
+	body := bufio.NewReaderSize(stageDownloadReader{response.Body, deadline}, 512)
 	prefix, _ := body.Peek(512)
 	contentType := http.DetectContentType(prefix)
-	if !q.Has("download") && !rasterAttachment(contentType) {
-		if audio := audioMediaType(response.Header.Get("X-Oie-Attachment-Type")); audio != "" {
+	declared := response.Header.Get("X-Oie-Attachment-Type")
+	playType := ""
+	if q.Has("play") && !q.Has("download") {
+		playType = stagedVideoType(response.Header)
+	}
+	if playType != "" {
+		contentType = playType
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	} else if !q.Has("download") && !rasterAttachment(contentType) {
+		if audio := audioMediaType(declared); audio != "" {
 			contentType = audio
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 		}
 	}
-	if q.Has("download") || !rasterAttachment(contentType) && audioMediaType(contentType) == "" {
+	if q.Has("download") || playType == "" && !rasterAttachment(contentType) && audioMediaType(contentType) == "" {
 		contentType = "application/octet-stream"
 		disposition := response.Header.Get("Content-Disposition")
 		kind, params, err := mime.ParseMediaType(disposition)

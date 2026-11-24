@@ -288,11 +288,14 @@ type view struct {
 }
 
 type copy struct {
-	OfflineStorageTitle, OfflineStorageLimit, OfflineStorageHelp, OfflineStorageUsage, OfflineStorageExcess, OfflineStorageFailed string
-	OfflineSearchAll, OfflineSearchChat, OfflineSearchEmpty, OfflineSearchCount, OfflineSearchTooLong                             string
-	OfflineHistoryFull, OfflineHistoryPending                                                                                     string
-	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing           string
-	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                              string
+	MediaTransparent, MediaDamaged, MediaCoverLabels string
+
+	MediaQuality, AttachMedia, MediaSD, MediaHD, MediaOG, MediaPreferOG, MediaAsFile, MediaKeepTracks, MediaTooLarge, MediaPrepareUnavailable, MediaLimitText, MediaChecking, MediaAttach, MediaOriginalTooLarge string
+	OfflineStorageTitle, OfflineStorageLimit, OfflineStorageHelp, OfflineStorageUsage, OfflineStorageExcess, OfflineStorageFailed                                                                                string
+	OfflineSearchAll, OfflineSearchChat, OfflineSearchEmpty, OfflineSearchCount, OfflineSearchTooLong                                                                                                            string
+	OfflineHistoryFull, OfflineHistoryPending                                                                                                                                                                    string
+	OfflineHistoryStatus, OfflineHistoryTitle, OfflineHistoryEmpty, OfflineHistoryMissing, OfflineHistoryMessageMissing                                                                                          string
+	KeepChatOffline, KeepChatOfflineFull, KeepChatOfflineUnavailable                                                                                                                                             string
 
 	ConversationRemoved string
 
@@ -852,6 +855,10 @@ var inboxCacheScript []byte
 var roomArchiveScript []byte
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/ui/media-encoder/") {
+		serveOutgoingMedia(w, r)
+		return
+	}
 	if r.URL.Path == DiagnosticsPath {
 		s.diagnostics.ServeHTTP(w, r)
 		return
