@@ -1224,8 +1224,13 @@ conversation. The local engine owns an OMEMO device identity for each account.
 Offer an encryption control in the conversation and show whether a message was
 encrypted. If an encrypted send needs a trust decision or a compatible peer,
 keep it pending and offer the relevant action. Retry must preserve the choice
-to encrypt. Group chats and attachments are later increments. Hosted operation
-needs a separate endpoint decision because a host that decrypts can read the message.
+to encrypt. Group chats and attachments are later increments. **Hosted endpoint (agreed).** In hosted mode the Oiê server is the trusted
+OMEMO device for each XMPP account. It encrypts and decrypts on behalf of the
+authenticated owner. Browsers and phones accessing that engine share the same
+device ID, fingerprint and history. Explain this trust boundary when the user
+reviews the server's fingerprint. Keep identity migration and backup
+passphrases in the operator's local CLI. Test that unauthenticated clients
+cannot read messages or change device verification.
 
 **Device verification.** Open the account's own devices from account settings
 and the peer's devices from conversation details or a blocked send. Show the
