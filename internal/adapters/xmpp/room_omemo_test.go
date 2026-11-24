@@ -22,8 +22,10 @@ func TestRoomOMEMOSendRequiresDevice(t *testing.T) {
 	account := domain.Account{ID: "test-account", Address: "owner@example.org"}
 	s := &mx.Session{}
 	raw, peer := net.Pipe()
-	defer raw.Close()
-	defer peer.Close()
+	t.Cleanup(func() {
+		_ = raw.Close()
+		_ = peer.Close()
+	})
 	e := &entry{session: s, raw: raw, state: domain.Connection{State: "connected"},
 		rooms: map[string]*roomSlot{room: {session: s, snapshot: domain.RoomSession{State: "joined"}}}}
 	m := &Manager{omemoDir: t.TempDir(), entries: map[domain.ID]*entry{account.ID: e}}
