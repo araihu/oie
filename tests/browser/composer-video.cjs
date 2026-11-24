@@ -614,7 +614,8 @@ async function launch() {
       } finally {
         await page.close();
       }
-      const draftPage = await browser.newPage({locale,viewport:{width,height:844}});
+      // The offline worker can handle requests before Playwright's delayed and failing routes.
+      const draftPage = await browser.newPage({locale,viewport:{width,height:844},serviceWorkers:'block'});
       try {
         await verifyDraftPlayback(draftPage, base + '/?chat=' + direct + '&lang=' + locale, locale, useWebKit && locale === 'pt-BR');
       } finally {
@@ -639,7 +640,7 @@ async function launch() {
       }
     }
     for (const [rejectNativeRange, pauseRecovery] of [[false,false], [true,false], [true,true]]) {
-      const page = await browser.newPage({locale:'pt-BR',viewport:{width:390,height:844}});
+      const page = await browser.newPage({locale:'pt-BR',viewport:{width:390,height:844},serviceWorkers:'block'});
       let releaseWave;
       const waveGate = new Promise(resolve => { releaseWave = resolve; });
       const nativeRequest = page.waitForRequest(request => request.url().includes('/' + audioItem.id + '/content') &&
