@@ -33,6 +33,7 @@ const capabilityHeader = "X-Oie-Host-Capability"
 // DataOnly omits presentation and assets for local/hosted network engines.
 type Config struct {
 	Role, Listen, DataDir, EngineURL, XMPPCAFile string
+	PrivateOMEMOUploadOrigin                     string
 	DevReload                                    bool
 	PrivateAPI                                   bool
 	DataOnly                                     bool

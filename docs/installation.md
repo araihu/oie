@@ -3,7 +3,8 @@
 [Open and share diagnostic logs](diagnostics.md) for desktop, Docker, or Helm.
 
 For the source-build preview of encrypted direct messages with Gajim and
-Conversations, see [OMEMO profiles and device verification](local-omemo.md).
+Conversations, see [OMEMO profiles and device verification](local-omemo.md). The same guide covers the HTTPS
+upload origin for encrypted attachments on private XMPP installations.
 
 ## Run with Docker
 

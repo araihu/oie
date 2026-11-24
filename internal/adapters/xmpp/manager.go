@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -102,23 +103,27 @@ type entry struct {
 	initialPeerPresence  map[string]map[string]peerResource
 }
 type Manager struct {
-	omemoDir        string
-	diagnostics     *diagnostics.Logger
-	dir             string
-	roots           *x509.CertPool
-	mu              sync.RWMutex
-	entries         map[domain.ID]*entry
-	ctx             context.Context
-	cancel          context.CancelFunc
-	host            application.ProtocolHost
-	workers         sync.WaitGroup
-	archiveQueuesMu sync.Mutex
-	archiveQueues   map[string]*archiveQueue
-	avatarGate      chan struct{}
+	privateUploadHost                       string
+	publicUploadClient, privateUploadClient *http.Client
+	encryptedDownloads                      chan struct{}
+	omemoDir                                string
+	diagnostics                             *diagnostics.Logger
+	dir                                     string
+	roots                                   *x509.CertPool
+	mu                                      sync.RWMutex
+	entries                                 map[domain.ID]*entry
+	ctx                                     context.Context
+	cancel                                  context.CancelFunc
+	host                                    application.ProtocolHost
+	workers                                 sync.WaitGroup
+	archiveQueuesMu                         sync.Mutex
+	archiveQueues                           map[string]*archiveQueue
+	avatarGate                              chan struct{}
 }
 
 func New(dir string, roots *x509.CertPool) *Manager {
-	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), avatarGate: make(chan struct{}, 1)}
+	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), avatarGate: make(chan struct{}, 1),
+		publicUploadClient: publicOMEMOUploadClient(), encryptedDownloads: make(chan struct{}, 4)}
 }
 func (m *Manager) SetDiagnostics(logger *diagnostics.Logger) { m.diagnostics = logger }
 
@@ -180,6 +185,12 @@ func (m *Manager) Close() {
 	}
 	m.mu.Unlock()
 	m.workers.Wait()
+	if m.publicUploadClient != nil {
+		m.publicUploadClient.CloseIdleConnections()
+	}
+	if m.privateUploadClient != nil {
+		m.privateUploadClient.CloseIdleConnections()
+	}
 }
 func (e *entry) stop() {
 	e.mu.Lock()
@@ -786,10 +797,11 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		return application.NotSent
 	}
 	protected := m.omemoDir != "" && out.Kind != "room" && out.DirectEncryption != "plain"
-	if protected && (out.Correction != nil || out.Reaction != nil || out.Reply != nil || len(out.Attachments) > 0 || len(out.Mentions) > 0) {
+	if protected && (out.Correction != nil || out.Reaction != nil || out.Reply != nil || len(out.Mentions) > 0) {
 		return application.Failed
 	}
 	var attachmentBody string
+	var encryptedFileURLs []string
 	if len(out.Attachments) != 0 {
 		if out.RecordWireAttempt == nil {
 			return application.NotSent
@@ -800,11 +812,15 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			}
 		}()
 		var uploadOutcome string
-		attachmentBody, uploadOutcome = m.uploadMessageAttachments(ctx, e, session, out)
+		if protected {
+			encryptedFileURLs, uploadOutcome = m.uploadAttachmentLinks(ctx, e, session, out, true)
+		} else {
+			attachmentBody, uploadOutcome = m.uploadMessageAttachments(ctx, e, session, out)
+			out.OriginalText = attachmentBody
+		}
 		if uploadOutcome != "" {
 			return uploadOutcome
 		}
-		out.OriginalText = attachmentBody
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -813,15 +829,29 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if err != nil {
 		return application.Failed
 	}
+	payloads := []outboundMessage{payload}
 	if protected {
-		env, err := m.encryptDirect(ctx, e, session, out.Address, out.OriginalText)
-		if err != nil {
+		bodies := encryptedFileURLs
+		if strings.TrimSpace(out.OriginalText) != "" {
+			bodies = append([]string{out.OriginalText}, bodies...)
+		}
+		envelopes, err := m.encryptDirect(ctx, e, session, out.Address, bodies)
+		if err != nil || len(envelopes) == 0 {
 			return application.NotSent
 		}
 		payload.Body = ""
-		payload.Encrypted = &env
 		payload.Store = &storeHint{}
 		payload.Encryption = &encryptionMarker{Namespace: omemo.Namespace, Name: "OMEMO"}
+		payloads = make([]outboundMessage, len(envelopes))
+		for i := range envelopes {
+			unit := payload
+			unit.Encrypted = &envelopes[i]
+			if i != 0 {
+				unit.ID = payload.ID + "-" + strconv.Itoa(i)
+				unit.Origin.ID = unit.ID
+			}
+			payloads[i] = unit
+		}
 	} else {
 		payload.ChatState = m.outgoingChatState(ctx, e, a, out)
 	}
@@ -892,13 +922,19 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	e.mu.Unlock()
 
-	if err = session.Encode(ctx, payload); err != nil {
-		if definitivelyUnsent(session.StreamManagement().Enabled, err) {
-			return application.NotSent
-		}
-		_ = raw.Close()
-		return application.Unknown
+	if !protected {
+		payloads[0] = payload
 	}
+	for i, unit := range payloads {
+		if err = session.Encode(ctx, unit); err != nil {
+			if i == 0 && definitivelyUnsent(session.StreamManagement().Enabled, err) {
+				return application.NotSent
+			}
+			_ = raw.Close()
+			return application.Unknown
+		}
+	}
+
 	if out.Kind == "direct" {
 		e.mu.Lock()
 		if peer, ok := e.typingPeers[out.Address]; ok && e.session == session {

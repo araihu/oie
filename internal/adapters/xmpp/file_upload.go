@@ -1,6 +1,7 @@
 package xmpp
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/xml"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
@@ -229,9 +231,23 @@ func (e *entry) forgetAttachmentUpload(session *mx.Session, id domain.ID) {
 }
 
 func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, session *mx.Session, out application.Outgoing) (string, string) {
+	links, outcome := m.uploadAttachmentLinks(ctx, e, session, out, false)
+	if outcome != "" {
+		return "", outcome
+	}
+	if out.OriginalText != "" {
+		links = append([]string{out.OriginalText}, links...)
+	}
+	return strings.Join(links, "\n"), ""
+}
+
+func (m *Manager) uploadAttachmentLinks(ctx context.Context, e *entry, session *mx.Session, out application.Outgoing, protected bool) ([]string, string) {
 	var largest int64
 	for _, file := range out.Attachments {
 		largest = max(largest, file.Size)
+	}
+	if protected {
+		largest += omemo.MediaTagSize
 	}
 	e.mu.RLock()
 	service, err := uploadService(e, largest)
@@ -241,7 +257,7 @@ func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, sessio
 	e.mu.RUnlock()
 	canceled := func() bool { return ctx.Err() != nil || (sessionCtx != nil && sessionCtx.Err() != nil) }
 	if !current || canceled() {
-		return "", application.NotSent
+		return nil, application.NotSent
 	}
 	if sessionCtx != nil {
 		var cancel context.CancelFunc
@@ -251,10 +267,10 @@ func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, sessio
 		defer stop()
 	}
 	if err != nil {
-		return "", application.Failed
+		return nil, application.Failed
 	}
 	if service == "" {
-		return "", application.NotSent
+		return nil, application.NotSent
 	}
 
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: m.roots, MinVersion: tls.VersionTLS12}}
@@ -268,47 +284,88 @@ func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, sessio
 		links = slices.Clone(progress.links)
 	}
 	for _, file := range out.Attachments[len(links):] {
+		var sealed domain.EncryptedAttachment
+		if protected {
+			file, sealed, err = encryptUpload(ctx, file)
+			if canceled() {
+				return nil, application.NotSent
+			}
+			if err != nil {
+				return nil, application.Failed
+			}
+		}
 		request := fmt.Sprintf(`<request xmlns="%s" filename="%s" size="%d" content-type="%s"/>`, uploadNamespace, escaped(file.FileName), file.Size, escaped(file.MediaType))
 		reply, err := readArchiveIQ(ctx, e, session, service, stanza.GetIQ, request)
 		if canceled() {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		if err != nil {
 			if errors.Is(err, errArchive) || errors.Is(err, errDetailPermission) || errors.Is(err, errArchiveCursor) {
-				return "", application.Failed
+				return nil, application.Failed
 			}
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		slot, err := decodeUploadSlot(reply)
 		if err != nil {
-			return "", application.Failed
+			return nil, application.Failed
 		}
 		e.mu.RLock()
 		current = e.attachmentUploadCurrent(session, out)
 		e.mu.RUnlock()
 		if !current {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		err = sendUpload(ctx, client, slot, file)
 		if canceled() {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		if err != nil {
 			if errors.Is(err, errUploadRejected) {
-				return "", application.Failed
+				return nil, application.Failed
 			}
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
-		links = append(links, slot.Get.URL)
+		link := slot.Get.URL
+		if protected {
+			link = omemo.MediaURI(link, sealed)
+		}
+		links = append(links, link)
 		if !e.saveAttachmentUpload(session, out, service, links) {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 	}
 	if canceled() {
-		return "", application.NotSent
+		return nil, application.NotSent
 	}
-	if out.OriginalText != "" {
-		links = append([]string{out.OriginalText}, links...)
+	return links, ""
+}
+
+func encryptUpload(ctx context.Context, file application.OutgoingAttachment) (application.OutgoingAttachment, domain.EncryptedAttachment, error) {
+	var empty domain.EncryptedAttachment
+	if file.Size < 0 || file.Size > application.MaxStagedAttachmentSize {
+		return file, empty, errUploadRejected
 	}
-	return strings.Join(links, "\n"), ""
+	body, err := file.Open(ctx)
+	if err != nil {
+		return file, empty, err
+	}
+	defer func() { _ = body.Close() }()
+	plain, err := io.ReadAll(io.LimitReader(body, file.Size+1))
+	if err != nil {
+		return file, empty, err
+	}
+	if int64(len(plain)) != file.Size {
+		return file, empty, errUploadRejected
+	}
+	ciphertext, sealed, err := omemo.SealMedia(plain)
+	clear(plain)
+	if err != nil {
+		return file, empty, err
+	}
+	file.Size = int64(len(ciphertext))
+	file.MediaType = "application/octet-stream"
+	file.Open = func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(ciphertext)), nil
+	}
+	return file, sealed, nil
 }

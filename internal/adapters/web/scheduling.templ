@@ -354,6 +354,16 @@ templ schedulePreviewBody() {
 }
 
 templ outgoingAttachments(v view,m engineapi.Message) {
+	if m.OmemoAttachments != nil && len(*m.OmemoAttachments) > 0 {
+		<div class="oie-message-attachments">
+			for i, name := range *m.OmemoAttachments {
+				@link.Link(omemoAttachmentHref(m.Id,i),link.WithAttrs(templ.Attributes{"download":name})) {
+					<span>{name}</span>
+				}
+			}
+		</div>
+	}
+
 	if m.Attachments != nil && len(*m.Attachments)>0 {
 		<div class="oie-message-attachments" data-message-attachments>
 			for _, a := range *m.Attachments {

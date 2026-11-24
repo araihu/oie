@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.43.0
+  version: 0.44.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -3776,6 +3776,47 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/messages/{messageId}/omemo-attachments/{index}:
+    parameters:
+    - $ref: '#/components/parameters/MessageID'
+    - name: index
+      in: path
+      required: true
+      description: Zero-based position in the message's omemoAttachments array.
+      schema: {type: integer, minimum: 0, maximum: 15}
+      example: 0
+    get:
+      operationId: downloadOmemoAttachment
+      tags: [Messages]
+      summary: Download an authenticated OMEMO attachment
+      description: Fetches ciphertext for the retained message and returns the complete file after verification.
+      responses:
+        '200':
+          description: Verified attachment bytes.
+          headers:
+            Content-Disposition:
+              description: Safe download filename.
+              schema: {type: string}
+              example: attachment; filename=photo.jpg
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '422':
+          description: Blocked attachment destination.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: Failed download or authentication.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/messages/{messageId}/retraction:
     parameters:
     - $ref: '#/components/parameters/MessageID'
@@ -4662,6 +4703,7 @@ components:
           - 0.41.0
           - 0.42.0
           - 0.43.0
+          - 0.44.0
         omemoEnabled:
           type: boolean
           description: The owning engine has an OMEMO profile. Hosted engines keep its private keys on the server.
@@ -6877,6 +6919,12 @@ components:
       - isOwn
       - sendState
       properties:
+        omemoAttachments:
+          type: array
+          description: File names in download order. The engine keeps the key and remote URL.
+          maxItems: 16
+          items: {type: string}
+          example: [photo.jpg]
         omemo:
           type: boolean
           description: The direct message was received through OMEMO or queued with an immutable OMEMO send intent.

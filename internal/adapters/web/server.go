@@ -1077,6 +1077,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.videoThumbnailStatus(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/ui/omemo-attachments/") {
+		s.omemoAttachment(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/ui/shared-content/") {
 		handler := http.Handler(http.HandlerFunc(s.sharedMediaContent))
 		if validOperationKey(r.URL.Query().Get("engineId")) && !r.URL.Query().Has("download") {

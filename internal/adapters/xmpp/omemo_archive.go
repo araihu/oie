@@ -106,10 +106,9 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 		}
 		var saveErr error
 		err = e.omemoDevice.DecryptTo(ctx, record.sender, *env, func(text string) error {
-			if text == "" {
+			if !readOMEMOPayload(&in, text) {
 				return nil
 			}
-			in.OriginalText = text
 			saveErr = m.host.Receive(ctx, in)
 			return saveErr
 		})

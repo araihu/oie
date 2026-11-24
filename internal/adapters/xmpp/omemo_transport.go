@@ -137,22 +137,31 @@ func (m *Manager) omemoPublishLoop(ctx context.Context, e *entry, s *mx.Session)
 		refresh.Stop()
 	}
 }
-func (m *Manager) encryptDirect(ctx context.Context, e *entry, s *mx.Session, peer, text string) (omemo.Envelope, error) {
+func (m *Manager) encryptDirect(ctx context.Context, e *entry, s *mx.Session, peer string, bodies []string) ([]omemo.Envelope, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	own, _, err := e.omemoDevice.LocalIdentity()
 	if err != nil || peer == e.account.Address {
-		return omemo.Envelope{}, omemo.ErrInvalid
+		return nil, omemo.ErrInvalid
 	}
 	targets, err := observeDevices(ctx, e, s, peer, 0)
 	if err != nil {
-		return omemo.Envelope{}, err
+		return nil, err
 	}
 	siblings, err := observeDevices(ctx, e, s, e.account.Address, own)
 	if err != nil {
-		return omemo.Envelope{}, err
+		return nil, err
 	}
-	return e.omemoDevice.Encrypt(ctx, append(targets, siblings...), text)
+	targets = append(targets, siblings...)
+	payloads := make([]omemo.Envelope, len(bodies))
+	for i, body := range bodies {
+		envelope, err := e.omemoDevice.Encrypt(ctx, targets, body)
+		if err != nil {
+			return nil, err
+		}
+		payloads[i] = envelope
+	}
+	return payloads, nil
 }
 
 // Self must be present in the account's published list before sending. Only
@@ -206,11 +215,12 @@ func (m *Manager) receiveEncrypted(ctx context.Context, e *entry, msg stanza.Mes
 func (m *Manager) acceptEncrypted(ctx context.Context, e *entry, p omemo.Pending) error {
 	var receiveErr error
 	err := e.omemoDevice.Receive(ctx, p, func(text string) error {
-		if text == "" {
+		_, requests := m.host.(application.ConversationRequestHost)
+		in := application.Incoming{Encrypted: true, AccountID: e.account.ID, Kind: "direct", Address: p.Peer, ProviderID: p.Envelope.ProviderID(), CreatedAt: p.At, CheckDirectHistory: requests}
+		if !readOMEMOPayload(&in, text) {
 			return nil
 		}
-		_, requests := m.host.(application.ConversationRequestHost)
-		receiveErr = m.host.Receive(ctx, application.Incoming{Encrypted: true, AccountID: e.account.ID, Kind: "direct", Address: p.Peer, ProviderID: p.Envelope.ProviderID(), OriginalText: text, CreatedAt: p.At, CheckDirectHistory: requests})
+		receiveErr = m.host.Receive(ctx, in)
 		return receiveErr
 	})
 	if err == nil {

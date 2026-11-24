@@ -1,8 +1,8 @@
 # OMEMO direct messages (B16 preview)
 
 This increment adds the legacy OMEMO wire format used by Gajim and Conversations
-(`eu.siacs.conversations.axolotl`) to local and hosted engines. Enable it once per profile. Direct messages require
-verified recipient devices by default. In conversation details, **OMEMO encryption**
+(`eu.siacs.conversations.axolotl`) to local and hosted engines. Enable it once
+per profile. Direct messages require verified recipient devices by default. In conversation details, **OMEMO encryption**
 opens the device list and the encryption control. Changing the control applies
 to future messages. A queued encrypted message keeps its protection through
 retries and restarts.
@@ -56,9 +56,31 @@ A newly verified sender's held messages can then enter the timeline.
 The local timeline, search index and outgoing queue can contain readable text.
 Use OS account permissions and disk encryption to protect the profile.
 Automatic link preview fetching and conventional Oiê ZIP export are disabled
-in this profile. Encrypted direct text has an OMEMO label in the timeline. Direct attachments,
-structured replies, edits and reactions are outside the tested direct-text exchange. The engine accepts
-unencrypted direct text only when the user explicitly enables it for that peer.
+in this profile. Encrypted direct messages have an OMEMO label. The engine
+accepts unencrypted direct text only when the user explicitly enables it for
+that peer. Structured replies, edits and reactions are outside this increment.
+
+## Send and download encrypted attachments
+
+Use the attachment picker in a direct chat with OMEMO enabled. The regular
+engine upload limits apply, including the provider limit for the ciphertext.
+Oiê encrypts each file before sending its bytes to the XMPP HTTP Upload
+service. The provider sees the upload filename and ciphertext size. The key
+and URL travel inside an OMEMO message. A caption and each attached file
+arrive as separate encrypted messages in Gajim and Conversations.
+[XEP-0363](https://xmpp.org/extensions/xep-0363.html) ·
+[XEP-0454](https://xmpp.org/extensions/xep-0454.html).
+
+Select a received filename to download it. The engine verifies the entire
+file before returning it. Local or hosted Oiê can also download files
+recovered from the XMPP archive while the upload service still has the bytes.
+The hosting operator can read files processed by the hosted engine.
+
+Ciphertext downloads use HTTPS. For a dedicated private HTTPS upload service,
+set `--omemo-upload-origin https://upload.example.internal:5443` or
+`OIE_OMEMO_UPLOAD_ORIGIN` on the engine. The exception applies to that exact
+host and port. To trust a private CA, supply the CA with `--xmpp-ca-file`.
+Encrypted downloads do not follow redirects.
 
 ## Recover direct messages from the XMPP server
 
@@ -171,3 +193,12 @@ hosted session read all four archived messages once, with the original Oiê
 IDs preserved on replay. An additional Gajim message received live retained
 its ID after a restart and archive catch-up. The five message bodies were
 absent from the Prosody archive.
+
+
+For encrypted attachments, Gajim 2.4.3 and Conversations 2.21.4+free on
+Android each sent and received a fixture PNG with both engine roles. Every
+download matched its original by SHA-256 or byte comparison. The hosted
+engine recovered both inbound attachment messages from XMPP history after
+the clients sent them while it was stopped. A Chromium browser downloaded
+the correct original files in both roles. Prosody stored eight encrypted
+file blobs, and its XMPP archive contained no download URI or key.

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.43.0",
+    "version": "0.44.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -6249,6 +6249,84 @@
         "x-cli-name": "get"
       }
     },
+    "/api/v1/messages/{messageId}/omemo-attachments/{index}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        },
+        {
+          "name": "index",
+          "in": "path",
+          "required": true,
+          "description": "Zero-based position in the message's omemoAttachments array.",
+          "schema": {
+            "type": "integer",
+            "maximum": 15,
+            "minimum": 0
+          },
+          "example": 0
+        }
+      ],
+      "get": {
+        "operationId": "downloadOmemoAttachment",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Download an authenticated OMEMO attachment",
+        "description": "Fetches ciphertext for the retained message and returns the complete file after verification.",
+        "responses": {
+          "200": {
+            "description": "Verified attachment bytes.",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Safe download filename.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=photo.jpg"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "422": {
+            "description": "Blocked attachment destination.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "description": "Failed download or authentication.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{messageId}/retraction": {
       "parameters": [
         {
@@ -7752,7 +7830,8 @@
               "0.40.0",
               "0.41.0",
               "0.42.0",
-              "0.43.0"
+              "0.43.0",
+              "0.44.0"
             ]
           },
           "omemoEnabled": {
@@ -11270,6 +11349,17 @@
           "sendState"
         ],
         "properties": {
+          "omemoAttachments": {
+            "type": "array",
+            "description": "File names in download order. The engine keeps the key and remote URL.",
+            "maxItems": 16,
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "photo.jpg"
+            ]
+          },
           "omemo": {
             "type": "boolean",
             "description": "The direct message was received through OMEMO or queued with an immutable OMEMO send intent."

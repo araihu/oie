@@ -25,6 +25,7 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
+	EncryptedAttachments                      []domain.EncryptedAttachment
 	Encrypted                                 bool
 	Moderation                                *IncomingRoomModeration
 	Retraction                                *IncomingRetraction
@@ -548,7 +549,11 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 }
 
 func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
-	if !utf8.ValidString(in.OriginalText) || !in.ModerationTombstone && strings.TrimSpace(in.OriginalText) == "" || strings.ContainsRune(in.OriginalText, 0) || len(in.OriginalText) > (1<<20) || len(in.ProviderID) > (1<<20) {
+	hasEncryptedFiles := in.Encrypted && in.Kind == "direct" && len(in.EncryptedAttachments) > 0 && len(in.EncryptedAttachments) <= MaxMessageAttachments
+	if len(in.EncryptedAttachments) > 0 && !hasEncryptedFiles {
+		return ErrInvalid
+	}
+	if !utf8.ValidString(in.OriginalText) || !in.ModerationTombstone && !hasEncryptedFiles && strings.TrimSpace(in.OriginalText) == "" || strings.ContainsRune(in.OriginalText, 0) || len(in.OriginalText) > (1<<20) || len(in.ProviderID) > (1<<20) {
 		return ErrInvalid
 	}
 	a, err := e.Account(ctx, in.AccountID)
@@ -644,6 +649,7 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 	m.FileDigests = normalizeFileDigests(refs, in.FileDigests)
 	m.MentionsYou = incomingRoomMention(in)
 	if in.Encrypted {
+		m.EncryptedAttachments = in.EncryptedAttachments
 		m.DirectEncryption = "omemo"
 	}
 	if in.Kind == "room" && !in.IsOwn {

@@ -101,6 +101,9 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	instance.protocols = xmpadapter.New(filepath.Join(dir, "private", "connections"), h.roots)
 	if protected {
 		instance.protocols.EnableOMEMO(omemo.ProfileDir(dir))
+		if err := instance.protocols.SetPrivateOMEMOUploadOrigin(h.cfg.PrivateOMEMOUploadOrigin); err != nil {
+			return nil, err
+		}
 	}
 	instance.protocols.SetDiagnostics(h.cfg.Diagnostics)
 	engine.SetProtocols(instance.protocols)
