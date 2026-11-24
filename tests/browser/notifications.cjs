@@ -717,6 +717,7 @@ async function run() {
 
     const iphone = await browser.newContext({userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'});
     const iphonePage = await iphone.newPage();
+    iphonePage.setDefaultTimeout(8000);
     iphonePage.on('pageerror', error => errors.push(error.message));
     await iphonePage.addInitScript(() => {
       window.outputContexts = 0;
@@ -756,12 +757,18 @@ async function run() {
     assert.equal(await iphonePage.evaluate(() => window.outputContexts), 0, 'opening, tapping and typing leave audio output idle on iPhone');
     assert.deepEqual(await iphonePage.evaluate(() => window.playedTones), []);
     assert.equal(iphoneToneRequests.length, 0);
+    let holdNextTone = false, heldTone;
+    await iphonePage.route('**/ui/notification.wav', route => {
+      if (!holdNextTone) return route.continue();
+      holdNextTone = false;
+      heldTone = route;
+    });
     async function holdDefaultTone(requestTone) {
-      let held;
-      await iphonePage.route('**/ui/notification.wav', route => { held = route; }, {times: 1});
+      heldTone = undefined;
+      holdNextTone = true;
       await requestTone();
-      await until(() => held, 'notification tone request reached the server');
-      return held;
+      await until(() => heldTone, 'notification tone request reached the server');
+      return heldTone;
     }
     await iphonePage.evaluate(() => {
       Object.defineProperty(document, 'hidden', {configurable: true, value: true});
@@ -780,7 +787,7 @@ async function run() {
     const failedTone = await holdDefaultTone(push);
     const failedResponse = iphonePage.waitForResponse(response => response.url().endsWith('/ui/notification.wav') && response.status() === 503);
     await failedTone.fulfill({status: 503, body: ''});
-    await (await failedResponse).finished();
+    await failedResponse;
 
     const staleTone = await holdDefaultTone(push);
     await quietWindow();
@@ -818,7 +825,7 @@ async function run() {
     await iphonePage.waitForFunction(() => window.playedTones.some(tone => tone.src.startsWith('blob:') && tone.sessionType === 'ambient'));
 
     const startCapture = () => iphonePage.evaluate(() => {
-      const composer = document.querySelector('[data-schedule-composer]');
+      const composer = document.querySelector('#send-message-form');
       composer.setAttribute('data-capturing-audio', '');
       composer.dispatchEvent(new Event('oie:recording-requested', {bubbles: true}));
       return {paused: window.lastTonePlayer.paused, session: navigator.audioSession.type};
@@ -827,7 +834,7 @@ async function run() {
     push();
     await iphonePreview.click();
     await pause(350);
-    await iphonePage.evaluate(() => document.querySelector('[data-schedule-composer]').removeAttribute('data-capturing-audio'));
+    await iphonePage.evaluate(() => document.querySelector('#send-message-form').removeAttribute('data-capturing-audio'));
     await quietWindow();
     assert.equal(await iphonePage.evaluate(() => window.playedTones.length), 1, 'alerts and previews during capture never replay after it ends');
     push();
