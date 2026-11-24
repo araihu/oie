@@ -21,11 +21,11 @@ func TestStagingStopsReadingStalledHTTPBody(t *testing.T) {
 	}))
 	defer server.Close()
 	reader, writer := io.Pipe()
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 	go func() {
 		res, err := server.Client().Post(server.URL, "application/octet-stream", reader)
 		if err == nil {
-			res.Body.Close()
+			_ = res.Body.Close()
 		}
 	}()
 	if _, err := writer.Write([]byte("begin")); err != nil {
