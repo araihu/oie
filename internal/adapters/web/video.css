@@ -27,3 +27,23 @@
 .oie-audio-controls{min-width:0;height:3.375rem;display:flex;align-items:center}
 .oie-audio-controls audio{width:100%;height:100%}
 .oie-audio-controls [hidden]{display:none}
+
+.oie-fallback-player,.oie-fallback-picture{position:absolute;inset:0}
+.oie-fallback-controls{position:absolute;inset:auto 0 0;display:flex;align-items:center;gap:.5rem;padding:.35rem;background:#111d;color:white}
+.oie-fallback-controls button,.oie-fallback-controls a{display:grid;place-items:center;min-width:2rem;min-height:2rem;color:inherit;background:transparent}
+.oie-fallback-controls .oie-icon{width:1.1rem;height:1.1rem}
+.oie-fallback-controls [data-fallback-sound]{font-size:.75rem}
+.oie-fallback-controls input{min-width:0}
+[data-fallback-seek]{flex:1}
+[data-fallback-volume]{width:18%;max-width:4rem}
+
+.oie-video-card [data-video-download][hidden],.oie-fallback-controls [hidden]{display:none}
+.oie-video-stage{container-type:inline-size}
+@container (max-width:18rem){
+ .oie-fallback-controls{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"seek seek seek" "toggle volume save" "sound sound sound";gap:0 .25rem;padding:.15rem .35rem}
+ .oie-fallback-controls [data-fallback-seek]{grid-area:seek;width:100%}
+ .oie-fallback-controls [data-fallback-toggle]{grid-area:toggle}
+ .oie-fallback-controls [data-fallback-volume]{grid-area:volume;width:100%;max-width:none}
+ .oie-fallback-controls a{grid-area:save}
+ .oie-fallback-controls [data-fallback-sound]{grid-area:sound}
+}

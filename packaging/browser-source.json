@@ -16,9 +16,54 @@
     "vendor/github.com/araihu/goshtoso/assets/muamba_gen.go": "9adf4ccc1d259d346486f7bb95eb66d553703fa86c1ef926828f283eeabe52f7",
     "vendor/github.com/araihu/margo/assets/mermaid_gen.go": "e75fdffb43e7d07c3d08d9ee48868e1b478d8d0a3e34187cc1fffcef4fd98f6e",
     "vendor/github.com/wailsapp/wails/v3/internal/assetserver/bundledassets/runtime.js": "243f2d6815dce5281716cc3f8605300e2840c3f8f694fedf4d67316ff742371a",
-    "vendor/modernc.org/libc/builder.json": "fddd398fddbb3bb9a85444491d29ba3033ed47363444d8dfdaa3e1fa74df096b"
+    "vendor/modernc.org/libc/builder.json": "fddd398fddbb3bb9a85444491d29ba3033ed47363444d8dfdaa3e1fa74df096b",
+    "internal/adapters/web/libmedia/manifest.json": "f56c3e14c16eb6166af2c98643783d93217e199500108cfc4c00f163c85be33b"
   },
   "archives": [
+    {
+      "name": "libmedia-5978d2ba.tar.gz",
+      "url": "https://codeload.github.com/zhaohappy/libmedia/tar.gz/5978d2ba44259d814b321ae41c0fe5a72a792064",
+      "sha256": "bb3517642e5db548d36011970f87a3e4284cb04a4d4e87f09886fad10bf27eda",
+      "include": [
+        "build",
+        "packages",
+        "scripts",
+        "webpack.config.ts",
+        "package.json",
+        "babel.config.json",
+        "tsconfig.json",
+        "eslint",
+        "pnpm-lock.yaml",
+        ".gitmodules",
+        "COPYING.LGPLv3",
+        "README_en.md",
+        "package-lock.json",
+        "@types",
+        ".github/workflows/pages.yml"
+      ],
+      "packaged_name": "libmedia-5978d2ba-source.tar",
+      "packaged_sha256": "1b931911fff104f657195513195c8d77d219e8291b2e31325436a49d579bf08e"
+    },
+    {
+      "name": "cheap-f8bbe7f5.tar.gz",
+      "url": "https://codeload.github.com/zhaohappy/cheap/tar.gz/f8bbe7f5a54ce354a50ae88b7aa5697e5398e6fc",
+      "sha256": "8798c3c1d95bc9a827b6704e37599f9bdf417d39acf843e0a870d67bf7c9db5d"
+    },
+    {
+      "name": "common-5eb14e32.tar.gz",
+      "url": "https://codeload.github.com/zhaohappy/common/tar.gz/5eb14e32dc810b891c441713af7c3517be708fc8",
+      "sha256": "668b9d8bdca86b3cceef1ea1d9521c84499b99df6d05a66cb3530bdacaee7964"
+    },
+    {
+      "name": "ffmpeg-a216f26d.tar.gz",
+      "url": "https://codeload.github.com/zhaohappy/FFmpeg/tar.gz/a216f26d6ed993bdc12d842cdab3f91bd0b31909",
+      "sha256": "55627ed63d16689e4d4d83d2de006b6e1b252fef403267beca1442b17bff3c84"
+    },
+    {
+      "name": "libvpx-a40848c8.tar.gz",
+      "url": "https://codeload.github.com/webmproject/libvpx/tar.gz/a40848c80f8a002f2f4225c1c16a34743cce54db",
+      "sha256": "cf67383db134a5ef9ce4be31d8c34a6839d008afe2fd9ef0847f2d711d140bd0"
+    },
     {
       "name": "wavesurfer.js-8.1.0.tar.gz",
       "url": "https://codeload.github.com/katspaugh/wavesurfer.js/tar.gz/refs/tags/8.1.0",

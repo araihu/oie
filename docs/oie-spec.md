@@ -120,7 +120,7 @@ updates are deferred as B23.
 notarization.
 
 **AGREED:** video previews and playback use the browser or desktop WebView's
-media support. Oiê requires no FFmpeg executable for video previews.
+media support first. After Play, Oiê can load browser-side decoders for a received video the native player cannot display.
 
 **RECOMMENDED:** retain any ad-hoc executable signing required by the native
 build tooling and document Apple's manual first-open procedure. The installer
@@ -710,7 +710,7 @@ thumbnail. For other videos the browser may read a bounded sample through Oiê's
 same-origin media route and extract a frame. The engine does not run a video
 decoder. Video previews remain automatic near the viewport unless disabled on
 the device. Opening a card or loading a preview never starts playback. Use
-native controls for playback after Play, even when extraction fails. Keep
+native controls first after Play, even when extraction fails. Load a local playback decoder on demand when native playback cannot present video. Offer the original for download. Keep
 failed-preview retry explicit. Global and conversation media catalogs keep
 their responsive 4:3 preview frames. Preview cache retention and quotas remain
 open under O09.

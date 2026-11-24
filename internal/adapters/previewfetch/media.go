@@ -225,7 +225,7 @@ func (f *Fetcher) Open(parent context.Context, address string, request applicati
 		return empty, application.MediaFailure{Code: "media_blocked"}
 	}
 	req.Header.Set("User-Agent", "Oie/0.15 media")
-	req.Header.Set("Accept", "video/mp4, video/webm, video/ogg, video/quicktime, audio/mpeg, audio/ogg, audio/mp4, audio/wav, audio/flac, audio/aac, audio/webm, text/plain, text/markdown, text/csv, application/json, text/json, application/xml, text/xml, application/pdf")
+	req.Header.Set("Accept", "video/mp4, video/webm, video/ogg, video/quicktime, video/x-matroska, video/matroska, video/x-msvideo, audio/mpeg, audio/ogg, audio/mp4, audio/wav, audio/flac, audio/aac, audio/webm, text/plain, text/markdown, text/csv, application/json, text/json, application/xml, text/xml, application/pdf")
 	req.Header.Set("Accept-Encoding", "identity")
 	if request.Range != nil {
 		req.Header.Set("Range", rangeHeader(*request.Range))

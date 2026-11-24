@@ -17,3 +17,6 @@ with Helvetica titles and subtitles. Its cross-reference offsets and stream
 length are computed from the committed bytes. The PDF has no external
 resources, scripts or attachments. Neither file contains personal data or
 third-party content.
+
+`tiny-hevc.mkv` is an original four-second test pattern and sine wave. Generate it with
+`ffmpeg -f lavfi -i testsrc2=size=160x90:rate=12 -f lavfi -i sine=frequency=440:sample_rate=16000 -t 4 -c:v libx265 -x265-params keyint=12 -crf 32 -c:a flac tiny-hevc.mkv`.

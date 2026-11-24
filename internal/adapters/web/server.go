@@ -486,6 +486,7 @@ type copy struct {
 	SharedLoadingOlder                                                                                                                                                                                       string
 	SharedLoadFailed                                                                                                                                                                                         string
 	VideoPlay                                                                                                                                                                                                string
+	VideoPause, VideoSeek, VideoVolume, VideoEnableSound, VideoDownloadOriginal                                                                                                                              string
 	VideoRetry                                                                                                                                                                                               string
 	VideoLoading                                                                                                                                                                                             string
 	VideoPlaying                                                                                                                                                                                             string
@@ -812,6 +813,9 @@ var documentsScript []byte
 //go:embed document.css
 var documentStylesheet []byte
 
+//go:embed video-fallback.js
+var videoFallbackScript []byte
+
 //go:embed videos.js
 var videosScript []byte
 
@@ -948,7 +952,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.previewStatus(w, r)
 		return
 	}
-	if s.serveDevReload(w, r) || s.servePDFJS(w, r) {
+	if s.serveDevReload(w, r) || s.servePDFJS(w, r) || serveVideoDecoderAsset(w, r) {
 		return
 	}
 	if r.URL.Path == "/ui/message-search" {
@@ -1010,7 +1014,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/room-archive.js":    {"text/javascript", roomArchiveScript},
 		"/ui/timeline.js":        {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
-		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/video-frames.js": {"text/javascript", videoFramesScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
+		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/video-frames.js": {"text/javascript", videoFramesScript}, "/ui/video-fallback.js": {"text/javascript", videoFallbackScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/typing.js":    {"text/javascript", typingScript},
 		"/ui/contacts.js":  {"text/javascript", contactsScript},
 		"/ui/viewport.js":  {"text/javascript", viewportScript},

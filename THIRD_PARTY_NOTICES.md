@@ -139,3 +139,19 @@ The runtime and templates copied into `oiectl` by `araihu/oapi-cli-gen`
 are available under MIT. The desktop archives carry its license at
 `licenses/oapi-cli-gen/LICENSE`. The standalone CLI module carries the same text in
 [`cli/internal/cliruntime/LICENSE`](cli/internal/cliruntime/LICENSE).
+
+## libmedia playback
+
+The optional received-video player bundles libmedia revision
+`5978d2ba44259d814b321ae41c0fe5a72a792064` and its FFmpeg-based WebAssembly
+decoders. The LGPLv3 license is served at
+`/ui/libmedia/5978d2ba/COPYING.LGPLv3`. The asset hashes and upstream build
+revision are in `internal/adapters/web/libmedia/manifest.json`. The release
+source archive includes libmedia, its cheap and common dependencies and the
+matching FFmpeg source. [Upstream player and build instructions](https://github.com/zhaohappy/libmedia/tree/5978d2ba44259d814b321ae41c0fe5a72a792064).
+
+The upstream FFmpeg decoder build enables GPL components. The GPL and
+LGPL license texts accompany the decoder assets. VP8 and VP9 use libvpx
+`a40848c80`, with its BSD license and patent grant in `LICENSE.libvpx`
+and `PATENTS.libvpx`. The stretch/pitch module includes SoundTouch. Its
+source and notices are in libmedia's audiostretchpitch package.

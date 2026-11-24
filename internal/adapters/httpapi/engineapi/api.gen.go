@@ -47277,6 +47277,51 @@ func (response GetSharedContentMedia200TextResponse) VisitGetSharedContentMediaR
 	return err
 }
 
+type GetSharedContentMedia200VideomatroskaResponse struct {
+	Body          io.Reader
+	Headers       GetSharedContentMedia200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetSharedContentMedia200VideomatroskaResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "video/matroska")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.LastModified != nil {
+		w.Header().Set("Last-Modified", fmt.Sprint(*response.Headers.LastModified))
+	}
+	if response.Headers.XOieIntegrity != nil {
+		w.Header().Set("X-Oie-Integrity", fmt.Sprint(*response.Headers.XOieIntegrity))
+	}
+	if response.Headers.XOieSHA256 != nil {
+		w.Header().Set("X-Oie-SHA256", fmt.Sprint(*response.Headers.XOieSHA256))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
 type GetSharedContentMedia200Videomp4Response struct {
 	Body          io.Reader
 	Headers       GetSharedContentMedia200ResponseHeaders
@@ -47421,6 +47466,96 @@ type GetSharedContentMedia200VideowebmResponse struct {
 func (response GetSharedContentMedia200VideowebmResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
 
 	w.Header().Set("Content-Type", "video/webm")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.LastModified != nil {
+		w.Header().Set("Last-Modified", fmt.Sprint(*response.Headers.LastModified))
+	}
+	if response.Headers.XOieIntegrity != nil {
+		w.Header().Set("X-Oie-Integrity", fmt.Sprint(*response.Headers.XOieIntegrity))
+	}
+	if response.Headers.XOieSHA256 != nil {
+		w.Header().Set("X-Oie-SHA256", fmt.Sprint(*response.Headers.XOieSHA256))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetSharedContentMedia200VideoxMatroskaResponse struct {
+	Body          io.Reader
+	Headers       GetSharedContentMedia200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetSharedContentMedia200VideoxMatroskaResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "video/x-matroska")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.LastModified != nil {
+		w.Header().Set("Last-Modified", fmt.Sprint(*response.Headers.LastModified))
+	}
+	if response.Headers.XOieIntegrity != nil {
+		w.Header().Set("X-Oie-Integrity", fmt.Sprint(*response.Headers.XOieIntegrity))
+	}
+	if response.Headers.XOieSHA256 != nil {
+		w.Header().Set("X-Oie-SHA256", fmt.Sprint(*response.Headers.XOieSHA256))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetSharedContentMedia200VideoxMsvideoResponse struct {
+	Body          io.Reader
+	Headers       GetSharedContentMedia200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetSharedContentMedia200VideoxMsvideoResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "video/x-msvideo")
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
 	}
@@ -47810,6 +47945,45 @@ func (response GetSharedContentMedia206TextResponse) VisitGetSharedContentMediaR
 	return err
 }
 
+type GetSharedContentMedia206VideomatroskaResponse struct {
+	Body          io.Reader
+	Headers       GetSharedContentMedia206ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetSharedContentMedia206VideomatroskaResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "video/matroska")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.LastModified != nil {
+		w.Header().Set("Last-Modified", fmt.Sprint(*response.Headers.LastModified))
+	}
+	w.WriteHeader(206)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
 type GetSharedContentMedia206Videomp4Response struct {
 	Body          io.Reader
 	Headers       GetSharedContentMedia206ResponseHeaders
@@ -47936,6 +48110,84 @@ type GetSharedContentMedia206VideowebmResponse struct {
 func (response GetSharedContentMedia206VideowebmResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
 
 	w.Header().Set("Content-Type", "video/webm")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.LastModified != nil {
+		w.Header().Set("Last-Modified", fmt.Sprint(*response.Headers.LastModified))
+	}
+	w.WriteHeader(206)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetSharedContentMedia206VideoxMatroskaResponse struct {
+	Body          io.Reader
+	Headers       GetSharedContentMedia206ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetSharedContentMedia206VideoxMatroskaResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "video/x-matroska")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.AcceptRanges != nil {
+		w.Header().Set("Accept-Ranges", fmt.Sprint(*response.Headers.AcceptRanges))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	if response.Headers.ContentRange != nil {
+		w.Header().Set("Content-Range", fmt.Sprint(*response.Headers.ContentRange))
+	}
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.LastModified != nil {
+		w.Header().Set("Last-Modified", fmt.Sprint(*response.Headers.LastModified))
+	}
+	w.WriteHeader(206)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetSharedContentMedia206VideoxMsvideoResponse struct {
+	Body          io.Reader
+	Headers       GetSharedContentMedia206ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetSharedContentMedia206VideoxMsvideoResponse) VisitGetSharedContentMediaResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "video/x-msvideo")
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
 	}
@@ -52372,34 +52624,35 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
+	"fn73/x8A",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

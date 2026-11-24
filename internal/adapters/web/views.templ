@@ -229,6 +229,7 @@ if !v.CompactSource {
 @documentViewer(v)
 </div>
 }
+@videoFallbackControls(v)
 <template data-message-template="menu">
 @dropdown.Dropdown(dropdown.Config{ID:"message-menu-oie-message-placeholder",Label:v.Text.MessageActions,Trigger:messageMenuTrigger(v,"oie-message-placeholder"),RootClass:"oie-message-menu",MenuAlign:dropdown.AlignEnd,Sections:offlineMenuSections(v)})
 <div data-menu-extra hx-trigger="oie:menu-load" hx-target="this" hx-select="[role=menu] > *, [data-menu-state]" hx-swap="innerHTML settle:0ms show:none" hx-sync="this:queue last" hx-push-url="false"></div>

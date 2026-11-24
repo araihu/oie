@@ -224,7 +224,12 @@ func sharedMediaMaximum(kind string) int64 {
 }
 
 func videoMediaType(value string) bool {
-	return value == "video/mp4" || value == "video/webm" || value == "video/ogg" || value == "video/quicktime"
+	switch value {
+	case "video/mp4", "video/webm", "video/ogg", "video/quicktime",
+		"video/x-matroska", "video/matroska", "video/x-msvideo":
+		return true
+	}
+	return false
 }
 
 func validUnsatisfiedVideoRange(value string) bool {
