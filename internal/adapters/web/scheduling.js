@@ -429,6 +429,7 @@ window.OieRuntime.register('scheduling', life => {
     const recordRemove = recordPanel.querySelector('[data-record-audio-remove]');
     const recordPlay = recordPanel.querySelector('[data-record-audio-play]');
     const recordRetry = recordPanel.querySelector('[data-record-audio-retry]');
+    const qualityLabel = mediaDialog.querySelector('h2').textContent;
     const recordLabel = recordPanel.dataset.recordLabel;
     const stopLabel = recordPanel.dataset.stopLabel;
     const sendLabel = document.getElementById('oie-live-copy').dataset.send;
@@ -732,9 +733,11 @@ window.OieRuntime.register('scheduling', life => {
       recordWave.hidden = fallback || waiting;
       recordPlay.hidden = !file || fallback;
       recordPlay.disabled = !audioPreview || !!audioPreview.failed;
-      recordRetry.hidden = !file?.failed && !audioPreview?.failed;
+      recordRetry.hidden = !file?.qualityDeferred && !file?.failed && !audioPreview?.failed;
+      const retryLabel = file?.qualityDeferred ? qualityLabel : labels.retry;
+      if (recordRetry.textContent !== retryLabel) recordRetry.textContent = retryLabel;
       if (file) {
-        recordStatus.textContent = file.failed ? labels.failed : audioPreview?.failed ? recordPanel.dataset.playFailed :
+        recordStatus.textContent = file.qualityDeferred ? qualityLabel : file.failed ? labels.failed : audioPreview?.failed ? recordPanel.dataset.playFailed :
           file.file ? labels.preparing : file.fileName;
         updateAudioPlayer();
       }
@@ -875,9 +878,10 @@ window.OieRuntime.register('scheduling', life => {
     });
     life.on(recordRetry, 'click', () => {
       const file = recordingDraft();
-      if (file?.failed && !locked && available()) {
+      if ((file?.failed || file?.qualityDeferred) && !locked && available()) {
         recordRemove.focus({preventScroll: true});
         file.failed = false;
+        file.qualityDeferred = false;
         syncPending();
         stageNext();
       } else if (audioPreview?.failed) {
@@ -1110,7 +1114,7 @@ window.OieRuntime.register('scheduling', life => {
 
     function stageNext() {
       if (uploading || locked || !available() || life.signal.aborted) return;
-      const file = [...pending.values()].find(file => !file.failed && !file.request);
+      const file = [...pending.values()].find(file => !file.failed && !file.qualityDeferred && !file.request);
       if (file) void stage(file);
     }
 
@@ -1124,7 +1128,11 @@ window.OieRuntime.register('scheduling', life => {
         if (file.prepareMedia) {
           const {chooseMedia} = await import('/ui/media-encoder/choice.mjs');
           const prepared = await chooseMedia(mediaDialog, file.file, controller.signal, preferredQuality(), file.recordedAudio);
-          if (!prepared) { forget(file); return; }
+          if (!prepared) {
+            if (file.recordedAudio && !controller.signal.aborted) file.qualityDeferred = true;
+            else forget(file);
+            return;
+          }
           if (controller.signal.aborted || file.discarded || !available()) throw Error('draft unavailable');
           const entry = videos.get(file.id);
           if (entry && prepared !== file.file) {

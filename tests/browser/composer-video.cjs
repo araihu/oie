@@ -213,6 +213,10 @@ async function verifyAudioCapture(page, locale, useTone, interruption = '') {
     const staged = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
     if (interruption === 'during-stop') await stop.click();
     else await page.evaluate(() => window.interruptAudioTestTrack());
+    if (interruption === 'during-stop') {
+      await page.locator('[data-media-cancel]').click();
+      await page.locator('[data-record-audio-retry]').click();
+    }
     await keepRecordedFile(page);
     assert((await staged).ok(), 'microphone interruption keeps the recorded audio');
     await audio.locator('[data-record-audio-play]').waitFor();
