@@ -385,6 +385,20 @@ window.OieRuntime.register('message-audio', life => {
     for (const record of records) for (const node of record.addedNodes) offerPlayback(node);
   });
   observer.observe(app, {childList: true, subtree: true});
+  for (const name of ['drawer:close', 'drawer:close-request']) {
+    life.on(window, name, event => {
+      if (event.detail?.id !== 'details') return;
+      life.timeout(() => {
+        if (event.defaultPrevented) return;
+        for (const card of document.querySelectorAll('#chat-info-content [data-message-audio]')) {
+          waiting.delete(card);
+          const player = players.get(card);
+          if (player) release(player);
+          else card.querySelector('audio').pause();
+        }
+      }, 0);
+    });
+  }
   life.on(window, 'pagehide', () => {
     waiting.clear();
     for (const player of players.values()) release(player);

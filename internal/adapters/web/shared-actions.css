@@ -31,6 +31,10 @@
 .oie-shared-item:has(> .oie-shared-actions > .oie-shared-star) > .oie-audio-card > strong {
   padding-inline-start: 2rem;
 }
+/* Audio controls need the full width of the narrower conversation drawer. */
+.oie-info-shared .oie-shared-item:has(> .oie-audio-card) {
+  grid-column: 1 / -1;
+}
 @container shared-audio (min-width: 8rem) {
   .oie-shared-item > .oie-audio-card .oie-message-audio[data-waveform-player] {
     display: flex;

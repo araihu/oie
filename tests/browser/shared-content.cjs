@@ -107,6 +107,92 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const watch=async context=>{await context.addInitScript(()=>{try{localStorage.setItem('oie.device.auto-video-previews.v1','false')}catch{}});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  // A paginated clip whose waveform read fails still exposes native playback.
+  {
+   const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+   await page.route('**/ui/shared-content/'+items[54].id+'/content?*',route=>
+    route.request().headers().range==='bytes=0-20971519'
+     ? route.fulfill({status:503,contentType:'application/problem+json',body:'{}'}) : route.continue());
+   const failed=page.waitForResponse(response=>response.url().includes(items[54].id+'/content')&&response.status()===503);
+   await page.goto(base+'/?section=media&lang=en');
+   const card=tile(page,54);
+   await page.locator('[data-shared-item]').first().waitFor();
+   await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=scroll.scrollHeight);
+   await card.scrollIntoViewIfNeeded();
+   await failed;
+   await card.getByRole('button',{name:/^Play audio/}).click();
+   const native=card.locator('audio[controls]');
+   await native.waitFor();
+   await page.waitForFunction(audio=>audio.currentTime>.05&&!audio.error,await native.elementHandle());
+   await page.close();
+  }
+  // A metadata refresh updates the label without replacing or pausing the player.
+  {
+   const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+   const item=items[54];
+   const original={...item};
+   item.message={...item.message,createdAt:'2026-11-25T12:00:00Z'};
+   try{
+    await page.goto(base+'/?section=media&lang=en');
+    const card=tile(page,54);
+    const slider=card.getByRole('slider',{name:'Audio position'});
+    await slider.waitFor();
+    const audio=await card.locator('audio').elementHandle();
+    await audio.evaluate(node=>{ node.loop=true; window.originalCatalogAudio=node; });
+    await card.getByRole('button',{name:/^Play audio/}).click();
+    await page.waitForFunction(node=>node.currentTime>.05,audio);
+    await slider.focus();
+    const version=await card.getAttribute('data-shared-record-version');
+    item.fileName='Renamed recording.mp3';
+    item.message={...item.message,revisionId:id(9898)};
+    emit('account.history_changed');
+    await until(async()=>await card.getAttribute('data-shared-record-version')!==version,'audio metadata update');
+    assert.equal(await card.locator('.oie-audio-card > strong').textContent(),item.fileName);
+    assert(await audio.evaluate(node=>node===window.originalCatalogAudio&&node.isConnected&&!node.paused));
+    assert(await slider.evaluate(node=>node===document.activeElement));
+    await card.getByRole('button',{name:'Pause audio · '+item.fileName,exact:true}).click();
+    assert(await audio.evaluate(node=>node.paused));
+    await card.getByRole('button',{name:/^Play audio/}).click();
+    await page.waitForFunction(node=>!node.paused,audio);
+    item.url='https://files.example.test/replacement.mp3';
+    item.message={...item.message,originalText:item.url,revisionId:id(9899)};
+    emit('account.history_changed');
+    await page.waitForFunction(node=>!node.isConnected&&node.paused,audio);
+    assert(await card.locator('audio').evaluate(node=>node.paused));
+   }finally{
+    Object.assign(item,original);
+    await page.close();
+   }
+  }
+  // Closing the details drawer releases its audio and keeps narrow controls usable.
+  {
+   const page=await browser.newPage({viewport:{width:320,height:800},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+   const item=items[54];
+   await page.goto(base+'/?chat='+item.message.conversationId+'&open=details&infoView=shared&infoType=media&lang=en');
+   const card=page.locator('#info-shared-results [data-shared-item="'+item.id+'"]');
+   await card.scrollIntoViewIfNeeded();
+   const slider=card.getByRole('slider',{name:'Audio position'});
+   await slider.waitFor();
+   const play=card.getByRole('button',{name:/^Play audio/});
+   const playBox=await play.boundingBox();
+   const waveBox=await slider.boundingBox();
+   assert(waveBox.width>=24&&playBox.x+playBox.width<waveBox.x);
+   const audio=await card.locator('audio').elementHandle();
+   await audio.evaluate(node=>{node.loop=true;});
+   await play.click();
+   await page.waitForFunction(node=>node.currentTime>.05,audio);
+   await page.keyboard.press('Escape');
+   await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});
+   await page.waitForFunction(node=>node.paused&&!node.hasAttribute('src'),audio);
+   await page.close();
+  }
+
   for(const {width,locale,mode,columns} of [
    {width:390,locale:'pt-BR',mode:'light',columns:1},
    {width:1440,locale:'en',mode:'dark',columns:3},
