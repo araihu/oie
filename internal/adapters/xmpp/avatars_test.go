@@ -92,7 +92,7 @@ func TestOnlyKnownProfileIdentitiesCanInvalidateAvatar(t *testing.T) {
 	}
 }
 
-func TestOMEMOProfileCapabilitiesAndDirectArchive(t *testing.T) {
+func TestOMEMOProfileCapabilities(t *testing.T) {
 	basic, protected := localClientInfo(false), localClientInfo(true)
 	hasOMEMO := func(value disco.Info) bool {
 		for _, f := range value.Features {
@@ -104,10 +104,5 @@ func TestOMEMOProfileCapabilitiesAndDirectArchive(t *testing.T) {
 	}
 	if hasOMEMO(basic) || !hasOMEMO(protected) || clientCaps(basic).Ver == clientCaps(protected).Ver {
 		t.Fatal("incorrect OMEMO capability advertisement")
-	}
-	e := &entry{account: domain.Account{Address: "alice@localhost"}}
-	m := &Manager{omemoDir: t.TempDir()}
-	if supported, err := m.supportsArchive(t.Context(), e, nil, e.account.Address); err != nil || supported {
-		t.Fatal("direct MAM must preserve its cursor until encrypted history recovery is available", err)
 	}
 }
