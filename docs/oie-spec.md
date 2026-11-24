@@ -1234,6 +1234,15 @@ reviews the server's fingerprint. Keep identity migration and backup
 passphrases in the operator's local CLI. Test that unauthenticated clients
 cannot read messages or change device verification.
 
+**Archived direct messages.** The local and hosted engines recover compatible
+encrypted direct text from the authenticated XMPP account archive. Reuse the
+device's verified identities and session keys. Preserve the server timestamp,
+deduplicate live and archived copies, and apply Oiê retention and deletion
+rules. Continue past messages that need verification or lack a decryption key.
+Report incomplete history and preserve the position needed to retry. Identity
+migration and encrypted history backups remain separate recovery paths.
+[XEP-0313](https://xmpp.org/extensions/xep-0313.html).
+
 **Device verification.** Open the account's own devices from account settings
 and the peer's devices from conversation details or a blocked send. Show the
 fingerprint and trust state of each device. Let the user compare, verify or
