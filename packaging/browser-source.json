@@ -23,6 +23,8 @@
     "vendor/modernc.org/libc/builder.json": "fddd398fddbb3bb9a85444491d29ba3033ed47363444d8dfdaa3e1fa74df096b"
   },
   "archives": [
+    {"name": "emscripten-5c27e79dd.tar.gz", "url": "https://codeload.github.com/emscripten-core/emscripten/tar.gz/5c27e79dd0a9c4e27ef2326841698cdd4f6b5784", "sha256": "3eb9ea2d69052a491296eb466dbcda5fbc1c0fed4e475c58545a83558fb47d10"},
+    {"name": "SDL-55b03c749.tar.gz", "url": "https://codeload.github.com/libsdl-org/SDL/tar.gz/55b03c7493a7abed33cf803d1380a40fa8af903f", "sha256": "a726e31f8ad9443a2a9a649f12751442d8ca5ea78a84fde14f760c81706b4127"},
     {"name": "ffmpeg.wasm-71aa99d37.tar.gz", "url": "https://codeload.github.com/ffmpegwasm/ffmpeg.wasm/tar.gz/71aa99d37c02a7b4c435275ca9ef50e612f6efa1", "sha256": "53c5842f160cece0e39345876f9483b56aa84b966637ff6f624353a0fa884219"},
     {"name": "FFmpeg-4729204c1.tar.gz", "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/4729204c17f756e186d622060088371d10b34f7e", "sha256": "0d7ad57d4dd851d577fc6c19e5cec5b6e5faaeb2dbd52ab76127e3c3763fec6d"},
     {"name": "x264-33cac6b77.tar.gz", "url": "https://codeload.github.com/ffmpegwasm/x264/tar.gz/33cac6b77d5b9259c552156013a817ab23119612", "sha256": "75434a5a1f2d7d4314821c6054dd300731d69e2fa73314ba4a5ec9df38d4ec80"},

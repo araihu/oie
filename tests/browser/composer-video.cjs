@@ -616,7 +616,9 @@ async function launch() {
       if (await fetch(base).then(response => response.ok, () => false)) break;
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-    await require('./outgoing-media.cjs').outgoingMedia(browser, base + '/?chat=' + direct, state);
+    await require('./outgoing-media.cjs').outgoingMedia(browser, base + '/?chat=' + direct, state, sendRequests);
+    acceptedAudio = undefined;
+    sendRequests.length = 0;
     if (process.argv.includes('--media-quality')) return;
     for (const [locale, width] of [['en',1440], ['pt-BR',390]]) {
       const page = await browser.newPage({locale,viewport:{width,height:844}});

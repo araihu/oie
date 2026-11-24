@@ -76,7 +76,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       const menuItem = menu.getByRole('menuitem', {name:label, exact:true});
       await menuItem.waitFor();
       const items = await menu.getByRole('menuitem').allTextContents();
-      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Arquivo', 'Agendar mensagem'] : ['Image', 'File', 'Schedule message']);
+      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Áudio ou vídeo', 'Arquivo', 'Agendar mensagem'] : ['Image', 'Audio or video', 'File', 'Schedule message']);
       const chooser = page.waitForEvent('filechooser');
       await menuItem.click();
       assert.equal(await (await chooser).element().getAttribute('accept'), accept);

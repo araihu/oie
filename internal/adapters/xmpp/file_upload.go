@@ -38,6 +38,7 @@ type attachmentUploadProgress struct {
 var errUploadRejected = errors.New("upload rejected")
 
 func recordUploadLimit(e *entry, session *mx.Session, service string, info disco.Info) {
+	var limit int64
 	for _, form := range info.Form {
 		kind, ok := form.Raw("FORM_TYPE")
 		if !ok || len(kind) != 1 || kind[0] != uploadNamespace {
@@ -51,16 +52,22 @@ func recordUploadLimit(e *entry, session *mx.Session, service string, info disco
 		if err != nil || maxSize <= 0 {
 			continue
 		}
-		e.mu.Lock()
-		if e.session == session {
-			if e.uploadLimits == nil {
-				e.uploadLimits = make(map[string]int64)
-			}
-			e.uploadLimits[service] = maxSize
-		}
-		e.mu.Unlock()
+		limit = maxSize
+		break
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.session != session {
 		return
 	}
+	if limit == 0 {
+		delete(e.uploadLimits, service)
+		return
+	}
+	if e.uploadLimits == nil {
+		e.uploadLimits = make(map[string]int64)
+	}
+	e.uploadLimits[service] = limit
 }
 
 // advertisedUploadLimit is called with e.mu held.

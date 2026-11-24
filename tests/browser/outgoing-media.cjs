@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
-async function outgoingMedia(browser, href, state) {
+async function outgoingMedia(browser, href, state, sends) {
   const fixtures = path.join(__dirname, 'fixtures');
   const cases = [
     ['en', 1000, 'alternate-audio.mkv', 'SD'],
@@ -28,7 +28,32 @@ async function outgoingMedia(browser, href, state) {
         await (await picking).setFiles(file);
       }
       const file = path.join(fixtures, name);
+      const wasm = '**/media-encoder/*/ffmpeg-core.wasm';
+      let releaseCodec;
+      const gate = new Promise(resolve => { releaseCodec = resolve; });
+      await page.route(wasm, async route => { await gate; await route.continue(); }, {times:1});
       await select(file);
+      try {
+        await dialog.waitFor();
+        assert(await submit.isDisabled());
+        const shift = await page.evaluate(async () => {
+          const nodes = ['#message-composer', '#composer-split', '[data-media-choice]'].map(s => document.querySelector(s));
+          const bounds = () => nodes.flatMap(n => {
+            const r = n.getBoundingClientRect();
+            return [r.x, r.y, r.width, r.height];
+          });
+          const initial = bounds();
+          let max = 0;
+          for (let i = 0; i < 6; i++) {
+            await new Promise(requestAnimationFrame);
+            bounds().forEach((value, index) => { max = Math.max(max, Math.abs(value - initial[index])); });
+          }
+          return max;
+        });
+        assert(shift <= 1, 'composer and dialog stay in place while codecs load');
+      } finally {
+        releaseCodec();
+      }
       if (quality === 'file') await dialog.locator('[data-media-as-file]:visible').waitFor();
       else {
         await dialog.locator('[data-prepare-media]:enabled').waitFor();
@@ -52,6 +77,21 @@ async function outgoingMedia(browser, href, state) {
       }
       assert.equal(await composer.inputValue(), 'Fixture caption');
       assert(!requests.includes('/ui/messages/send'));
+      if (quality === 'SD') {
+        await page.locator('#composer-split [data-popover-trigger] button').click();
+        await page.locator('#composer-schedule-new').click();
+        const review = page.locator('[data-schedule-dialog][open]');
+        await review.getByText(receipt.fileName, {exact:true}).waitFor();
+        const when = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16);
+        await review.locator('#schedule-local-time').fill(when);
+        const action = await page.locator('#send-message-form').evaluate(form => form.action);
+        const submitted = page.waitForResponse(r => r.request().method() === 'POST' && r.url() === action);
+        await review.getByRole('button', {name:'Schedule message',exact:true}).click();
+        await submitted;
+        assert.deepEqual(sends.at(-1).attachmentIds, [receipt.id]);
+        assert(Date.parse(sends.at(-1).scheduledAt) > Date.now());
+        continue;
+      }
       await page.locator('[data-remove-attachment]').click();
       if (quality !== 'HD') continue;
 
