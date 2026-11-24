@@ -403,7 +403,7 @@ window.OieRuntime.register('scheduling', life => {
     const menuTrigger = menu.querySelector('[data-popover-trigger] button');
     const scheduleAction = menu.querySelector('#composer-schedule-new');
     const attachmentActions = menu.querySelectorAll('#composer-attach-image, #composer-attach-media, #composer-attach-file');
-    const mediaDialog = composer.querySelector('[data-media-choice]');
+    const mediaChoice = composer.querySelector('[data-media-choice]');
     const pending = new Map();
     const videos = new Map();
     const playerDialog = attachments.querySelector('[data-draft-video-dialog]');
@@ -429,7 +429,7 @@ window.OieRuntime.register('scheduling', life => {
     const recordRemove = recordPanel.querySelector('[data-record-audio-remove]');
     const recordPlay = recordPanel.querySelector('[data-record-audio-play]');
     const recordRetry = recordPanel.querySelector('[data-record-audio-retry]');
-    const qualityLabel = mediaDialog.querySelector('h2').textContent;
+    const qualityLabel = mediaChoice.closest('dialog').querySelector('h2').textContent;
     const recordLabel = recordPanel.dataset.recordLabel;
     const stopLabel = recordPanel.dataset.stopLabel;
     const sendLabel = document.getElementById('oie-live-copy').dataset.send;
@@ -1127,7 +1127,7 @@ window.OieRuntime.register('scheduling', life => {
         if (/[\x00-\x1f\x7f]/.test(file.fileName)) throw Error('invalid filename');
         if (file.prepareMedia) {
           const {chooseMedia} = await import('/ui/media-encoder/choice.mjs');
-          const prepared = await chooseMedia(mediaDialog, file.file, controller.signal, preferredQuality(), file.recordedAudio);
+          const prepared = await chooseMedia(mediaChoice, file.file, controller.signal, preferredQuality(), file.recordedAudio);
           if (!prepared) {
             if (file.recordedAudio && !controller.signal.aborted) file.qualityDeferred = true;
             else forget(file);

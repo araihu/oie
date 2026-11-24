@@ -15,8 +15,9 @@ function loadEncoder() {
   return loading;
 }
 
-export async function chooseMedia(dialog, file, signal, preferred, recording) {
+export async function chooseMedia(content, file, signal, preferred, recording) {
   signal.throwIfAborted();
+  const dialog = content.closest('dialog');
   const events = new AbortController();
   const options = {signal: events.signal};
   const submit = dialog.querySelector('[data-prepare-media]');
@@ -24,59 +25,71 @@ export async function chooseMedia(dialog, file, signal, preferred, recording) {
   const message = dialog.querySelector('[role=status]');
   const group = dialog.querySelector('fieldset');
   const radios = [...group.querySelectorAll('input[type=radio]')];
-  const limit = Number(dialog.dataset.uploadLimit) || undefined;
+  const limit = Number(content.dataset.uploadLimit) || undefined;
   const originalFits = !limit || file.size <= limit;
   const limitLabel = dialog.querySelector('[data-media-limit]');
   limitLabel.hidden = !limit;
-  if (limit) limitLabel.textContent = dialog.dataset.limitText.replace('{bytes}', new Intl.NumberFormat(document.documentElement.lang).format(limit));
+  if (limit) {
+    const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+    const unit = Math.min(Math.floor(Math.log2(limit) / 10), units.length - 1);
+    const size = new Intl.NumberFormat(document.documentElement.lang, {maximumFractionDigits: 2}).format(limit / 1024 ** unit);
+    limitLabel.textContent = content.dataset.limitText.replace('{size}', size + ' ' + units[unit]);
+  }
   let ff, info;
   let finish;
   const choice = new Promise(resolve => { finish = resolve; });
-  function cancel() { finish(null); }
+  let selected = null;
+  function close() {
+    dialog.dispatchEvent(new CustomEvent('modal:close', {bubbles:true, detail:{id:dialog.id}}));
+  }
+  function accept(output) {
+    selected = output;
+    close();
+  }
   group.disabled = true;
   submit.disabled = true;
   raw.disabled = !originalFits;
+  submit.hidden = false;
   raw.hidden = !recording;
   for (const radio of radios) {
     radio.disabled = radio.value === 'OG';
     radio.checked = radio.value === (preferred === 'HD' ? 'HD' : 'SD');
   }
   dialog.querySelector('[data-media-filename]').textContent = file.name;
-  message.textContent = dialog.dataset.checking;
+  message.textContent = content.dataset.checking;
   function offerFile(label) {
     group.disabled = true;
     submit.disabled = true;
+    submit.hidden = true;
     raw.hidden = false;
     raw.disabled = !originalFits;
-    message.textContent = originalFits ? label : dialog.dataset.tooLarge;
+    message.textContent = originalFits ? label : content.dataset.tooLarge;
     if (originalFits && dialog.contains(document.activeElement)) raw.focus({preventScroll:true});
   }
-  raw.addEventListener('click', () => finish(file), options);
-  dialog.querySelector('[data-media-cancel]').addEventListener('click', cancel, options);
-  dialog.addEventListener('cancel', event => { event.preventDefault(); cancel(); }, options);
-  dialog.addEventListener('close', () => { if (!dialog.open) cancel(); }, options);
-  signal.addEventListener('abort', cancel, options);
+  raw.addEventListener('click', () => accept(file), options);
+  dialog.addEventListener('close', () => { if (!dialog.open) finish(selected); }, options);
+  signal.addEventListener('abort', () => finish(null), options);
   submit.addEventListener('click', async () => {
     if (!info || submit.disabled) return;
     group.disabled = submit.disabled = true;
     raw.disabled = true;
-    message.textContent = dialog.dataset.preparing;
+    message.textContent = content.dataset.preparing;
     try {
       const quality = radios.find(radio => radio.checked).value;
       const output = await prepareMedia(ff, file, info, quality, limit);
       if (events.signal.aborted) return;
-      if (output.route === 'offer file') { offerFile(dialog.dataset.keepTracks); return; }
+      if (output.route === 'offer file') { offerFile(content.dataset.keepTracks); return; }
       if (output.route === 'too large') {
         group.disabled = submit.disabled = false;
         raw.disabled = !originalFits;
-        message.textContent = dialog.dataset.tooLarge;
+        message.textContent = content.dataset.tooLarge;
         return;
       }
-      if (output.blob === file) { finish(file); return; }
+      if (output.blob === file) { accept(file); return; }
       const suffix = info.video ? '.mp4' : '.m4a';
-      finish(new File([output.blob], file.name.replace(/\.[^.]+$/, '') + suffix, {type:output.blob.type}));
+      accept(new File([output.blob], file.name.replace(/\.[^.]+$/, '') + suffix, {type:output.blob.type}));
     } catch {
-      if (!events.signal.aborted) offerFile(dialog.dataset.unavailable);
+      if (!events.signal.aborted) offerFile(content.dataset.unavailable);
     }
   }, options);
   async function inspect() {
@@ -88,23 +101,23 @@ export async function chooseMedia(dialog, file, signal, preferred, recording) {
         wasmURL: new URL('ffmpeg-core.wasm', codecRoot).href});
       info = await inspectMedia(ff, file);
       if (events.signal.aborted) return;
-      if (!info.preservable) { offerFile(dialog.dataset.keepTracks); return; }
+      if (!info.preservable) { offerFile(content.dataset.keepTracks); return; }
       const og = radios.find(radio => radio.value === 'OG');
       og.disabled = !originalFits || !info.compatible;
       if (preferred === 'OG' && !og.disabled) og.checked = true;
-      message.textContent = !originalFits ? dialog.dataset.originalTooLarge : '';
+      message.textContent = !originalFits ? content.dataset.originalTooLarge : '';
       submit.disabled = group.disabled = false;
     } catch {
-      if (!events.signal.aborted) offerFile(dialog.dataset.unavailable);
+      if (!events.signal.aborted) offerFile(content.dataset.unavailable);
     }
   }
   try {
-    dialog.showModal();
+    dialog.dispatchEvent(new CustomEvent('modal:open', {bubbles:true, detail:{id:dialog.id}}));
     void inspect();
     return await choice;
   } finally {
     events.abort();
     ff?.terminate();
-    dialog.close();
+    if (signal.aborted) close();
   }
 }

@@ -17,7 +17,7 @@ async function outgoingMedia(browser, href, state, sends) {
       page.on('request', req => requests.push(new URL(req.url()).pathname));
       await page.goto(href + '&lang=' + locale);
       const composer = page.locator('#message-composer');
-      const dialog = page.locator('[data-media-choice]');
+      const dialog = page.getByRole('dialog',{name:locale === 'en' ? 'Media quality' : 'Qualidade da mídia',exact:true});
       const submit = dialog.locator('[data-prepare-media]');
       await composer.fill('Fixture caption');
       assert(!requests.some(url => url.includes('/media-encoder/')));
@@ -36,8 +36,14 @@ async function outgoingMedia(browser, href, state, sends) {
       try {
         await dialog.waitFor();
         assert(await submit.isDisabled());
+        const centered = await dialog.evaluate(node => {
+          const r = node.getBoundingClientRect();
+          return Math.abs(r.x + r.width / 2 - innerWidth / 2) <= 1 &&
+            Math.abs(r.y + r.height / 2 - innerHeight / 2) <= 1 && node.scrollWidth <= node.clientWidth;
+        });
+        assert(centered, 'media quality dialog is centered and fits the viewport');
         const shift = await page.evaluate(async () => {
-          const nodes = ['#message-composer', '#composer-split', '[data-media-choice]'].map(s => document.querySelector(s));
+          const nodes = ['#message-composer', '#composer-split', '#media-quality-dialog'].map(s => document.querySelector(s));
           const bounds = () => nodes.flatMap(n => {
             const r = n.getBoundingClientRect();
             return [r.x, r.y, r.width, r.height];
@@ -54,8 +60,10 @@ async function outgoingMedia(browser, href, state, sends) {
       } finally {
         releaseCodec();
       }
-      if (quality === 'file') await dialog.locator('[data-media-as-file]:visible').waitFor();
-      else {
+      if (quality === 'file') {
+        await dialog.locator('[data-media-as-file]:visible').waitFor();
+        assert(await submit.isHidden());
+      } else {
         await dialog.locator('[data-prepare-media]:enabled').waitFor();
         assert(await dialog.locator('[value=SD]').isChecked());
         assert(await dialog.locator('[value=OG]').isDisabled());
@@ -101,17 +109,21 @@ async function outgoingMedia(browser, href, state, sends) {
       await select(compatible);
       await dialog.locator('[data-prepare-media]:enabled').waitFor();
       assert(await dialog.locator('[value=OG]').isDisabled());
-      await dialog.locator('[data-media-cancel]').click();
+      await dialog.getByRole('button',{name:'Fechar',exact:true}).click();
       await page.waitForFunction(() => !document.querySelector('#send-message-form').hasAttribute('data-attachments-pending'));
       assert.equal(await composer.inputValue(), 'Fixture caption');
       state.uploadMaxBytes = compatible.buffer.length;
       await page.reload();
-      await select(compatible);
+      await select([compatible, {...compatible, name:'second.mp4'}]);
       await dialog.locator('[value=OG]').check();
       const original = page.waitForResponse(r => r.url().includes('/ui/scheduling/stage?'));
       await submit.click();
       const accepted = await original;
       assert.deepEqual(await (await page.request.get(accepted.url().replace('/stage?', '/file?'))).body(), compatible.buffer);
+      await dialog.getByText('second.mp4', {exact:true}).waitFor();
+      await dialog.press('Escape');
+      await dialog.waitFor({state:'hidden'});
+      assert.equal(await composer.inputValue(), 'Fixture caption');
     } finally {
       delete state.uploadMaxBytes;
       await page.close();

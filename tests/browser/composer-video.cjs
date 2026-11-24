@@ -94,7 +94,7 @@ async function waitForRecordingTime(page, minimumSeconds) {
 
 // These capture, restoration and retry checks exercise the original recording.
 async function keepRecordedFile(page) {
-  await page.locator('[data-media-choice][open] [data-media-as-file]').click();
+  await page.locator('#media-quality-dialog[open] [data-media-as-file]').click();
 }
 
 async function verifyAudioCapture(page, locale, useTone, interruption = '') {
@@ -214,7 +214,7 @@ async function verifyAudioCapture(page, locale, useTone, interruption = '') {
     if (interruption === 'during-stop') await stop.click();
     else await page.evaluate(() => window.interruptAudioTestTrack());
     if (interruption === 'during-stop') {
-      await page.locator('[data-media-cancel]').click();
+      await page.locator('#media-quality-dialog[open]').press('Escape');
       await page.locator('[data-record-audio-retry]').click();
     }
     await keepRecordedFile(page);
