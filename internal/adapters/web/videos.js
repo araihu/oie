@@ -69,14 +69,15 @@ window.OieRuntime.register('videos', life => {
    status(card,'videoLoading','loading');
    try {
     const response = await fetch(source, {headers:{Range:'bytes=0-0'},signal,redirect:'error'});
+    const size = Number(response.status === 206 ? response.headers.get('Content-Range')?.split('/')[1] : response.headers.get('Content-Length'));
     const ext = extensions[response.headers.get('Content-Type')?.split(';')[0]];
     void response.body?.cancel().catch(()=>{});
     signal.throwIfAborted();
     if (!response.ok) {failure(card);return;}
-    if (!ext) {failure(card,true);return;}
+    if (!ext || !Number.isSafeInteger(size) || size <= 0) {failure(card,true);return;}
     const {playFallback} = await import('/ui/video-fallback.js');
     signal.throwIfAborted();
-    await playFallback({card,source:source.href,ext,signal,focus,takeAudio:()=>{const audio=session.audio;session.audio=null;return audio;},
+    await playFallback({card,source:source.href,ext,size,signal,focus,takeAudio:()=>{const audio=session.audio;session.audio=null;return audio;},
      onState:(key,state)=>status(card,key,state),onFailure:()=>failure(card,true)});
    } catch {if(!signal.aborted) failure(card,true);}
   };

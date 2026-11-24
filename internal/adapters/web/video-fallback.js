@@ -34,9 +34,70 @@ function getWasm(type, codec) {
   return location.origin + base + path + '-simd.wasm';
 }
 
+// Keep the original transfer abortable while the player is opening a decoder.
+// Browser backpressure bounds the buffered data even when a provider ignores Range.
+function mediaReader(source, ext, size, signal) {
+  let position = 0, reader, request, remainder, skip = 0;
+  const endOfInput = -(1 << 20); // libmedia IOError.END
+  function close() {
+    request?.abort();
+    request = reader = remainder = null;
+  }
+  signal.addEventListener('abort', close, {once:true});
+  async function connect() {
+    signal.throwIfAborted();
+    request = new AbortController();
+    const response = await fetch(source, {headers:{Range:'bytes=' + position + '-'},
+      credentials:'same-origin', redirect:'error', signal:request.signal});
+    if (!response.ok || !response.body) throw new Error('Media unavailable');
+    if (response.status === 206) {
+      const range = response.headers.get('Content-Range');
+      if (range !== 'bytes ' + position + '-' + (size - 1) + '/' + size) throw new Error('Unexpected media range');
+    } else if (Number(response.headers.get('Content-Length')) !== size) {
+      throw new Error('Media size changed');
+    }
+    skip = response.status === 200 ? position : 0;
+    reader = response.body.getReader();
+  }
+  return new class extends window.AVPlayer.IOLoader.CustomIOLoader {
+    get ext() { return ext; }
+    get name() { return 'video.' + ext; }
+    open() { return 0; }
+    size() { return BigInt(size); }
+    async stop() { close(); }
+    seek(offset) {
+      const next = Number(offset);
+      if (!Number.isSafeInteger(next) || next < 0 || next > size) return -1;
+      if (position !== next) { close(); position = next; }
+      return 0;
+    }
+    async read(buffer) {
+      signal.throwIfAborted();
+      if (position === size) return endOfInput;
+      if (!reader) await connect();
+      let written = 0;
+      while (written < buffer.length && position < size) {
+        if (!remainder?.length) {
+          const {done,value} = await reader.read();
+          if (done) throw new Error('Incomplete media');
+          const discard = Math.min(skip,value.length);
+          skip -= discard;
+          remainder = value.subarray(discard);
+        }
+        const count = Math.min(buffer.length-written,remainder.length,size-position);
+        buffer.set(remainder.subarray(0,count),written);
+        remainder = remainder.subarray(count);
+        position += count;
+        written += count;
+      }
+      return written;
+    }
+  }();
+}
+
 let teardown = Promise.resolve();
 
-export async function playFallback({card, source, ext, signal, takeAudio, onState, onFailure, focus}) {
+export async function playFallback({card, source, ext, size, signal, takeAudio, onState, onFailure, focus}) {
   await loadScript('cheap-polyfill.js', 'cheap-polyfill');
   signal.throwIfAborted();
   await loadScript('avplayer/avplayer.js');
@@ -57,6 +118,16 @@ export async function playFallback({card, source, ext, signal, takeAudio, onStat
   const audio = takeAudio();
   if (audio) window.AVPlayer.audioContext = audio;
   let player, observer, playing = false, rendered = false;
+  const input = mediaReader(source, ext, size, signal);
+  let pending = Promise.resolve();
+  function run(operation) {
+    const result = pending.then(() => {
+      signal.throwIfAborted();
+      return operation();
+    });
+    pending = result.catch(() => {});
+    return result;
+  }
   const active = () => !signal.aborted;
   const failed = () => { if (active()) onFailure(); };
   const setPlaying = value => {
@@ -70,6 +141,7 @@ export async function playFallback({card, source, ext, signal, takeAudio, onStat
     root.remove();
     const context = window.AVPlayer.audioContext;
     teardown = (async () => {
+      await pending;
       try { await player?.destroy(); }
       finally {
         try { await window.AVPlayer.stopPipelines(); }
@@ -107,21 +179,22 @@ export async function playFallback({card, source, ext, signal, takeAudio, onStat
     toggle.disabled = true;
     try {
       if (playing) {
-        await player.pause();
+        await run(() => player.pause());
         if (active()) { setPlaying(false); onState('videoPaused', 'paused'); }
       } else {
         void player.resume().catch(failed);
-        await player.play(options);
+        await run(() => player.play(options));
         if (active()) { setPlaying(true); onState('videoPlaying', 'playing'); }
       }
     } catch { failed(); }
     finally { toggle.disabled = false; }
   }, {signal});
   seek.addEventListener('change', () => {
-    void player.seek(BigInt(Math.round(Number(seek.value) * 1000))).catch(failed);
+    const timestamp = BigInt(Math.round(Number(seek.value) * 1000));
+    void run(() => player.seek(timestamp)).catch(failed);
   }, {signal});
   volume.addEventListener('input', () => player.setVolume(Number(volume.value)), {signal});
-  await player.load(source, {ext, http:{credentials:'same-origin',referrerPolicy:'no-referrer'}});
+  await run(() => player.load(input));
   signal.throwIfAborted();
   seek.max = String(Number(player.getDuration()) / 1000);
   observer = new ResizeObserver(() => {
@@ -132,5 +205,5 @@ export async function playFallback({card, source, ext, signal, takeAudio, onStat
   seek.disabled = !(Number(seek.max) > 0);
   if (focus && document.activeElement === document.body) toggle.focus({preventScroll:true});
   setPlaying(true);
-  await player.play(options);
+  await run(() => player.play(options));
 }

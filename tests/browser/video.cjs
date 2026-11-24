@@ -38,7 +38,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(match){
    assert.equal(u.search,'');const ref=match[1];state.reads.set(ref,count(ref)+1);if(ref===bad&&state.badUnavailable)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});
    const body=state.corrupt?Buffer.from('not a supported video container'):state.hevc?hevc:bytes;let start=0,end=body.length-1,status=200;
-   if(req.headers.range){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}
+   if(req.headers.range&&!state.ignoreRange){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}
    res.setHeader('Content-Type',state.hevc?'video/x-matroska':'video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition','inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
@@ -104,6 +104,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   state.hevc=true;
   await page.goto(base+'/?section=media&lang=en');
   assert.equal(await page.evaluate(()=>performance.getEntriesByType('resource').filter(e=>e.name.includes('/libmedia/')).length),0);
+  // Leave while the first codec is still in flight, then replay the same file.
+  let releaseCodec, requestedCodec;
+  const heldCodec=new Promise(resolve=>{releaseCodec=resolve});
+  const codecStarted=new Promise(resolve=>{requestedCodec=resolve});
+  await page.route('**/decode/hevc-simd.wasm',async route=>{
+   requestedCodec();await heldCodec;await route.continue().catch(()=>{});
+  },{times:1});
+  await card(good).locator('[data-video-play]').click();
+  await Promise.race([codecStarted,page.waitForTimeout(9000).then(()=>{throw Error('HEVC decoder was not requested')})]);
+  await card(good).evaluate(c=>window.OieVideos.release(c));
+  releaseCodec();
   await card(good).locator('[data-video-play]').click();
   const seek=card(good).locator('[data-fallback-seek]'),toggle=card(good).locator('[data-fallback-toggle]');
   await until(()=>card(good).evaluate(c=>!!c.querySelector('canvas') && c.querySelector('[data-video-status]').dataset.state==='playing'),'real HEVC fallback frame');
@@ -114,8 +125,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await until(()=>seek.evaluate(e=>Number(e.value)>2),'fallback seek and resume');
   await page.evaluate(()=>window.OieVideos.release(document.body));
   await until(()=>card(good).evaluate(c=>!c.querySelector('canvas')&&!c.querySelector('[data-video-cover]').hidden),'release fallback');
+  state.ignoreRange=true;
   await card(good).locator('[data-video-play]').click();
   await until(()=>card(good).evaluate(c=>!!c.querySelector('canvas')&&c.querySelector('[data-video-status]').dataset.state==='playing'),'fallback replay after cleanup');
+  state.ignoreRange=false;
   state.hevc=false;
   findings.push('HEVC/FLAC Matroska presents frames, pauses, seeks and replays using on-demand local decoders.');
   state.corrupt=true;await page.setViewportSize({width:390,height:844});await page.goto(base+'/?section=media&lang=pt-BR&theme=light');const beforeUnsupported=count(good);await card(good).locator('[data-video-play]').click();await until(async()=>await card(good).locator('[data-video-status]').getAttribute('data-state')==='failed','unsupported video codec feedback');assert.equal(await card(good).locator('[data-video-status]').isVisible(),false);assert.equal(await card(good).locator('[data-video-status]').textContent(),'');await until(async()=>await alerts.count()===1,'Portuguese unsupported video toast');assert.equal(await alerts.locator('[x-text="notification.message"]').textContent(),'Este vídeo não pode ser reproduzido neste navegador.');assert(await alerts.getByRole('button',{name:'Fechar',exact:true}).isVisible());assert(count(good)>beforeUnsupported);assert.equal((await card(good).locator('[data-video-retry]').textContent()).trim(),'Tentar vídeo novamente');
