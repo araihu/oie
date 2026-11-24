@@ -26,6 +26,7 @@ var errArchiveCursor = errors.New("archive cursor expired")
 var errUnstable = errors.New("archive not stable")
 
 type archiveMessage struct {
+	Encrypted *struct{} `xml:"eu.siacs.conversations.axolotl encrypted"`
 	stanza.Message
 	fileSharingMetadata
 	replyMetadata
@@ -101,6 +102,9 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 		q.FirstAt, q.FirstID = at.UTC(), r.ID
 	}
 	q.LastAt, q.LastID = at.UTC(), r.ID
+	if e.omemoDevice != nil && q.Scope == e.account.Address {
+		return nil
+	}
 	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.archiveTrust)
 	if err != nil {
 		q.Err = err
@@ -123,6 +127,9 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 }
 func archivedIncoming(account domain.Account, scope string, r *archiveResult, trust archiveTrust) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
+	if msg != nil && msg.Encrypted != nil {
+		return application.Incoming{}, false, nil
+	}
 	withdrawal := msg != nil && (len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 || len(msg.LegacyTombstones) != 0)
 	if withdrawal {
 		in, ok := archivedRoomModeration(account, scope, r)

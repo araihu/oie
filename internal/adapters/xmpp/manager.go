@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
@@ -38,6 +39,9 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
+	omemoDevice         *omemo.Device
+	omemoRefresh        chan struct{}
+	omemoPeers          chan string
 	account             domain.Account
 	config              configuration
 	workerStopped       bool
@@ -98,6 +102,7 @@ type entry struct {
 	initialPeerPresence  map[string]map[string]peerResource
 }
 type Manager struct {
+	omemoDir        string
 	diagnostics     *diagnostics.Logger
 	dir             string
 	roots           *x509.CertPool
@@ -255,6 +260,12 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	e := &entry{detailsWake: make(chan struct{}, 1), avatarWake: make(chan struct{}, 1), accountAvatarGate: avatarGate, avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
+	var deviceErr error
+	if cfg.Enabled && m.omemoDir != "" {
+		e.omemoDevice, deviceErr = omemo.Open(filepath.Join(m.omemoDir, string(a.ID), "device.json"))
+		e.omemoRefresh = make(chan struct{}, 1)
+		e.omemoPeers = make(chan string, 8)
+	}
 	m.entries[a.ID] = e
 	m.workers.Add(1)
 	go func() {
@@ -266,6 +277,10 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 		}()
 		if !cfg.Enabled {
 			_ = m.publish(ctx, e, "not_connected", "", false)
+			return
+		}
+		if deviceErr != nil {
+			_ = m.publish(ctx, e, "not_connected", "protocol_unavailable", true)
 			return
 		}
 		m.run(ctx, e)
@@ -329,6 +344,11 @@ func (m *Manager) ForgetConnection(ctx context.Context, a domain.Account) error 
 	if old := m.entries[a.ID]; old != nil {
 		old.stop()
 		delete(m.entries, a.ID)
+	}
+	if m.omemoDir != "" {
+		if err := os.RemoveAll(filepath.Join(m.omemoDir, string(a.ID))); err != nil {
+			return err
+		}
 	}
 	dir, err := os.Open(m.dir)
 	if err != nil {
@@ -418,7 +438,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			var show string
 			show, err = m.configuredPresence(announceCtx, e.account.ID)
 			if err == nil {
-				err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show)))
+				err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show, m.omemoDir != "")))
 			}
 			if err == nil {
 				e.presenceMu.Lock()
@@ -506,6 +526,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if err == nil {
 				if serving == nil {
 					serving = startServing()
+				}
+				if m.omemoDir != "" {
+					m.workers.Add(1)
+					go func() { defer m.workers.Done(); m.omemoPublishLoop(historyCtx, e, session) }()
 				}
 				m.workers.Add(5)
 				go func() { defer m.workers.Done(); m.presenceLoop(historyCtx, e, session, presenceWake) }()
@@ -758,6 +782,10 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
 	}
+	protected := m.omemoDir != "" && out.Kind != "room"
+	if protected && (out.Correction != nil || out.Reaction != nil || out.Reply != nil || len(out.Attachments) > 0 || len(out.Mentions) > 0) {
+		return application.Failed
+	}
 	var attachmentBody string
 	if len(out.Attachments) != 0 {
 		if out.RecordWireAttempt == nil {
@@ -782,7 +810,18 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if err != nil {
 		return application.Failed
 	}
-	payload.ChatState = m.outgoingChatState(ctx, e, a, out)
+	if protected {
+		env, err := m.encryptDirect(ctx, e, session, out.Address, out.OriginalText)
+		if err != nil {
+			return application.NotSent
+		}
+		payload.Body = ""
+		payload.Encrypted = &env
+		payload.Store = &storeHint{}
+		payload.Encryption = &encryptionMarker{Namespace: omemo.Namespace, Name: "OMEMO"}
+	} else {
+		payload.ChatState = m.outgoingChatState(ctx, e, a, out)
+	}
 	if len(payload.Mentions) > 0 && !m.roomAllowsMentionReferences(ctx, e, session, out) {
 		payload.Mentions = nil
 	}
@@ -839,7 +878,9 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		defer cancel()
 	}
 	e.mu.Lock()
-	trackCorrectionSource(e, a, out)
+	if !protected {
+		trackCorrectionSource(e, a, out)
+	}
 	if payload.ChatState != nil {
 		peer, _ := e.typingPeer(out.Address)
 		peer.offered = true
@@ -927,9 +968,10 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			roomModerationMetadata
 			typingMetadata
 			displayedMarkerMetadata
-			Subject     *string        `xml:"jabber:client subject"`
-			Body        string         `xml:"jabber:client body"`
-			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
+			Encrypted   *omemo.Envelope `xml:"eu.siacs.conversations.axolotl encrypted"`
+			Subject     *string         `xml:"jabber:client subject"`
+			Body        string          `xml:"jabber:client body"`
+			Archive     *archiveResult  `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
 				Items struct {
 					Node string `xml:"node,attr"`
@@ -956,6 +998,15 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
+		}
+		if msg.Encrypted != nil {
+			if m.omemoDir == "" || msg.MUC != nil || msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage || msg.From.Localpart() == "" || msg.To.String() != "" && msg.To.Bare().String() != e.account.Address {
+				return nil
+			}
+			return m.receiveEncrypted(ctx, e, msg.Message, *msg.Encrypted)
+		}
+		if m.omemoDir != "" && (msg.Type == "" || msg.Type == stanza.ChatMessage || msg.Type == stanza.NormalMessage) {
+			return nil
 		}
 		if handled, err := m.receiveRoomInvitation(ctx, e, msg.Message, msg.MUC, msg.DirectInvitations); handled {
 			return err
@@ -1112,8 +1163,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			reply = iq.Result(nil)
 		}
 		if query.Disco != nil && iq.Type == stanza.GetIQ {
-			info := clientInfo()
-			if query.Disco.Node == "" || query.Disco.Node == avatarCaps().Node+"#"+avatarCaps().Ver {
+			info := localClientInfo(m.omemoDir != "")
+			caps := clientCaps(info)
+			if query.Disco.Node == "" || query.Disco.Node == caps.Node+"#"+caps.Ver {
 				info.Node = query.Disco.Node
 				reply = iq.Result(info.TokenReader())
 			} else {

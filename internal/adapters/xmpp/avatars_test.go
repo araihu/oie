@@ -54,7 +54,7 @@ func TestOwnPEPNotificationsAndCapabilityDiscovery(t *testing.T) {
 	if _, ok := e.avatarDirty["alice@localhost"]; !ok {
 		t.Fatal("own server PEP notification ignored")
 	}
-	caps := avatarCaps()
+	caps := clientCaps(clientInfo())
 	node := caps.Node + "#" + caps.Ver
 	reply := handle(`<iq xmlns="jabber:client" type="get" id="caps" from="localhost"><query xmlns="http://jabber.org/protocol/disco#info" node="` + node + `"/></iq>`)
 	var response struct {
@@ -86,7 +86,7 @@ func TestOnlyKnownProfileIdentitiesCanInvalidateAvatar(t *testing.T) {
 	if _, ok := e.avatarDirty["bob@localhost"]; !ok {
 		t.Fatal("known peer update ignored")
 	}
-	caps := avatarCaps()
+	caps := clientCaps(clientInfo())
 	if caps.Ver == "" || caps.Ver != clientInfo().Hash(sha1.New()) {
 		t.Fatal("entity caps mismatch")
 	}

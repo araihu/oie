@@ -2,6 +2,9 @@
 
 [Open and share diagnostic logs](diagnostics.md) for desktop, Docker, or Helm.
 
+For the source-build preview of encrypted direct messages with Gajim and
+Conversations, see [local OMEMO profiles and device verification](local-omemo.md).
+
 ## Run with Docker
 
 The [GHCR package](https://github.com/araihu/oie/pkgs/container/oie) runs the

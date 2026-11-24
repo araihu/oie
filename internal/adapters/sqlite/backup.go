@@ -77,6 +77,11 @@ func WriteProfileBackup(ctx context.Context, dir string, dst io.Writer, includeM
 
 func writeBackup(ctx context.Context, source *sql.DB, dir string, dst io.Writer, includeMedia bool) error {
 	private := filepath.Join(dir, "private")
+	if _, err := os.Lstat(filepath.Join(private, "omemo")); err == nil {
+		return errors.New("encrypted profiles require encrypted history backup")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	if err := ensureBackupDirectory(private); err != nil {
 		return err
 	}

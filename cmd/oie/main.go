@@ -29,6 +29,8 @@ func run() error {
 	if len(os.Args) > 1 {
 		var err error
 		switch os.Args[1] {
+		case "omemo":
+			err = runOMEMO(os.Args[2:], os.Stdout)
 		case "auth":
 			err = runAuth(ctx, os.Args[2:], os.Stdout)
 		case "backup":
