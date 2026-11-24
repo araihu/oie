@@ -13,7 +13,7 @@ type OMEMOArchiveHost interface {
 }
 
 type omemoArchiveRepository interface {
-	RetainedOMEMO(ctx context.Context, account domain.ID, address, providerID string, own bool) (bool, error)
+	RetainedOMEMO(ctx context.Context, account domain.ID, kind, address, providerID string, own bool) (bool, error)
 }
 
 func (e *Engine) RetainedOMEMO(ctx context.Context, in Incoming, legacyID string) (bool, error) {
@@ -21,9 +21,9 @@ func (e *Engine) RetainedOMEMO(ctx context.Context, in Incoming, legacyID string
 	if !ok {
 		return false, nil
 	}
-	retained, err := r.RetainedOMEMO(ctx, in.AccountID, in.Address, in.ProviderID, in.IsOwn)
+	retained, err := r.RetainedOMEMO(ctx, in.AccountID, in.Kind, in.Address, in.ProviderID, in.IsOwn)
 	if err != nil || retained || legacyID == "" || len(legacyID) > 4096 {
 		return retained, err
 	}
-	return r.RetainedOMEMO(ctx, in.AccountID, in.Address, legacyID, in.IsOwn)
+	return r.RetainedOMEMO(ctx, in.AccountID, in.Kind, in.Address, legacyID, in.IsOwn)
 }

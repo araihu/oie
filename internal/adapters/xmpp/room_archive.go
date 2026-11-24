@@ -139,6 +139,13 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		return result, nil
 	}
 	capability, err := m.roomArchiveSupport(sessionCtx, e, s, c.Address)
+	if err == nil && capability.textSearch && e.omemoDevice != nil {
+		encrypted, err := e.omemoDevice.RoomEncryption(c.Address)
+		if err != nil {
+			return result, err
+		}
+		capability.textSearch = !encrypted
+	}
 	p := &result.Archive.RoomArchiveProgress
 	availability, search := "supported", "unsupported"
 	switch {

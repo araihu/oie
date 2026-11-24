@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -793,10 +794,16 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
 	}
-	if out.DirectEncryption == "omemo" && m.omemoDir == "" {
+	protected := out.DirectEncryption == "omemo" || m.omemoDir != "" && out.Kind != "room" && out.DirectEncryption != "plain"
+	if protected && e.omemoDevice == nil {
 		return application.NotSent
 	}
-	protected := m.omemoDir != "" && out.Kind != "room" && out.DirectEncryption != "plain"
+	if out.Kind == "room" && e.omemoDevice != nil {
+		enabled, err := e.omemoDevice.RoomEncryption(out.Address)
+		if err != nil || enabled && !protected {
+			return application.NotSent
+		}
+	}
 	if protected && (out.Correction != nil || out.Reaction != nil || out.Reply != nil || len(out.Mentions) > 0) {
 		return application.Failed
 	}
@@ -830,12 +837,37 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		return application.Failed
 	}
 	payloads := []outboundMessage{payload}
+	var roomAuthority roomOMEMOAuthority
 	if protected {
 		bodies := encryptedFileURLs
 		if strings.TrimSpace(out.OriginalText) != "" {
 			bodies = append([]string{out.OriginalText}, bodies...)
 		}
-		envelopes, err := m.encryptDirect(ctx, e, session, out.Address, bodies)
+		var envelopes []omemo.Envelope
+		if out.Kind == "room" {
+			roomCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
+			defer cancel()
+			var members []string
+			var targets []omemo.Target
+			roomAuthority, members, targets, err = m.prepareRoomOMEMO(roomCtx, e, session, out.Address)
+			if err != nil {
+				return application.NotSent
+			}
+			envelopes, err = encryptOMEMOBodies(roomCtx, e.omemoDevice, targets, bodies)
+			if err != nil {
+				return application.NotSent
+			}
+			rechecked, err := m.discoverRoomOMEMO(roomCtx, e, session, out.Address)
+			if err != nil || rechecked != roomAuthority {
+				return application.NotSent
+			}
+			current, err := m.roomOMEMOMembers(roomCtx, e, session, out.Address)
+			if err != nil || !slices.Equal(members, current) {
+				return application.NotSent
+			}
+		} else {
+			envelopes, err = m.encryptDirect(ctx, e, session, out.Address, bodies)
+		}
 		if err != nil || len(envelopes) == 0 {
 			return application.NotSent
 		}
@@ -860,6 +892,12 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	e.sendMu.Lock()
 	defer e.sendMu.Unlock()
+	if out.Kind == "room" && !protected && e.omemoDevice != nil {
+		enabled, err := e.omemoDevice.RoomEncryption(out.Address)
+		if err != nil || enabled {
+			return application.NotSent
+		}
+	}
 	e.mu.Lock()
 	if e.session != session || e.raw != raw || e.state.State != "connected" {
 		e.mu.Unlock()
@@ -880,6 +918,13 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 				return application.Failed
 			}
 			return application.NotSent
+		}
+		if protected {
+			authority, ok := roomOMEMOAuthorityLocked(e, session, out.Address)
+			if !ok || authority != roomAuthority {
+				e.mu.Unlock()
+				return application.NotSent
+			}
 		}
 		payload.Mentions = roomMentionReferences(slot, payload.Mentions)
 		mentions = outgoingMentionProof(payload.Mentions)
@@ -1044,6 +1089,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
 		}
+		if msg.Type == stanza.GroupChatMessage && msg.Encrypted != nil {
+			return m.receiveRoomOMEMO(ctx, e, msg.Message, msg.replyMetadata, *msg.Encrypted, msg.Delay.Stamp, msg.Delay.From)
+		}
 		if m.omemoDir != "" && msg.Encrypted != nil {
 			if msg.MUC != nil || msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage || msg.From.Localpart() == "" || msg.To.String() != "" && msg.To.Bare().String() != e.account.Address {
 				return nil
@@ -1112,6 +1160,12 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Delay.Stamp == "" && msg.Delay.From == "" {
 			e.captureTyping(msg.Message, msg.Body, msg.typingMetadata)
+		}
+		if msg.Type == stanza.GroupChatMessage && e.omemoDevice != nil {
+			enabled, err := e.omemoDevice.RoomEncryption(msg.From.Bare().String())
+			if err != nil || enabled {
+				return err
+			}
 		}
 		if len(msg.Reactions) != 0 {
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)

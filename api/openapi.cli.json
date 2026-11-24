@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.44.0",
+    "version": "0.45.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -6249,6 +6249,92 @@
         "x-cli-name": "get"
       }
     },
+    "/api/v1/conversations/{conversationId}/omemo": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getRoomOmemo",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Review encryption for a private room",
+        "description": "Lists the current eligible room members when their affiliations are available to the connected account.",
+        "responses": {
+          "200": {
+            "description": "Room encryption preference and member addresses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomOmemo"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setRoomOmemo",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Change encryption for new room messages",
+        "description": "Protect new sends in a confirmed members-only non-anonymous room. Accepted sends keep their selected protection.",
+        "requestBody": {
+          "required": true,
+          "description": "Desired room encryption.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Require OMEMO for new room sends.",
+                    "example": true
+                  }
+                }
+              },
+              "example": {
+                "enabled": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Saved room policy."
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{messageId}/omemo-attachments/{index}": {
       "parameters": [
         {
@@ -7831,7 +7917,8 @@
               "0.41.0",
               "0.42.0",
               "0.43.0",
-              "0.44.0"
+              "0.44.0",
+              "0.45.0"
             ]
           },
           "omemoEnabled": {
@@ -11228,6 +11315,52 @@
           "at": "2026-11-13T15:00:00Z"
         }
       },
+      "RoomOmemo": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Room policy, verified configuration and complete affiliation list when available.",
+        "required": [
+          "address",
+          "enabled",
+          "eligible",
+          "members"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Bare room address.",
+            "example": "team@rooms.example.org"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Saved room encryption preference.",
+            "example": true
+          },
+          "eligible": {
+            "type": "boolean",
+            "description": "The joined room is members-only and non-anonymous.",
+            "example": true
+          },
+          "members": {
+            "type": "array",
+            "description": "Current affiliated account addresses.",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "alice@example.org"
+            ]
+          }
+        },
+        "example": {
+          "address": "team@rooms.example.org",
+          "enabled": true,
+          "eligible": true,
+          "members": [
+            "alice@example.org"
+          ]
+        }
+      },
       "OmemoDevices": {
         "type": "object",
         "description": "Public OMEMO keys for an account or direct peer.",
@@ -11362,7 +11495,7 @@
           },
           "omemo": {
             "type": "boolean",
-            "description": "The direct message was received through OMEMO or queued with an immutable OMEMO send intent."
+            "description": "The message was received through OMEMO or accepted with an immutable OMEMO send intent."
           },
           "retraction": {
             "$ref": "#/components/schemas/MessageRetraction"

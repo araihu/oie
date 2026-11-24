@@ -1581,8 +1581,11 @@ type ViewBrowserOmemoParams struct {
 	// Account Account being reviewed.
 	Account openapi_types.UUID `form:"account" json:"account"`
 
-	// Chat Direct conversation being reviewed.
+	// Chat Direct conversation or room being reviewed.
 	Chat *openapi_types.UUID `form:"chat,omitempty" json:"chat,omitempty"`
+
+	// Peer Account whose devices are being reviewed from the room member list.
+	Peer *string `form:"peer,omitempty" json:"peer,omitempty"`
 }
 
 // DecideBrowserOmemoParams defines parameters for DecideBrowserOmemo.
@@ -1590,8 +1593,11 @@ type DecideBrowserOmemoParams struct {
 	// Account Account being reviewed.
 	Account openapi_types.UUID `form:"account" json:"account"`
 
-	// Chat Direct conversation being reviewed.
+	// Chat Direct conversation or room being reviewed.
 	Chat *openapi_types.UUID `form:"chat,omitempty" json:"chat,omitempty"`
+
+	// Peer Account whose devices are being reviewed from the room member list.
+	Peer *string `form:"peer,omitempty" json:"peer,omitempty"`
 }
 
 // RefreshWorkspaceParams defines parameters for RefreshWorkspace.

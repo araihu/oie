@@ -40,7 +40,8 @@ paths:
   /ui/omemo:
     parameters:
     - {name: account, in: query, required: true, schema: {type: string, format: uuid}, description: Account being reviewed.}
-    - {name: chat, in: query, schema: {type: string, format: uuid}, description: Direct conversation being reviewed.}
+    - {name: chat, in: query, schema: {type: string, format: uuid}, description: Direct conversation or room being reviewed.}
+    - {name: peer, in: query, schema: {type: string}, description: Account whose devices are being reviewed from the room member list., example: alice@example.org}
     get:
       operationId: viewBrowserOmemo
       tags: [Accounts]

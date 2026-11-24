@@ -9,7 +9,7 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-func (s *Store) RetainedOMEMO(ctx context.Context, account domain.ID, address, providerID string, own bool) (bool, error) {
+func (s *Store) RetainedOMEMO(ctx context.Context, account domain.ID, kind, address, providerID string, own bool) (bool, error) {
 	chat, err := s.read.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(account), Address: address})
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
@@ -18,7 +18,7 @@ func (s *Store) RetainedOMEMO(ctx context.Context, account domain.ID, address, p
 		return false, err
 	}
 	conversation, err := decodeConversation(chat)
-	if err != nil || conversation.Kind != "direct" {
+	if err != nil || conversation.Kind != kind {
 		return false, err
 	}
 	row, err := s.read.FindProviderMessage(ctx, dbgen.FindProviderMessageParams{

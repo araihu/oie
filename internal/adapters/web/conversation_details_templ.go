@@ -401,7 +401,7 @@ func chatInfoContent(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if v.OmemoEnabled && v.Selected.Kind == "direct" {
+			if v.OmemoEnabled && (v.Selected.Kind == "direct" || v.Selected.Kind == "room") {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<a class=\"oie-info-entry\" target=\"_blank\" rel=\"noopener\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err

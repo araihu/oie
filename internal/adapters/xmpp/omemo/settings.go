@@ -96,3 +96,25 @@ func (d *Device) RepairSession(peer string, id uint32, fp string) error {
 		return nil
 	})
 }
+
+func (d *Device) RoomEncryption(room string) (bool, error) {
+	s, err := d.read()
+	if err != nil {
+		return false, err
+	}
+	return s.EncryptedRooms[room], nil
+}
+
+func (d *Device) SetRoomEncryption(room string, enabled bool) error {
+	return d.update(func(s *state) error {
+		if !enabled {
+			delete(s.EncryptedRooms, room)
+			return nil
+		}
+		if s.EncryptedRooms == nil {
+			s.EncryptedRooms = map[string]bool{}
+		}
+		s.EncryptedRooms[room] = true
+		return nil
+	})
+}

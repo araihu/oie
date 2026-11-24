@@ -125,7 +125,11 @@ func (m *Manager) omemoPublishLoop(ctx context.Context, e *entry, s *mx.Session)
 						if ctx.Err() != nil {
 							break
 						}
-						_ = m.acceptEncrypted(ctx, e, p)
+						if p.Room != "" {
+							_ = m.acceptRoomOMEMO(ctx, e, p)
+						} else {
+							_ = m.acceptEncrypted(ctx, e, p)
+						}
 					}
 				}
 			case <-refresh.C:
@@ -152,10 +156,13 @@ func (m *Manager) encryptDirect(ctx context.Context, e *entry, s *mx.Session, pe
 	if err != nil {
 		return nil, err
 	}
-	targets = append(targets, siblings...)
+	return encryptOMEMOBodies(ctx, e.omemoDevice, append(targets, siblings...), bodies)
+}
+
+func encryptOMEMOBodies(ctx context.Context, device *omemo.Device, targets []omemo.Target, bodies []string) ([]omemo.Envelope, error) {
 	payloads := make([]omemo.Envelope, len(bodies))
 	for i, body := range bodies {
-		envelope, err := e.omemoDevice.Encrypt(ctx, targets, body)
+		envelope, err := device.Encrypt(ctx, targets, body)
 		if err != nil {
 			return nil, err
 		}

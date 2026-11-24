@@ -10,6 +10,7 @@ import (
 	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
 
@@ -52,6 +53,35 @@ func archiveOMEMO(account domain.Account, r *archiveResult, at time.Time) (archi
 	}, true
 }
 
+func archiveRoomOMEMO(account domain.Account, query *archiveQuery, r *archiveResult, at time.Time) (archivedOMEMO, bool) {
+	msg := r.Forwarded.Message
+	if msg == nil || (msg.Encrypted == nil && msg.OMEMO2 == nil) || msg.Type != stanza.GroupChatMessage ||
+		msg.From.Bare().String() != query.Scope || msg.From.Resourcepart() == "" {
+		return archivedOMEMO{}, false
+	}
+	// The authenticated room supplies exactly one original affiliation,JID pair.
+	// A current nickname is not evidence for a previous archived message.
+	record := archivedOMEMO{in: application.Incoming{AccountID: account.ID, Kind: "room", Address: query.Scope,
+		SenderName: msg.From.Resourcepart(), Historical: true, Encrypted: true, CreatedAt: at,
+		ProviderID: msg.ID, ArchiveScope: query.Scope, ArchiveID: r.ID}}
+	if len(msg.Users) == 1 && len(msg.Users[0].Items) == 1 {
+		item := msg.Users[0].Items[0]
+		if author, err := jid.Parse(item.JID); err == nil && author.Localpart() != "" && author.Bare().String() != query.Scope && omemoAffiliation(item.Affiliation) {
+			record.sender = author.Bare().String()
+			record.in.IsOwn = record.sender == account.Address
+			record.in.SenderAddress = record.sender
+			if query.SIDVerified {
+				record.in.References = []domain.MessageReference{{Scope: "room:" + query.Scope, Author: msg.From.String(), ID: r.ID}}
+			}
+		}
+	}
+	record.envelope = msg.Encrypted
+	if record.envelope != nil {
+		record.size = record.envelope.Size()
+	}
+	return record, true
+}
+
 func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archivePage, now time.Time) (bool, error) {
 	if len(page.Query.OMEMO) == 0 {
 		return false, nil
@@ -68,6 +98,14 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 			return false, err
 		}
 		in, env := record.in, record.envelope
+		if page.Query.RoomOMEMO {
+			e.mu.RLock()
+			authority, ok := roomOMEMOAuthorityLocked(e, page.omemoSession, in.Address)
+			e.mu.RUnlock()
+			if !ok || authority.slot != page.omemoAuthority.slot || authority.revision != page.omemoAuthority.revision {
+				return false, errArchive
+			}
+		}
 		if env != nil && in.IsOwn && env.Header.From == self {
 			// Sent by this installation, which stores its cleartext on acceptance.
 			continue
@@ -91,7 +129,7 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 		if err := m.checkArchiveRetention(ctx, in.AccountID); err != nil {
 			return false, err
 		}
-		if env == nil {
+		if env == nil || record.sender == "" {
 			gaps = true
 			continue
 		}

@@ -1038,6 +1038,7 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-omemo-settings code {display:block;user-select:all;padding:.7rem;background:var(--oie-raised);border-radius:.5rem;margin-block:.65rem}
 .oie-omemo-settings input:not([type="hidden"]) {padding:.5rem;border:1px solid var(--oie-border);border-radius:.4rem;max-width:100%;min-width:0}
 .oie-omemo-settings form>a {margin-inline-start:.75rem;text-decoration:underline}
+.oie-omemo-settings li>a {display:inline-flex;align-items:center;min-height:2.75rem;text-decoration:underline}
 .oie-omemo-settings details>summary {cursor:pointer}
 .oie-omemo-settings img {max-width: 100%; height: auto}
 .oie-message-omemo {font-size: .75em; margin-inline-end: .3em}

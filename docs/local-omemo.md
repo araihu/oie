@@ -1,4 +1,4 @@
-# OMEMO direct messages (B16 preview)
+# OMEMO for direct chats and private rooms (B16 preview)
 
 This increment adds the legacy OMEMO wire format used by Gajim and Conversations
 (`eu.siacs.conversations.axolotl`) to local and hosted engines. Enable it once
@@ -103,6 +103,31 @@ records it can return. Oiê also applies its own retention policy.
 The archive import covers the legacy OMEMO namespace. In an OMEMO profile this
 pass selects encrypted direct messages. Rooms use their separate archive path.
 
+## Turn on OMEMO in a private room
+
+The room must restrict entry to members and let participants see one another's
+XMPP addresses. Join the room and open **OMEMO encryption** in its details.
+Select **Encrypt the next messages** and check the devices listed for each
+member. Verify every active device. The local and hosted engines encrypt for
+the complete membership, including members who are offline. The hosted engine
+uses the server identity, as in direct chats.
+
+The engine checks the configuration and current affiliations before sending.
+A queued encrypted message stays encrypted through retries. If the room
+configuration changes or a member has an unverified device, the encrypted send
+waits. This preview supports up to 64 members and 256 recipient devices.
+Other room clients each control their own encryption setting. After importing
+an identity into a new profile, enable OMEMO for each private room again.
+
+Private rooms support encrypted text and files while joined. Compatible
+archives can return encrypted messages after reconnecting, provided the archive
+supplies the sender's original affiliation and XMPP address and Oiê has the
+keys. Oiê uses the archive timestamp. An unavailable message can hold the
+affected history page open for retry after verification.
+Search uses the content recovered by Oiê.
+[XEP-0384](https://xmpp.org/extensions/xep-0384.html#usecases-muc) ·
+[XEP-0045](https://xmpp.org/extensions/xep-0045.html).
+
 ## Migrate an identity or recover history
 
 Stop the source engine. Set `OIE_DATA_DIR` to its profile. The commands below
@@ -202,3 +227,15 @@ engine recovered both inbound attachment messages from XMPP history after
 the clients sent them while it was stopped. A Chromium browser downloaded
 the correct original files in both roles. Prosody stored eight encrypted
 file blobs, and its XMPP archive contained no download URI or key.
+
+The private room fixture used Prosody 13.0.4 with a members-only room,
+visible XMPP addresses and MAM. Gajim 2.4.3 and Conversations 2.21.4+free
+both exchanged live encrypted text with the local and hosted engines.
+The hosted engine also recovered both clients' messages sent while Oiê was
+stopped, and Chromium showed one OMEMO-badged message per archived reply.
+Both clients matched the bytes of an encrypted PNG sent by hosted Oiê.
+Hosted Oiê matched the bytes of an encrypted PNG sent by Gajim. Changing the room to
+show addresses only to moderators held the next protected send in the
+queue. Restoring visible addresses delivered the same message with OMEMO.
+The room archive stored encrypted envelopes without the protected text
+or attachment links.

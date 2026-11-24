@@ -40,7 +40,8 @@ type archiveMessage struct {
 	Users             []struct {
 		Invites []struct{} `xml:"invite"`
 		Items   []struct {
-			JID string `xml:"jid,attr"`
+			JID         string `xml:"jid,attr"`
+			Affiliation string `xml:"affiliation,attr"`
 		} `xml:"item"`
 	} `xml:"http://jabber.org/protocol/muc#user x"`
 }
@@ -67,6 +68,7 @@ type archiveQuery struct {
 	Messages        []application.Incoming
 	OMEMO           []archivedOMEMO
 	RecoverOMEMO    bool
+	RoomOMEMO       bool
 	With            string
 	FirstAt, LastAt time.Time
 	Start, End      time.Time
@@ -117,6 +119,18 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 				} else {
 					q.OMEMO = append(q.OMEMO, record)
 				}
+			}
+		}
+		return nil
+	}
+	if q.RoomOMEMO {
+		record, ok := archiveRoomOMEMO(e.account, q, r, at)
+		if ok {
+			q.Bytes += record.size
+			if q.Bytes > 8<<20 {
+				q.Err = errArchive
+			} else {
+				q.OMEMO = append(q.OMEMO, record)
 			}
 		}
 		return nil

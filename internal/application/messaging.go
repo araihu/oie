@@ -453,6 +453,17 @@ func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain
 			}
 		}
 	}
+	if c.Kind == "room" {
+		if p, ok := e.protocols.(RoomOMEMOProtocol); ok {
+			enabled, err := p.RoomEncryption(a, c.Address)
+			if err != nil {
+				return MessageResult{}, err
+			}
+			if enabled {
+				m.DirectEncryption = "omemo"
+			}
+		}
+	}
 	m, err = e.prepareComposition(ctx, a, c, m, in, review)
 	if err != nil {
 		return MessageResult{}, err
@@ -549,7 +560,7 @@ func (e *Engine) Receive(ctx context.Context, in Incoming) error {
 }
 
 func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
-	hasEncryptedFiles := in.Encrypted && in.Kind == "direct" && len(in.EncryptedAttachments) > 0 && len(in.EncryptedAttachments) <= MaxMessageAttachments
+	hasEncryptedFiles := in.Encrypted && (in.Kind == "direct" || in.Kind == "room") && len(in.EncryptedAttachments) > 0 && len(in.EncryptedAttachments) <= MaxMessageAttachments
 	if len(in.EncryptedAttachments) > 0 && !hasEncryptedFiles {
 		return ErrInvalid
 	}

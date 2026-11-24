@@ -28,7 +28,7 @@ templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat stri
 					<p>{ v.Text.OmemoHosted }</p>
 				}
 				if preview!=nil {
-					<form method="post" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
+					<form method="post" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
 						@omemoFields(v, "verify")
 						<h2>{ v.Text.OmemoCompare }</h2>
 						<p>{ state.Address } · { deviceNumber(preview.Id) }</p><code>{ fingerprintGroups(preview.Fingerprint) }</code>
@@ -37,11 +37,11 @@ templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat stri
 						@button.Button(button.WithType("submit")) {
 							{ v.Text.OmemoConfirm }
 						}
-						<a href={ templ.SafeURL(v.omemoHref(account, chat)) }>{ v.Text.DeleteDataCancel }</a>
+						<a href={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>{ v.Text.DeleteDataCancel }</a>
 					</form>
 				} else {
 					if chat!="" {
-						<form method="post" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
+						<form method="post" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
 							if state.Encrypted {
 								@omemoFields(v, "plaintext")
 								<p>{ v.Text.OmemoRequired }</p>
@@ -80,7 +80,7 @@ templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat stri
 									<img src={ fingerprintQR(trustURI(state.Address, d, false)) } alt="XEP-0434" width="220" height="220"/>
 								</details>
 							} else if d.Verified {
-								<form method="post" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
+								<form method="post" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
 									@omemoFields(v, "distrust")
 									<input type="hidden" name="device" value={ deviceNumber(d.Id) }/><input type="hidden" name="fingerprint" value={ d.Fingerprint }/>
 									@button.Button(button.WithType("submit")) {
@@ -93,7 +93,7 @@ templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat stri
 					if len(state.Devices)==0 {
 						<p>{ v.Text.OmemoNoDevices }</p>
 					}
-					<form method="post" enctype="multipart/form-data" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
+					<form method="post" enctype="multipart/form-data" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
 						@omemoFields(v, "review")
 						<h2>{ v.Text.OmemoCompare }</h2>
 						<label>{ v.Text.OmemoInput }<input name="candidate" autocomplete="off" spellcheck="false"/></label>
@@ -102,6 +102,51 @@ templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat stri
 							{ v.Text.OmemoReview }
 						}
 					</form>
+				}
+			</main>
+		</body>
+	</html>
+}
+
+templ roomOmemoSettings(v view, room engineapi.RoomOmemo, account, chat string) {
+	<!DOCTYPE html>
+	<html lang={ v.Locale } data-mode={ v.Theme } class={ templ.KV("dark", v.Theme == "dark") }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ v.Text.OmemoRoomTitle }</title>
+			@head.Dependencies(head.WithLocalRuntime())
+			<link rel="stylesheet" href={ templ.URL(versionedStylesheetURL("/ui/app.css", stylesheet)) }/>
+			<script src="/ui/theme.js"></script>
+		</head>
+		<body>
+			<main class="oie-omemo-settings">
+				<h1>{ v.Text.OmemoRoomTitle }</h1>
+				<p>{ room.Address }</p>
+				if room.Enabled {
+					<p>{ v.Text.OmemoRequired }</p>
+				}
+				if !room.Eligible || len(room.Members) == 0 {
+					<p>{ v.Text.OmemoRoomUnavailable }</p>
+				}
+				if room.Enabled || room.Eligible && len(room.Members) != 0 {
+					<form method="post" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
+						if room.Enabled {
+							@omemoFields(v, "plaintext")
+							@button.Button(button.WithType("submit")){ { v.Text.OmemoDisable } }
+						} else {
+							@omemoFields(v, "encrypt")
+							@button.Button(button.WithType("submit")){ { v.Text.OmemoEnable } }
+						}
+					</form>
+				}
+				if len(room.Members) != 0 {
+					<h2>{ v.Text.OmemoRoomMembers }</h2>
+					<ul>
+						for _, participant := range room.Members {
+							<li><a href={ templ.SafeURL(v.omemoMemberHref(account, participant)) }>{ participant }</a></li>
+						}
+					</ul>
 				}
 			</main>
 		</body>

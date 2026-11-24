@@ -51,17 +51,18 @@ type Device struct {
 }
 
 type state struct {
-	PlainPeers map[string]bool `json:",omitempty"`
-	Pending    []Pending       `json:",omitempty"`
-	Version    int
-	DeviceID   uint32
-	Secret     []byte
-	NextPreKey uint32
-	PreKeys    map[uint32][]byte
-	Signed     []byte
-	Observed   map[string]map[uint32]string `json:",omitempty"`
-	Verified   map[string]string
-	Sessions   map[string][]byte
+	EncryptedRooms map[string]bool `json:",omitempty"`
+	PlainPeers     map[string]bool `json:",omitempty"`
+	Pending        []Pending       `json:",omitempty"`
+	Version        int
+	DeviceID       uint32
+	Secret         []byte
+	NextPreKey     uint32
+	PreKeys        map[uint32][]byte
+	Signed         []byte
+	Observed       map[string]map[uint32]string `json:",omitempty"`
+	Verified       map[string]string
+	Sessions       map[string][]byte
 }
 
 func Open(path string) (*Device, error) {

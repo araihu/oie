@@ -14,18 +14,28 @@ import (
 // Pending holds only ciphertext until the user has compared the sender's key.
 type Pending struct {
 	Peer, StanzaID, Digest string
-	At                     time.Time
-	Envelope               Envelope
-	Bytes                  int
+	Room, Nickname         string
+
+	At       time.Time
+	Envelope Envelope
+	Bytes    int
 }
 
 func (d *Device) Hold(peer, id string, env Envelope, at time.Time) error {
+	return d.HoldPending(Pending{Peer: peer, StanzaID: id, Envelope: env, At: at})
+}
+
+func (d *Device) HoldPending(message Pending) error {
+	env := message.Envelope
 	raw, err := json.Marshal(env)
 	if err != nil {
 		return err
 	}
-	if len(raw) > 1<<20 || len(id) > 4096 || len(env.Header.Keys) > 256 || env.Header.From == 0 {
+	if len(raw) > 1<<20 || len(message.StanzaID) > 4096 || len(env.Header.Keys) > 256 || env.Header.From == 0 {
 		return ErrInvalid
+	}
+	if message.Room != "" {
+		raw = append([]byte(message.Room+"\x00"), raw...)
 	}
 	digest := sha256.Sum256(raw)
 	key := hex.EncodeToString(digest[:])
@@ -36,7 +46,7 @@ func (d *Device) Hold(peer, id string, env Envelope, at time.Time) error {
 		}
 		size := len(raw)
 		for _, p := range s.Pending {
-			if p.Peer == peer && p.Digest == key {
+			if p.Peer == message.Peer && p.Room == message.Room && p.Digest == key {
 				return nil
 			}
 			size += p.Bytes
@@ -44,7 +54,8 @@ func (d *Device) Hold(peer, id string, env Envelope, at time.Time) error {
 		if len(s.Pending) >= 128 || size > 2<<20 {
 			return ErrInvalid
 		}
-		s.Pending = append(s.Pending, Pending{Peer: peer, StanzaID: id, At: at, Envelope: env, Digest: key, Bytes: len(raw)})
+		message.Bytes, message.Digest = len(raw), key
+		s.Pending = append(s.Pending, message)
 		return nil
 	})
 }

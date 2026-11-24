@@ -11,6 +11,7 @@ import (
 )
 
 type roomConfiguration struct {
+	omemo      bool
 	revision   uint64
 	pending    bool
 	mode       string
@@ -65,6 +66,8 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 			slot.pendingOwnOccupantID = ""
 		}
 		configuration.pending, configuration.mode = false, mode
+		flags := managementFlags(info)
+		configuration.omemo = room && mode == application.RoomReactionsNonanonymous && flags.membersOnly && !flags.open
 		configuration.retraction = readRetractionSupport(info)
 		if e.roomConfigurations == nil {
 			e.roomConfigurations = make(map[string]roomConfiguration)

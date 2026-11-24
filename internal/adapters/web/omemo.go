@@ -152,11 +152,17 @@ func (s *Server) omemoPage(w http.ResponseWriter, r *http.Request) {
 	var peer *string
 	if chat != "" {
 		c, err := s.client.GetConversationWithResponse(ctx, chat)
-		if err != nil || c.JSON200 == nil || c.JSON200.Kind != "direct" || c.JSON200.AccountId != account {
+		if err != nil || c.JSON200 == nil || c.JSON200.AccountId != account {
 			http.NotFound(w, r)
 			return
 		}
+		if c.JSON200.Kind == "room" {
+			s.roomOmemoPage(w, r, v, account, chat)
+			return
+		}
 		peer = &c.JSON200.Address
+	} else if member := r.URL.Query().Get("peer"); member != "" {
+		peer = &member
 	}
 	var preview *engineapi.OmemoDevice
 	if r.Method == "POST" {
@@ -207,7 +213,7 @@ func (s *Server) omemoPage(w http.ResponseWriter, r *http.Request) {
 				body.Device = &id
 				body.Fingerprint = &fp
 			case "encrypt", "plaintext":
-				if peer == nil {
+				if peer == nil || chat == "" {
 					http.Error(w, v.Text.InvalidForm, http.StatusBadRequest)
 					return
 				}
@@ -224,7 +230,11 @@ func (s *Server) omemoPage(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, v.Text.OmemoMismatch, saved.StatusCode())
 				return
 			}
-			http.Redirect(w, r, v.omemoHref(account, chat), http.StatusSeeOther)
+			target := v.omemoHref(account, chat)
+			if chat == "" && peer != nil {
+				target = v.omemoMemberHref(account, *peer)
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
 			return
 		}
 	}
@@ -233,4 +243,15 @@ func (s *Server) omemoPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+func (v view) omemoMemberHref(account, peer string) string {
+	return v.omemoHref(account, "") + "&peer=" + url.QueryEscape(peer)
+}
+
+func (v view) omemoDeviceFormHref(account, chat, address string) string {
+	if chat == "" {
+		return v.omemoMemberHref(account, address)
+	}
+	return v.omemoHref(account, chat)
+}
+
 func deviceNumber(id int) string { return fmt.Sprint(id) }

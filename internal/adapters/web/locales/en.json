@@ -1,4 +1,7 @@
 {
+  "OmemoRoomTitle": "Room encryption",
+  "OmemoRoomUnavailable": "Join a members-only room with visible addresses to enable OMEMO.",
+  "OmemoRoomMembers": "Check member devices",
   "OmemoTitle": "OMEMO encryption",
   "OmemoHosted": "Your Oiê server holds the keys and can read these messages.",
   "OmemoRequired": "New messages require encryption.",

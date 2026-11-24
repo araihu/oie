@@ -28,6 +28,9 @@ type archivePageRequest struct {
 }
 
 type archivePage struct {
+	omemoEntry          *entry
+	omemoSession        *mx.Session
+	omemoAuthority      roomOMEMOAuthority
 	Query               *archiveQuery
 	First, Last         string
 	Complete            bool
@@ -85,11 +88,32 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 		}
 	}
 
-	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End, With: request.With, RecoverOMEMO: request.RecoverOMEMO}
+	var roomEncrypted bool
+	if e.omemoDevice != nil && scope != e.account.Address {
+		var err error
+		roomEncrypted, err = e.omemoDevice.RoomEncryption(scope)
+		if err != nil {
+			return archivePage{}, err
+		}
+		if roomEncrypted && request.Search != "" {
+			return archivePage{}, application.ErrProtocolUnavailable
+		}
+	}
+	var authority roomOMEMOAuthority
+	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End, With: request.With, RecoverOMEMO: request.RecoverOMEMO, RoomOMEMO: roomEncrypted}
 	if q.ID == "" {
 		return archivePage{}, errArchive
 	}
 	e.mu.RLock()
+	if roomEncrypted {
+		var ok bool
+		authority, ok = roomOMEMOAuthorityLocked(e, s, scope)
+		if !ok {
+			e.mu.RUnlock()
+			return archivePage{}, errArchive
+		}
+	}
+
 	e.historyMu.Lock()
 	if e.session != s || e.roomConfigurations[scope].pending {
 		e.historyMu.Unlock()
@@ -146,10 +170,20 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	if err := m.checkArchiveRetention(ctx, e.account.ID); err != nil {
 		return archivePage{}, err
 	}
-	return archivePage{Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend, ReactionAnchor: request.ReactionAnchor}, nil
+	return archivePage{omemoEntry: e, omemoSession: s, omemoAuthority: authority, Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend, ReactionAnchor: request.ReactionAnchor}, nil
 }
 
 func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error {
+	if page.Query.RoomOMEMO && len(page.Query.OMEMO) != 0 {
+		gaps, err := m.ingestOMEMOArchive(ctx, page.omemoEntry, page, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		if gaps {
+			return errOMEMOHistoryIncomplete
+		}
+		return nil
+	}
 	// XEP-0313 gives these results a chronological order even when several
 	// events have the same timestamp or the page was fetched backwards.
 	type tie struct {
