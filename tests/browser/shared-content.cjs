@@ -5,6 +5,7 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const engine=id(1),alpha=id(2),beta=id(3),chatA=id(4),chatB=id(5),revision=id(6),streams=new Set(),state={seq:0,mode:'normal',pending:true,catalogReads:[],downloads:new Map(),stars:new Map(),starEffects:0,unexpectedWrites:0,videoReads:0,documentPreviewReads:0};
+ const audio=await fs.readFile(path.join(__dirname,'fixtures/covered-tone.mp3'));
  const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8/x8AAwMCAO+aM3sAAAAASUVORK5CYII=','base64'),hash=createHash('sha256').update(image).digest('hex');
  const accounts=[{id:alpha,revisionId:revision,label:'Personal',address:'alice@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'},{id:beta,revisionId:revision,label:'Work',address:'work@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}];
  const chats=[{id:chatA,accountId:alpha,title:'Family',address:'family@fixture',kind:'room'},{id:chatB,accountId:beta,title:'Team',address:'team@fixture',kind:'direct'}].map(c=>({...c,revisionId:revision,updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false,lastMessage:'Shared reference'}));
@@ -63,7 +64,31 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   for(const chat of chats){if(u.pathname===`/api/v1/conversations/${chat.id}`)return send(200,chat);if(u.pathname===`/api/v1/conversations/${chat.id}/messages`)return send(200,{items:[...new Map(items.filter(i=>i.message.conversationId===chat.id).map(i=>[i.message.id,i.message])).values()].slice(0,50)});const context=u.pathname.match(new RegExp('^/api/v1/conversations/'+chat.id+'/messages/([^/]+)/context$'));if(context){const source=items.find(i=>i.message.id===context[1]&&i.message.conversationId===chat.id);return source?send(200,{targetId:source.message.id,items:[source.message],hasOlder:false,hasNewer:true}):send(404,{status:404})}}
   if(u.pathname.startsWith('/api/v1/media/')){res.setHeader('Content-Type','image/png');res.end(image);return}
-  const content=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);if(content){const item=items.find(item=>item.id===content[1]);if(item?.kind==='video')state.videoReads++;else if(item?.kind==='document'){assert.equal(req.headers.range,'bytes=0-65535');state.documentPreviewReads++}return send(503,{status:503})}
+  const content=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
+  if(content){
+   const item=items.find(item=>item.id===content[1]);
+   if(item?.kind==='audio'){
+    const match=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range||'');
+    const start=match?Number(match[1]):0;
+    const end=match?.[2]?Math.min(Number(match[2]),audio.length-1):audio.length-1;
+    if(start>end){
+     res.setHeader('Content-Range','bytes */'+audio.length);
+     return send(416,{status:416});
+    }
+    res.setHeader('Content-Type','audio/mpeg');
+    res.setHeader('Accept-Ranges','bytes');
+    res.setHeader('Content-Length',end-start+1);
+    if(match)res.setHeader('Content-Range',`bytes ${start}-${end}/${audio.length}`);
+    res.writeHead(match?206:200);
+    return res.end(audio.subarray(start,end+1));
+   }
+   if(item?.kind==='video')state.videoReads++;
+   else if(item?.kind==='document'){
+    assert.equal(req.headers.range,'bytes=0-65535');
+    state.documentPreviewReads++;
+   }
+   return send(503,{status:503});
+  }
   if(u.pathname.endsWith('/message-stars'))return send(200,{items:u.searchParams.getAll('messageId').map(currentStar)});
   if(u.pathname.endsWith('/previews'))return send(200,{items:items.filter(i=>i.preview&&u.searchParams.getAll('messageId').includes(i.message.id)).map(i=>i.preview)});
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
@@ -82,6 +107,92 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const watch=async context=>{await context.addInitScript(()=>{try{localStorage.setItem('oie.device.auto-video-previews.v1','false')}catch{}});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  // A paginated clip whose waveform read fails still exposes native playback.
+  {
+   const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+   await page.route('**/ui/shared-content/'+items[54].id+'/content?*',route=>
+    route.request().headers().range==='bytes=0-20971519'
+     ? route.fulfill({status:503,contentType:'application/problem+json',body:'{}'}) : route.continue());
+   const failed=page.waitForResponse(response=>response.url().includes(items[54].id+'/content')&&response.status()===503);
+   await page.goto(base+'/?section=media&lang=en');
+   const card=tile(page,54);
+   await page.locator('[data-shared-item]').first().waitFor();
+   await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=scroll.scrollHeight);
+   await card.scrollIntoViewIfNeeded();
+   await failed;
+   await card.getByRole('button',{name:/^Play audio/}).click();
+   const native=card.locator('audio[controls]');
+   await native.waitFor();
+   await page.waitForFunction(audio=>audio.currentTime>.05&&!audio.error,await native.elementHandle());
+   await page.close();
+  }
+  // A metadata refresh updates the label without replacing or pausing the player.
+  {
+   const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+   const item=items[54];
+   const original={...item};
+   item.message={...item.message,createdAt:'2026-11-25T12:00:00Z'};
+   try{
+    await page.goto(base+'/?section=media&lang=en');
+    const card=tile(page,54);
+    const slider=card.getByRole('slider',{name:'Audio position'});
+    await slider.waitFor();
+    const audio=await card.locator('audio').elementHandle();
+    await audio.evaluate(node=>{ node.loop=true; window.originalCatalogAudio=node; });
+    await card.getByRole('button',{name:/^Play audio/}).click();
+    await page.waitForFunction(node=>node.currentTime>.05,audio);
+    await slider.focus();
+    const version=await card.getAttribute('data-shared-record-version');
+    item.fileName='Renamed recording.mp3';
+    item.message={...item.message,revisionId:id(9898)};
+    emit('account.history_changed');
+    await until(async()=>await card.getAttribute('data-shared-record-version')!==version,'audio metadata update');
+    assert.equal(await card.locator('.oie-audio-card > strong').textContent(),item.fileName);
+    assert(await audio.evaluate(node=>node===window.originalCatalogAudio&&node.isConnected&&!node.paused));
+    assert(await slider.evaluate(node=>node===document.activeElement));
+    await card.getByRole('button',{name:'Pause audio · '+item.fileName,exact:true}).click();
+    assert(await audio.evaluate(node=>node.paused));
+    await card.getByRole('button',{name:/^Play audio/}).click();
+    await page.waitForFunction(node=>!node.paused,audio);
+    item.url='https://files.example.test/replacement.mp3';
+    item.message={...item.message,originalText:item.url,revisionId:id(9899)};
+    emit('account.history_changed');
+    await page.waitForFunction(node=>!node.isConnected&&node.paused,audio);
+    assert(await card.locator('audio').evaluate(node=>node.paused));
+   }finally{
+    Object.assign(item,original);
+    await page.close();
+   }
+  }
+  // Closing the details drawer releases its audio and keeps narrow controls usable.
+  {
+   const page=await browser.newPage({viewport:{width:320,height:800},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+   const item=items[54];
+   await page.goto(base+'/?chat='+item.message.conversationId+'&open=details&infoView=shared&infoType=media&lang=en');
+   const card=page.locator('#info-shared-results [data-shared-item="'+item.id+'"]');
+   await card.scrollIntoViewIfNeeded();
+   const slider=card.getByRole('slider',{name:'Audio position'});
+   await slider.waitFor();
+   const play=card.getByRole('button',{name:/^Play audio/});
+   const playBox=await play.boundingBox();
+   const waveBox=await slider.boundingBox();
+   assert(waveBox.width>=24&&playBox.x+playBox.width<waveBox.x);
+   const audio=await card.locator('audio').elementHandle();
+   await audio.evaluate(node=>{node.loop=true;});
+   await play.click();
+   await page.waitForFunction(node=>node.currentTime>.05,audio);
+   await page.keyboard.press('Escape');
+   await page.getByRole('dialog',{name:'Conversation details',exact:true}).waitFor({state:'hidden'});
+   await page.waitForFunction(node=>node.paused&&!node.hasAttribute('src'),audio);
+   await page.close();
+  }
+
   for(const {width,locale,mode,columns} of [
    {width:390,locale:'pt-BR',mode:'light',columns:1},
    {width:1440,locale:'en',mode:'dark',columns:3},
@@ -195,7 +306,39 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   assert.equal(await page.locator('[data-shared-item][data-shared-conversation="'+chatA+'"]').count()>0,true);assert.equal(await page.locator('[data-shared-item][data-shared-conversation="'+chatB+'"]').count()>0,true);const duplicateIDs=await page.evaluate(()=>[...document.querySelectorAll('[id]')].map(el=>el.id).filter((id,index,ids)=>ids.indexOf(id)!==index));assert.deepEqual(duplicateIDs,[]);
   await tile(page,0).locator('button[data-preview-download]').click();await until(async()=>await tile(page,0).locator('[data-preview-id]').getAttribute('data-preview-download')==='ready','manual retained image');assert.equal(state.downloads.size,1);await tile(page,0).locator('[data-preview-expand]').first().click();await page.locator('#oie-image-viewer').waitFor({state:'visible'});assert.equal(await page.locator('.oie-viewer-sender strong').textContent(),'Bob');const viewerStar=page.locator('.oie-viewer-header [data-star-message]');await until(async()=>await viewerStar.getAttribute('data-star-message')===items[0].message.id&&!await viewerStar.isHidden(),'source star available');await viewerStar.click();await until(async()=>await viewerStar.getAttribute('aria-pressed')==='true','source star current');assert.equal(state.starEffects,1);assert.equal(state.stars.get(items[0].message.id).conversationId,chatA);await page.locator('[data-viewer-close]').click();await tile(page,1).locator('button[data-preview-download]').click();await until(async()=>await tile(page,1).locator('[data-preview-id]').getAttribute('data-preview-download')==='ready','second image');await tile(page,1).locator('[data-preview-expand]').first().click();await until(async()=>await viewerStar.getAttribute('aria-pressed')==='true','same source second image');assert.equal(await page.locator('.oie-viewer-sender strong').textContent(),'Bob');assert.equal(state.starEffects,1);await page.locator('[data-viewer-close]').click();
   findings.push('Full main pane aggregates50 refs across chats/accounts; local month grouping respects device timezone; duplicate IDs0; auto opt-out sends nothing until explicit request;2 images share one source identity and Star without duplicate effects');
-  const beforeOlder=page.url();await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=scroll.scrollHeight);await until(async()=>await page.locator('[data-shared-item]').count()===56,'older cards appended');assert.equal(page.url(),beforeOlder);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(await page.locator('audio').count(),0);assert.equal(await page.locator('video[src],video source').count(),0);assert.equal(await tile(page,55).locator('video[controls][playsinline][preload=none]').count(),1);assert.equal(state.videoReads,0);assert.equal(await tile(page,54).locator('[data-shared-reference]').getAttribute('href'),items[54].url);// A pending tab request keeps the shell, old cards and viewport intact.
+  const audioSource=url=>url.pathname===`/ui/shared-content/${items[54].id}/content`;
+  const heldAudio=await holdFirstPage(page,audioSource);
+  const beforeOlder=page.url();await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=scroll.scrollHeight);await until(async()=>await page.locator('[data-shared-item]').count()===56,'older cards appended');assert.equal(page.url(),beforeOlder);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(await page.locator('audio').count(),1);assert.equal(await page.locator('video[src],video source').count(),0);assert.equal(await tile(page,55).locator('video[controls][playsinline][preload=none]').count(),1);assert.equal(state.videoReads,0);assert.equal(await tile(page,54).locator('[data-shared-reference]').count(),0);assert.equal(await tile(page,54).locator('[data-shared-menu-trigger]').count(),1);
+  const audioCard=tile(page,54);
+  const controls=audioCard.locator('[data-message-audio]');
+  const playAudio=audioCard.getByRole('button',{name:/^Play audio/});
+  await audioCard.scrollIntoViewIfNeeded();
+  const slider=audioCard.getByRole('slider',{name:'Audio position'});
+  try{
+   await playAudio.waitFor();
+   assert.equal(await audioCard.locator('.oie-shared-kind').count(),0);
+   const before=await controls.boundingBox();
+   const rail=await audioCard.boundingBox();
+   assert(before.width>rail.width-26,'controls use the card width');
+   assert(before.x>=rail.x && before.x+before.width<=rail.x+rail.width);
+   heldAudio.release();
+   await slider.waitFor();
+   assert.deepEqual(await controls.boundingBox(),before);
+   const waveform = await slider.boundingBox();
+   const play = await playAudio.boundingBox();
+   const duration = await controls.locator('[data-message-audio-time]').boundingBox();
+   const centerY=box=>box.y+box.height/2;
+   assert(Math.abs(centerY(play)-centerY(waveform))<=1,'play and waveform share a center line');
+   assert(Math.abs(centerY(play)-centerY(duration))<=1,'play and duration share a center line');
+   assert(play.x+play.width<waveform.x && waveform.x+waveform.width<=duration.x,'controls fit side by side');
+   await playAudio.click();
+   await page.waitForFunction(node=>node.ended&&node.currentTime>.5&&!node.error,
+    await controls.locator('audio').elementHandle());
+  }finally{
+   heldAudio.release();
+   await page.unroute(audioSource,heldAudio.handler);
+  }
+  // A pending tab request keeps the shell, old cards and viewport intact.
   await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=800);
   const viewport=await page.evaluate(()=>{const ids=['oie-app','shared-content-search','shared-search','shared-search-results','shared-content-scroll'];window.tabNodes=ids.map(id=>document.getElementById(id));return{rect:document.getElementById('shared-content-scroll').getBoundingClientRect().toJSON(),scroll:document.getElementById('shared-content-scroll').scrollTop}});
   // Refresh Links while Media is open, before Links has ever been visited.
@@ -286,7 +429,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await page.goBack();await until(async()=>new URL(page.url()).searchParams.get('contentAccount')===beta&&await selected()===beta,'Back restores committed Work account');assert((await trigger.textContent()).includes('Work · work@fixture'));await page.goForward();await until(async()=>!new URL(page.url()).searchParams.get('contentAccount')&&await selected()==='','Forward restores All accounts');
   await page.reload();assert.equal(await selected(),'');assert((await trigger.textContent()).includes('All accounts'));
   findings.push('Searchable account checkboxes apply single and multiple selections, clear to All accounts, keep picker typeahead local, and trust URL selection through fragment navigation/Back/Forward/reload despite stale session storage');
-  findings.push('Stable older-page cursor, category reset, Unicode metadata search and account filter retain URL context; links remain literal, docs/audio stay safe references, and video controls have no source or body requests before explicit Play');
+  findings.push('Stable older-page cursor, category reset, Unicode metadata search and account filter retain URL context; links remain literal, documents retain their previews, audio cards play in place with stable geometry, and video controls have no source or body requests before explicit Play');
   await page.goto(base+'/?'+query);await page.locator('#shared-search').focus();await page.locator('#shared-content-scroll').evaluate(el=>el.scrollTop=800);const before=await page.locator('[data-shared-item]').evaluateAll(items=>{const top=document.querySelector('#shared-content-scroll').getBoundingClientRect().top,item=items.find(item=>item.getBoundingClientRect().bottom>top);return{id:item.dataset.sharedItem,top:item.getBoundingClientRect().top}});state.pending=false;emit('account.history_changed');await until(async()=>await page.locator('[data-shared-indexing]').count()===0,'local index completion');assert(await page.locator('#shared-search').evaluate(el=>document.activeElement===el));assert(Math.abs((await page.locator(`[data-shared-item="${before.id}"]`).boundingBox()).y-before.top)<3,'index completion moved visible reference');
   await tile(page,0).locator('[data-shared-menu-trigger]').click();const sourceAction=tile(page,0).getByRole('menuitem',{name:'Go to message',exact:true});const source=new URL(await sourceAction.getAttribute('href'),base);assert.equal(source.searchParams.get('chat'),chatA);assert.equal(source.searchParams.get('message'),items[0].message.id);assert.equal(source.searchParams.get('section'),'chats');await sourceAction.click();await until(async()=>await page.locator('[data-message-id="'+items[0].message.id+'"]').evaluate(el=>document.activeElement===el),'source context focus');assert.equal(await page.locator('#message-composer').inputValue(),draft);await page.locator('[data-message-menu-trigger="'+items[0].message.id+'"]').click();await page.locator('#copy-message-'+items[0].message.id).click();await until(async()=>await page.evaluate(()=>copied.length)===1,'original copied');assert.equal(await page.evaluate(()=>copied[0]),items[0].message.originalText);
   for(const mode of ['unavailable','foreign']){state.mode=mode;await page.goto(base+'/?'+query);assert(await page.locator('[data-shared-retry]').isVisible());assert.equal(await page.locator('[data-shared-item]').count(),0);state.mode='normal';await page.locator('[data-shared-retry]').click();await until(async()=>await page.locator('[data-shared-item]').count()===50,'retried gallery ready');assert.equal(await page.locator('[data-shared-item]').count(),50)}await page.goto(base+'/?'+query+'&contentCursor=invalid');assert((await page.locator('#shared-content-status').textContent()).includes('no longer available'));await Promise.all([page.waitForURL(url=>!url.searchParams.has('contentCursor')),page.getByRole('link',{name:'Show newest items'}).click()]);await until(async()=>await page.locator('[data-shared-item]').count()===50,'newest gallery ready');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);await context.close();
