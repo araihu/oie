@@ -238,6 +238,13 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    heldAudio.release();
    await slider.waitFor();
    assert.deepEqual(await controls.boundingBox(),before);
+   const waveform = await slider.boundingBox();
+   const play = await playAudio.boundingBox();
+   const duration = await controls.locator('[data-message-audio-time]').boundingBox();
+   const centerY=box=>box.y+box.height/2;
+   assert(Math.abs(centerY(play)-centerY(waveform))<=1,'play and waveform share a center line');
+   assert(Math.abs(centerY(play)-centerY(duration))<=1,'play and duration share a center line');
+   assert(play.x+play.width<waveform.x && waveform.x+waveform.width<=duration.x,'controls fit side by side');
    await playAudio.click();
    await page.waitForFunction(node=>node.ended&&node.currentTime>.5&&!node.error,
     await controls.locator('audio').elementHandle());
