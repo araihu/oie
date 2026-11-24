@@ -1576,6 +1576,24 @@ type PutBrowserPushParams struct {
 	IfMatch *string `json:"If-Match,omitempty"`
 }
 
+// ViewBrowserOmemoParams defines parameters for ViewBrowserOmemo.
+type ViewBrowserOmemoParams struct {
+	// Account Account being reviewed.
+	Account openapi_types.UUID `form:"account" json:"account"`
+
+	// Chat Direct conversation being reviewed.
+	Chat *openapi_types.UUID `form:"chat,omitempty" json:"chat,omitempty"`
+}
+
+// DecideBrowserOmemoParams defines parameters for DecideBrowserOmemo.
+type DecideBrowserOmemoParams struct {
+	// Account Account being reviewed.
+	Account openapi_types.UUID `form:"account" json:"account"`
+
+	// Chat Direct conversation being reviewed.
+	Chat *openapi_types.UUID `form:"chat,omitempty" json:"chat,omitempty"`
+}
+
 // RefreshWorkspaceParams defines parameters for RefreshWorkspace.
 type RefreshWorkspaceParams struct {
 	// InboxCursor Opaque cursor for the next page of the current conversation list.

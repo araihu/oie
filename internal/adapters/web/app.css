@@ -1028,3 +1028,16 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-engine-retention-status{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-block-size:44px}
 .oie-engine-retention-status [data-retention-retry][hidden]{display:inline-flex;visibility:hidden}
 .oie-engine-retention-status p{margin:0}
+
+.oie-omemo-settings {max-width: 42rem; margin: 2rem auto; padding: 1rem; overflow-wrap: anywhere}
+.oie-omemo-settings section,.oie-omemo-settings form {margin-block: 1.5rem}
+.oie-omemo-settings label {display: grid; gap: .25rem; margin-block: .75rem}
+.oie-omemo-settings h1 {font-size:1.65rem;font-weight:650;margin-bottom:.25rem}
+.oie-omemo-settings h2 {font-size:1.1rem;font-weight:600}
+.oie-omemo-settings p {margin-block:.5rem}
+.oie-omemo-settings code {display:block;user-select:all;padding:.7rem;background:var(--oie-raised);border-radius:.5rem;margin-block:.65rem}
+.oie-omemo-settings input:not([type="hidden"]) {padding:.5rem;border:1px solid var(--oie-border);border-radius:.4rem;max-width:100%;min-width:0}
+.oie-omemo-settings form>a {margin-inline-start:.75rem;text-decoration:underline}
+.oie-omemo-settings details>summary {cursor:pointer}
+.oie-omemo-settings img {max-width: 100%; height: auto}
+.oie-message-omemo {font-size: .75em; margin-inline-end: .3em}

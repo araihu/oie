@@ -76,7 +76,7 @@ func (out Outgoing) MatchesOriginalContent(m domain.Message) bool {
 
 func outgoingMessage(m domain.Message, c domain.Conversation) Outgoing {
 	body, reply := outgoingReplyContent(m)
-	out := Outgoing{ID: m.ID, Address: c.Address, OriginalText: body, Kind: c.Kind, Reply: reply}
+	out := Outgoing{DirectEncryption: m.DirectEncryption, ID: m.ID, Address: c.Address, OriginalText: body, Kind: c.Kind, Reply: reply}
 	out.Mentions = slices.Clone(m.Mentions)
 	if m.Reply != nil && m.Reply.OriginalExpired {
 		return out

@@ -782,7 +782,10 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
 	}
-	protected := m.omemoDir != "" && out.Kind != "room"
+	if out.DirectEncryption == "omemo" && m.omemoDir == "" {
+		return application.NotSent
+	}
+	protected := m.omemoDir != "" && out.Kind != "room" && out.DirectEncryption != "plain"
 	if protected && (out.Correction != nil || out.Reaction != nil || out.Reply != nil || len(out.Attachments) > 0 || len(out.Mentions) > 0) {
 		return application.Failed
 	}
@@ -1012,7 +1015,13 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			return m.receiveEncrypted(ctx, e, msg.Message, *msg.Encrypted)
 		}
 		if m.omemoDir != "" && (msg.Type == "" || msg.Type == stanza.ChatMessage || msg.Type == stanza.NormalMessage) {
-			return nil
+			required, err := e.omemoDevice.RequiresEncryption(msg.From.Bare().String())
+			if err != nil {
+				return err
+			}
+			if required {
+				return nil
+			}
 		}
 		if handled, err := m.receiveRoomInvitation(ctx, e, msg.Message, msg.MUC, msg.DirectInvitations); handled {
 			return err

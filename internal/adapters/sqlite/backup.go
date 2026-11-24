@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/securearchive"
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
@@ -45,6 +46,15 @@ type backupFile struct {
 // WriteProfileBackup exports a stopped profile without running migrations or
 // starting protocol sessions. The profile lock keeps media from changing during export.
 func WriteProfileBackup(ctx context.Context, dir string, dst io.Writer, includeMedia bool) (err error) {
+	return writeProfileBackup(ctx, dir, dst, includeMedia, "")
+}
+func WriteEncryptedHistory(ctx context.Context, dir string, dst io.Writer, passphrase string) error {
+	if passphrase == "" {
+		return errors.New("a passphrase is required")
+	}
+	return writeProfileBackup(ctx, dir, dst, false, passphrase)
+}
+func writeProfileBackup(ctx context.Context, dir string, dst io.Writer, includeMedia bool, passphrase string) (err error) {
 	dir, err = filepath.Abs(dir)
 	if err != nil {
 		return err
@@ -72,6 +82,9 @@ func WriteProfileBackup(ctx context.Context, dir string, dst io.Writer, includeM
 		return err
 	}
 	defer func() { err = errors.Join(err, db.Close()) }()
+	if passphrase != "" {
+		return securearchive.Seal(dst, securearchive.History, passphrase, func(w io.Writer) error { return writeSnapshot(ctx, db, dir, w, false) })
+	}
 	return writeBackup(ctx, db, dir, dst, includeMedia)
 }
 
@@ -82,6 +95,10 @@ func writeBackup(ctx context.Context, source *sql.DB, dir string, dst io.Writer,
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	return writeSnapshot(ctx, source, dir, dst, includeMedia)
+}
+func writeSnapshot(ctx context.Context, source *sql.DB, dir string, dst io.Writer, includeMedia bool) error {
+	private := filepath.Join(dir, "private")
 	if err := ensureBackupDirectory(private); err != nil {
 		return err
 	}

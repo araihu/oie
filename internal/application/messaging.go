@@ -25,6 +25,7 @@ func (e StateConflict) Unwrap() error { return ErrStateConflict }
 
 type ConnectionInput struct{ Password, Endpoint string }
 type Incoming struct {
+	Encrypted                                 bool
 	Moderation                                *IncomingRoomModeration
 	Retraction                                *IncomingRetraction
 	ModerationTombstone                       bool
@@ -59,6 +60,7 @@ type Rejected struct {
 }
 
 type Outgoing struct {
+	DirectEncryption      string
 	Reaction              *domain.OutgoingReaction
 	ReactionEmojis        []string
 	ID                    domain.ID
@@ -442,6 +444,14 @@ func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain
 		return MessageResult{}, ErrInvalid
 	}
 	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), ScheduledAt: at}
+	if c.Kind == "direct" {
+		if p, ok := e.protocols.(OmemoProtocol); ok {
+			m.DirectEncryption, err = p.DirectEncryption(a, c.Address)
+			if err != nil {
+				return MessageResult{}, err
+			}
+		}
+	}
 	m, err = e.prepareComposition(ctx, a, c, m, in, review)
 	if err != nil {
 		return MessageResult{}, err
@@ -633,6 +643,9 @@ func (e *Engine) receiveText(ctx context.Context, in Incoming) error {
 	m.MediaThumbnails = normalizeThumbnailReferences(refs, in.MediaThumbnails)
 	m.FileDigests = normalizeFileDigests(refs, in.FileDigests)
 	m.MentionsYou = incomingRoomMention(in)
+	if in.Encrypted {
+		m.DirectEncryption = "omemo"
+	}
 	if in.Kind == "room" && !in.IsOwn {
 		m.ObservedRoomNickname = in.OwnRoomNickname
 	}

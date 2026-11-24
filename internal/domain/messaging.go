@@ -49,6 +49,7 @@ func (m Message) IsWithdrawn() bool {
 }
 
 type Message struct {
+	DirectEncryption                          string             `json:",omitempty"`
 	Retraction                                *MessageRetraction `json:",omitempty"`
 	Moderation                                *MessageModeration `json:",omitempty"`
 	ID, RevisionID, AccountID, ConversationID ID

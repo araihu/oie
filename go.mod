@@ -3,6 +3,7 @@ module github.com/araihu/oie
 go 1.27.4
 
 require (
+	filippo.io/age v1.3.2
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/a-h/templ v0.3.1100
 	github.com/araihu/goshtoso v0.6.4
@@ -13,14 +14,17 @@ require (
 	github.com/gofrs/flock v0.13.2
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
+	github.com/makiuchi-d/gozxing v0.1.1
 	github.com/oapi-codegen/nethttp-middleware v1.3.1
 	github.com/oapi-codegen/runtime v1.8.0
 	github.com/rivo/uniseg v0.4.7
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/wailsapp/wails/v3 v3.1.0
 	go.mau.fi/libsignal v0.2.3
 	golang.org/x/image v0.48.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/term v0.47.0
 	golang.org/x/text v0.44.0
 	mellium.im/sasl v0.3.2
 	mellium.im/xmlstream v0.15.4
@@ -30,6 +34,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.14.5 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
@@ -73,7 +78,6 @@ require (
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
 	go.etcd.io/bbolt v1.4.0 // indirect
@@ -82,8 +86,8 @@ require (
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
-	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
+	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	mellium.im/reader v0.1.0 // indirect

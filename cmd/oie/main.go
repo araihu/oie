@@ -30,7 +30,7 @@ func run() error {
 		var err error
 		switch os.Args[1] {
 		case "omemo":
-			err = runOMEMO(os.Args[2:], os.Stdout)
+			err = runOMEMO(ctx, os.Args[2:], os.Stdout)
 		case "auth":
 			err = runAuth(ctx, os.Args[2:], os.Stdout)
 		case "backup":

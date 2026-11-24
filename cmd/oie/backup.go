@@ -59,6 +59,9 @@ func createBackup(ctx context.Context, args []string, stdout, stderr io.Writer) 
 }
 
 func saveBackup(ctx context.Context, dataDir, output string, includeMedia bool) error {
+	return publishBackup(ctx, output, func(w io.Writer) error { return sqlite.WriteProfileBackup(ctx, dataDir, w, includeMedia) })
+}
+func publishBackup(ctx context.Context, output string, write func(io.Writer) error) error {
 	// Stage in the destination directory, then publish without replacing any
 	// existing file. A cancelled export never leaves a half-written backup.
 	file, err := os.CreateTemp(filepath.Dir(output), ".oie-backup-")
@@ -66,7 +69,7 @@ func saveBackup(ctx context.Context, dataDir, output string, includeMedia bool) 
 		return err
 	}
 	defer func() { _ = os.Remove(file.Name()) }()
-	err = sqlite.WriteProfileBackup(ctx, dataDir, file, includeMedia)
+	err = write(file)
 	if err == nil {
 		err = file.Sync()
 	}

@@ -178,6 +178,7 @@ type connectionView struct {
 	Value engineapi.Connection
 }
 type view struct {
+	OmemoEnabled         bool
 	BrowserPush          bool
 	OfflineHistory       bool
 	OfflineEngineStatus  string
@@ -521,61 +522,67 @@ type copy struct {
 	RoomLeaveRequested                                                                                                                                                                                       string
 	RoomQueueHint                                                                                                                                                                                            string
 	NavFailed                                                                                                                                                                                                string
-	InfoConversationActions                                                                                                                                                                                  string
-	InfoStarred                                                                                                                                                                                              string
-	InfoConnection                                                                                                                                                                                           string
-	InfoBack                                                                                                                                                                                                 string
-	InfoGroup                                                                                                                                                                                                string
-	InfoReportedOccupants                                                                                                                                                                                    string
-	InfoStarsUnavailable                                                                                                                                                                                     string
-	FavoritesEmpty, FavoritesEmptyHelp, FavoritesSearch, FavoritesNoResults                                                                                                                                  string
-	InfoStarsEmpty                                                                                                                                                                                           string
-	InfoNavigationFailed                                                                                                                                                                                     string
-	SearchAccounts, SearchAccountSelected, SearchAccountsSelected, SearchClearAccounts                                                                                                                       string
-	NoAccountsFound                                                                                                                                                                                          string
-	SharedTools                                                                                                                                                                                              string
-	SharedContentTypes                                                                                                                                                                                       string
-	SharedMediaTab                                                                                                                                                                                           string
-	SharedLinksTab                                                                                                                                                                                           string
-	SharedDocsTab                                                                                                                                                                                            string
-	SharedAllChats                                                                                                                                                                                           string
-	SharedSearch                                                                                                                                                                                             string
-	SharedSearchAction                                                                                                                                                                                       string
-	SharedPageUnavailable                                                                                                                                                                                    string
-	SharedNewest                                                                                                                                                                                             string
-	SharedUnavailable                                                                                                                                                                                        string
-	SharedFinding                                                                                                                                                                                            string
-	SharedEmpty                                                                                                                                                                                              string
-	SharedEmptyHelp                                                                                                                                                                                          string
-	SharedGoToMessage                                                                                                                                                                                        string
-	SharedOpenLink                                                                                                                                                                                           string
-	SharedNext                                                                                                                                                                                               string
-	SharedImage                                                                                                                                                                                              string
-	SharedAudio                                                                                                                                                                                              string
-	SharedVideo                                                                                                                                                                                              string
-	DownloadRetentionTitle, DownloadRetentionPeriod, KeepDownloads, DownloadRetentionDays, RemoveDownloads, RemoveDownloadsConfirm, DownloadsRemoved, DownloadRetentionSaved, DownloadRetentionUnavailable   string
-	AudioUnavailable, FileIntegrityMismatch                                                                                                                                                                  string
-	SharedDocument                                                                                                                                                                                           string
-	SharedLink                                                                                                                                                                                               string
-	CapabilityPresenceNote                                                                                                                                                                                   string
-	DetailsRefresh                                                                                                                                                                                           string
-	DetailsOwningAccount                                                                                                                                                                                     string
-	DetailsObservation                                                                                                                                                                                       string
-	DetailsSnapshotHelp                                                                                                                                                                                      string
-	DetailsPending                                                                                                                                                                                           string
-	DetailsKnown                                                                                                                                                                                             string
-	DetailsPartial                                                                                                                                                                                           string
-	DetailsForbidden                                                                                                                                                                                         string
-	DetailsUnavailable                                                                                                                                                                                       string
-	DetailsNotConnected                                                                                                                                                                                      string
-	DetailsUnsupported                                                                                                                                                                                       string
-	DetailsUnknown                                                                                                                                                                                           string
-	DetailsReadUnavailable                                                                                                                                                                                   string
-	DetailsRoomName                                                                                                                                                                                          string
-	DetailsDescription                                                                                                                                                                                       string
-	DetailsTopic                                                                                                                                                                                             string
-	DetailsRoomSession                                                                                                                                                                                       string
-	RoomNotJoined                                                                                                                                                                                            string
+
+	OmemoTitle, OmemoHosted, OmemoRequired, OmemoPlain, OmemoEnable, OmemoDisable      string
+	OmemoCompare, OmemoConfirm, OmemoDevice, OmemoThis, OmemoVerified, OmemoUnverified string
+	OmemoInactive, OmemoShare, OmemoDistrust, OmemoNoDevices, OmemoInput, OmemoImage   string
+	OmemoReview, OmemoMismatch, OmemoUnavailable                                       string
+
+	InfoConversationActions                                                                                                                                                                                string
+	InfoStarred                                                                                                                                                                                            string
+	InfoConnection                                                                                                                                                                                         string
+	InfoBack                                                                                                                                                                                               string
+	InfoGroup                                                                                                                                                                                              string
+	InfoReportedOccupants                                                                                                                                                                                  string
+	InfoStarsUnavailable                                                                                                                                                                                   string
+	FavoritesEmpty, FavoritesEmptyHelp, FavoritesSearch, FavoritesNoResults                                                                                                                                string
+	InfoStarsEmpty                                                                                                                                                                                         string
+	InfoNavigationFailed                                                                                                                                                                                   string
+	SearchAccounts, SearchAccountSelected, SearchAccountsSelected, SearchClearAccounts                                                                                                                     string
+	NoAccountsFound                                                                                                                                                                                        string
+	SharedTools                                                                                                                                                                                            string
+	SharedContentTypes                                                                                                                                                                                     string
+	SharedMediaTab                                                                                                                                                                                         string
+	SharedLinksTab                                                                                                                                                                                         string
+	SharedDocsTab                                                                                                                                                                                          string
+	SharedAllChats                                                                                                                                                                                         string
+	SharedSearch                                                                                                                                                                                           string
+	SharedSearchAction                                                                                                                                                                                     string
+	SharedPageUnavailable                                                                                                                                                                                  string
+	SharedNewest                                                                                                                                                                                           string
+	SharedUnavailable                                                                                                                                                                                      string
+	SharedFinding                                                                                                                                                                                          string
+	SharedEmpty                                                                                                                                                                                            string
+	SharedEmptyHelp                                                                                                                                                                                        string
+	SharedGoToMessage                                                                                                                                                                                      string
+	SharedOpenLink                                                                                                                                                                                         string
+	SharedNext                                                                                                                                                                                             string
+	SharedImage                                                                                                                                                                                            string
+	SharedAudio                                                                                                                                                                                            string
+	SharedVideo                                                                                                                                                                                            string
+	DownloadRetentionTitle, DownloadRetentionPeriod, KeepDownloads, DownloadRetentionDays, RemoveDownloads, RemoveDownloadsConfirm, DownloadsRemoved, DownloadRetentionSaved, DownloadRetentionUnavailable string
+	AudioUnavailable, FileIntegrityMismatch                                                                                                                                                                string
+	SharedDocument                                                                                                                                                                                         string
+	SharedLink                                                                                                                                                                                             string
+	CapabilityPresenceNote                                                                                                                                                                                 string
+	DetailsRefresh                                                                                                                                                                                         string
+	DetailsOwningAccount                                                                                                                                                                                   string
+	DetailsObservation                                                                                                                                                                                     string
+	DetailsSnapshotHelp                                                                                                                                                                                    string
+	DetailsPending                                                                                                                                                                                         string
+	DetailsKnown                                                                                                                                                                                           string
+	DetailsPartial                                                                                                                                                                                         string
+	DetailsForbidden                                                                                                                                                                                       string
+	DetailsUnavailable                                                                                                                                                                                     string
+	DetailsNotConnected                                                                                                                                                                                    string
+	DetailsUnsupported                                                                                                                                                                                     string
+	DetailsUnknown                                                                                                                                                                                         string
+	DetailsReadUnavailable                                                                                                                                                                                 string
+	DetailsRoomName                                                                                                                                                                                        string
+	DetailsDescription                                                                                                                                                                                     string
+	DetailsTopic                                                                                                                                                                                           string
+	DetailsRoomSession                                                                                                                                                                                     string
+	RoomNotJoined                                                                                                                                                                                          string
 
 	DetailsOccupantCount         string
 	DetailsRoomProperties        string
@@ -845,6 +852,10 @@ var roomArchiveScript []byte
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == DiagnosticsPath {
 		s.diagnostics.ServeHTTP(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/omemo" {
+		s.omemoPage(w, r)
 		return
 	}
 	if r.URL.Path == "/ui/access-keys" {
@@ -1238,6 +1249,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	}
 	v.CanResetData = engine.JSON200.CanResetData != nil && *engine.JSON200.CanResetData
 	v.Preview = engine.HTTPResponse.Header.Get("X-Oie-Mock") == "true"
+	v.OmemoEnabled = engine.JSON200.OmemoEnabled != nil && *engine.JSON200.OmemoEnabled
 	v.Role = engine.JSON200.Role
 	if r.URL.Path == "/ui/refresh" && v.EventCursor != "" && (v.Section == "chats" || v.Section == "archived") {
 		if r.Header.Get("X-Oie-Refresh-Cursor") == v.EventCursor {

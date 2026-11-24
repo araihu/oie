@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.42.0
+  version: 0.43.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -2131,6 +2131,48 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/accounts/{accountId}/omemo:
+    parameters:
+    - $ref: '#/components/parameters/AccountID'
+    - name: peer
+      in: query
+      description: Bare peer JID. Omit to inspect devices of the account itself.
+      schema: {type: string, maxLength: 1023}
+    get:
+      operationId: getOmemoDevices
+      tags: [Accounts]
+      summary: Inspect public OMEMO fingerprints
+      description: Returns the current policy, this endpoint and known devices belonging to the selected owner.
+      responses:
+        '200':
+          description: Public device information
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OmemoDevices'}
+              example: {address: alice@example.org, encrypted: true, devices: []}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/AuthenticationRequired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    put:
+      operationId: setOmemoDecision
+      tags: [Accounts]
+      summary: Confirm an OMEMO device or change protection for future messages
+      description: Device decisions require an exact public fingerprint. Policy changes apply to future submissions for the selected peer.
+      requestBody:
+        description: Explicit decision for the selected address.
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OmemoDecision'}
+            example: {action: encrypt}
+      responses:
+        '204': {description: Decision applied}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/AuthenticationRequired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /api/v1/accounts/{accountId}/connection:
     parameters:
     - $ref: '#/components/parameters/AccountID'
@@ -4619,6 +4661,10 @@ components:
           - 0.40.0
           - 0.41.0
           - 0.42.0
+          - 0.43.0
+        omemoEnabled:
+          type: boolean
+          description: The owning engine has an OMEMO profile. Hosted engines keep its private keys on the server.
         eventCursor:
           type: string
           description: Application stream boundary, separate from provider history cursors.
@@ -6779,6 +6825,41 @@ components:
         reason: {type: string, maxLength: 500}
       example:
         at: '2026-11-13T15:00:00Z'
+    OmemoDevices:
+      type: object
+      description: Public OMEMO keys for an account or direct peer.
+      additionalProperties: false
+      example: {address: alice@example.org, encrypted: true, devices: []}
+      required: [address, encrypted, devices]
+      properties:
+        address: {type: string, description: Bare address of the key owner., example: alice@example.org}
+        encrypted: {type: boolean, description: Future direct messages require OMEMO.}
+        devices:
+          type: array
+          description: Known devices in numeric order.
+          items: {$ref: '#/components/schemas/OmemoDevice'}
+    OmemoDevice:
+      type: object
+      description: Public identity of a single device.
+      additionalProperties: false
+      example: {id: 42, fingerprint: 'abcdef01abcdef01abcdef01abcdef01abcdef01abcdef01abcdef01abcdef01', verified: true, active: true, own: false}
+      required: [id, fingerprint, verified, active, own]
+      properties:
+        id: {type: integer, minimum: 1, maximum: 2147483647}
+        fingerprint: {type: string, pattern: '^[0-9a-f]{64}$'}
+        verified: {type: boolean}
+        active: {type: boolean}
+        own: {type: boolean, description: Identity of this engine.}
+    OmemoDecision:
+      type: object
+      description: One explicit device or chat encryption decision.
+      additionalProperties: false
+      example: {action: encrypt}
+      required: [action]
+      properties:
+        action: {type: string, enum: [verify, distrust, encrypt, plaintext], example: encrypt}
+        device: {type: integer, minimum: 1, maximum: 2147483647}
+        fingerprint: {type: string, pattern: '^[0-9a-f]{64}$'}
     Message:
       type: object
       description: Retained original text and actual send evidence. submitted means the stanza was written to the
@@ -6796,6 +6877,9 @@ components:
       - isOwn
       - sendState
       properties:
+        omemo:
+          type: boolean
+          description: The direct message was received through OMEMO or queued with an immutable OMEMO send intent.
         retraction:
           $ref: '#/components/schemas/MessageRetraction'
         canRetract:

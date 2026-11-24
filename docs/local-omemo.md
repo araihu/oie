@@ -1,10 +1,17 @@
-# Local OMEMO direct text (B16 preview)
+# OMEMO direct messages (B16 preview)
 
 This increment adds the legacy OMEMO wire format used by Gajim and Conversations
-(`eu.siacs.conversations.axolotl`) to an explicitly enabled local engine profile.
-Every direct text send in that profile requires verified recipient devices. The
-choice survives disconnects, restarts and queued retries. Rooms retain their
-usual transport. Use a disposable profile to try it.
+(`eu.siacs.conversations.axolotl`) to local and hosted engines. Enable it once per profile. Direct messages require
+verified recipient devices by default. In conversation details, **OMEMO encryption**
+opens the device list and the encryption control. Changing the control applies
+to future messages. A queued encrypted message keeps its protection through
+retries and restarts.
+
+In hosted mode the server is one trusted device per XMPP account. Every
+authenticated browser uses that device and shares its fingerprint, verification
+decisions and readable history. Other XMPP clients verify the server's fingerprint
+once. The server operator can read the messages. Use the existing
+[hosted authentication and HTTPS setup](hosted-auth.md).
 
 ## Try it
 
@@ -22,7 +29,7 @@ usual transport. Use a disposable profile to try it.
    ./bin/oie omemo devices --account "$ACCOUNT_ID"
    ```
 
-3. Compare the fingerprint over an authenticated channel. Gajim shows its own identity in the account's OMEMO settings. Conversations shows **OMEMO fingerprint** in **Account details**. Compare all eight groups of hex digits and confirm the bare account address and device ID. Spaces between groups are accepted.
+3. Compare the fingerprint over an authenticated channel. Gajim shows its own identity in the account's OMEMO settings. Conversations shows **OMEMO fingerprint** in **Account details**. In Oiê, open the OMEMO page for the account to share its fingerprint or QR code. Open it from a direct conversation to enter a fingerprint, paste an XMPP verification link, or upload its QR image (PNG or JPEG). Review the address, device ID and fingerprint before confirming. You can also verify from the CLI. Compare all eight groups of hex digits and confirm the bare account address and device ID. Spaces between groups are accepted.
 
    ```sh
    ./bin/oie omemo verify --account "$ACCOUNT_ID" --peer "$PEER_JID" \
@@ -49,12 +56,52 @@ A newly verified sender's held messages can then enter the timeline.
 The local timeline, search index and outgoing queue can contain readable text.
 Use OS account permissions and disk encryption to protect the profile.
 Automatic link preview fetching and conventional Oiê ZIP export are disabled
-in this profile. Encrypted history backup and recovery, key migration, the
-per-chat switch, message encryption badges and graphical device verification
-remain B16 work. This increment handles live direct text. Encrypted archive
-catch-up, copies received from your other devices, direct attachments,
-structured replies, edits and reactions are outside its verified scope.
-Plaintext direct messages are ignored in this profile.
+in this profile. Encrypted direct text has an OMEMO label in the timeline. Direct attachments,
+structured replies, edits, reactions, XMPP archive catch-up and copies from other
+XMPP devices are outside the tested direct-text exchange. The engine accepts
+unencrypted direct text only when the user explicitly enables it for that peer.
+
+## Migrate an identity or recover history
+
+Stop the source engine. Set `OIE_DATA_DIR` to its profile. The commands below
+prompt for a passphrase, or accept `--passphrase-file` for automation.
+
+```sh
+oie omemo export-key --account "$ACCOUNT_ID" --file my-identity.age
+oie omemo export-history --file my-history.age
+oie omemo inspect-key --file my-identity.age
+```
+
+On the destination, initialize OMEMO with the engine stopped. Restore history
+to create the saved accounts and conversations, or register the same XMPP
+account before connecting if you only need its identity. Use the destination's
+account UUID and compare the fingerprint shown by `inspect-key` with the source.
+
+```sh
+oie omemo init
+oie omemo import-history --file my-history.age
+oie omemo import-key --account "$ACCOUNT_ID" --file my-identity.age --fingerprint "$FINGERPRINT"
+```
+
+Retire the source before connecting the restored account. Re-enter its XMPP
+credentials and verify contacts again. Oiê retains the device ID and identity,
+creates fresh prekeys and negotiates new sessions. If a verified peer's session
+needs repair, compare its fingerprint and run the following command, then send
+a message to establish a fresh session.
+
+```sh
+oie omemo repair --account "$ACCOUNT_ID" --peer "$PEER_JID" --device "$DEVICE_ID" --fingerprint "$FINGERPRINT"
+```
+
+Both files use the age v1 passphrase format. The authenticated plaintext begins
+with `OIE OMEMO IDENTITY 1\n` or `OIE OMEMO HISTORY 1\n`. The identity payload
+is JSON containing the bare address, numeric device ID, hex fingerprint and
+base64-encoded 32-byte private key. The history payload is the versioned Oiê
+backup ZIP for retained profile history, including other conversations. Media
+files, protocol credentials and private OMEMO keys are excluded. Import merges
+with retained data and pauses restored sends. Only retained readable messages
+can be recovered this way. Gajim exports and Conversations .ceb backups use
+different formats.
 
 ## Reproduce the interoperability check
 
@@ -80,3 +127,16 @@ account across both exchanges, including the post-restart replies and the
 held send. None of the nine test strings appeared in any of the three server
 archives. Both peers displayed new encrypted text after restarting the Oiê
 engine with the same profile.
+
+The restored hosted fixture exposed the original device ID and fingerprint to
+two independent owner credentials. Both clients received a new encrypted message
+from that device and sent an encrypted reply that the other owner credential
+could read. Gajim recorded OMEMO on both messages. Conversations displayed the
+incoming text and sent from its encrypted composer. A second history import added
+zero messages after the first restored nine. An altered history archive and a
+wrong passphrase both failed before a destination database was created.
+
+In a direct conversation with Gajim, a new protected send stayed queued through
+a switch to plaintext. Reverification released the original message. The Prosody
+archives contained the separate explicitly authorized plaintext control and
+none of the protected text from the hosted exchanges.

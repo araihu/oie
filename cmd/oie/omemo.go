@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,11 +17,15 @@ import (
 	"mellium.im/xmpp/jid"
 )
 
-func runOMEMO(args []string, w io.Writer) error {
+func runOMEMO(ctx context.Context, args []string, w io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: oie omemo init|devices|verify|distrust [options]")
+		return errors.New("usage: oie omemo init|devices|verify|distrust|repair|export-key|inspect-key|import-key|export-history|import-history [options]")
 	}
 	action := args[0]
+	switch action {
+	case "export-key", "inspect-key", "import-key", "export-history", "import-history":
+		return runOMEMOArchive(ctx, action, args[1:], w)
+	}
 	flags := flag.NewFlagSet("oie omemo "+action, flag.ContinueOnError)
 	root := flags.String("data-dir", envOrDefault("OIE_DATA_DIR", "./data"), "local engine profile")
 	account := flags.String("account", "", "Oiê account UUID")
@@ -102,6 +107,8 @@ func runOMEMO(args []string, w io.Writer) error {
 	switch action {
 	case "verify":
 		return d.Verify(j.Bare().String(), uint32(*id), strings.Join(strings.Fields(*fingerprint), ""))
+	case "repair":
+		return d.RepairSession(j.Bare().String(), uint32(*id), strings.Join(strings.Fields(*fingerprint), ""))
 	case "distrust":
 		return d.Distrust(j.Bare().String(), uint32(*id))
 	default:

@@ -51,7 +51,8 @@ type Device struct {
 }
 
 type state struct {
-	Pending    []Pending `json:",omitempty"`
+	PlainPeers map[string]bool `json:",omitempty"`
+	Pending    []Pending       `json:",omitempty"`
 	Version    int
 	DeviceID   uint32
 	Secret     []byte

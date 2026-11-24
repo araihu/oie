@@ -73,6 +73,26 @@ func TestVerifiedDirectRoundTrip(t *testing.T) {
 	if got, err := alice.Decrypt(ctx, "bob@example.org", reply); err != nil || got != "reply" {
 		t.Fatal(got, err)
 	}
+	if err := alice.Observe("bob@example.org", map[uint32]string{bid: bfp}); err != nil {
+		t.Fatal(err)
+	}
+	if err := alice.RepairSession("bob@example.org", bid, afp); !errors.Is(err, ErrUnverified) {
+		t.Fatal("accepted a mismatched repair fingerprint", err)
+	}
+	if err := alice.RepairSession("bob@example.org", bid, bfp); err != nil {
+		t.Fatal(err)
+	}
+	_, fresh, err := bob.Bundle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewed, err := alice.Encrypt(ctx, []Target{{"bob@example.org", bid, fresh}}, "after repair")
+	if err != nil || len(renewed.Header.Keys) != 1 || !renewed.Header.Keys[0].PreKey {
+		t.Fatal("repair did not start a fresh session", err)
+	}
+	if got, err := bob.Decrypt(ctx, "alice@example.org", renewed); err != nil || got != "after repair" {
+		t.Fatal(got, err)
+	}
 	if err := alice.Distrust("bob@example.org", bid); err != nil {
 		t.Fatal(err)
 	}

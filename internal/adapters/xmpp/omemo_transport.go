@@ -40,7 +40,7 @@ type omemoItems struct {
 	} `xml:"http://jabber.org/protocol/pubsub items"`
 }
 
-func (m *Manager) EnableLocalOMEMO(dir string) { m.omemoDir = dir }
+func (m *Manager) EnableOMEMO(dir string) { m.omemoDir = dir }
 func getOMEMOItem(ctx context.Context, e *entry, s *mx.Session, peer, node string) (omemoItems, error) {
 	// Node names are local constants or decimal device identifiers.
 	var reply omemoItems
@@ -210,7 +210,7 @@ func (m *Manager) acceptEncrypted(ctx context.Context, e *entry, p omemo.Pending
 			return nil
 		}
 		_, requests := m.host.(application.ConversationRequestHost)
-		receiveErr = m.host.Receive(ctx, application.Incoming{AccountID: e.account.ID, Kind: "direct", Address: p.Peer, ProviderID: p.StanzaID, OriginalText: text, CreatedAt: p.At, CheckDirectHistory: requests})
+		receiveErr = m.host.Receive(ctx, application.Incoming{Encrypted: true, AccountID: e.account.ID, Kind: "direct", Address: p.Peer, ProviderID: p.StanzaID, OriginalText: text, CreatedAt: p.At, CheckDirectHistory: requests})
 		return receiveErr
 	})
 	if err == nil {

@@ -3,7 +3,6 @@ package apphost
 import (
 	"context"
 	"crypto/x509"
-	"errors"
 	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"net/http"
 	"path/filepath"
@@ -86,9 +85,6 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if protected && h.cfg.Role != "local" {
-		return nil, errors.New("OMEMO profiles require the local engine")
-	}
 	if !protected {
 		engine.SetPreviewServices(fetcher, mediafiles.New(filepath.Join(dir, "media", "images")))
 	}
@@ -104,7 +100,7 @@ func (h *engineHost) start() (_ *engineInstance, err error) {
 	engine.SetDownloadFiles(downloads)
 	instance.protocols = xmpadapter.New(filepath.Join(dir, "private", "connections"), h.roots)
 	if protected {
-		instance.protocols.EnableLocalOMEMO(omemo.ProfileDir(dir))
+		instance.protocols.EnableOMEMO(omemo.ProfileDir(dir))
 	}
 	instance.protocols.SetDiagnostics(h.cfg.Diagnostics)
 	engine.SetProtocols(instance.protocols)
