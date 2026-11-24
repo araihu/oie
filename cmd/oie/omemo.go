@@ -71,7 +71,9 @@ func runOMEMO(args []string, w io.Writer) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(w, "local %d %s\n", device, fp)
+		if _, err := fmt.Fprintf(w, "local %d %s\n", device, fp); err != nil {
+			return err
+		}
 		observed, pins, err := d.DeviceList()
 		if err != nil {
 			return err
@@ -87,7 +89,9 @@ func runOMEMO(args []string, w io.Writer) error {
 		}
 		slices.Sort(lines)
 		for _, line := range lines {
-			fmt.Fprintln(w, line)
+			if _, err := fmt.Fprintln(w, line); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
