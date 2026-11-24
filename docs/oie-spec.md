@@ -1171,7 +1171,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B13** | Image OCR. |
 | **B14** | Audio transcription. |
 | **B15** | Implemented for the hosted web app on supported browsers. See [Web Push](notifications.md#hosted-web-push). |
-| **B16** | Start XMPP end-to-end encryption with OMEMO direct text on the local engine. Include device verification, key import/export and encrypted history recovery. See the [B16 plan](#163-local-engine-omemo-b16). |
+| **B16** | Support OMEMO direct text on the local engine and on a trusted hosted engine. Include device verification, key import/export and encrypted history recovery. See the [B16 plan](#163-local-engine-omemo-b16). |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
 | **B18** | Interactive OIDC enrollment and sign-in from desktop clients. The hosted browser uses OIDC and desktop can supply a hosted API key. |
 | **B19** | Sticker selection, packs and sending. |
@@ -1224,7 +1224,9 @@ conversation. The local engine owns an OMEMO device identity for each account.
 Offer an encryption control in the conversation and show whether a message was
 encrypted. If an encrypted send needs a trust decision or a compatible peer,
 keep it pending and offer the relevant action. Retry must preserve the choice
-to encrypt. Group chats and attachments are later increments. **Hosted endpoint (agreed).** In hosted mode the Oiê server is the trusted
+to encrypt. Group chats and attachments are later increments.
+
+**Hosted endpoint (agreed).** In hosted mode the Oiê server is the trusted
 OMEMO device for each XMPP account. It encrypts and decrypts on behalf of the
 authenticated owner. Browsers and phones accessing that engine share the same
 device ID, fingerprint and history. Explain this trust boundary when the user
