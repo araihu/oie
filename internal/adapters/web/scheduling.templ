@@ -288,7 +288,8 @@ templ scheduleFields(v view) {
 
 templ mediaQualityOptions(v view) {
 	<div data-media-choice data-limit-text={v.Text.MediaLimitText} data-upload-limit={fmt.Sprint(v.uploadLimit())}
-		data-unavailable={v.Text.MediaPrepareUnavailable} data-keep-tracks={v.Text.MediaKeepTracks} data-too-large={v.Text.MediaTooLarge}
+		data-unavailable={v.Text.MediaPrepareUnavailable} data-keep-tracks={v.Text.MediaKeepTracks}
+		data-transparent={v.Text.MediaTransparent} data-damaged={v.Text.MediaDamaged} data-cover-labels={v.Text.MediaCoverLabels} data-too-large={v.Text.MediaTooLarge}
 		data-original-too-large={v.Text.MediaOriginalTooLarge} data-preparing={v.Text.AttachmentPreparing} data-checking={v.Text.MediaChecking}>
 		<div class="oie-media-file">
 			@glyph(heroicons.Icon16SolidPaperClip)

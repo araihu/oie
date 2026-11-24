@@ -39,7 +39,13 @@ is SD. A recording, pasted media or dropped media uses the same quality dialog.
 An MP3 with an embedded PNG or JPEG cover qualifies as audio. HD and OG keep
 the compatible MP3 when it fits. SD can produce a smaller AAC/M4A with its
 cover and descriptive tags, subject to the same 10% savings rule as other
-compatible originals. **File** attaches the original. Choosing a quality prepares the bytes on the
+compatible originals. The composer recognizes MP3 by content and corrects the
+attachment name and media type when needed. An MP4 video can include a cover.
+For an MP3 with separately labeled covers, choose OG to preserve the labels.
+Attach a transparent video as a file to keep its alpha channel. A movie detected
+as incomplete displays a warning and can only be attached explicitly as a file.
+
+**File** attaches the original. Choosing a quality prepares the bytes on the
 device before staging, including for scheduled messages. A draft can contain
 up to 16 attachments. The account’s XMPP upload service sets the per-file
 limit. Discovery reports a limit only when all eligible services advertise one. The XMPP adapter uploads accepted

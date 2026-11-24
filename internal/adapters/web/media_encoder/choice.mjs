@@ -15,6 +15,17 @@ function loadEncoder() {
   return loading;
 }
 
+function mediaAttachment(file, info, blob) {
+  const originalMP3 = blob === file && info.mp3;
+  const type = originalMP3 ? 'audio/mpeg' : info.video ? 'video/mp4' : 'audio/mp4';
+  const suffix = originalMP3 ? '.mp3' : info.video ? '.mp4' : '.m4a';
+  const named = file.name.toLowerCase().endsWith(suffix) || blob === file && !originalMP3 &&
+    (info.video ? /\.m4v$/i : /\.mp4$/i).test(file.name);
+  const name = named ? file.name : (file.name.replace(/\.[^.]+$/, '') || file.name) + suffix;
+  if (blob === file && file.name === name && file.type === type) return file;
+  return new File([blob], name, {type, lastModified:file.lastModified});
+}
+
 export async function chooseMedia(content, file, signal, preferred, recording) {
   signal.throwIfAborted();
   const dialog = content.closest('dialog');
@@ -57,7 +68,16 @@ export async function chooseMedia(content, file, signal, preferred, recording) {
   }
   dialog.querySelector('[data-media-filename]').textContent = file.name;
   message.textContent = content.dataset.checking;
-  function offerFile(label) {
+  function offerOriginal(label) {
+    if (info?.compatible && originalFits) {
+      for (const radio of radios) {
+        radio.disabled = radio.value !== 'OG';
+        radio.checked = !radio.disabled;
+      }
+      group.disabled = submit.disabled = submit.hidden = false;
+      message.textContent = label;
+      return;
+    }
     group.disabled = true;
     submit.disabled = true;
     submit.hidden = true;
@@ -78,18 +98,16 @@ export async function chooseMedia(content, file, signal, preferred, recording) {
       const quality = radios.find(radio => radio.checked).value;
       const output = await prepareMedia(ff, file, info, quality, limit);
       if (events.signal.aborted) return;
-      if (output.route === 'offer file') { offerFile(content.dataset.keepTracks); return; }
+      if (output.route === 'offer file') { offerOriginal(content.dataset.keepTracks); return; }
       if (output.route === 'too large') {
         group.disabled = submit.disabled = false;
         raw.disabled = !originalFits;
         message.textContent = content.dataset.tooLarge;
         return;
       }
-      if (output.blob === file) { accept(file); return; }
-      const suffix = info.video ? '.mp4' : '.m4a';
-      accept(new File([output.blob], file.name.replace(/\.[^.]+$/, '') + suffix, {type:output.blob.type}));
+      accept(mediaAttachment(file, info, output.blob));
     } catch {
-      if (!events.signal.aborted) offerFile(content.dataset.unavailable);
+      if (!events.signal.aborted) offerOriginal(content.dataset.unavailable);
     }
   }, options);
   async function inspect() {
@@ -101,14 +119,14 @@ export async function chooseMedia(content, file, signal, preferred, recording) {
         wasmURL: new URL('ffmpeg-core.wasm', codecRoot).href});
       info = await inspectMedia(ff, file);
       if (events.signal.aborted) return;
-      if (!info.preservable) { offerFile(content.dataset.keepTracks); return; }
+      if (info.problem) { offerOriginal(content.dataset[info.problem]); return; }
       const og = radios.find(radio => radio.value === 'OG');
       og.disabled = !originalFits || !info.compatible;
       if (preferred === 'OG' && !og.disabled) og.checked = true;
       message.textContent = !originalFits ? content.dataset.originalTooLarge : '';
       submit.disabled = group.disabled = false;
     } catch {
-      if (!events.signal.aborted) offerFile(content.dataset.unavailable);
+      if (!events.signal.aborted) offerOriginal(content.dataset.unavailable);
     }
   }
   try {

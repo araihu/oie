@@ -7,10 +7,10 @@ function selectSD(originalSize, convertedSize, compatible, limit) {
   return fits(convertedSize) ? 'converted' : 'too-large';
 }
 
-async function probe(ff, filename) {
+async function probe(ff, filename, options = []) {
   // Core 0.12.10 can return -1 on success. Validate its fresh JSON report.
   await ff.deleteFile('probe.json').catch(() => {});
-  await ff.ffprobe(['-v', 'error', '-protocol_whitelist', 'file', '-show_streams', '-show_format', '-of', 'json', '-o', 'probe.json', filename]);
+  await ff.ffprobe(['-v', 'error', '-protocol_whitelist', 'file', ...options, '-show_streams', '-show_format', '-of', 'json', '-o', 'probe.json', filename]);
   const report = JSON.parse(await ff.readFile('probe.json', 'utf8'));
   if (!report.format || !Array.isArray(report.streams)) throw Error('Cannot identify media tracks');
   return report;
@@ -68,11 +68,11 @@ function childBox(bytes, type) {
 
 // The iTunes movie metadata carries the cover. Put any remaining descriptive
 // tags in a file-level keyed metadata box without rewriting media offsets.
-async function additionalAudioMetadata(ff, source, tags) {
+async function additionalMediaMetadata(ff, source, streamType, tags) {
   const path = 'metadata.mp4';
   try {
     const code = await ff.exec(['-nostdin', '-y', '-protocol_whitelist', 'file', '-i', source,
-      '-map', '0:a:0', '-frames:a', '0', '-c:a', 'aac', '-map_metadata', '-1',
+      '-map', '0:' + streamType + ':0', '-frames:' + streamType, '0', '-c', 'copy', '-map_metadata', '-1',
       ...tags.flatMap(([key, value]) => ['-metadata', key + '=' + value]),
       '-movflags', '+use_metadata_tags', path]);
     if (code !== 0) throw Error('Cannot preserve audio metadata');
@@ -82,6 +82,39 @@ async function additionalAudioMetadata(ff, source, tags) {
   } finally {
     await ff.deleteFile(path).catch(() => {});
   }
+}
+
+// Check top-level box lengths without loading media payloads into JS memory.
+// A zero-sized final box extends to EOF; packet counts below also cover it.
+async function completeMovie(ff, file, source) {
+  let windowStart = -1, bytes;
+  for (let offset = 0; offset < file.size;) {
+    if (!bytes || offset + 16 > windowStart + bytes.byteLength) {
+      windowStart = offset;
+      bytes = new DataView(await file.slice(offset, offset + 65536).arrayBuffer());
+    }
+    const at = offset - windowStart;
+    if (at + 8 > bytes.byteLength) return false;
+    let size = bytes.getUint32(at);
+    if (size === 0) break;
+    if (size === 1) {
+      if (at + 16 > bytes.byteLength) return false;
+      size = Number(bytes.getBigUint64(at + 8));
+      if (size < 16) return false;
+    }
+    if (size < 8 || size > file.size - offset) return false;
+    offset += size;
+  }
+  // Ignore edits when comparing against the unedited MP4 sample table.
+  // PCM sample counts are not packet counts.
+  const {streams} = await probe(ff, source, ['-ignore_editlist', '1', '-count_packets']);
+  return streams.every(s => !['h264', 'hevc', 'aac', 'mp3', 'av1', 'vp9'].includes(s.codec_name) ||
+    s.disposition?.attached_pic || !(Number(s.nb_frames) > (Number(s.nb_read_packets) || 0)));
+}
+
+function hasTransparency(video) {
+  return /^(yuva|gbrap|rgba|argb|abgr|bgra|ya|ayuv|vuya|pal8)/.test(video.pix_fmt) ||
+    Object.entries(video.tags || {}).some(([k, v]) => k.toLowerCase() === 'alpha_mode' && String(v) === '1');
 }
 
 export async function inspectMedia(ff, file) {
@@ -95,32 +128,36 @@ export async function inspectMedia(ff, file) {
   const video = videos[0];
   const audio = streams.filter(s => s.codec_type === 'audio');
   const subtitles = streams.filter(s => s.codec_type === 'subtitle');
-  if ((!video && !audio.length) || videos.length > 1 ||
-      (artwork.length && (video || artwork.some(s => !['png', 'mjpeg'].includes(s.codec_name)))) ||
-      /^(yuva|gbrap|rgba|argb|abgr|bgra|ya)/.test(video?.pix_fmt) || video?.tags?.alpha_mode === '1' ||
-      streams.length !== videos.length + audio.length + subtitles.length + artwork.length ||
-      subtitles.some(s => !['mov_text', 'subrip'].includes(s.codec_name))) {
-    return {preservable: false};
-  }
+  const movie = format.format_name.split(',').includes('mov');
+  if (movie && !await completeMovie(ff, file, source)) return {problem:'damaged'};
+  const alpha = video && hasTransparency(video);
   const copyVideo = !video || video.codec_name === 'h264' && video.pix_fmt === 'yuv420p' &&
     ['Constrained Baseline', 'Baseline', 'Main', 'High'].includes(video.profile);
-  const namedForPlayback = video ? /\.(mp4|m4v)$/i.test(file.name) : /\.(m4a|mp4)$/i.test(file.name);
-  const mp3 = format.format_name === 'mp3' && /\.mp3$/i.test(file.name) && !video &&
-    !subtitles.length && audio.length === 1 && audio[0].codec_name === 'mp3' && audio[0].channels <= 2;
-  const compatible = mp3 || namedForPlayback && copyVideo && audio.every(canCopyAudio) &&
-    subtitles.every(s => s.codec_name === 'mov_text') && isoBrands.has(format.tags?.major_brand);
-  return {preservable: true, source, videos, video, audio, subtitles, artwork, tags:format.tags || {}, copyVideo, compatible};
+  const supportedArtwork = artwork.every(s => ['png', 'mjpeg'].includes(s.codec_name));
+  const supportedTracks = (video || audio.length) && videos.length <= 1 &&
+    streams.length === videos.length + audio.length + subtitles.length + artwork.length;
+  const mp3 = format.format_name === 'mp3' && !video && !subtitles.length && audio.length === 1 &&
+    audio[0].codec_name === 'mp3' && audio[0].channels <= 2;
+  const compatible = !!(supportedTracks && !alpha && (mp3 || movie && isoBrands.has(format.tags?.major_brand) &&
+    copyVideo && audio.every(canCopyAudio) && subtitles.every(s => s.codec_name === 'mov_text')));
+  // An M4A covr entry has image bytes but no per-picture role or description.
+  const labeledCovers = artwork.length > 1 && artwork.some(s => s.tags?.title || s.tags?.comment);
+  let problem;
+  if (alpha) problem = 'transparent';
+  else if (labeledCovers) problem = 'coverLabels';
+  else if (!supportedTracks || !supportedArtwork || subtitles.some(s => !['subrip', 'mov_text'].includes(s.codec_name))) problem = 'keepTracks';
+  return {problem, compatible, mp3, source, videos, video, audio, subtitles, artwork, tags:format.tags || {}, copyVideo};
 }
 
 export async function prepareMedia(ff, file, info, quality, limit) {
-  if (!info.preservable) return originalFile(file, limit);
   const {source, videos, video, audio, subtitles, artwork, tags, copyVideo, compatible} = info;
   const fits = size => limit == null || size <= limit;
   if (quality === 'OG' || quality === 'HD' && compatible && fits(file.size)) {
     if (!compatible || !fits(file.size)) throw Error('Original unavailable');
     return {blob: file, route: 'original'};
   }
-  const args = ['-nostdin', '-y', '-noautorotate', '-protocol_whitelist', 'file', '-i', source, '-map_metadata', '0'];
+  if (info.problem) return originalFile(file, limit);
+  const args = ['-nostdin', '-y', '-xerror', '-noautorotate', '-protocol_whitelist', 'file', '-i', source, '-map_metadata', '0'];
   if (video) {
     args.push('-map', '0:' + video.index);
     if (quality === 'HD' && copyVideo) {
@@ -144,8 +181,9 @@ export async function prepareMedia(ff, file, info, quality, limit) {
   for (const [index, track] of subtitles.entries()) {
     args.push('-map', '0:' + track.index, '-c:s:' + index, track.codec_name === 'mov_text' ? 'copy' : 'mov_text');
   }
-  for (const cover of artwork) args.push('-map', '0:' + cover.index);
-  if (artwork.length) args.push('-c:v', 'copy');
+  for (const [i, cover] of artwork.entries()) {
+    args.push('-map', '0:' + cover.index, '-c:v:' + (videos.length + i), 'copy');
+  }
   const tracks = [...videos, ...audio, ...subtitles];
   const mapped = [...tracks, ...artwork];
   for (const [index, track] of mapped.entries()) {
@@ -165,7 +203,7 @@ export async function prepareMedia(ff, file, info, quality, limit) {
   for (const [index, track] of mapped.entries()) {
     if (track.codec_name !== 'subrip') continue;
     const before = await subtitleText(ff, source, track.index, true);
-    const after = await subtitleText(ff, output, prepared.streams[index].index, false);
+    const after = await subtitleText(ff, output, playable[index].index, false);
     if (before === null || before !== after) return originalFile(file, limit);
   }
   const parts = [await ff.readFile(output)];
@@ -173,7 +211,7 @@ export async function prepareMedia(ff, file, info, quality, limit) {
     const containerTags = ['major_brand', 'minor_version', 'compatible_brands', 'encoder'];
     const extra = Object.entries(tags).filter(([key, value]) =>
       !containerTags.includes(key) && prepared.format.tags?.[key] !== value);
-    if (extra.length) parts.push(await additionalAudioMetadata(ff, source, extra));
+    if (extra.length) parts.push(await additionalMediaMetadata(ff, output, audio.length ? 'a' : 'v', extra));
   }
   const blob = new Blob(parts, {type: video ? 'video/mp4' : 'audio/mp4'});
   let choice = fits(blob.size) ? 'converted' : 'too-large';

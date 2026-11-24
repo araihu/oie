@@ -2,6 +2,86 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
+async function verifyMediaIntegrity(browser, href) {
+  const page = await browser.newPage({locale:'en'});
+  try {
+    await page.goto(href + '&lang=en');
+    const dir = path.join(__dirname, 'fixtures');
+    const video = await fs.readFile(path.join(dir, 'covered-video.mp4'));
+    const mp3 = await fs.readFile(path.join(dir, 'covered-tone.mp3'));
+    const covers = await fs.readFile(path.join(dir, 'labeled-covers.mp3'));
+    const alpha = await fs.readFile(path.join(dir, 'transparent.webm'));
+    const partial = video.subarray(0, Math.floor(video.length / 2));
+    const openEnded = Buffer.from(partial);
+    const mdat = openEnded.indexOf('mdat');
+    assert(mdat > 4);
+    openEnded.writeUInt32BE(0, mdat - 4);
+    const cases = [
+      {name:'transparent.webm', mime:'video/webm', bytes:alpha, reason:'transparent'},
+      {name:'short.mp4', mime:'video/mp4', bytes:partial, reason:'damaged'},
+      {name:'open-ended.mp4', mime:'video/mp4', bytes:openEnded, reason:'damaged'},
+      {name:'recording', mime:'application/octet-stream', bytes:mp3, output:'recording.mp3'},
+      {name:'recording.wav', mime:'audio/wav', bytes:mp3, output:'recording.mp3'},
+      {name:'covers.mp3', mime:'audio/mpeg', bytes:covers, reason:'coverLabels', output:'covers.mp3'},
+      {name:'covered.mp4', mime:'video/mp4', bytes:video, output:'covered.mp4'},
+      {name:'covered.mp4', mime:'video/mp4', bytes:video, output:'covered.mp4', quality:'SD'},
+    ];
+    const dialog = page.locator('#media-quality-dialog');
+    const composer = page.locator('#message-composer');
+    await composer.fill('Keep this caption');
+    let staged = 0;
+    page.on('request', req => { if (new URL(req.url()).pathname === '/ui/scheduling/stage') staged++; });
+    for (const c of cases) {
+      await page.locator('#composer-split [data-popover-trigger] button').click();
+      const picking = page.waitForEvent('filechooser');
+      await page.locator('#composer-attach-media').click();
+      await (await picking).setFiles({name:c.name, mimeType:c.mime, buffer:c.bytes});
+      const submit = dialog.locator('[data-prepare-media]');
+      const before = staged;
+      if (!c.output) {
+        await dialog.locator('[data-media-as-file]:visible').waitFor();
+        assert(await submit.isHidden(), c.name);
+        assert.equal(await dialog.locator('input[type=radio]:enabled').count(), 0, c.name);
+      } else {
+        await dialog.locator('[data-prepare-media]:enabled').waitFor();
+        assert.equal(await dialog.locator('[value=SD]').isEnabled(), !c.reason, c.name);
+        assert.equal(await dialog.locator('[value=HD]').isEnabled(), !c.reason, c.name);
+        assert(await dialog.locator('[value=OG]').isEnabled(), c.name);
+      }
+      if (c.reason) {
+        const label = await dialog.locator('[data-transparent]').getAttribute(
+          'data-' + (c.reason === 'coverLabels' ? 'cover-labels' : c.reason));
+        assert.equal(await dialog.locator('[role=status]').textContent(), label, c.name);
+      }
+      if (c.output) {
+        await dialog.locator('[value=' + (c.quality || 'OG') + ']').check();
+        const staging = page.waitForResponse(r => new URL(r.url()).pathname === '/ui/scheduling/stage');
+        await submit.click();
+        const response = await staging;
+        assert(response.ok());
+        const receipt = await response.json();
+        const bytes = await (await page.request.get(response.url().replace('/stage?', '/file?'))).body();
+        assert.equal(receipt.fileName, c.output);
+        assert.equal(receipt.mediaType, c.output.endsWith('mp4') ? 'video/mp4' : 'audio/mpeg');
+        if (c.quality === 'SD') {
+          assert(bytes.length <= c.bytes.length * 0.9, 'covered video was compressed');
+          const png = video.indexOf(Buffer.from('89504e470d0a1a0a', 'hex'));
+          const end = video.indexOf('IEND', png);
+          assert(png >= 0 && end > png && bytes.includes(video.subarray(png, end + 8)));
+        } else assert.deepEqual(bytes, c.bytes);
+        await page.locator('[data-remove-attachment]').click();
+      } else {
+        await dialog.press('Escape');
+        await dialog.waitFor({state:'hidden'});
+        assert.equal(staged, before, 'cancel did not stage ' + c.name);
+      }
+      assert.equal(await composer.inputValue(), 'Keep this caption');
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function outgoingMedia(browser, href, state, sends) {
   const fixtures = path.join(__dirname, 'fixtures');
   const cases = [
@@ -151,5 +231,6 @@ async function outgoingMedia(browser, href, state, sends) {
       await page.close();
     }
   }
+  await verifyMediaIntegrity(browser, href);
 }
 module.exports = {outgoingMedia};

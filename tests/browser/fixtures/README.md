@@ -14,6 +14,12 @@ They do not need FFmpeg, network media, or any external fixture service.
 16×16 PNG cover, title, artist and custom ID3 text tag. It exercises sending
 compatible MP3 originals and preparing M4A with embedded artwork and metadata.
 
+`transparent.webm` is a synthetic 16×16 VP8 clip with a half-transparent red
+frame. `covered-video.mp4` combines an H.264 test pattern with the PNG from
+`covered-tone.mp3`. The tests cut the MP4 in memory to simulate an incomplete
+download. `labeled-covers.mp3` uses the same synthetic tone with two PNGs
+tagged as front and back covers.
+
 `unindexed-opus.weba` contains a two-second synthetic 660 Hz tone encoded
 with FFmpeg's libopus at 12 kbps. Its WebM clusters have unknown sizes, omit
 cues, and contain audio blocks with the keyframe flag cleared. This exercises

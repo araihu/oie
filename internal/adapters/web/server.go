@@ -287,7 +287,7 @@ type view struct {
 }
 
 type copy struct {
-	MediaQuality, AttachMedia, MediaSD, MediaHD, MediaOG, MediaPreferOG, MediaAsFile, MediaKeepTracks, MediaTooLarge, MediaPrepareUnavailable, MediaLimitText, MediaChecking, MediaAttach, MediaOriginalTooLarge string
+	MediaQuality, AttachMedia, MediaSD, MediaHD, MediaOG, MediaPreferOG, MediaAsFile, MediaKeepTracks, MediaTransparent, MediaDamaged, MediaCoverLabels, MediaTooLarge, MediaPrepareUnavailable, MediaLimitText, MediaChecking, MediaAttach, MediaOriginalTooLarge string
 	OfflineStorageTitle, OfflineStorageLimit, OfflineStorageHelp, OfflineStorageUsage, OfflineStorageExcess, OfflineStorageFailed                                                                                string
 	OfflineSearchAll, OfflineSearchChat, OfflineSearchEmpty, OfflineSearchCount, OfflineSearchTooLong                                                                                                            string
 	OfflineHistoryFull, OfflineHistoryPending                                                                                                                                                                    string
