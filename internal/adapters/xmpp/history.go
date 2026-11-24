@@ -26,7 +26,6 @@ var errArchiveCursor = errors.New("archive cursor expired")
 var errUnstable = errors.New("archive not stable")
 
 type archiveMessage struct {
-	Encrypted *struct{} `xml:"eu.siacs.conversations.axolotl encrypted"`
 	stanza.Message
 	fileSharingMetadata
 	replyMetadata
@@ -127,9 +126,6 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 }
 func archivedIncoming(account domain.Account, scope string, r *archiveResult, trust archiveTrust) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
-	if msg != nil && msg.Encrypted != nil {
-		return application.Incoming{}, false, nil
-	}
 	withdrawal := msg != nil && (len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 || len(msg.LegacyTombstones) != 0)
 	if withdrawal {
 		in, ok := archivedRoomModeration(account, scope, r)
@@ -328,6 +324,11 @@ func readArchiveIQ(ctx context.Context, e *entry, s *mx.Session, scope string, k
 	return result.Inner, nil
 }
 func (m *Manager) supportsArchive(ctx context.Context, e *entry, s *mx.Session, scope string) (bool, error) {
+	// Encrypted MAM replay needs its own decryption and recovery policy. Keep
+	// the direct cursor intact until those messages can actually be imported.
+	if m.omemoDir != "" && scope == e.account.Address {
+		return false, nil
+	}
 	info, err := m.queryInfo(ctx, e, s, scope)
 	kind := "room"
 	if scope == e.account.Address {

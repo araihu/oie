@@ -280,7 +280,7 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 			return
 		}
 		if deviceErr != nil {
-			_ = m.publish(ctx, e, "not_connected", "protocol_unavailable", true)
+			_ = m.publish(ctx, e, "error", "connection_failed", true)
 			return
 		}
 		m.run(ctx, e)
@@ -996,11 +996,17 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			}
 			m.queueAvatar(e, publisher, "", false)
 		}
+		if e.omemoDevice != nil && msg.AvatarEvent != nil && msg.AvatarEvent.Items.Node == deviceNode && (msg.From.String() == "" || msg.From.String() == e.account.Address) {
+			select {
+			case e.omemoRefresh <- struct{}{}:
+			default:
+			}
+		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
 		}
-		if msg.Encrypted != nil {
-			if m.omemoDir == "" || msg.MUC != nil || msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage || msg.From.Localpart() == "" || msg.To.String() != "" && msg.To.Bare().String() != e.account.Address {
+		if m.omemoDir != "" && msg.Encrypted != nil {
+			if msg.MUC != nil || msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage || msg.From.Localpart() == "" || msg.To.String() != "" && msg.To.Bare().String() != e.account.Address {
 				return nil
 			}
 			return m.receiveEncrypted(ctx, e, msg.Message, *msg.Encrypted)
