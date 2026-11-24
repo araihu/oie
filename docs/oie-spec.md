@@ -1171,7 +1171,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B13** | Image OCR. |
 | **B14** | Audio transcription. |
 | **B15** | Implemented for the hosted web app on supported browsers. See [Web Push](notifications.md#hosted-web-push). |
-| **B16** | XMPP end-to-end encryption, including keys/trust, encrypted history, and the hosted-engine endpoint model. |
+| **B16** | Start XMPP end-to-end encryption with OMEMO direct text on the local engine. Include device verification, key import/export and encrypted history recovery. See the [B16 plan](#163-local-engine-omemo-b16). |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
 | **B18** | Interactive OIDC enrollment and sign-in from desktop clients. The hosted browser uses OIDC and desktop can supply a hosted API key. |
 | **B19** | Sticker selection, packs and sending. |
@@ -1216,6 +1216,50 @@ A separate native daemon is an accepted future option. Wails desktop packaging i
 - **macOS signing and notarization.** Obtain an Apple Developer ID Application certificate for Arai Hû. Add signing with Hardened Runtime, notarization and ticket stapling to the macOS release job before computing release checksums. Verify Gatekeeper on a clean Mac using the published archive and Homebrew cask. [Apple notarization guide](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
 - **Third-party Fedora and Arch channels.** Evaluate COPR and an AUR `PKGBUILD` as additional distribution channels. The signed Arai Hû repositories serve updates directly through DNF and pacman. [Package-manager installation](installation.md#package-manager-builds)
 - **Other catalogs.** Evaluate official distro repositories and additional formats as separate distribution choices. Record the maintainer, submission path and update policy for each selected channel before implementing it. See the [current installation channels](installation.md#package-manager-builds).
+
+### 16.3 Local-engine OMEMO (B16)
+
+**First milestone (backlog).** Send and receive encrypted text in a direct XMPP
+conversation. The local engine owns an OMEMO device identity for each account.
+Offer an encryption control in the conversation and show whether a message was
+encrypted. If an encrypted send needs a trust decision or a compatible peer,
+keep it pending and offer the relevant action. Retry must preserve the choice
+to encrypt. Group chats and attachments are later increments. Hosted operation
+needs a separate endpoint decision because a host that decrypts can read the message.
+
+**Device verification.** Open the account's own devices from account settings
+and the peer's devices from conversation details or a blocked send. Show the
+fingerprint and trust state of each device. Let the user compare, verify or
+distrust a fingerprint. A changed key needs a fresh decision. Keep the draft
+while the user reviews devices. Gajim exposes copyable fingerprints, QR codes,
+trust states and inactive devices. Conversations lets users scan from its trust
+screen and checks that the code belongs to the chat. Both clients support blind
+trust before verification. Oiê must reserve “verified” for an authenticated
+fingerprint. The initial trust policy is open.
+[Gajim trust manager](https://github.com/gajim/gajim/blob/ff64611a76a2cf05c7381a8738e6ba9cd30e60b6/src/gajim/gtk/crypto_trust_manager.py) ·
+[Conversations trust screen](https://codeberg.org/iNPUTmice/Conversations/src/commit/923b2422c3fd0bb8b472f207cc3440f566cad5d5/src/main/java/eu/siacs/conversations/ui/TrustKeysActivity.java)
+
+| User action | Format and expected behavior |
+| --- | --- |
+| Share or verify a public fingerprint | Offer copyable hex and import/export an XEP-0434 Trust Message URI as text or QR. Also support the `omemo-sid-<device-id>` fingerprint links used by the reference clients for their legacy OMEMO identities. Match the account, protocol and fingerprint, and ask for confirmation before applying trust. [XEP-0434](https://xmpp.org/extensions/xep-0434.html) · [Gajim URI writer](https://github.com/gajim/gajim/blob/ff64611a76a2cf05c7381a8738e6ba9cd30e60b6/src/gajim/common/modules/omemo.py#L677-L700) · [Conversations URI writer](https://codeberg.org/iNPUTmice/Conversations/src/commit/923b2422c3fd0bb8b472f207cc3440f566cad5d5/src/main/java/eu/siacs/conversations/entities/Account.java#L603-L624) |
+| Move an Oiê identity | Import and export a documented, versioned, passphrase-protected key archive using authenticated encryption. After unlocking it, show the account, device ID and fingerprint before activation. Retire the old installation when moving an identity. Give an additional device a fresh identity. Offer explicit session repair after restoring stale state. |
+| Recover readable history | Offer a separately selectable encrypted backup of retained OMEMO messages. Restore under the destination's deletion, retention and merge rules in [section 12](#12-backup-and-merge-restore). Importing a key alone cannot recover every earlier XMPP archive message. Show when decryption is unavailable. Keep private keys and decrypted OMEMO content, including pending text, out of unencrypted profile exports. |
+| Import from another client | Evaluate Conversations Encrypted Backup (`.ceb`) by file version. Its migration flow uses one encrypted file per account for keys and chat text. Preview the available contents and let the user select identity or history. Gajim stores OMEMO state per account and separately exports readable chat history. Any Gajim importer needs an identified source format and fixtures. [Conversations migration guide](https://codeberg.org/iNPUTmice/Conversations/src/commit/923b2422c3fd0bb8b472f207cc3440f566cad5d5/docs/user/migrating_to_new_device.md) · [Gajim key store](https://github.com/gajim/gajim/blob/ff64611a76a2cf05c7381a8738e6ba9cd30e60b6/src/gajim/common/modules/omemo.py#L155-L163) · [Gajim history export](https://github.com/gajim/gajim/blob/ff64611a76a2cf05c7381a8738e6ba9cd30e60b6/src/gajim/gtk/history_export.py#L107-L148) |
+
+**Interoperability and acceptance.** Current XEP-0384 uses `urn:xmpp:omemo:2`.
+The inspected Gajim and Conversations implementations use the legacy
+`eu.siacs.conversations.axolotl` message format. Test sending and receiving
+with both Gajim and Conversations. Record the client version and namespace
+for each result before claiming compatibility. Treat an incompatible version
+as unavailable. Verify that a changed device prompts review, a wrong-account
+QR leaves trust intact, and a blocked send transmits no plaintext. On a
+replacement installation, round-trip the key archive, verify the fingerprint
+and exchange new messages. Separately restore backed-up history twice without
+duplicates or retransmission. A wrong passphrase or altered archive must leave
+the destination intact.
+[XEP-0384](https://xmpp.org/extensions/xep-0384.html) ·
+[Gajim's XMPP namespaces](https://github.com/gajim/python-nbxmpp/blob/2e3fb9618e53633ce01524425f24c145d5f21aac/nbxmpp/namespaces.py#L116-L118) ·
+[Conversations' XMPP namespaces](https://codeberg.org/iNPUTmice/Conversations/src/commit/923b2422c3fd0bb8b472f207cc3440f566cad5d5/src/main/java/eu/siacs/conversations/xml/Namespace.java#L5-L10)
 
 ## 17. Recommended delivery sequence and validation
 
