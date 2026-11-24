@@ -235,6 +235,7 @@ func (m *Manager) CapabilityEvidence(_ context.Context, a domain.Account) (domai
 		e.mu.RLock()
 		if e.state.State == "connected" {
 			d = cloneDiscovery(e.discovery)
+			d.UploadMaxBytes = advertisedUploadLimit(e)
 		}
 		e.mu.RUnlock()
 	}

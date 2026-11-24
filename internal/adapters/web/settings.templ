@@ -174,7 +174,13 @@ templ compositionSettings(v view) {
 
 templ deviceSettings(v view) {
 	<div class="oie-settings-section">
-		@toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
+		<label for="outgoing-media-default">{v.Text.MediaQuality}</label>
+  <select id="outgoing-media-default" class="oie-download-select" data-media-default>
+   <option value="SD">{v.Text.MediaSD}</option>
+   <option value="HD">{v.Text.MediaHD}</option>
+   <option value="OG">{v.Text.MediaPreferOG}</option>
+  </select>
+  @toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
 		<p id="render-markdown-help">{ v.Text.RenderMarkdownHelp }</p>
 		@toggle.Toggle(toggle.Config{ID:"auto-image-downloads",Label:v.Text.AutoImageDownloads,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-image-downloads":"","aria-describedby":"auto-image-downloads-help"}})
 		<p id="auto-image-downloads-help">{ v.Text.AutoImageDownloadsHelp }</p>

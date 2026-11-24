@@ -63,6 +63,25 @@ func recordUploadLimit(e *entry, session *mx.Session, service string, info disco
 	}
 }
 
+// advertisedUploadLimit is called with e.mu held.
+func advertisedUploadLimit(e *entry) int64 {
+	if e.discovery.State != "complete" {
+		return 0
+	}
+	var largest int64
+	for _, service := range e.discovery.Services {
+		if !serverServiceSupports(service, uploadNamespace) {
+			continue
+		}
+		limit := e.uploadLimits[service.Address]
+		if limit == 0 {
+			return 0
+		}
+		largest = max(largest, limit)
+	}
+	return largest
+}
+
 // uploadService is called with e.mu held.
 func uploadService(e *entry, largest int64) (string, error) {
 	hasService := false

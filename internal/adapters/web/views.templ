@@ -961,7 +961,7 @@ for _,a:=range v.Accounts {
 }
 
 templ liveRegions(v view){
-<div id="oie-live-regions" data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-upload-limit={strconv.FormatInt(v.uploadLimit(), 10)} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)

@@ -245,7 +245,7 @@ func (s *Server) serveStagedAttachment(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 			return
 		}
-		response, err := s.archiveClient.StageMessageAttachmentWithBodyWithResponse(ctx, conversation, attachment, r.Header.Get("Content-Type"), http.MaxBytesReader(w, r.Body, (20<<20)+(64<<10)))
+		response, err := s.archiveClient.StageMessageAttachmentWithBodyWithResponse(ctx, conversation, attachment, r.Header.Get("Content-Type"), r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return

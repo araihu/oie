@@ -92,6 +92,11 @@ async function waitForRecordingTime(page, minimumSeconds) {
   }, minimumSeconds);
 }
 
+// These capture, restoration and retry checks exercise the original recording.
+async function keepRecordedFile(page) {
+  await page.locator('[data-media-choice][open] [data-media-as-file]').click();
+}
+
 async function verifyAudioCapture(page, locale, useTone, interruption = '') {
   const copy = locale === 'pt-BR' ? {
     record:'Gravar áudio', waiting:'Abrindo microfone…', stop:'Parar gravação', recording:'Gravando áudio…', cancel:'Cancelar',
@@ -208,6 +213,7 @@ async function verifyAudioCapture(page, locale, useTone, interruption = '') {
     const staged = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
     if (interruption === 'during-stop') await stop.click();
     else await page.evaluate(() => window.interruptAudioTestTrack());
+    await keepRecordedFile(page);
     assert((await staged).ok(), 'microphone interruption keeps the recorded audio');
     await audio.locator('[data-record-audio-play]').waitFor();
     assert(!await dot.isVisible());
@@ -239,6 +245,7 @@ async function verifyCaptureWithoutWaveform(page, href) {
   assert.equal(await panel.locator('[data-record-audio-wave] canvas').count(), 0);
   const staged = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
   await page.getByRole('button', {name:'Stop recording',exact:true}).click();
+  await keepRecordedFile(page);
   assert((await staged).ok());
   await panel.getByRole('button', {name:'Play recording',exact:true}).click();
   await page.waitForFunction(() => document.querySelector('[data-record-audio] audio').currentTime > 0);
@@ -307,6 +314,7 @@ async function verifyDraftPlayback(page, href, locale, queuedSend) {
   await waitForRecordingTime(page, 2);
   const stage = page.waitForResponse(response => new URL(response.url()).pathname === '/ui/scheduling/stage');
   await stop.click();
+  await keepRecordedFile(page);
   await page.locator(media).evaluate(node => { node.playbackRate = 0.5; });
   await play.focus();
   await play.press('Enter');
@@ -409,6 +417,7 @@ async function verifyDraftPlayback(page, href, locale, queuedSend) {
   }, {times:1});
   const uploadRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
   await stop.click();
+  await keepRecordedFile(page);
   const attachmentID = new URL((await uploadRequest).url()).searchParams.get('attachmentId');
   let requests = 0;
   const response = page.waitForResponse(result => new URL(result.url()).pathname === '/ui/messages/send');
@@ -453,7 +462,8 @@ async function launch() {
     if (url.pathname === '/api/v1/accounts') return send(200,{items:[{id:account,revisionId:revision,protocol:'xmpp',label:'Fixture',address:'alice@fixture',createdAt:now,connectionState:'connected'}]});
     if (name === 'connection') return send(200,{accountId:account,state:'connected',updatedAt:now});
     if (name === 'history') return send(200,{accountId:account,state:'complete',retainedMessages:2,conversations:2,updatedAt:now});
-    if (name === 'capabilities') return send(200,{accountId:account,features});
+    if (name === 'capabilities') return send(200,{accountId:account,features,
+      discovery:{state:'complete', services:[], uploadMaxBytes:state.uploadMaxBytes}});
     if (['avatars','previews','message-stars'].includes(name)) return send(200,{items:[]});
     if (url.pathname === '/api/v1/conversations') return send(200,{items:conversations});
     if (chat && name === chat.id) return send(200,chat);
@@ -606,6 +616,8 @@ async function launch() {
       if (await fetch(base).then(response => response.ok, () => false)) break;
       await new Promise(resolve => setTimeout(resolve, 50));
     }
+    await require('./outgoing-media.cjs').outgoingMedia(browser, base + '/?chat=' + direct, state);
+    if (process.argv.includes('--media-quality')) return;
     for (const [locale, width] of [['en',1440], ['pt-BR',390]]) {
       const page = await browser.newPage({locale,viewport:{width,height:844}});
       try {
@@ -870,7 +882,7 @@ async function launch() {
       for (const [action, accept] of [[imageAction, 'image/*'], [fileAction, '']]) {
         await options.click();
         await menu.waitFor();
-        assert.equal(await menu.getByRole('menuitem').count(), 3);
+        assert.equal(await menu.getByRole('menuitem').count(), 4);
         assert(await scheduleAction.isEnabled());
         const chooser = page.waitForEvent('filechooser');
         await action.click();
@@ -1055,6 +1067,7 @@ async function launch() {
         }, {times:1});
         state.stageStatus = 503;
         await stop.click();
+        await keepRecordedFile(page);
         try {
           await send.click();
           assert.equal(await send.getAttribute('aria-disabled'),'true');
@@ -1124,6 +1137,7 @@ async function launch() {
         await audio.locator('[data-record-audio-wave] canvas').first().waitFor();
         await waitForRecordingTime(page, 1);
         await stop.click();
+        await keepRecordedFile(page);
         await position.waitFor();
         await page.waitForFunction(() => !document.querySelector('#composer-send').disabled);
         assert.equal(posts.length,before + 3);
@@ -1174,6 +1188,7 @@ async function launch() {
         }, {times:1});
         const uploadRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
         await stop.click();
+        await keepRecordedFile(page);
         const attachmentID = new URL((await uploadRequest).url()).searchParams.get('attachmentId');
         let releaseQueuedSend;
         const queuedSendGate = new Promise(resolve => { releaseQueuedSend = resolve; });
@@ -1264,6 +1279,7 @@ async function launch() {
           await route.continue().catch(() => {});
         }, {times:1});
         await stop.click();
+        await keepRecordedFile(page);
         await cancelPageUpload;
         try {
           await send.click();
@@ -1291,6 +1307,7 @@ async function launch() {
         }, {times:1});
         const background = page.waitForRequest(request => new URL(request.url()).pathname === '/ui/scheduling/stage');
         await stop.click();
+        await keepRecordedFile(page);
         const backgroundID = new URL((await background).url()).searchParams.get('attachmentId');
         let finishBackgroundSend;
         const sendGate = new Promise(resolve => { finishBackgroundSend = resolve; });
@@ -1335,6 +1352,7 @@ async function launch() {
         await page.route('**/ui/messages/reconcile', route => route.fulfill({status:503,
           json:{ok:false,code:'engine_unavailable'}}));
         await stop.click();
+        await keepRecordedFile(page);
         try {
           await send.click();
           await page.locator('#conversation-list a[href*="chat=' + room + '"]').first().click();
@@ -1359,6 +1377,7 @@ async function launch() {
           await route.continue().catch(() => {});
         }, {times:1});
         await stop.click();
+        await keepRecordedFile(page);
         try {
           await send.click();
           let unloadPrompts = 0;

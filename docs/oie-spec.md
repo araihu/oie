@@ -421,8 +421,7 @@ compositions, attachment staging, cross-conversation listing and Send now.
 Edit, reschedule, cancel and Send now share an atomic cutoff at the dispatch
 claim, before the first provider attempt. The engine stores staged bytes and
 their SHA-256 in its data directory and keeps the dispatch instant in UTC.
-This increment accepts up to 16 files per message, each at most 20 MiB.
-An advertised provider limit can be lower. XMPP dispatch uploads the files
+The composer accepts up to 16 files per message. The provider determines the per-file limit. XMPP dispatch uploads the files
 and sends their ordered HTTPS links in the outgoing message body. After a
 restart, a claimed send can retry when the engine knows that no stanza write
 began. It keeps the original mutation cutoff. If a write may have begun, the
@@ -696,6 +695,8 @@ and 12 for sync and restore.
 Allow media sharing when effective protocol/server capabilities permit. Expose known upload limits and meaningful transfer errors through the uniform API.
 
 **AGREED:** the composer’s plus menu offers Image and File. Selecting, pasting or dropping a file adds it to the active conversation draft with individual removal and supported image thumbnails. Use the message box for the caption. Ordinary text paste keeps its normal behavior. Adding a file preserves the existing draft and leaves Send as a separate composer action. Respect the selected conversation’s capabilities and known upload limits, with clear feedback when attachments cannot be sent. Upload staging and multi-attachment delivery semantics remain open under O09. See [attachment composition](attachment-composition.md) for the implemented browser workflow. Location sharing is tracked in B34.
+
+**AGREED:** prepare outgoing audio and video on the sending device before creating a schedule or sending. New devices default to SD. Provide HD and a preference for a compatible original, with a per-attachment choice. Converted video uses MP4 with H.264 and AAC-LC, and converted audio uses M4A with AAC-LC. Keep the source dimensions and frame rate. SD and HD use quality targets for video and 64/128 kbps per mono/stereo track in SD or 128/256 kbps in HD. HD copies compatible tracks. Keep alternate audio and subtitles, including their language and default selection, or offer the original as a file. Keep a compatible original when SD saves less than 10%, except when only SD fits the advertised limit. Known limits apply to final bytes. The provider can still reject an upload.
 
 Incoming images **download automatically as they enter view** by default, configurable per device. Turning automatic image downloads off keeps supplied small previews automatic and full originals on demand; in that mode, do not download an original merely to generate a thumbnail. Other file types keep small previews automatic and full files on demand.
 

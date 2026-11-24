@@ -539,3 +539,18 @@
   pointer-events: none;
   content: "";
 }
+
+.oie-media-choice {
+  inline-size: min(25rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  background: var(--color-surface, Canvas);
+  color: inherit;
+  border: 1px solid var(--color-border, GrayText);
+  border-radius: .75rem;
+}
+.oie-media-choice::backdrop { background: rgb(0 0 0 / .46); }
+.oie-media-choice h2 { margin: 0; font-size: 1.15rem; }
+.oie-media-choice [data-media-filename] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oie-media-choice fieldset { display: grid; gap: .5rem; padding: 0; border: 0; }
+.oie-media-choice [role=status] { min-block-size: 3lh; }
+.oie-media-choice footer { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }

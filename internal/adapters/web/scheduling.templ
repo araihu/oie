@@ -11,6 +11,7 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/radio"
 	"github.com/araihu/goshtoso/components/splitbutton"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -249,7 +250,12 @@ templ scheduleControl(v view) {
 				Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsPhoto16SolidPhoto, Decorative:true, RootClass:"oie-icon"}),
 				OnClick:"$dispatch('oie:compose-add','image')",
 			},{
-				ID:"composer-attach-file",
+                ID:"composer-attach-media",
+                Label:v.Text.AttachMedia,
+                Icon:glyph(heroicons.Icon16SolidPlay),
+                OnClick:"$dispatch('oie:compose-add','media')",
+            },{
+                ID:"composer-attach-file",
 				Label:v.Text.AttachFile,
 				Icon:glyph(heroicons.Icon16SolidPaperClip),
 				OnClick:"$dispatch('oie:compose-add','file')",
@@ -276,6 +282,24 @@ templ scheduleFields(v view) {
 	<input type="hidden" name="attachmentIds"/>
 	@scheduleEditor(v)
 	<input type="file" data-attachment-picker multiple hidden/>
+ <dialog class="oie-media-choice" data-media-choice aria-labelledby="media-quality-title"
+  data-limit-text={v.Text.MediaLimitText} data-upload-limit={fmt.Sprint(v.uploadLimit())} data-unavailable={v.Text.MediaPrepareUnavailable} data-keep-tracks={v.Text.MediaKeepTracks}
+  data-too-large={v.Text.MediaTooLarge} data-original-too-large={v.Text.MediaOriginalTooLarge} data-preparing={v.Text.AttachmentPreparing} data-checking={v.Text.MediaChecking}>
+  <h2 id="media-quality-title">{v.Text.MediaQuality}</h2>
+  <p data-media-filename dir="auto"></p>
+  <fieldset aria-labelledby="media-quality-title">
+   @radio.Radio(radio.Config{ID:"outgoing-media-sd",Name:"mediaQuality",Value:"SD",Label:v.Text.MediaSD,Checked:true})
+   @radio.Radio(radio.Config{ID:"outgoing-media-hd",Name:"mediaQuality",Value:"HD",Label:v.Text.MediaHD})
+   @radio.Radio(radio.Config{ID:"outgoing-media-og",Name:"mediaQuality",Value:"OG",Label:v.Text.MediaOG})
+  </fieldset>
+  <p data-media-limit hidden></p>
+  <p role="status"></p>
+  <footer>
+   @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-media-cancel":""})){ {v.Text.RoomCancelAction} }
+   @button.Button(button.WithType("button"),button.WithAttrs(templ.Attributes{"data-media-as-file":"","hidden":true})){ {v.Text.MediaAsFile} }
+   @button.Button(button.WithType("button"),button.WithAttrs(templ.Attributes{"data-prepare-media":""})){ {v.Text.MediaAttach} }
+  </footer>
+ </dialog>
 }
 
 templ scheduleEditor(v view) {

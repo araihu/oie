@@ -34,8 +34,12 @@ stages portal-granted files in the desktop process and returns the completed
 attachments to the active draft. A file whose request
 committed before cancellation can remain in storage. Cleanup is tracked in O09.
 
-The app accepts up to 16 attachments, with an engine limit of 20 MiB per file.
-The provider can impose a lower limit. The XMPP adapter uploads accepted
+Use **Audio or video** for SD, HD or a compatible original. The device default
+is SD. A recording, pasted media or dropped media uses the same quality dialog.
+**File** attaches the original. Choosing a quality prepares the bytes on the
+device before staging, including for scheduled messages. A draft can contain
+up to 16 attachments. The account’s XMPP upload service sets the per-file
+limit. Discovery reports a limit only when all eligible services advertise one. The XMPP adapter uploads accepted
 attachments before writing the outgoing chat message. The recipient receives
 the caption followed by the provider’s download links. A pending message shows
 filenames and supported thumbnails while the engine confirms acceptance.
