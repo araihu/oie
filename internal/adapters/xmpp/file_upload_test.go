@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +18,18 @@ import (
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmpp/stanza"
 )
+
+func TestLargeAttachmentUploadTimeout(t *testing.T) {
+	for size, want := range map[int64]time.Duration{
+		32 << 10:      30500 * time.Millisecond,
+		12 << 30:      30*time.Second + 196608*time.Second,
+		math.MaxInt64: time.Duration(math.MaxInt64),
+	} {
+		if got := attachmentUploadTimeout(size); got != want {
+			t.Errorf("timeout for %d bytes = %v, want %v", size, got, want)
+		}
+	}
+}
 
 func TestAdvertisedUploadLimit(t *testing.T) {
 	first := domain.DiscoveredService{Address: "upload-a.example", Scope: "service", State: "known", Features: []string{uploadNamespace}}

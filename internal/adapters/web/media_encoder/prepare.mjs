@@ -107,9 +107,43 @@ async function completeMovie(ff, file, source) {
   }
   // Ignore edits when comparing against the unedited MP4 sample table.
   // PCM sample counts are not packet counts.
-  const {streams} = await probe(ff, source, ['-ignore_editlist', '1', '-count_packets']);
-  return streams.every(s => !['h264', 'hevc', 'aac', 'mp3', 'av1', 'vp9'].includes(s.codec_name) ||
-    s.disposition?.attached_pic || !(Number(s.nb_frames) > (Number(s.nb_read_packets) || 0)));
+  // The demuxer can emit a *partial* final packet, including in fragmented
+  // movies without nb_frames. Observe its diagnostics during the same scan.
+  let damaged = false;
+  const onLog = ({message}) => {
+    if (/\bPacket corrupt \(stream =|\bpartial file\b/i.test(message)) damaged = true;
+  };
+  ff.on('log', onLog);
+  try {
+    const {streams} = await probe(ff, source, ['-v', 'warning', '-ignore_editlist', '1', '-count_packets']);
+    return !damaged && streams.every(s => !['h264', 'hevc', 'aac', 'mp3', 'av1', 'vp9'].includes(s.codec_name) ||
+      s.disposition?.attached_pic || !(Number(s.nb_frames) > (Number(s.nb_read_packets) || 0)));
+  } finally {
+    ff.off('log', onLog);
+  }
+}
+
+// Streamed WAV writers can leave the container and data lengths unknown.
+async function completeWave(file) {
+  const header = new DataView(await file.slice(0, 12).arrayBuffer());
+  if (header.byteLength < 12) return false;
+  const signature = header.getUint32(0);
+  const littleEndian = signature === 0x52494646; // RIFF
+  if (!littleEndian && signature !== 0x52494658) return true; // RIFX; RF64 has its own size table.
+  const riffSize = header.getUint32(4, littleEndian);
+  const unknown = size => size === 0 || size === 0xffffffff;
+  if (!unknown(riffSize) && riffSize > file.size - 8) return false;
+  const end = unknown(riffSize) ? file.size : riffSize + 8;
+  // Skip PCM and ancillary chunk payloads. A data chunk may have a known
+  // length even when the container does not.
+  for (let offset = 12; offset + 8 <= end;) {
+    const chunk = new DataView(await file.slice(offset, offset + 8).arrayBuffer());
+    const length = chunk.getUint32(4, littleEndian);
+    if (chunk.getUint32(0) === 0x64617461 && unknown(length)) return true; // data
+    if (length > end - offset - 8) return false;
+    offset += 8 + length + (length % 2);
+  }
+  return true;
 }
 
 function hasTransparency(video) {
@@ -130,6 +164,7 @@ export async function inspectMedia(ff, file) {
   const subtitles = streams.filter(s => s.codec_type === 'subtitle');
   const movie = format.format_name.split(',').includes('mov');
   if (movie && !await completeMovie(ff, file, source)) return {problem:'damaged'};
+  if (format.format_name === 'wav' && !await completeWave(file)) return {problem:'damaged'};
   const alpha = video && hasTransparency(video);
   const copyVideo = !video || video.codec_name === 'h264' && video.pix_fmt === 'yuv420p' &&
     ['Constrained Baseline', 'Baseline', 'Main', 'High'].includes(video.profile);
@@ -141,7 +176,13 @@ export async function inspectMedia(ff, file) {
   const compatible = !!(supportedTracks && !alpha && (mp3 || movie && isoBrands.has(format.tags?.major_brand) &&
     copyVideo && audio.every(canCopyAudio) && subtitles.every(s => s.codec_name === 'mov_text')));
   // An M4A covr entry has image bytes but no per-picture role or description.
-  const labeledCovers = artwork.length > 1 && artwork.some(s => s.tags?.title || s.tags?.comment);
+  const labeledCovers = artwork.some(({tags = {}}) => {
+    if (artwork.length > 1) return tags.title || tags.comment;
+    // A single ordinary album cover remains identifiable as the album cover.
+    // A custom description or a different APIC role needs the original.
+    return (tags.title && tags.title !== 'Album cover') ||
+      (tags.comment && !['Cover (front)', 'Other'].includes(tags.comment));
+  });
   let problem;
   if (alpha) problem = 'transparent';
   else if (labeledCovers) problem = 'coverLabels';

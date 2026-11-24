@@ -31,19 +31,32 @@ type attachmentSelection struct {
 	Error bool                         `json:"error"`
 }
 
-// AttachFiles stages the files selected in the Flatpak's native chooser. The
-// nested WebKit sandbox cannot read the paths provided by the Documents portal.
-func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversationID, csrf string, remaining int, imagesOnly bool) (attachmentSelection, error) {
-	server := s.server.Load()
-	if desktopAppID() != flatpakAppID || server == nil || !validUUID(engineID) || !validUUID(conversationID) || remaining < 1 || remaining > 16 {
-		return attachmentSelection{}, errors.New("invalid desktop attachment request")
+// SelectMedia grants the WebView local access to this portal selection.
+func (s *runtimeService) SelectMedia(ctx context.Context, remaining int) (portalSelection, error) {
+	if desktopAppID() != flatpakAppID || remaining < 1 || remaining > 16 {
+		return portalSelection{}, errors.New("invalid media selection")
 	}
+	paths, err := s.pickAttachmentPaths(ctx, false)
+	if err != nil {
+		return portalSelection{}, err
+	}
+	return s.media.open(paths, remaining)
+}
+
+func (s *runtimeService) ReadMediaChunk(id string, index int, offset int64) ([]byte, error) {
+	return s.media.read(id, index, offset)
+}
+
+func (s *runtimeService) ReleaseMedia(id string) {
+	s.media.release(id)
+}
+
+func (s *runtimeService) pickAttachmentPaths(ctx context.Context, imagesOnly bool) ([]string, error) {
 	s.dialogMu.Lock()
 	defer s.dialogMu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return attachmentSelection{}, err
+		return nil, err
 	}
-
 	dialog := s.app.Dialog.OpenFile()
 	options := wails.OpenFileDialogOptions{
 		Title: s.labels.AttachFiles, Window: s.app.Window.Current(),
@@ -57,7 +70,17 @@ func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversation
 		}}
 	}
 	dialog.SetOptions(&options)
-	paths, err := dialog.PromptForMultipleSelection()
+	return dialog.PromptForMultipleSelection()
+}
+
+// AttachFiles stages the files selected in the Flatpak's native chooser. The
+// nested WebKit sandbox cannot read the paths provided by the Documents portal.
+func (s *runtimeService) AttachFiles(ctx context.Context, engineID, conversationID, csrf string, remaining int, imagesOnly bool) (attachmentSelection, error) {
+	server := s.server.Load()
+	if desktopAppID() != flatpakAppID || server == nil || !validUUID(engineID) || !validUUID(conversationID) || remaining < 1 || remaining > 16 {
+		return attachmentSelection{}, errors.New("invalid desktop attachment request")
+	}
+	paths, err := s.pickAttachmentPaths(ctx, imagesOnly)
 	if err != nil {
 		return attachmentSelection{}, err
 	}

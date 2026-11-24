@@ -412,7 +412,7 @@ window.OieRuntime.register('scheduling', life => {
     const videoPreviewBudget = 20 * 1024 * 1024;
     const submittedRecordingKey = 'submitted-recording:' + data.engineId + ':' + data.conversationId;
     const runtimeMemory = window.OieRuntime.memory;
-    let currentVideo, playerURL, playback, previewing;
+    let currentVideo, playerURL, previewing;
     const selectionOrder = new Map();
     let sequence = 0;
     let dragDepth = 0;
@@ -1054,7 +1054,6 @@ window.OieRuntime.register('scheduling', life => {
       if (!currentVideo) return;
       const id = currentVideo.id;
       currentVideo = null;
-      playback?.abort();
       player.pause();
       player.removeAttribute('src');
       player.load();
@@ -1070,24 +1069,17 @@ window.OieRuntime.register('scheduling', life => {
     async function playVideo(entry) {
       if (!entry || currentVideo) return;
       currentVideo = entry;
-      playback = new AbortController();
-      const {signal} = playback;
       playbackError.hidden = true;
       playerDialog.querySelector('[data-draft-video-title]').textContent = entry.name;
       playerDialog.showModal();
-      const timeout = setTimeout(() => playback?.signal === signal && playback.abort(), 12000);
+      playerURL = entry.file ? URL.createObjectURL(entry.file) : '';
+      player.src = playerURL || fileURL(entry.id) + '&play=1';
       try {
-        const file = await videoBlob(entry, signal);
-        signal.throwIfAborted();
-        playerURL = URL.createObjectURL(file);
-        player.src = playerURL;
         await player.play();
       } catch (error) {
-        if (currentVideo === entry && playback.signal === signal && error.name !== 'NotAllowedError') {
+        if (currentVideo === entry && error.name !== 'NotAllowedError' && error.name !== 'AbortError') {
           playbackError.hidden = false;
         }
-      } finally {
-        clearTimeout(timeout);
       }
     }
 
@@ -1122,7 +1114,7 @@ window.OieRuntime.register('scheduling', life => {
       uploading = true;
       const controller = new AbortController();
       file.request = controller;
-      let timeout, staged;
+      let staged;
       try {
         if (/[\x00-\x1f\x7f]/.test(file.fileName)) throw Error('invalid filename');
         if (file.prepareMedia) {
@@ -1147,7 +1139,6 @@ window.OieRuntime.register('scheduling', life => {
           file.prepareMedia = false;
           syncPending();
         }
-        timeout = setTimeout(() => controller.abort(), 90000);
         // Encode the multipart quoted string directly so quotes and literal %22 stay distinct.
         const boundary = 'oie-' + newID();
         const filename = file.fileName.replace(/["\\]/g, '\\$&');
@@ -1188,7 +1179,6 @@ window.OieRuntime.register('scheduling', life => {
         if (!life.signal.aborted) status.textContent = labels.failed;
         if (file.recordedAudio) errorToast(labels.failed);
       } finally {
-        clearTimeout(timeout);
         delete file.request;
         const submitted = runtimeMemory.get(submittedRecordingKey) === file;
         if (submitted && staged) runtimeMemory.delete(submittedRecordingKey);
@@ -1263,6 +1253,7 @@ window.OieRuntime.register('scheduling', life => {
     restoreSubmittedRecording();
 
     function discardPending(keepQueued = false) {
+      nativeSelection?.abort();
       nativeSelection = null;
       for (const file of pending.values()) {
         if (keepQueued && runtimeMemory.get(submittedRecordingKey) === file) {
@@ -1287,28 +1278,23 @@ window.OieRuntime.register('scheduling', life => {
       selectionOrder.clear();
       syncPending();
     });
-    async function chooseNativeFiles(choose, mode) {
+    async function chooseNativeFiles(desktop, mode) {
       if (pending.size) return;
       const remaining = 16 - files.length;
       if (remaining <= 0) {
         errorToast(labels.limit);
         return;
       }
-      const selection = nativeSelection = {};
+      const selection = nativeSelection = new AbortController();
       syncPending();
       try {
-        const result = await choose(data.engineId, data.conversationId, csrf, remaining, mode === 'image');
+        const result = mode === 'media'
+          ? await desktop.selectMedia(remaining, selection.signal)
+          : await desktop.attachFiles(data.engineId, data.conversationId, csrf, remaining, mode === 'image');
         if (nativeSelection !== selection) return;
         if (result.files?.length && mode === 'media') {
-          const picked = [];
-          for (const staged of result.files) {
-            const response = await life.fetch(fileURL(staged.id), {cache:'no-store'});
-            if (!response.ok) throw Error('could not read selection');
-            picked.push(new File([await response.blob()], staged.fileName, {type:staged.mediaType}));
-          }
-          if (nativeSelection !== selection) return;
           nativeSelection = null;
-          addFiles(picked, false, true);
+          addFiles(result.files, false, true);
         } else if (result.files?.length) {
           const detail = {files: [...files, ...result.files]};
           composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
@@ -1329,10 +1315,10 @@ window.OieRuntime.register('scheduling', life => {
 
     life.on(composer, 'oie:compose-add', event => {
       if (!['image', 'media', 'file'].includes(event.detail) || !canAddAttachments()) return;
-      const choose = window.OieDesktop?.attachFiles;
+      const desktop = window.OieDesktop;
       const imagesOnly = event.detail === 'image';
-      if (choose) {
-        void chooseNativeFiles(choose, event.detail);
+      if (event.detail === 'media' ? desktop?.selectMedia : desktop?.attachFiles) {
+        void chooseNativeFiles(desktop, event.detail);
         return;
       }
       picker.dataset.asMedia = String(event.detail === 'media');

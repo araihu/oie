@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -207,7 +208,11 @@ func sendUpload(ctx context.Context, client *http.Client, slot uploadSlot, file 
 func attachmentUploadTimeout(size int64) time.Duration {
 	// Give each file its own allowance for connection setup and a slow uplink.
 	const bytesPerSecond = 64 << 10
-	return 30*time.Second + time.Duration(size)*time.Second/bytesPerSecond
+	seconds := size / bytesPerSecond
+	if seconds >= math.MaxInt64/int64(time.Second)-30 {
+		return time.Duration(math.MaxInt64)
+	}
+	return 30*time.Second + time.Duration(seconds)*time.Second + time.Duration(size%bytesPerSecond)*time.Second/bytesPerSecond
 }
 
 // attachmentUploadCurrent is called with e.mu held.

@@ -16,7 +16,7 @@ system save dialog with the file’s name.
 | --- | --- | --- | --- |
 | Choose, paste or drop files | Show the selected files in the composer and start staging | Make the existing caption available for editing | 0 |
 | Remove a file while staging | Cancel that file’s request and remove its row | Keep the typed caption and other files | 0 |
-| Unsupported conversation or file over the local limit | Show a localized notice | Preserve the existing draft | 0 |
+| Unsupported conversation or selection over the attachment count limit | Show a localized notice | Preserve the existing draft | 0 |
 | Stage fails or its response is lost | Offer Retry and Remove in that file’s row | Keep the caption and file selection | 0 |
 | Retry staging | Reuse the file’s staging ID | Keep the caption editable | 0 |
 | Staging succeeds | Retain the file in the scoped draft | Preserve text typed during the request | 0 |
@@ -24,14 +24,15 @@ system save dialog with the file’s name.
 | Navigation or scheduled-draft switch during staging | Cancel the outstanding selections | A late response cannot apply to another draft | 0 |
 
 Browser staging uses the existing conversation-scoped multipart endpoint. Files stage
-one at a time, with a separate timeout for each request. Send and Schedule
+one at a time, with an idle timeout for each upload. Send and Schedule
 become available after all selected files finish staging or the user
 removes the remaining selections. Staged attachments survive a reload.
 Thumbnail extraction runs independently of staging and send eligibility.
-Unsupported video formats still have filename and removal controls.
+A restored draft streams its video on explicit playback, including files larger than the thumbnail budget. Unsupported video formats still have filename and removal controls.
 Unfinished file selections are held in the current view. The Flatpak chooser
-stages portal-granted files in the desktop process and returns the completed
-attachments to the active draft. A file whose request
+reads selected audio and video locally for the quality dialog. Only the confirmed
+attachment is staged. The File and Image actions stage portal-granted files in
+the desktop process. A file whose request
 committed before cancellation can remain in storage. Cleanup is tracked in O09.
 
 Use **Audio or video** for SD, HD or a compatible original. The device default
@@ -41,8 +42,8 @@ the compatible MP3 when it fits. SD can produce a smaller AAC/M4A with its
 cover and descriptive tags, subject to the same 10% savings rule as other
 compatible originals. The composer recognizes MP3 by content and corrects the
 attachment name and media type when needed. An MP4 video can include a cover.
-For an MP3 with separately labeled covers, choose OG to preserve the labels.
-Attach a transparent video as a file to keep its alpha channel. A movie detected
+For an MP3 with a custom cover description, a back cover or separately labeled covers, choose OG to preserve the labels.
+Attach a transparent video as a file to keep its alpha channel. An MP4 or WAV detected
 as incomplete displays a warning and can only be attached explicitly as a file.
 
 **File** attaches the original. Choosing a quality prepares the bytes on the

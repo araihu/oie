@@ -620,7 +620,7 @@ async function launch() {
       if (await fetch(base).then(response => response.ok, () => false)) break;
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-    await require('./outgoing-media.cjs').outgoingMedia(browser, base + '/?chat=' + direct, state, sendRequests);
+    await require('./outgoing-media.cjs').outgoingMedia(browser, base + '/?chat=' + direct, state, sendRequests, audioFixture(1));
     acceptedAudio = undefined;
     sendRequests.length = 0;
     if (process.argv.includes('--media-quality')) return;
@@ -978,6 +978,27 @@ async function launch() {
       assert.equal(await composer.inputValue(),caption);
       await row.locator('[data-remove-attachment]').click();
       await row.waitFor({state:'hidden'});
+
+      if (locale === 'en') {
+        // A valid EBML Void puts this WebM just above the automatic thumbnail budget.
+        const large = Buffer.concat([bytes, Buffer.from([0xec, 0x11, 0x40, 0, 0]), Buffer.alloc(20 << 20)]);
+        await picker.setInputFiles({name:'Large.webm', mimeType:'application/octet-stream', buffer:large});
+        await row.getByRole('link', {name:'Large.webm'}).waitFor();
+        await page.reload();
+        await row.locator('[data-draft-video-play]').click();
+        await waitPlayback('[data-draft-video-dialog] video');
+        const url = await dialog.locator('video').evaluate(node => node.currentSrc);
+        assert.equal(new URL(url).pathname, '/ui/scheduling/file');
+        const range = await page.request.get(url, {headers:{Range:'bytes=1-32'}});
+        assert.equal(range.status(), 206);
+        assert.equal(range.headers()['content-type'], 'video/webm');
+        assert.deepEqual(await range.body(), large.subarray(1, 33));
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({state:'hidden'});
+        await row.locator('[data-remove-attachment]').click();
+        await row.waitFor({state:'hidden'});
+        assert.equal(await composer.inputValue(), caption);
+      }
 
       state.stageStatus = 503;
       await picker.setInputFiles(video);
