@@ -1171,7 +1171,7 @@ included in v0.0.1-rc.1. IDs remain stable and do not imply order.
 | **B13** | Image OCR. |
 | **B14** | Audio transcription. |
 | **B15** | Implemented for the hosted web app on supported browsers. See [Web Push](notifications.md#hosted-web-push). |
-| **B16** | Support OMEMO direct text on the local engine and on a trusted hosted engine. Include device verification, key import/export and encrypted history recovery. See the [B16 plan](#163-local-engine-omemo-b16). |
+| **B16** | Support OMEMO direct text and attachments on the local engine and on a trusted hosted engine. Include device verification, key import/export and encrypted history recovery. See the [B16 plan](#163-local-engine-omemo-b16). |
 | **B17** | Multi-user hosted instances with isolated accounts/history/schedules/outbox. |
 | **B18** | Interactive OIDC enrollment and sign-in from desktop clients. The hosted browser uses OIDC and desktop can supply a hosted API key. |
 | **B19** | Sticker selection, packs and sending. |
@@ -1224,7 +1224,7 @@ conversation. The local engine owns an OMEMO device identity for each account.
 Offer an encryption control in the conversation and show whether a message was
 encrypted. If an encrypted send needs a trust decision or a compatible peer,
 keep it pending and offer the relevant action. Retry must preserve the choice
-to encrypt. Group chats and attachments are later increments.
+to encrypt. Group chats are a later increment.
 
 **Hosted endpoint (agreed).** In hosted mode the Oiê server is the trusted
 OMEMO device for each XMPP account. It encrypts and decrypts on behalf of the
@@ -1233,6 +1233,16 @@ device ID, fingerprint and history. Explain this trust boundary when the user
 reviews the server's fingerprint. Keep identity migration and backup
 passphrases in the operator's local CLI. Test that unauthenticated clients
 cannot read messages or change device verification.
+
+**Direct attachments.** Encrypt file bytes before uploading via XMPP HTTP
+File Upload. Send each file's XEP-0454 URI inside an OMEMO message compatible
+with Gajim and Conversations. Send the caption as its own encrypted message
+when there is one. The engine must keep the key and source URL out of the
+browser, validate the complete ciphertext before returning bytes, and resolve
+downloads against retained messages. The hosted engine performs the same
+encryption and decryption as the local engine.
+[XEP-0363](https://xmpp.org/extensions/xep-0363.html) ·
+[XEP-0454](https://xmpp.org/extensions/xep-0454.html).
 
 **Archived direct messages.** The local and hosted engines recover compatible
 encrypted direct text from the authenticated XMPP account archive. Reuse the
