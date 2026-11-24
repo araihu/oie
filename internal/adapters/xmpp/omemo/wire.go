@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"maps"
 	"math/big"
 	"slices"
 	"unicode/utf8"
@@ -165,6 +166,9 @@ func (d *Device) Encrypt(ctx context.Context, targets []Target, text string) (En
 		env.Header.From = s.DeviceID
 		seen := map[uint32]bool{}
 		for _, t := range targets {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if t.JID == "" || t.DeviceID == 0 || seen[t.DeviceID] {
 				return ErrInvalid
 			}
@@ -208,74 +212,103 @@ func (d *Device) Decrypt(ctx context.Context, peer string, env Envelope) (string
 
 // DecryptTo commits the ratchet only after the consumer accepts the message.
 func (d *Device) DecryptTo(ctx context.Context, peer string, env Envelope, accept func(string) error) error {
-	return d.decryptTo(ctx, peer, env, "", accept)
+	return d.decryptTo(ctx, Pending{Peer: peer, Envelope: env}, accept)
 }
-func (d *Device) decryptTo(ctx context.Context, peer string, env Envelope, digest string, accept func(string) error) error {
-	iv, err := b64.DecodeString(env.Header.IV)
-	if err != nil || (len(iv) != 12 && len(iv) != 16) || peer == "" || env.Header.From == 0 || len(env.Header.Keys) > 256 {
-		return ErrInvalid
-	}
-	payload, err := b64.DecodeString(env.Payload)
-	if err != nil {
-		return ErrInvalid
-	}
-	var text string
-	err = d.update(func(s *state) error {
-		addr := protocol.NewSignalAddress(peer, env.Header.From)
+func (d *Device) decryptTo(ctx context.Context, message Pending, accept func(string) error) error {
+	return d.update(func(s *state) error {
+		if message.Room != "" && !s.EncryptedRooms[message.Room] {
+			return ErrRoomEncryptionDisabled
+		}
+		if message.Digest != "" {
+			i := slices.IndexFunc(s.Pending, message.sameEntry)
+			if i < 0 {
+				return ErrInvalid
+			}
+			message = s.Pending[i]
+		}
+		env := message.Envelope
+		iv, err := b64.DecodeString(env.Header.IV)
+		if err != nil || (len(iv) != 12 && len(iv) != 16) || message.Peer == "" || env.Header.From == 0 || len(env.Header.Keys) > 256 {
+			return ErrInvalid
+		}
+		payload, err := b64.DecodeString(env.Payload)
+		if err != nil {
+			return ErrInvalid
+		}
+		addr := protocol.NewSignalAddress(message.Peer, env.Header.From)
 		if s.Verified[addr.String()] == "" {
 			return ErrUnverified
 		}
-		var chosen *WrappedKey
-		for i := range env.Header.Keys {
-			if env.Header.Keys[i].To == s.DeviceID {
-				if chosen != nil {
-					return ErrInvalid
+		var candidates []WrappedKey
+		for _, key := range env.Header.Keys {
+			if key.To == s.DeviceID {
+				candidates = append(candidates, key)
+			}
+		}
+		lastErr := ErrInvalid
+		for i, key := range candidates {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			trial := s
+			if i < len(candidates)-1 {
+				// A legacy header can repeat a device ID across accounts. Trying
+				// one key must not advance the session or consume a pre-key for
+				// the next candidate until the payload authenticates.
+				copyOfState := *s
+				copyOfState.Sessions = maps.Clone(s.Sessions)
+				copyOfState.PreKeys = maps.Clone(s.PreKeys)
+				trial = &copyOfState
+			}
+			text, err := decryptEnvelopeKey(ctx, trial, addr, key, iv, payload)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			if key.PreKey {
+				if err := trial.replenish(); err != nil {
+					return err
 				}
-				chosen = &env.Header.Keys[i]
 			}
-		}
-		if chosen == nil {
-			return ErrInvalid
-		}
-		raw, err := b64.DecodeString(chosen.Value)
-		if err != nil || len(raw) < 10 || len(raw) > 65536 {
-			return ErrInvalid
-		}
-		builder := session.NewBuilder(s, s, s, s, addr, serializer)
-		material, err := unwrap(ctx, session.NewCipher(builder, addr), raw, chosen.PreKey)
-		if err != nil {
-			return err
-		}
-		if len(payload) > 0 {
-			if len(material) != 32 && len(material) != 16 {
-				return ErrInvalid
-			}
-			block, err := aes.NewCipher(material[:16])
-			if err != nil {
+			if err := accept(text); err != nil {
 				return err
 			}
-			aead, err := cipher.NewGCMWithNonceSize(block, len(iv))
-			if err != nil {
-				return err
+			discardPending(trial, message)
+			if trial != s {
+				*s = *trial
 			}
-			clear, err := aead.Open(nil, iv, append(payload, material[16:]...), nil)
-			if err != nil || !utf8.Valid(clear) {
-				return ErrInvalid
-			}
-			text = string(clear)
+			return nil
 		}
-		if chosen.PreKey {
-			if err := s.replenish(); err != nil {
-				return err
-			}
-		}
-		if err := accept(text); err != nil {
-			return err
-		}
-		discardPending(s, peer, digest)
-		return nil
+		return lastErr
 	})
-	return err
+}
+
+func decryptEnvelopeKey(ctx context.Context, s *state, addr *protocol.SignalAddress, key WrappedKey, iv, payload []byte) (string, error) {
+	raw, err := b64.DecodeString(key.Value)
+	if err != nil || len(raw) < 10 || len(raw) > 65536 {
+		return "", ErrInvalid
+	}
+	builder := session.NewBuilder(s, s, s, s, addr, serializer)
+	material, err := unwrap(ctx, session.NewCipher(builder, addr), raw, key.PreKey)
+	if err != nil || len(payload) == 0 {
+		return "", err
+	}
+	if len(material) != 32 && len(material) != 16 {
+		return "", ErrInvalid
+	}
+	block, err := aes.NewCipher(material[:16])
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCMWithNonceSize(block, len(iv))
+	if err != nil {
+		return "", err
+	}
+	clear, err := aead.Open(nil, iv, append(payload, material[16:]...), nil)
+	if err != nil || !utf8.Valid(clear) {
+		return "", ErrInvalid
+	}
+	return string(clear), nil
 }
 
 // Parse the remote message before passing its fields to the Signal library.

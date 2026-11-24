@@ -3796,8 +3796,8 @@ paths:
     put:
       operationId: setRoomOmemo
       tags: [Conversations]
-      summary: Change encryption for new room messages
-      description: Protect new sends in a confirmed members-only non-anonymous room. Accepted sends keep their selected protection.
+      summary: Change OMEMO for the room
+      description: Enable protected sends and encrypted receive and recovery in a confirmed members-only non-anonymous room. Accepted sends keep their selected protection after the setting changes.
       requestBody:
         required: true
         description: Desired room encryption.

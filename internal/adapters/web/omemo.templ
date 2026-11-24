@@ -108,7 +108,7 @@ templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat stri
 	</html>
 }
 
-templ roomOmemoSettings(v view, room engineapi.RoomOmemo, account, chat string) {
+templ roomOmemoSettings(v view, room engineapi.RoomOmemo, account, chat string, retry bool) {
 	<!DOCTYPE html>
 	<html lang={ v.Locale } data-mode={ v.Theme } class={ templ.KV("dark", v.Theme == "dark") }>
 		<head>
@@ -123,8 +123,11 @@ templ roomOmemoSettings(v view, room engineapi.RoomOmemo, account, chat string) 
 			<main class="oie-omemo-settings">
 				<h1>{ v.Text.OmemoRoomTitle }</h1>
 				<p>{ room.Address }</p>
+				if retry {
+					<p role="alert">{ v.Text.SharedActionFailed }</p>
+				}
 				if room.Enabled {
-					<p>{ v.Text.OmemoRequired }</p>
+					<p>{ v.Text.OmemoRoomActive }</p>
 				}
 				if !room.Eligible || len(room.Members) == 0 {
 					<p>{ v.Text.OmemoRoomUnavailable }</p>
@@ -133,10 +136,10 @@ templ roomOmemoSettings(v view, room engineapi.RoomOmemo, account, chat string) 
 					<form method="post" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
 						if room.Enabled {
 							@omemoFields(v, "plaintext")
-							@button.Button(button.WithType("submit")){ { v.Text.OmemoDisable } }
+							@button.Button(button.WithType("submit")){ { v.Text.OmemoRoomDisable } }
 						} else {
 							@omemoFields(v, "encrypt")
-							@button.Button(button.WithType("submit")){ { v.Text.OmemoEnable } }
+							@button.Button(button.WithType("submit")){ { v.Text.OmemoRoomEnable } }
 						}
 					</form>
 				}

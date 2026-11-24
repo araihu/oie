@@ -56,6 +56,7 @@ type EncryptedAttachment struct {
 }
 
 type Message struct {
+	OMEMOWireDigests                          []string              `json:",omitempty"`
 	EncryptedAttachments                      []EncryptedAttachment `json:",omitempty"`
 	DirectEncryption                          string                `json:",omitempty"`
 	Retraction                                *MessageRetraction    `json:",omitempty"`

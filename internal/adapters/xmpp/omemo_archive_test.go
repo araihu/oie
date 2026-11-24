@@ -93,7 +93,7 @@ func TestOMEMOArchiveAuthenticatedCatchupAndReplay(t *testing.T) {
 		t.Fatal("capture must only stage encrypted envelopes")
 	}
 	page := archivePage{Query: query}
-	if gap, err := m.ingestOMEMOArchive(ctx, e, page, time.Now()); err != nil || !gap || len(host.received) != 1 {
+	if gap, err := m.ingestOMEMOArchive(ctx, e, page, time.Now()); err != nil || gap.Start.IsZero() || len(host.received) != 1 {
 		t.Fatalf("archive pass did not recover the message after the gap: %v %v %+v", gap, err, host.received)
 	}
 	got := host.received[0]
@@ -107,7 +107,7 @@ func TestOMEMOArchiveAuthenticatedCatchupAndReplay(t *testing.T) {
 	if err := self.Verify("bob@localhost", device, fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	if gap, err := m.ingestOMEMOArchive(ctx, e, page, time.Now()); err != nil || gap || len(host.received) != 2 {
+	if gap, err := m.ingestOMEMOArchive(ctx, e, page, time.Now()); err != nil || !gap.Start.IsZero() || len(host.received) != 2 {
 		t.Fatalf("retry lost a message or duplicated a retained one: %v %v %+v", gap, err, host.received)
 	}
 }

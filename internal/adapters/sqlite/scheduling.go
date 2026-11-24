@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -208,7 +209,22 @@ func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision doma
 	if !frozen.MatchesOriginalContent(current) {
 		return application.StateConflict{Current: current}
 	}
-	if attachmentBody != "" || len(mentions) != 0 {
+	if len(frozen.OMEMOWireDigests) != 0 {
+		parts := len(m.Attachments)
+		if strings.TrimSpace(frozen.OriginalText) != "" {
+			parts++
+		}
+		if m.DirectEncryption != "omemo" || len(frozen.OMEMOWireDigests) != parts {
+			return application.ErrInvalid
+		}
+		for _, digest := range frozen.OMEMOWireDigests {
+			if !application.ValidOMEMOEnvelopeID(digest) {
+				return application.ErrInvalid
+			}
+		}
+		m.OMEMOWireDigests = frozen.OMEMOWireDigests
+	}
+	if attachmentBody != "" || len(mentions) != 0 || len(frozen.OMEMOWireDigests) != 0 {
 		if attachmentBody != "" {
 			m.AttachmentWireText = attachmentBody
 		}

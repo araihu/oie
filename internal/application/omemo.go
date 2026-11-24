@@ -31,6 +31,27 @@ func (e *Engine) OMEMOEnabled() bool {
 	p, ok := e.protocols.(OmemoProtocol)
 	return ok && p.OMEMOEnabled()
 }
+
+func (e *Engine) conversationEncryption(a domain.Account, c domain.Conversation) (string, error) {
+	switch c.Kind {
+	case "direct":
+		if p, ok := e.protocols.(OmemoProtocol); ok {
+			return p.DirectEncryption(a, c.Address)
+		}
+	case "room":
+		if p, ok := e.protocols.(RoomOMEMOProtocol); ok {
+			enabled, err := p.RoomEncryption(a, c.Address)
+			if err != nil {
+				return "", err
+			}
+			if enabled {
+				return "omemo", nil
+			}
+		}
+	}
+	return "", nil
+}
+
 func (e *Engine) omemoScope(ctx context.Context, id domain.ID, peer string) (OmemoProtocol, domain.Account, string, error) {
 	p, ok := e.protocols.(OmemoProtocol)
 	if !ok || !p.OMEMOEnabled() {

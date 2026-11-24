@@ -84,7 +84,7 @@ func (m *Manager) isolatedRoomPage(ctx context.Context, host application.RoomArc
 		result.Outcome = "stored"
 		return result, nil
 	}
-	if !page.Complete || len(page.Query.Messages) != 0 {
+	if !page.Complete || len(page.Query.Messages) != 0 || len(page.Query.OMEMO) != 0 {
 		result.Outcome = "stored"
 	}
 	if request.Action != "search" {
@@ -137,7 +137,7 @@ func (m *Manager) ingestIsolatedRoomPage(ctx context.Context, host application.R
 	if err := m.ingestArchivePage(ctx, page); err != nil {
 		return err
 	}
-	if rememberDeferredRoomReactions(p, page.Query.Deferred) {
+	if reactions, encrypted := rememberDeferredRoomReactions(p, page.Query.Deferred), rememberRoomOMEMOGaps(p, page.Query.OMEMOGaps); reactions || encrypted {
 		if err := host.StoreRoomArchiveProgress(ctx, c.ID, *p); err != nil {
 			return err
 		}

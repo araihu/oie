@@ -141,9 +141,7 @@ func (m *Manager) omemoPublishLoop(ctx context.Context, e *entry, s *mx.Session)
 		refresh.Stop()
 	}
 }
-func (m *Manager) encryptDirect(ctx context.Context, e *entry, s *mx.Session, peer string, bodies []string) ([]omemo.Envelope, error) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
+func directOMEMOTargets(ctx context.Context, e *entry, s *mx.Session, peer string) ([]omemo.Target, error) {
 	own, _, err := e.omemoDevice.LocalIdentity()
 	if err != nil || peer == e.account.Address {
 		return nil, omemo.ErrInvalid
@@ -156,7 +154,43 @@ func (m *Manager) encryptDirect(ctx context.Context, e *entry, s *mx.Session, pe
 	if err != nil {
 		return nil, err
 	}
-	return encryptOMEMOBodies(ctx, e.omemoDevice, append(targets, siblings...), bodies)
+	return append(targets, siblings...), nil
+}
+
+func (m *Manager) prepareOMEMORecipients(ctx context.Context, e *entry, s *mx.Session, out application.Outgoing) (roomOMEMOAuthority, []string, []omemo.Target, error) {
+	var authority roomOMEMOAuthority
+	var peers []string
+	var targets []omemo.Target
+	var err error
+	if out.Kind == "room" {
+		roomCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
+		defer cancel()
+		authority, peers, targets, err = m.prepareRoomOMEMO(roomCtx, e, s, out.Address)
+	} else {
+		directCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		peers = []string{out.Address, e.account.Address}
+		targets, err = directOMEMOTargets(directCtx, e, s, out.Address)
+	}
+	if err == nil && len(targets) == 0 {
+		err = omemo.ErrUnverified
+	}
+	if err == nil && len(out.Attachments) != 0 {
+		// Keep verification failures before the first external upload, so
+		// these sends can still be edited or cancelled while waiting.
+		verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		err = e.omemoDevice.WithVerifiedTargets(verifyCtx, e.account.Address, peers, targets, nil)
+		if err == nil && authority.slot != nil {
+			e.mu.RLock()
+			current, ok := roomOMEMOAuthorityLocked(e, s, out.Address)
+			if !ok || current != authority || current.slot.snapshot.IntentRevisionID != out.RoomIntentRevisionID {
+				err = application.ErrStateConflict
+			}
+			e.mu.RUnlock()
+		}
+	}
+	return authority, peers, targets, err
 }
 
 func encryptOMEMOBodies(ctx context.Context, device *omemo.Device, targets []omemo.Target, bodies []string) ([]omemo.Envelope, error) {

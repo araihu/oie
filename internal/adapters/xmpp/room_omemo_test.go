@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -16,6 +17,39 @@ import (
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
+
+type roomInvitationTestHost struct {
+	hostStub
+	application.ConversationRequestHost
+	rooms []string
+}
+
+func (h *roomInvitationTestHost) ReceiveRoomInvitation(_ context.Context, _ domain.ID, room, _ string) error {
+	h.rooms = append(h.rooms, room)
+	return nil
+}
+
+func TestRoomInvitationsReachHandlerWithOMEMOEnabled(t *testing.T) {
+	host := &roomInvitationTestHost{}
+	dir := t.TempDir()
+	device, err := omemo.Open(filepath.Join(dir, "device.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{host: host, omemoDir: dir}
+	e := &entry{account: domain.Account{Address: "owner@example.org"}, omemoDevice: device}
+	for _, wire := range []string{
+		`<message xmlns="jabber:client" from="mediated@rooms.example.org" to="owner@example.org"><x xmlns="http://jabber.org/protocol/muc#user"><invite from="member@example.org"/></x></message>`,
+		`<message xmlns="jabber:client" from="member@example.org/client" to="owner@example.org" type="normal"><x xmlns="jabber:x:conference" jid="direct@rooms.example.org"/></message>`,
+		`<message xmlns="jabber:client" from="member@example.org/client" to="another@example.org"><x xmlns="jabber:x:conference" jid="wrong@rooms.example.org"/></message>`,
+		`<message xmlns="jabber:client" from="member@example.org/client" to="owner@example.org" type="chat"><body>ordinary plaintext</body></message>`,
+	} {
+		receiveHistoryTestWire(t, m, e, wire)
+	}
+	if want := []string{"mediated@rooms.example.org", "direct@rooms.example.org"}; !slices.Equal(host.rooms, want) || len(host.received) != 0 {
+		t.Fatalf("received invitations %v and %d plaintext messages", host.rooms, len(host.received))
+	}
+}
 
 func TestRoomOMEMOSendRequiresDevice(t *testing.T) {
 	const room = "private@rooms.example.org"

@@ -114,6 +114,7 @@ type reactionScope struct {
 	account      domain.Account
 	intent       domain.ID
 	roomJoined   bool
+	protected    bool
 }
 
 func (e *Engine) loadReactionScope(ctx context.Context, id domain.ID) (reactionScope, error) {
@@ -125,7 +126,11 @@ func (e *Engine) loadReactionScope(ctx context.Context, id domain.ID) (reactionS
 	if err != nil {
 		return reactionScope{}, err
 	}
-	scope := reactionScope{conversation: c, account: a}
+	policy, err := e.conversationEncryption(a, c)
+	if err != nil {
+		return reactionScope{}, err
+	}
+	scope := reactionScope{conversation: c, account: a, protected: policy == "omemo"}
 	if c.Kind == "room" {
 		session, err := e.RoomSession(ctx, c.ID)
 		if err == nil && session.Active && session.State == "joined" {
@@ -154,6 +159,9 @@ func (e *Engine) reactionEligibility(ctx context.Context, candidate MessageReact
 		return candidate, domain.OutgoingReaction{}, err
 	}
 	c, a := loaded.conversation, loaded.account
+	if loaded.protected || candidate.Source.DirectEncryption == "omemo" {
+		return deny("protocol_unavailable")
+	}
 	if c.Kind == "room" && !loaded.roomJoined {
 		return deny("session_changed")
 	}

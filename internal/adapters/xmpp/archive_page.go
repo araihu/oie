@@ -23,6 +23,8 @@ type archivePageRequest struct {
 	Backward                    bool
 	Prepend                     bool
 	RecoverOMEMO                bool
+	RecoverPlainDirect          bool
+	ConfirmRetractionID         string
 	Limit                       int
 	ReactionAnchor              domain.ArchiveReactionAnchor
 }
@@ -89,18 +91,36 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	}
 
 	var roomEncrypted bool
-	if e.omemoDevice != nil && scope != e.account.Address {
+	if scope != e.account.Address {
 		var err error
-		roomEncrypted, err = e.omemoDevice.RoomEncryption(scope)
+		roomEncrypted, err = roomArchiveProtected(e, scope)
 		if err != nil {
 			return archivePage{}, err
+		}
+		if expected, ok := ctx.Value(roomArchiveProtectionKey{}).(bool); ok && expected != roomEncrypted {
+			return archivePage{}, application.ErrStateConflict
 		}
 		if roomEncrypted && request.Search != "" {
 			return archivePage{}, application.ErrProtocolUnavailable
 		}
+		if request.Search != "" && e.omemoDevice != nil {
+			operation := roomOperationScope{e.account.ID, scope}
+			admitted, err := m.beginPlainRoomOperation(e.omemoDevice, operation)
+			if err != nil {
+				return archivePage{}, err
+			}
+			if !admitted {
+				return archivePage{}, application.ErrProtocolUnavailable
+			}
+			defer m.endPlainRoomOperation(operation)
+			finishSearch := e.beginPlainArchiveSearch(s)
+			defer finishSearch()
+		}
 	}
 	var authority roomOMEMOAuthority
-	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End, With: request.With, RecoverOMEMO: request.RecoverOMEMO, RoomOMEMO: roomEncrypted}
+	q := &archiveQuery{ID: randomQueryID(), Scope: scope, Start: request.Start, End: request.End, With: request.With,
+		RecoverOMEMO: request.RecoverOMEMO, RecoverPlainDirect: request.RecoverPlainDirect,
+		ConfirmRetractionID: request.ConfirmRetractionID, RoomOMEMO: roomEncrypted}
 	if q.ID == "" {
 		return archivePage{}, errArchive
 	}
@@ -170,20 +190,38 @@ func (m *Manager) readArchivePage(ctx context.Context, e *entry, s *mx.Session, 
 	if err := m.checkArchiveRetention(ctx, e.account.ID); err != nil {
 		return archivePage{}, err
 	}
+	if scope != e.account.Address {
+		enabled, err := roomArchiveProtected(e, scope)
+		if err != nil {
+			return archivePage{}, err
+		}
+		if enabled != roomEncrypted {
+			return archivePage{}, application.ErrStateConflict
+		}
+	}
 	return archivePage{omemoEntry: e, omemoSession: s, omemoAuthority: authority, Query: q, First: first, Last: last, Complete: fin.Complete, Prepend: request.Prepend, ReactionAnchor: request.ReactionAnchor}, nil
 }
 
-func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error {
-	if page.Query.RoomOMEMO && len(page.Query.OMEMO) != 0 {
-		gaps, err := m.ingestOMEMOArchive(ctx, page.omemoEntry, page, time.Now().UTC())
-		if err != nil {
-			return err
+// A clear search may have reached the managed stream even if its IQ times out.
+// Guard both an in-flight IQ during teardown and any sequence left to replay.
+func (e *entry) beginPlainArchiveSearch(session *mx.Session) func() {
+	e.sendMu.Lock()
+	e.plainArchiveSearches++
+	e.sendMu.Unlock()
+	return func() {
+		e.sendMu.Lock()
+		defer e.sendMu.Unlock()
+		e.plainArchiveSearches--
+		e.mu.RLock()
+		current := e.session == session
+		e.mu.RUnlock()
+		if current {
+			e.recordProtectedSequence(session.StreamManagement(), nil)
 		}
-		if gaps {
-			return errOMEMOHistoryIncomplete
-		}
-		return nil
 	}
+}
+
+func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error {
 	// XEP-0313 gives these results a chronological order even when several
 	// events have the same timestamp or the page was fetched backwards.
 	type tie struct {
@@ -220,7 +258,7 @@ func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error
 	}
 	receive := func(in application.Incoming) error {
 		err := m.host.Receive(ctx, in)
-		if in.Reaction != nil && errors.Is(err, application.ErrInvalid) {
+		if (in.Reaction != nil || page.Query.RoomOMEMO && (in.Retraction != nil || in.Moderation != nil)) && errors.Is(err, application.ErrInvalid) {
 			return nil
 		}
 		return err
@@ -241,6 +279,13 @@ func (m *Manager) ingestArchivePage(ctx context.Context, page archivePage) error
 				}
 			}
 		}
+	}
+	if page.Query.RoomOMEMO && len(page.Query.OMEMO) != 0 {
+		gaps, err := m.ingestOMEMOArchive(ctx, page.omemoEntry, page, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		page.Query.OMEMOGaps = gaps
 	}
 	return nil
 }

@@ -68,6 +68,12 @@ func (m *Manager) recoverRoomGroup(ctx context.Context, host application.RoomArc
 					status.partial, status.err = true, err
 					continue
 				}
+				protected, err := roomArchiveProtected(e, room.Address)
+				if err != nil {
+					status.partial, status.err = true, err
+					continue
+				}
+				protectionChanged := protected != a.Protected
 				retentionChanged := false
 				if retention, ok := m.host.(application.RetentionHost); ok {
 					days, err := retention.RetentionDays(ctx, room.AccountID, room.Address, "room")
@@ -77,10 +83,11 @@ func (m *Manager) recoverRoomGroup(ctx context.Context, host application.RoomArc
 					}
 					retentionChanged = a.RetentionDays == nil || *a.RetentionDays != days
 				}
-				if initial && a.InitialComplete && !retentionChanged {
+				if initial && a.InitialComplete && !retentionChanged && !protectionChanged {
 					continue
 				}
-				if !initial && !retentionChanged && a.InitialComplete && (a.Mode == "on_demand" || a.OlderComplete) && !a.CaughtUpThrough.Before(cutoff) && pendingRoomReactionReplay(e, s, room.Address, !a.DeferredReactions.Start.IsZero()) == nil && !currentRoomConfiguration(e, room.Address).pending {
+				if !initial && !retentionChanged && !protectionChanged && roomArchiveCaughtUp(a, cutoff) && a.DeferredOMEMO == nil &&
+					pendingRoomReactionReplay(e, s, room.Address, !a.DeferredReactions.Start.IsZero()) == nil && !currentRoomConfiguration(e, room.Address).pending {
 					status.supported = status.supported || a.Availability == "supported"
 					continue
 				}

@@ -8,6 +8,7 @@ import (
 
 func (s *Server) roomOmemoPage(w http.ResponseWriter, r *http.Request, v view, account, chat string) {
 	ctx := r.Context()
+	status := http.StatusOK
 	if r.Method == http.MethodPost {
 		r.Body = http.MaxBytesReader(w, r.Body, 8192)
 		if r.ParseForm() != nil || !validCSRF(r) {
@@ -24,12 +25,20 @@ func (s *Server) roomOmemoPage(w http.ResponseWriter, r *http.Request, v view, a
 			return
 		}
 		saved, err := s.client.SetRoomOmemoWithResponse(ctx, chat, engineapi.SetRoomOmemoJSONRequestBody{Enabled: action == "encrypt"})
-		if err != nil || saved.StatusCode() != http.StatusNoContent {
-			http.Error(w, v.Text.OmemoRoomUnavailable, http.StatusConflict)
+		if err != nil {
+			http.Error(w, v.Text.OmemoUnavailable, http.StatusServiceUnavailable)
 			return
 		}
-		http.Redirect(w, r, v.omemoHref(account, chat), http.StatusSeeOther)
-		return
+		switch saved.StatusCode() {
+		case http.StatusNoContent:
+			http.Redirect(w, r, v.omemoHref(account, chat), http.StatusSeeOther)
+			return
+		case http.StatusConflict:
+			status = http.StatusConflict
+		default:
+			http.Error(w, v.Text.OmemoUnavailable, saved.StatusCode())
+			return
+		}
 	}
 	result, err := s.client.GetRoomOmemoWithResponse(ctx, chat)
 	if err != nil || result.JSON200 == nil {
@@ -37,5 +46,6 @@ func (s *Server) roomOmemoPage(w http.ResponseWriter, r *http.Request, v view, a
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = roomOmemoSettings(v, *result.JSON200, account, chat).Render(ctx, w)
+	w.WriteHeader(status)
+	_ = roomOmemoSettings(v, *result.JSON200, account, chat, status == http.StatusConflict).Render(ctx, w)
 }

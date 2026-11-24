@@ -33,8 +33,19 @@ const (
 type attachmentUploadProgress struct {
 	service    string
 	roomIntent domain.ID
+	files      []domain.StagedAttachment
 	links      []string
 	updatedAt  time.Time
+	protected  bool
+}
+
+func (p attachmentUploadProgress) reusable(out application.Outgoing, service string, protected bool) bool {
+	return p.service == service && p.roomIntent == out.RoomIntentRevisionID && p.protected == protected &&
+		time.Since(p.updatedAt) < attachmentProgressLifetime && len(p.files) == len(p.links) &&
+		len(p.files) <= len(out.Attachments) &&
+		slices.EqualFunc(p.files, out.Attachments[:len(p.files)], func(saved domain.StagedAttachment, current application.OutgoingAttachment) bool {
+			return saved == current.StagedAttachment
+		})
 }
 
 var errUploadRejected = errors.New("upload rejected")
@@ -87,6 +98,14 @@ func uploadService(e *entry, largest int64) (string, error) {
 }
 
 func (m *Manager) AttachmentAvailability(_ context.Context, a domain.Account, attachments []domain.StagedAttachment) error {
+	return m.attachmentAvailability(a, attachments, 0)
+}
+
+func (m *Manager) OMEMOAttachmentAvailability(_ context.Context, a domain.Account, attachments []domain.StagedAttachment) error {
+	return m.attachmentAvailability(a, attachments, omemo.MediaTagSize)
+}
+
+func (m *Manager) attachmentAvailability(a domain.Account, attachments []domain.StagedAttachment, overhead int64) error {
 	m.mu.RLock()
 	e := m.entries[a.ID]
 	m.mu.RUnlock()
@@ -99,7 +118,7 @@ func (m *Manager) AttachmentAvailability(_ context.Context, a domain.Account, at
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	_, err := uploadService(e, largest)
+	_, err := uploadService(e, largest+overhead)
 	return err
 }
 
@@ -119,7 +138,7 @@ type uploadSlot struct {
 func secureSlotURL(raw string) bool {
 	parsed, err := url.Parse(raw)
 	return err == nil && len(raw) <= 4096 && parsed.Scheme == "https" && parsed.Hostname() != "" && parsed.User == nil && parsed.Fragment == "" &&
-		!strings.ContainsAny(raw, " \t\r\n")
+		!strings.ContainsAny(raw, "# \t\r\n")
 }
 
 func decodeUploadSlot(payload string) (uploadSlot, error) {
@@ -198,7 +217,7 @@ func (e *entry) attachmentUploadCurrent(session *mx.Session, out application.Out
 	return room != nil && room.session == session && room.snapshot.State == "joined" && room.snapshot.IntentRevisionID == out.RoomIntentRevisionID
 }
 
-func (e *entry) saveAttachmentUpload(session *mx.Session, out application.Outgoing, service string, links []string) bool {
+func (e *entry) saveAttachmentUpload(session *mx.Session, out application.Outgoing, service string, links []string, protected bool) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.attachmentUploadCurrent(session, out) {
@@ -218,7 +237,13 @@ func (e *entry) saveAttachmentUpload(session *mx.Session, out application.Outgoi
 		}
 		delete(e.attachmentUploads, oldestID)
 	}
-	e.attachmentUploads[out.ID] = attachmentUploadProgress{service: service, roomIntent: out.RoomIntentRevisionID, links: slices.Clone(links), updatedAt: now}
+	files := make([]domain.StagedAttachment, len(links))
+	for index := range links {
+		files[index] = out.Attachments[index].StagedAttachment
+	}
+	e.attachmentUploads[out.ID] = attachmentUploadProgress{
+		service: service, roomIntent: out.RoomIntentRevisionID, files: files, links: slices.Clone(links), updatedAt: now, protected: protected,
+	}
 	return true
 }
 
@@ -227,6 +252,37 @@ func (e *entry) forgetAttachmentUpload(session *mx.Session, id domain.ID) {
 	defer e.mu.Unlock()
 	if e.session == session {
 		delete(e.attachmentUploads, id)
+	}
+}
+
+type roomOperationScope struct {
+	account domain.ID
+	room    string
+}
+
+// Beginning a clear operation and activating OMEMO are ordered for an
+// account and room, even while its XMPP connection is being replaced.
+func (m *Manager) beginPlainRoomOperation(device *omemo.Device, scope roomOperationScope) (bool, error) {
+	m.plainRoomOperationsMu.Lock()
+	defer m.plainRoomOperationsMu.Unlock()
+	enabled, err := device.RoomEncryption(scope.room)
+	if err != nil || enabled {
+		return false, err
+	}
+	if m.plainRoomOperations == nil {
+		m.plainRoomOperations = make(map[roomOperationScope]int)
+	}
+	m.plainRoomOperations[scope]++
+	return true, nil
+}
+
+func (m *Manager) endPlainRoomOperation(scope roomOperationScope) {
+	m.plainRoomOperationsMu.Lock()
+	defer m.plainRoomOperationsMu.Unlock()
+	if m.plainRoomOperations[scope] == 1 {
+		delete(m.plainRoomOperations, scope)
+	} else {
+		m.plainRoomOperations[scope]--
 	}
 }
 
@@ -273,14 +329,16 @@ func (m *Manager) uploadAttachmentLinks(ctx context.Context, e *entry, session *
 		return nil, application.NotSent
 	}
 
-	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: m.roots, MinVersion: tls.VersionTLS12}}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var client *http.Client
+	if !protected {
+		transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: m.roots, MinVersion: tls.VersionTLS12}}
+		defer transport.CloseIdleConnections()
+		client = &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	}
 	var links []string
-	if progress.service == service && progress.roomIntent == out.RoomIntentRevisionID &&
-		time.Since(progress.updatedAt) < attachmentProgressLifetime && len(progress.links) <= len(out.Attachments) {
-		// Once dispatch starts the composition cannot change. Reuse completed
-		// uploads only for this message, provider service and connection.
+	if progress.reusable(out, service, protected) {
+		// A pre-wire protected send can become editable again. Reuse only
+		// uploads that still match the accepted attachment list.
 		links = slices.Clone(progress.links)
 	}
 	for _, file := range out.Attachments[len(links):] {
@@ -315,12 +373,21 @@ func (m *Manager) uploadAttachmentLinks(ctx context.Context, e *entry, session *
 		if !current {
 			return nil, application.NotSent
 		}
-		err = sendUpload(ctx, client, slot, file)
+		if protected {
+			destination, _ := url.Parse(slot.Put.URL) // decodeUploadSlot validated the URL.
+			// The file-specific deadline also applies to slower uploads.
+			guarded := *m.omemoMediaClient(destination)
+			guarded.Timeout = 0
+			err = sendUpload(ctx, &guarded, slot, file)
+		} else {
+			err = sendUpload(ctx, client, slot, file)
+		}
 		if canceled() {
 			return nil, application.NotSent
 		}
 		if err != nil {
-			if errors.Is(err, errUploadRejected) {
+			var denial application.PreviewFailure
+			if errors.Is(err, errUploadRejected) || errors.As(err, &denial) && denial.Code == "blocked" {
 				return nil, application.Failed
 			}
 			return nil, application.NotSent
@@ -330,7 +397,7 @@ func (m *Manager) uploadAttachmentLinks(ctx context.Context, e *entry, session *
 			link = omemo.MediaURI(link, sealed)
 		}
 		links = append(links, link)
-		if !e.saveAttachmentUpload(session, out, service, links) {
+		if !e.saveAttachmentUpload(session, out, service, links, protected) {
 			return nil, application.NotSent
 		}
 	}

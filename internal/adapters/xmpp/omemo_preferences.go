@@ -90,7 +90,11 @@ func (m *Manager) DecideOMEMO(_ context.Context, a domain.Account, peer string, 
 		if peer == a.Address || choice.Device != 0 || choice.Fingerprint != "" {
 			return application.ErrInvalid
 		}
-		return d.SetEncryption(peer, choice.Action == "encrypt")
+		if err := d.SetEncryption(peer, choice.Action == "encrypt"); err != nil {
+			return err
+		}
+		m.WakeRoomArchive(a.ID)
+		return nil
 	case "verify", "distrust":
 		if choice.Device == 0 || len(choice.Fingerprint) != 64 {
 			return application.ErrInvalid

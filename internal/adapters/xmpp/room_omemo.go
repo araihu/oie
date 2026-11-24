@@ -153,13 +153,20 @@ func (m *Manager) SetRoomOMEMO(ctx context.Context, a domain.Account, room strin
 		e.sendMu.Lock()
 		defer e.sendMu.Unlock()
 	}
-	if err := device.SetRoomEncryption(room, enabled); err != nil {
+	if err := m.saveRoomEncryption(device, roomOperationScope{a.ID, room}, enabled); err != nil {
 		return err
 	}
-	if enabled {
-		m.WakeRoomArchive(a.ID)
-	}
+	m.WakeRoomArchive(a.ID)
 	return nil
+}
+
+func (m *Manager) saveRoomEncryption(device *omemo.Device, scope roomOperationScope, enabled bool) error {
+	m.plainRoomOperationsMu.Lock()
+	defer m.plainRoomOperationsMu.Unlock()
+	if enabled && m.plainRoomOperations[scope] != 0 {
+		return application.ErrStateConflict
+	}
+	return device.SetRoomEncryption(scope.room, enabled)
 }
 
 func (m *Manager) prepareRoomOMEMO(ctx context.Context, e *entry, s *mx.Session, room string) (roomOMEMOAuthority, []string, []omemo.Target, error) {
@@ -206,7 +213,13 @@ func (m *Manager) receiveRoomOMEMO(ctx context.Context, e *entry, msg stanza.Mes
 	e.mu.RLock()
 	authority, ok := roomOMEMOAuthorityLocked(e, e.session, room)
 	var sender string
+	var stableID string
 	if ok {
+		e.historyMu.Lock()
+		if e.sidScopes[room] {
+			stableID = roomStanzaID(msg.From, meta.Stable)
+		}
+		e.historyMu.Unlock()
 		if nick == authority.slot.snapshot.Nickname {
 			sender = e.account.Address
 		} else if occupant := authority.slot.management.occupants[nick]; omemoAffiliation(occupant.affiliation) {
@@ -219,11 +232,18 @@ func (m *Manager) receiveRoomOMEMO(ctx context.Context, e *entry, msg stanza.Mes
 	}
 	if sender == e.account.Address {
 		self, _, err := e.omemoDevice.LocalIdentity()
-		if err != nil || self == env.Header.From {
+		if err != nil {
 			return err
 		}
+		if self == env.Header.From {
+			origin := meta.originID()
+			if len(meta.Origins) == 0 {
+				origin = msg.ID
+			}
+			return m.bindRoomOMEMOEcho(ctx, e.account.ID, room, msg.From.String(), origin, env.ProviderID(), stableID, "")
+		}
 	}
-	return m.acceptRoomOMEMO(ctx, e, omemo.Pending{Peer: sender, Room: room, Nickname: nick, StanzaID: roomStanzaID(msg.From.Bare(), meta.Stable), At: time.Now().UTC(), Envelope: env})
+	return m.acceptRoomOMEMO(ctx, e, omemo.Pending{Peer: sender, Room: room, Nickname: nick, StanzaID: stableID, At: time.Now().UTC(), Envelope: env})
 }
 
 func (m *Manager) acceptRoomOMEMO(ctx context.Context, e *entry, p omemo.Pending) error {

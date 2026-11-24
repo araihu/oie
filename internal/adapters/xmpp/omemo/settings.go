@@ -1,11 +1,14 @@
 package omemo
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/gofrs/flock"
 	"go.mau.fi/libsignal/protocol"
 )
 
@@ -54,6 +57,31 @@ func (d *Device) RequiresEncryption(peer string) (bool, error) {
 	}
 	return !s.PlainPeers[peer], nil
 }
+
+func (d *Device) PlaintextPeers() (map[string]bool, error) {
+	s, err := d.read()
+	if err != nil {
+		return nil, err
+	}
+	return s.PlainPeers, nil
+}
+
+// WithPlaintextPeer keeps the preference stable until stored archive data
+// for the explicitly opted-in peer has been accepted.
+func (d *Device) WithPlaintextPeer(ctx context.Context, peer string, accept func() error) (bool, error) {
+	lock := flock.New(d.path + ".lock")
+	locked, err := lock.TryRLockContext(ctx, 10*time.Millisecond)
+	if err != nil || !locked {
+		return false, err
+	}
+	defer func() { _ = lock.Close() }()
+	s, err := d.read()
+	if err != nil || !s.PlainPeers[peer] {
+		return false, err
+	}
+	return true, accept()
+}
+
 func (d *Device) SetEncryption(peer string, enabled bool) error {
 	return d.update(func(s *state) error {
 		if enabled {
@@ -109,6 +137,9 @@ func (d *Device) SetRoomEncryption(room string, enabled bool) error {
 	return d.update(func(s *state) error {
 		if !enabled {
 			delete(s.EncryptedRooms, room)
+			if room != "" {
+				s.Pending = slices.DeleteFunc(s.Pending, func(message Pending) bool { return message.Room == room })
+			}
 			return nil
 		}
 		if s.EncryptedRooms == nil {
@@ -117,4 +148,64 @@ func (d *Device) SetRoomEncryption(room string, enabled bool) error {
 		s.EncryptedRooms[room] = true
 		return nil
 	})
+}
+
+// WithVerifiedTargets keeps device verification and the published recipient
+// snapshot stable while an already encrypted message is committed to the wire.
+// The shared file lock also covers trust changes made by the operator CLI.
+func (d *Device) WithVerifiedTargets(ctx context.Context, own string, peers []string, targets []Target, write func()) error {
+	lock := flock.New(d.path + ".lock")
+	locked, err := lock.TryRLockContext(ctx, 10*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	if !locked {
+		return ErrUnverified
+	}
+	defer func() { _ = lock.Close() }()
+
+	s, err := d.read()
+	if err != nil {
+		return err
+	}
+	expected := make(map[string]map[uint32]string, len(peers))
+	for _, peer := range peers {
+		expected[peer] = make(map[uint32]string)
+	}
+	seen := make(map[uint32]bool, len(targets))
+	for _, t := range targets {
+		if t.DeviceID == 0 || seen[t.DeviceID] {
+			return ErrInvalid
+		}
+		seen[t.DeviceID] = true
+		fp, err := t.Bundle.Fingerprint()
+		devices, ok := expected[t.JID]
+		if err != nil || !ok || s.Verified[protocol.NewSignalAddress(t.JID, t.DeviceID).String()] != fp {
+			return ErrUnverified
+		}
+		devices[t.DeviceID] = fp
+	}
+	for peer, devices := range expected {
+		observed := s.Observed[peer]
+		count := 0
+		for id, fp := range observed {
+			if peer == own && id == s.DeviceID {
+				continue
+			}
+			if fp == "" || devices[id] != fp {
+				return ErrUnverified
+			}
+			count++
+		}
+		if count != len(devices) {
+			return ErrUnverified
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if write != nil {
+		write()
+	}
+	return nil
 }

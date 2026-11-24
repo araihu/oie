@@ -20,6 +20,7 @@ type archivedOMEMO struct {
 	in       application.Incoming
 	sender   string
 	envelope *omemo.Envelope
+	origin   string
 	size     int
 }
 
@@ -71,31 +72,41 @@ func archiveRoomOMEMO(account domain.Account, query *archiveQuery, r *archiveRes
 			record.in.IsOwn = record.sender == account.Address
 			record.in.SenderAddress = record.sender
 			if query.SIDVerified {
-				record.in.References = []domain.MessageReference{{Scope: "room:" + query.Scope, Author: msg.From.String(), ID: r.ID}}
+				stanzaID := roomStanzaID(msg.From, msg.Stable)
+				if stanzaID == "" && usableID(r.ID) && missingRoomStanzaID(msg.From, msg.Stable) {
+					stanzaID = r.ID
+				}
+				if stanzaID != "" {
+					record.in.References = []domain.MessageReference{{Scope: "room:" + query.Scope, Author: msg.From.String(), ID: stanzaID}}
+				}
 			}
 		}
 	}
 	record.envelope = msg.Encrypted
+	record.origin = msg.originID()
+	if len(msg.Origins) == 0 {
+		record.origin = msg.ID
+	}
 	if record.envelope != nil {
 		record.size = record.envelope.Size()
 	}
 	return record, true
 }
 
-func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archivePage, now time.Time) (bool, error) {
+func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archivePage, now time.Time) (domain.ArchiveTimeRange, error) {
+	var gaps domain.ArchiveTimeRange
 	if len(page.Query.OMEMO) == 0 {
-		return false, nil
+		return gaps, nil
 	}
 	self, _, err := e.omemoDevice.LocalIdentity()
 	if err != nil {
-		return false, err
+		return gaps, err
 	}
-	gaps := false
 	daysByPeer := map[string]int{}
 	retention, checksRetention := m.host.(application.RetentionHost)
 	for _, record := range page.Query.OMEMO {
 		if err := ctx.Err(); err != nil {
-			return false, err
+			return gaps, err
 		}
 		in, env := record.in, record.envelope
 		if page.Query.RoomOMEMO {
@@ -103,14 +114,28 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 			authority, ok := roomOMEMOAuthorityLocked(e, page.omemoSession, in.Address)
 			e.mu.RUnlock()
 			if !ok || authority.slot != page.omemoAuthority.slot || authority.revision != page.omemoAuthority.revision {
-				return false, errArchive
+				return gaps, errArchive
 			}
 		}
 		if env != nil && in.IsOwn && env.Header.From == self {
-			// Sent by this installation, which stores its cleartext on acceptance.
+			// This installation already retains the content. Match the
+			// original ciphertext before adding a reference to its row.
+			if page.Query.RoomOMEMO {
+				var stableID string
+				if len(in.References) == 1 {
+					stableID = in.References[0].ID
+				}
+				if err := m.bindRoomOMEMOEcho(ctx, in.AccountID, in.Address, in.Address+"/"+in.SenderName, record.origin, env.ProviderID(), stableID, in.ArchiveID); err != nil {
+					return gaps, err
+				}
+			}
 			continue
 		}
-		if env != nil && env.Payload == "" && !slices.ContainsFunc(env.Header.Keys, func(k omemo.WrappedKey) bool { return k.To == self }) {
+		if page.Query.RoomOMEMO && env == nil {
+			// There is no legacy envelope to retry for this entry.
+			continue
+		}
+		if env != nil && (page.Query.RoomOMEMO || env.Payload == "") && !slices.ContainsFunc(env.Header.Keys, func(k omemo.WrappedKey) bool { return k.To == self }) {
 			continue
 		}
 		if checksRetention {
@@ -118,7 +143,7 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 			if !ok {
 				days, err = retention.RetentionDays(ctx, in.AccountID, in.Address, in.Kind)
 				if err != nil {
-					return false, err
+					return gaps, err
 				}
 				daysByPeer[in.Address] = days
 			}
@@ -127,23 +152,35 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 			}
 		}
 		if err := m.checkArchiveRetention(ctx, in.AccountID); err != nil {
-			return false, err
+			return gaps, err
 		}
-		if env == nil || record.sender == "" {
-			gaps = true
+		stamp := domain.ArchiveTimeRange{Start: in.CreatedAt, End: in.CreatedAt}
+		if env == nil {
+			gaps.Include(stamp)
 			continue
 		}
 		legacyID := in.ProviderID
 		in.ProviderID = env.ProviderID()
 		retained, err := m.retainedOMEMO(ctx, in, "")
 		if err != nil {
-			return false, err
+			return gaps, err
 		}
 		if retained {
+			if err := m.bindRetainedRoomOMEMOArchive(ctx, page, in); err != nil {
+				return gaps, err
+			}
+			continue
+		}
+		if record.sender == "" {
+			gaps.Include(stamp)
 			continue
 		}
 		var saveErr error
-		err = e.omemoDevice.DecryptTo(ctx, record.sender, *env, func(text string) error {
+		message := omemo.Pending{Peer: record.sender, Envelope: *env}
+		if page.Query.RoomOMEMO {
+			message.Room = in.Address
+		}
+		err = e.omemoDevice.Receive(ctx, message, func(text string) error {
 			if !readOMEMOPayload(&in, text) {
 				return nil
 			}
@@ -154,19 +191,39 @@ func (m *Manager) ingestOMEMOArchive(ctx context.Context, e *entry, page archive
 			m.refreshOMEMOPreKeys(e, *env)
 			continue
 		}
+		if errors.Is(err, omemo.ErrRoomEncryptionDisabled) {
+			return gaps, application.ErrStateConflict
+		}
 		var storageErr *fs.PathError
 		if saveErr != nil && !errors.Is(saveErr, application.ErrInvalid) || errors.As(err, &storageErr) || ctx.Err() != nil {
-			return false, err
+			return gaps, err
 		}
 		// A live copy can commit while archive ingestion is waiting for the
 		// ratchet lock. Older profiles used the originating stanza ID.
 		retained, err = m.retainedOMEMO(ctx, in, legacyID)
 		if err != nil {
-			return false, err
+			return gaps, err
 		}
-		gaps = gaps || !retained && env.Payload != ""
+		if retained {
+			if err := m.bindRetainedRoomOMEMOArchive(ctx, page, in); err != nil {
+				return gaps, err
+			}
+		}
+		if !retained && env.Payload != "" {
+			gaps.Include(stamp)
+		}
 	}
 	return gaps, nil
+}
+
+func (m *Manager) bindRetainedRoomOMEMOArchive(ctx context.Context, page archivePage, in application.Incoming) error {
+	if host, ok := m.host.(application.RetainedRoomOMEMOArchiveHost); ok && page.Query.RoomOMEMO && in.SenderAddress != "" {
+		err := host.BindRetainedRoomOMEMOArchive(ctx, in)
+		if !errors.Is(err, application.ErrInvalid) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *Manager) retainedOMEMO(ctx context.Context, in application.Incoming, legacyID string) (bool, error) {

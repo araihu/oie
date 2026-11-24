@@ -11,9 +11,16 @@ type omemoAttachmentReader interface {
 }
 
 func (e *Engine) DownloadOMEMOAttachment(ctx context.Context, id domain.ID, index int) (MediaRead, error) {
+	return e.downloadOMEMOAttachment(ctx, id, index, "")
+}
+
+func (e *Engine) downloadOMEMOAttachment(ctx context.Context, id domain.ID, index int, expected domain.ID) (MediaRead, error) {
 	m, err := e.Message(ctx, id)
 	if err != nil {
 		return MediaRead{}, err
+	}
+	if expected != "" && m.RevisionID != expected {
+		return MediaRead{}, StateConflict{Current: m}
 	}
 	if m.ID != id || m.DirectEncryption != "omemo" || m.Retraction != nil || m.Moderation != nil ||
 		index < 0 || index >= len(m.EncryptedAttachments) {
@@ -28,7 +35,7 @@ func (e *Engine) DownloadOMEMOAttachment(ctx context.Context, id domain.ID, inde
 		return MediaRead{}, err
 	}
 	current, err := e.Message(ctx, id)
-	if err != nil || current.RevisionID != m.RevisionID || current.Retraction != nil || current.Moderation != nil {
+	if err != nil || current.ID != id || current.RevisionID != m.RevisionID || current.Retraction != nil || current.Moderation != nil {
 		_ = result.Body.Close()
 		if err != nil {
 			return MediaRead{}, err

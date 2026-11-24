@@ -527,6 +527,7 @@ type copy struct {
 	OmemoCompare, OmemoConfirm, OmemoDevice, OmemoThis, OmemoVerified, OmemoUnverified string
 	OmemoInactive, OmemoShare, OmemoDistrust, OmemoNoDevices, OmemoInput, OmemoImage   string
 	OmemoRoomTitle, OmemoRoomUnavailable, OmemoRoomMembers                             string
+	OmemoRoomActive, OmemoRoomEnable, OmemoRoomDisable                                 string
 	OmemoReview, OmemoMismatch, OmemoUnavailable                                       string
 
 	InfoConversationActions                                                                                                                                                                                string

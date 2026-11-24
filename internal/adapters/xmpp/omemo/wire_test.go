@@ -173,3 +173,61 @@ func TestPendingVerificationRollbackAndKeyChange(t *testing.T) {
 		t.Fatal("changed identity retained trust", err)
 	}
 }
+
+func TestDecryptLegacyRepeatedRecipientID(t *testing.T) {
+	const peer = "alice@example.org"
+	alice, err := Open(filepath.Join(t.TempDir(), "alice"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := Open(filepath.Join(t.TempDir(), "bob"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	aid, afp, err := alice.LocalIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bid, bundle, err := bob.Bundle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bfp, err := bundle.Fingerprint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := alice.Verify("bob@example.org", bid, bfp); err != nil {
+		t.Fatal(err)
+	}
+	if err := bob.Verify(peer, aid, afp); err != nil {
+		t.Fatal(err)
+	}
+	target := []Target{{JID: "bob@example.org", DeviceID: bid, Bundle: bundle}}
+	first, err := alice.Encrypt(t.Context(), target, "the first message")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := alice.Encrypt(t.Context(), target, "the second message")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first candidate unwraps successfully but does not authenticate this
+	// payload. The legitimate candidate must start from the original ratchet.
+	withCollision := second
+	withCollision.Header.Keys = []WrappedKey{first.Header.Keys[0], second.Header.Keys[0]}
+	refused := errors.New("consumer rejected message")
+	if err := bob.DecryptTo(t.Context(), peer, withCollision, func(text string) error {
+		if text != "the second message" {
+			t.Fatalf("unexpected plaintext %q", text)
+		}
+		return refused
+	}); !errors.Is(err, refused) {
+		t.Fatalf("expected the consumer's error, got %v", err)
+	}
+	if text, err := bob.Decrypt(t.Context(), peer, withCollision); err != nil || text != "the second message" {
+		t.Fatalf("decrypt collided header: %q, %v", text, err)
+	}
+	if text, err := bob.Decrypt(t.Context(), peer, first); err != nil || text != "the first message" {
+		t.Fatalf("failed attempt consumed another message's key: %q, %v", text, err)
+	}
+}

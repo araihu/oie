@@ -38,6 +38,26 @@ func TestUploadServiceUsesAccountServerDiscovery(t *testing.T) {
 	}
 }
 
+func TestOMEMOAttachmentAvailabilityIncludesAuthenticationTag(t *testing.T) {
+	const service = "upload.example.test"
+	account := domain.Account{ID: "alice"}
+	e := &entry{discovery: domain.CapabilityDiscovery{State: "complete", Services: []domain.DiscoveredService{
+		{Address: service, Scope: "service", State: "known", Features: []string{uploadNamespace}},
+	}}, uploadLimits: map[string]int64{service: 100}}
+	m := &Manager{entries: map[domain.ID]*entry{account.ID: e}}
+	attachments := []domain.StagedAttachment{{Size: 100}}
+	if err := m.AttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); !errors.Is(err, application.ErrAttachmentTooLarge) {
+		t.Fatalf("provider cap accepted the plaintext size of a protected file: %v", err)
+	}
+	attachments[0].Size = 84
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatalf("protected upload at the ciphertext limit was rejected: %v", err)
+	}
+}
+
 func TestAttachmentUploadRetriesOnlyUnfinishedFiles(t *testing.T) {
 	var first, second atomic.Int32
 	endpoint := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

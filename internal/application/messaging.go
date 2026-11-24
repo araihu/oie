@@ -61,18 +61,20 @@ type Rejected struct {
 }
 
 type Outgoing struct {
-	DirectEncryption      string
-	Reaction              *domain.OutgoingReaction
-	ReactionEmojis        []string
-	ID                    domain.ID
-	Address, OriginalText string
-	Kind                  string
-	RoomIntentRevisionID  domain.ID
-	Reply                 *domain.ReplyReference
-	Mentions              []domain.MessageMention
-	Correction            *domain.OutgoingCorrection
-	Attachments           []OutgoingAttachment
-	RecordWireAttempt     func(context.Context, string, ...domain.WireMentionProof) error
+	OMEMOWireDigests       []string
+	RecordOMEMOWireAttempt func(context.Context, []string) error
+	DirectEncryption       string
+	Reaction               *domain.OutgoingReaction
+	ReactionEmojis         []string
+	ID                     domain.ID
+	Address, OriginalText  string
+	Kind                   string
+	RoomIntentRevisionID   domain.ID
+	Reply                  *domain.ReplyReference
+	Mentions               []domain.MessageMention
+	Correction             *domain.OutgoingCorrection
+	Attachments            []OutgoingAttachment
+	RecordWireAttempt      func(context.Context, string, ...domain.WireMentionProof) error
 }
 
 // Outcomes distinguish definitely unsent failures from ambiguous external effects.
@@ -80,7 +82,9 @@ const (
 	Submitted = "submitted"
 	Unknown   = "unknown"
 	NotSent   = "not_sent"
-	Failed    = "failed"
+	// ProtectionPending is a hold before the adapter begins a transfer.
+	ProtectionPending = "protection_pending"
+	Failed            = "failed"
 )
 
 type ProtocolHost interface {
@@ -168,6 +172,10 @@ type attachmentOutboxRepository interface {
 	PendingMessagesByAttachments(context.Context, time.Time, bool, PendingMessageCursor) ([]domain.Message, PendingMessageCursor, error)
 	ClaimDispatchMessage(ctx context.Context, id, expected, roomIntent, revision domain.ID, at time.Time, guardWire bool) (domain.Message, error)
 	RecoverInterruptedMessage(ctx context.Context, id, expected, revision domain.ID, at time.Time) error
+}
+
+type protectedOutboxRequeueRepository interface {
+	RequeueUnstartedProtectedMessage(ctx context.Context, id, expected, revision domain.ID, at, next time.Time) (domain.Message, error)
 }
 
 // Physical sources retain the body addressed by a client wire identity. A
@@ -445,24 +453,9 @@ func (e *Engine) sendComposition(ctx context.Context, key, conversationID domain
 		return MessageResult{}, ErrInvalid
 	}
 	m := domain.Message{ID: id, RevisionID: rev, AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: a.ID, DisplayName: a.Address}, CreatedAt: now, IsOwn: true, SendState: "queued", ProviderID: string(id), ScheduledAt: at}
-	if c.Kind == "direct" {
-		if p, ok := e.protocols.(OmemoProtocol); ok {
-			m.DirectEncryption, err = p.DirectEncryption(a, c.Address)
-			if err != nil {
-				return MessageResult{}, err
-			}
-		}
-	}
-	if c.Kind == "room" {
-		if p, ok := e.protocols.(RoomOMEMOProtocol); ok {
-			enabled, err := p.RoomEncryption(a, c.Address)
-			if err != nil {
-				return MessageResult{}, err
-			}
-			if enabled {
-				m.DirectEncryption = "omemo"
-			}
-		}
+	m.DirectEncryption, err = e.conversationEncryption(a, c)
+	if err != nil {
+		return MessageResult{}, err
 	}
 	m, err = e.prepareComposition(ctx, a, c, m, in, review)
 	if err != nil {
@@ -857,6 +850,14 @@ func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, spl
 	}
 	var roomRevision domain.ID
 	if c.Kind == "room" {
+		if m.DirectEncryption != "omemo" {
+			if protocol, ok := e.protocols.(RoomOMEMOProtocol); ok {
+				enabled, err := protocol.RoomEncryption(a, c.Address)
+				if err != nil || enabled {
+					return nil
+				}
+			}
+		}
 		session, err := e.RoomSession(ctx, c.ID)
 		if err != nil {
 			return err
@@ -896,10 +897,10 @@ func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, spl
 	if err != nil {
 		return err
 	}
-	// The protocol bounds each upload independently. A single fixed deadline
-	// for the composition can starve the later files of a valid upload.
+	// The protocol bounds each upload, OMEMO recipient discovery and the
+	// final wire attempt. A shared short deadline can starve later phases.
 	sendCtx := ctx
-	if len(claimed.Attachments) == 0 {
+	if len(claimed.Attachments) == 0 && claimed.DirectEncryption != "omemo" {
 		var cancel context.CancelFunc
 		sendCtx, cancel = context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -913,7 +914,7 @@ func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, spl
 	}
 	stateName := outcome
 	switch outcome {
-	case NotSent:
+	case NotSent, ProtectionPending:
 		stateName = "queued"
 	case Submitted, Unknown, Failed:
 	default:
@@ -929,7 +930,12 @@ func (e *Engine) dispatchMessage(ctx context.Context, r MessagingRepository, spl
 	now = e.now().UTC()
 	finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer finishCancel()
-	_, err = r.TransitionMessage(finishCtx, m.ID, "dispatching", stateName, rev, now, now.Add(time.Second))
+	requeue, canRelease := r.(protectedOutboxRequeueRepository)
+	if canRelease && (outcome == ProtectionPending || (outcome == NotSent && claimed.DirectEncryption == "omemo" && len(claimed.Attachments) == 0)) {
+		_, err = requeue.RequeueUnstartedProtectedMessage(finishCtx, m.ID, claimed.RevisionID, rev, now, now.Add(time.Second))
+	} else {
+		_, err = r.TransitionMessage(finishCtx, m.ID, "dispatching", stateName, rev, now, now.Add(time.Second))
+	}
 	if err != nil && !errors.Is(err, ErrStateConflict) {
 		return err
 	}

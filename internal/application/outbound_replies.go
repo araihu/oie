@@ -56,7 +56,7 @@ func outgoingReplyContent(m domain.Message) (string, *domain.ReplyReference) {
 	if m.Reply != nil && m.Reply.OriginalExpired {
 		return m.Reply.BodyText, nil
 	}
-	if m.OutboundReply != nil && m.OutboundReply.Reference != nil {
+	if m.DirectEncryption != "omemo" && m.OutboundReply != nil && m.OutboundReply.Reference != nil {
 		return m.OriginalText, &domain.ReplyReference{Target: *m.OutboundReply.Reference, Fallback: slices.Clone(m.OutboundReply.Fallback)}
 	}
 	return m.OriginalText, nil
@@ -77,6 +77,10 @@ func (out Outgoing) MatchesOriginalContent(m domain.Message) bool {
 func outgoingMessage(m domain.Message, c domain.Conversation) Outgoing {
 	body, reply := outgoingReplyContent(m)
 	out := Outgoing{DirectEncryption: m.DirectEncryption, ID: m.ID, Address: c.Address, OriginalText: body, Kind: c.Kind, Reply: reply}
+	// Older queued OMEMO compositions can still contain native references.
+	if m.DirectEncryption == "omemo" {
+		return out
+	}
 	out.Mentions = slices.Clone(m.Mentions)
 	if m.Reply != nil && m.Reply.OriginalExpired {
 		return out

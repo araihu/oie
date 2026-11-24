@@ -58,7 +58,9 @@ Use OS account permissions and disk encryption to protect the profile.
 Automatic link preview fetching and conventional Oiê ZIP export are disabled
 in this profile. Encrypted direct messages have an OMEMO label. The engine
 accepts unencrypted direct text only when the user explicitly enables it for
-that peer. Structured replies, edits and reactions are outside this increment.
+that peer. Replies in a protected conversation include the quote in the
+encrypted text. Room mentions appear as text. Protocol edits and reactions
+are unavailable for protected messages and conversations.
 
 ## Send and download encrypted attachments
 
@@ -76,11 +78,11 @@ file before returning it. Local or hosted Oiê can also download files
 recovered from the XMPP archive while the upload service still has the bytes.
 The hosting operator can read files processed by the hosted engine.
 
-Ciphertext downloads use HTTPS. For a dedicated private HTTPS upload service,
+Ciphertext uploads and downloads use HTTPS. For a dedicated private HTTPS upload service,
 set `--omemo-upload-origin https://upload.example.internal:5443` or
 `OIE_OMEMO_UPLOAD_ORIGIN` on the engine. The exception applies to that exact
 host and port. To trust a private CA, supply the CA with `--xmpp-ca-file`.
-Encrypted downloads do not follow redirects.
+Encrypted transfers do not follow redirects.
 
 ## Recover direct messages from the XMPP server
 
@@ -107,7 +109,7 @@ pass selects encrypted direct messages. Rooms use their separate archive path.
 
 The room must restrict entry to members and let participants see one another's
 XMPP addresses. Join the room and open **OMEMO encryption** in its details.
-Select **Encrypt the next messages** and check the devices listed for each
+Select **Enable OMEMO in this room** and check the devices listed for each
 member. Verify every active device. The local and hosted engines encrypt for
 the complete membership, including members who are offline. The hosted engine
 uses the server identity, as in direct chats.
@@ -115,15 +117,31 @@ uses the server identity, as in direct chats.
 The engine checks the configuration and current affiliations before sending.
 A queued encrypted message stays encrypted through retries. If the room
 configuration changes or a member has an unverified device, the encrypted send
-waits. This preview supports up to 64 members and 256 recipient devices.
+waits. The sender can still cancel while the message is waiting for verification
+before upload or transmission. This preview supports up to 64 members and 256
+recipient devices.
 Other room clients each control their own encryption setting. After importing
 an identity into a new profile, enable OMEMO for each private room again.
+Disabling OMEMO pauses encrypted reception and recovery in that room. Enabling
+it again resumes recovery from a compatible archive.
+
+The legacy format identifies each recipient key by device ID. If devices on
+different accounts publish the same ID, Oiê holds the send because some
+clients can read only one recipient key per ID. If the collision involves a
+retired device, its owner can clear the stale device from their published
+device list using their client. If both devices are active, use a different
+enrolled device or re-enroll one device after saving its history. Retire the
+colliding ID and verify any new fingerprint before retrying the protected send.
 
 Private rooms support encrypted text and files while joined. Compatible
 archives can return encrypted messages after reconnecting, provided the archive
 supplies the sender's original affiliation and XMPP address and Oiê has the
 keys. Oiê uses the archive timestamp. An unavailable message can hold the
-affected history page open for retry after verification.
+affected archive range open for retry after verification while the rest of
+history is recovered. Encrypted messages addressed only to other devices stay
+unavailable on this installation. Oiê also processes archived room withdrawals
+that refer to an authenticated message. The server needs to supply its stable
+message IDs for those references.
 Search uses the content recovered by Oiê.
 [XEP-0384](https://xmpp.org/extensions/xep-0384.html#usecases-muc) ·
 [XEP-0045](https://xmpp.org/extensions/xep-0045.html).

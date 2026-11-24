@@ -2,19 +2,25 @@ package omemo
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"slices"
 	"time"
 
 	"go.mau.fi/libsignal/protocol"
 )
 
+var ErrRoomEncryptionDisabled = errors.New("OMEMO is disabled for the room")
+
 // Pending holds only ciphertext until the user has compared the sender's key.
 type Pending struct {
 	Peer, StanzaID, Digest string
 	Room, Nickname         string
+	// A re-enqueued envelope gets a new ID even when its digest is unchanged.
+	ID string `json:",omitempty"`
 
 	At       time.Time
 	Envelope Envelope
@@ -40,6 +46,9 @@ func (d *Device) HoldPending(message Pending) error {
 	digest := sha256.Sum256(raw)
 	key := hex.EncodeToString(digest[:])
 	return d.update(func(s *state) error {
+		if message.Room != "" && !s.EncryptedRooms[message.Room] {
+			return ErrInvalid
+		}
 		addressed := slices.ContainsFunc(env.Header.Keys, func(k WrappedKey) bool { return k.To == s.DeviceID })
 		if !addressed {
 			return ErrInvalid
@@ -55,6 +64,7 @@ func (d *Device) HoldPending(message Pending) error {
 			return ErrInvalid
 		}
 		message.Bytes, message.Digest = len(raw), key
+		message.ID = rand.Text()
 		s.Pending = append(s.Pending, message)
 		return nil
 	})
@@ -76,14 +86,19 @@ func (d *Device) Ready() ([]Pending, error) {
 }
 
 func (d *Device) Receive(ctx context.Context, p Pending, accept func(string) error) error {
-	return d.decryptTo(ctx, p.Peer, p.Envelope, p.Digest, accept)
+	return d.decryptTo(ctx, p, accept)
 }
-func discardPending(s *state, peer, digest string) {
-	if digest != "" {
-		s.Pending = slices.DeleteFunc(s.Pending, func(p Pending) bool { return p.Peer == peer && p.Digest == digest })
+
+func (p Pending) sameEntry(other Pending) bool {
+	return p.Peer == other.Peer && p.Room == other.Room && p.Digest == other.Digest && p.ID == other.ID
+}
+
+func discardPending(s *state, message Pending) {
+	if message.Digest != "" {
+		s.Pending = slices.DeleteFunc(s.Pending, message.sameEntry)
 	}
 }
 
 func (d *Device) Discard(p Pending) error {
-	return d.update(func(s *state) error { discardPending(s, p.Peer, p.Digest); return nil })
+	return d.update(func(s *state) error { discardPending(s, p); return nil })
 }

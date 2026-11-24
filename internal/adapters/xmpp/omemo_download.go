@@ -23,7 +23,7 @@ func (m *Manager) SetPrivateOMEMOUploadOrigin(value string) error {
 		return nil
 	}
 	u, err := url.Parse(value)
-	if err != nil || !secureSlotURL(value) || u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.ForceQuery || strings.Contains(value, "#") {
+	if err != nil || !secureSlotURL(value) || u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.ForceQuery {
 		return errors.New("OMEMO upload origin must be a bare HTTPS origin")
 	}
 	m.privateUploadHost = u.Host
@@ -43,7 +43,7 @@ func (m *Manager) OpenOMEMOAttachment(ctx context.Context, file domain.Encrypted
 	var empty application.MediaRead
 	blocked := application.MediaFailure{Code: "media_blocked"}
 	failed := application.MediaFailure{Code: "media_fetch_failed"}
-	if !secureSlotURL(file.URL) || strings.Contains(file.URL, "#") {
+	if !secureSlotURL(file.URL) {
 		return empty, blocked
 	}
 	select {
@@ -61,12 +61,8 @@ func (m *Manager) OpenOMEMOAttachment(ctx context.Context, file domain.Encrypted
 	if err != nil {
 		return empty, blocked
 	}
-	client := m.publicUploadClient
-	if m.privateUploadClient != nil && strings.EqualFold(req.URL.Host, m.privateUploadHost) {
-		client = m.privateUploadClient
-	}
 	req.Header.Set("Accept-Encoding", "identity")
-	res, err := client.Do(req)
+	res, err := m.omemoMediaClient(req.URL).Do(req)
 	if err != nil {
 		var denial application.PreviewFailure
 		if errors.As(err, &denial) && denial.Code == "blocked" {
@@ -95,6 +91,13 @@ func (m *Manager) OpenOMEMOAttachment(ctx context.Context, file domain.Encrypted
 	}}
 	return application.MediaRead{FileName: file.FileName, Body: body,
 		MediaType: "application/octet-stream", Length: int64(len(plain)), Total: int64(len(plain))}, nil
+}
+
+func (m *Manager) omemoMediaClient(u *url.URL) *http.Client {
+	if m.privateUploadClient != nil && strings.EqualFold(u.Host, m.privateUploadHost) {
+		return m.privateUploadClient
+	}
+	return m.publicUploadClient
 }
 
 func publicOMEMOUploadClient() *http.Client {

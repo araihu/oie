@@ -54,7 +54,7 @@ func (m *Manager) recoverDirectArchives(ctx context.Context, host application.Hi
 	}
 	retention, ok := m.host.(application.RetentionHost)
 	if !ok {
-		return m.recoverArchiveRange(ctx, host, e, s, e.account.Address, checkpointPrefix+e.account.Address, "", nil)
+		return m.recoverArchiveRange(ctx, host, e, s, e.account.Address, checkpointPrefix+e.account.Address, "", nil, false)
 	}
 	ctx, err := m.beginArchiveRetention(ctx, e.account.ID)
 	if err != nil {
@@ -64,15 +64,27 @@ func (m *Manager) recoverDirectArchives(ctx context.Context, host application.Hi
 	if err != nil {
 		return err
 	}
+	var plaintext map[string]bool
+	if e.omemoDevice != nil {
+		plaintext, err = e.omemoDevice.PlaintextPeers()
+		if err != nil {
+			return err
+		}
+	}
 	known := make(map[string]bool, len(peers))
 	var failures error
 	for _, peer := range peers {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		checkpoint := "retention-peer:" + strconv.Itoa(peer.Days) + ":" + checkpointPrefix + peer.Address
+		prefix := checkpointPrefix
+		plain := plaintext[peer.Address]
+		if plain {
+			prefix = "omemo-plain:"
+		}
+		checkpoint := "retention-peer:" + strconv.Itoa(peer.Days) + ":" + prefix + peer.Address
 		scoped := context.WithValue(ctx, archiveRetentionKey{}, archiveRetention{account: e.account.ID, days: peer.Days, now: time.Now().UTC()})
-		err := m.recoverArchiveRange(scoped, host, e, s, e.account.Address, checkpoint, peer.Address, nil)
+		err := m.recoverArchiveRange(scoped, host, e, s, e.account.Address, checkpoint, peer.Address, nil, plain)
 		if errors.Is(err, application.ErrStateConflict) {
 			return err
 		}
@@ -83,7 +95,7 @@ func (m *Manager) recoverDirectArchives(ctx context.Context, host application.Hi
 			known[peer.Address] = true
 		}
 	}
-	return errors.Join(failures, m.recoverArchiveRange(ctx, host, e, s, e.account.Address, checkpointPrefix+e.account.Address, "", known))
+	return errors.Join(failures, m.recoverArchiveRange(ctx, host, e, s, e.account.Address, checkpointPrefix+e.account.Address, "", known, false))
 }
 
 func filterKnownDirectPeers(page *archivePage, known map[string]bool) {
