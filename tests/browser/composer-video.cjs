@@ -711,6 +711,50 @@ async function launch() {
         await page.close();
       }
     }
+    for (const action of ['play', 'pause', 'stream']) {
+      const page = await browser.newPage({serviceWorkers:'block'});
+      await page.addInitScript(() => { window.OieDesktop = {}; });
+      let releaseRead;
+      const readGate = new Promise(resolve => { releaseRead = resolve; });
+      const ranges = [];
+      await page.route(url => url.pathname.endsWith('/' + audioItem.id + '/content'), async route => {
+        const range = route.request().headers().range;
+        ranges.push(range);
+        if (range === 'bytes=0-20971519') {
+          await readGate;
+          if (action === 'stream') return route.fulfill({
+            status:206, contentType:'audio/wav',
+            headers:{'Content-Range':'bytes 0-1/41943040'}, body:audioBytes.subarray(0,2),
+          });
+        }
+        return route.continue();
+      });
+      try {
+        await page.goto(base + '/?chat=' + direct + '&lang=en');
+        const player = page.locator('[data-message-id="' + receivedAudio.id + '"] [data-message-audio]');
+        const play = player.getByRole('button',{name:/^Play audio/});
+        await play.waitFor();
+        const audio = await player.locator('audio').elementHandle();
+        await play.click();
+        const pause = player.getByRole('button',{name:/^Pause audio/});
+        await pause.waitFor();
+        assert(await audio.evaluate(node => node.paused && !node.hasAttribute('src')));
+        if (action === 'pause') await pause.click();
+        releaseRead();
+        if (action === 'pause') {
+          await page.waitForFunction(node => node.currentSrc.startsWith('blob:') && node.readyState >= 2, audio);
+          assert(await audio.evaluate(node => node.paused && node.currentTime === 0));
+          await play.click();
+        }
+        await page.waitForFunction(node => node.ended && !node.error && node.currentTime >= 1.9, audio);
+        assert.equal(await audio.evaluate(node => node.currentSrc.startsWith('blob:')), action !== 'stream');
+        assert.equal(ranges[0], 'bytes=0-20971519');
+        if (action !== 'stream') assert.equal(ranges.length, 1, 'desktop playback reuses the bounded read');
+      } finally {
+        releaseRead();
+        await page.close();
+      }
+    }
     if (!useWebKit) {
       const audioPage = await browser.newPage({serviceWorkers:'block'});
       try {

@@ -139,6 +139,16 @@ window.OieRuntime.register('message-audio', life => {
     update(player);
     if (player.recovering) return;
     const {card, media, source} = player;
+    if (window.OieDesktop && !media.hasAttribute('src') && !player.waveUnavailable) {
+      if (player.waitingForAudio) return;
+      // Native WebViews can issue many range probes when playing a remote M4A.
+      // Prefer the bounded read already in progress, even before waveform decoding.
+      player.waitingForAudio = true;
+      status(card, card.dataset.audioLoading);
+      await player.buffered.catch(() => {});
+      player.waitingForAudio = false;
+      if (!current(player) || active !== player || !player.playRequested) return;
+    }
     if (!media.hasAttribute('src')) media.src = source;
     const attemptedSource = media.src;
     if (player.waveUnavailable && !media.controls) useNativeControls(player);
