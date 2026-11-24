@@ -16,7 +16,7 @@ system save dialog with the file’s name.
 | --- | --- | --- | --- |
 | Choose, paste or drop files | Show the selected files in the composer and start staging | Make the existing caption available for editing | 0 |
 | Remove a file while staging | Cancel that file’s request and remove its row | Keep the typed caption and other files | 0 |
-| Unsupported conversation or file over the local limit | Show a localized notice | Preserve the existing draft | 0 |
+| Unsupported conversation or selection over the attachment count limit | Show a localized notice | Preserve the existing draft | 0 |
 | Stage fails or its response is lost | Offer Retry and Remove in that file’s row | Keep the caption and file selection | 0 |
 | Retry staging | Reuse the file’s staging ID | Keep the caption editable | 0 |
 | Staging succeeds | Retain the file in the scoped draft | Preserve text typed during the request | 0 |
@@ -24,18 +24,32 @@ system save dialog with the file’s name.
 | Navigation or scheduled-draft switch during staging | Cancel the outstanding selections | A late response cannot apply to another draft | 0 |
 
 Browser staging uses the existing conversation-scoped multipart endpoint. Files stage
-one at a time, with a separate timeout for each request. Send and Schedule
+one at a time, with an idle timeout for each upload. Send and Schedule
 become available after all selected files finish staging or the user
 removes the remaining selections. Staged attachments survive a reload.
 Thumbnail extraction runs independently of staging and send eligibility.
-Unsupported video formats still have filename and removal controls.
+A restored draft streams its video on explicit playback, including files larger than the thumbnail budget. Unsupported video formats still have filename and removal controls.
 Unfinished file selections are held in the current view. The Flatpak chooser
-stages portal-granted files in the desktop process and returns the completed
-attachments to the active draft. A file whose request
+reads selected audio and video locally for the quality dialog. Only the confirmed
+attachment is staged. The File and Image actions stage portal-granted files in
+the desktop process. A file whose request
 committed before cancellation can remain in storage. Cleanup is tracked in O09.
 
-The app accepts up to 16 attachments, with an engine limit of 20 MiB per file.
-The provider can impose a lower limit. The XMPP adapter uploads accepted
+Use **Audio or video** for SD, HD or a compatible original. The device default
+is SD. A recording, pasted media or dropped media uses the same quality dialog.
+An MP3 with an embedded PNG or JPEG cover qualifies as audio. HD and OG keep
+the compatible MP3 when it fits. SD can produce a smaller AAC/M4A with its
+cover and descriptive tags, subject to the same 10% savings rule as other
+compatible originals. The composer recognizes MP3 by content and corrects the
+attachment name and media type when needed. An MP4 video can include a cover.
+For an MP3 with a custom cover description, a back cover or separately labeled covers, choose OG to preserve the labels.
+Attach a transparent video as a file to keep its alpha channel. An MP4 or WAV detected
+as incomplete displays a warning and can only be attached explicitly as a file.
+
+**File** attaches the original. Choosing a quality prepares the bytes on the
+device before staging, including for scheduled messages. A draft can contain
+up to 16 attachments. The account’s XMPP upload service sets the per-file
+limit. Discovery reports a limit only when all eligible services advertise one. The XMPP adapter uploads accepted
 attachments before writing the outgoing chat message. The recipient receives
 the caption followed by the provider’s download links. A pending message shows
 filenames and supported thumbnails while the engine confirms acceptance.

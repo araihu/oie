@@ -76,7 +76,7 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
       const menuItem = menu.getByRole('menuitem', {name:label, exact:true});
       await menuItem.waitFor();
       const items = await menu.getByRole('menuitem').allTextContents();
-      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Arquivo', 'Agendar mensagem'] : ['Image', 'File', 'Schedule message']);
+      assert.deepEqual(items.map(item => item.trim()), pt ? ['Imagem', 'Áudio ou vídeo', 'Arquivo', 'Agendar mensagem'] : ['Image', 'Audio or video', 'File', 'Schedule message']);
       const chooser = page.waitForEvent('filechooser');
       await menuItem.click();
       assert.equal(await (await chooser).element().getAttribute('accept'), accept);
@@ -112,8 +112,8 @@ async function attachmentComposition({base, api, until, alicePage, bobPage, alic
     await until(async () => await composer.inputValue() === 'text ' + original, 'ordinary paste inserts text');
     await composer.fill(original);
     await composer.evaluate(node => node.setSelectionRange(2, 5));
-    assert.equal(await dataEvent(page, 'drop', [file], '', 20*1024*1024+1), true);
-    const toast = page.locator('[data-toast-container] [role="alert"]').filter({hasText:pt ? '16 arquivos de 20 MiB' : '16 files of 20 MiB'});
+    assert.equal(await dataEvent(page, 'drop', Array.from({length:17}, (_,i) => ({...file,name:i+'.txt'})), ''), true);
+    const toast = page.locator('[data-toast-container] [role="alert"]').filter({hasText:pt ? '16 arquivos' : '16 files'});
     await toast.getByRole('button', {name:pt ? 'Fechar' : 'Close'}).click();
     await toast.waitFor({state:'hidden'});
     assert.equal(await draftFiles.isVisible(), false);

@@ -1829,6 +1829,8 @@ window.OieRuntime.register('live', (life, route) => {
       }else if(!preferencesCurrent)refreshAgain=true;
       if (regions.dataset.conversationId === body.dataset.conversationId) {
         if (composer) {
+          const mediaChoice = composer.querySelector('[data-media-choice]');
+          if (mediaChoice) mediaChoice.dataset.uploadLimit = regions.dataset.uploadLimit || '';
           const allowed = regions.dataset.attachmentAllowed;
           if (allowed && allowed !== composer.dataset.attachmentAllowed) {
             composer.dataset.attachmentAllowed = allowed;

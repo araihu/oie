@@ -890,3 +890,10 @@ and `shared content download`. Use
 `previews images request` to request retention of an original image on
 the engine. The response contains the download state. The CLI also
 provides `help` and `completion`.
+
+### Outgoing audio and video
+
+The web UI serves the bundled single-threaded FFmpeg.wasm encoder on demand.
+Desktop, hosted and source builds use the same browser assets. The browser
+caches the versioned codec files for reuse. Preparation takes place on the
+sending device. XMPP upload limits still apply to the prepared attachment.

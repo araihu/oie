@@ -139,3 +139,12 @@ The runtime and templates copied into `oiectl` by `araihu/oapi-cli-gen`
 are available under MIT. The desktop archives carry its license at
 `licenses/oapi-cli-gen/LICENSE`. The standalone CLI module carries the same text in
 [`cli/internal/cliruntime/LICENSE`](cli/internal/cliruntime/LICENSE).
+
+## Browser media preparation
+
+The client uses the MIT-licensed FFmpeg.wasm wrapper 0.12.15 and the
+single-threaded GPL-2.0-or-later core 0.12.10, including FFmpeg 5.1.4 and
+x264. Their notices are embedded at `/ui/media-encoder/NOTICES.txt`.
+The Linux corresponding-source archive includes the upstream build scripts and
+codec sources pinned in `packaging/browser-source.json`.
+[Upstream build](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/71aa99d37c02a7b4c435275ca9ef50e612f6efa1).

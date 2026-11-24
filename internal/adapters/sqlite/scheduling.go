@@ -250,12 +250,9 @@ func (s *Store) StageAttachment(ctx context.Context, conversationID domain.ID, i
 	}
 	defer func() { _ = os.Remove(tmp.Name()); _ = tmp.Close() }()
 	hash := sha256.New()
-	in.Size, err = io.Copy(io.MultiWriter(tmp, hash), io.LimitReader(body, application.MaxStagedAttachmentSize+1))
+	in.Size, err = io.Copy(io.MultiWriter(tmp, hash), body)
 	if err != nil {
 		return in, false, err
-	}
-	if in.Size > application.MaxStagedAttachmentSize {
-		return in, false, application.ErrAttachmentTooLarge
 	}
 	in.SHA256 = hex.EncodeToString(hash.Sum(nil))
 	if err = tmp.Sync(); err != nil {

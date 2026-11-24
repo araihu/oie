@@ -1,6 +1,17 @@
 window.OieRuntime.register('scheduling', life => {
   'use strict';
   const errorToast = message => window.dispatchEvent(new CustomEvent('notify', {detail: {kind: 'toast', tone: 'danger', message}}));
+  const qualityKey = 'oie.device.media-quality.v1';
+  function preferredQuality() {
+    try { return localStorage.getItem(qualityKey) || 'SD'; } catch { return 'SD'; }
+  }
+  const qualitySetting = document.querySelector('[data-media-default]');
+  if (qualitySetting) {
+    qualitySetting.value = preferredQuality();
+    life.on(qualitySetting, 'change', () => {
+      try { localStorage.setItem(qualityKey, qualitySetting.value); } catch { /* Storage unavailable. */ }
+    });
+  }
   const filter = document.querySelector('[data-schedule-filter]');
   if (filter) {
     const id = 'schedule-conversation';
@@ -391,16 +402,17 @@ window.OieRuntime.register('scheduling', life => {
     const menu = composer.querySelector('#composer-split-menu');
     const menuTrigger = menu.querySelector('[data-popover-trigger] button');
     const scheduleAction = menu.querySelector('#composer-schedule-new');
-    const attachmentActions = menu.querySelectorAll('#composer-attach-image, #composer-attach-file');
+    const attachmentActions = menu.querySelectorAll('#composer-attach-image, #composer-attach-media, #composer-attach-file');
+    const mediaChoice = composer.querySelector('[data-media-choice]');
     const pending = new Map();
     const videos = new Map();
     const playerDialog = attachments.querySelector('[data-draft-video-dialog]');
     const player = playerDialog.querySelector('video');
     const playbackError = playerDialog.querySelector('[data-draft-video-error]');
-    const maxFileSize = 20 * 1024 * 1024;
+    const videoPreviewBudget = 20 * 1024 * 1024;
     const submittedRecordingKey = 'submitted-recording:' + data.engineId + ':' + data.conversationId;
     const runtimeMemory = window.OieRuntime.memory;
-    let currentVideo, playerURL, playback, previewing;
+    let currentVideo, playerURL, previewing;
     const selectionOrder = new Map();
     let sequence = 0;
     let dragDepth = 0;
@@ -417,6 +429,7 @@ window.OieRuntime.register('scheduling', life => {
     const recordRemove = recordPanel.querySelector('[data-record-audio-remove]');
     const recordPlay = recordPanel.querySelector('[data-record-audio-play]');
     const recordRetry = recordPanel.querySelector('[data-record-audio-retry]');
+    const qualityLabel = mediaChoice.closest('dialog').querySelector('h2').textContent;
     const recordLabel = recordPanel.dataset.recordLabel;
     const stopLabel = recordPanel.dataset.stopLabel;
     const sendLabel = document.getElementById('oie-live-copy').dataset.send;
@@ -720,9 +733,11 @@ window.OieRuntime.register('scheduling', life => {
       recordWave.hidden = fallback || waiting;
       recordPlay.hidden = !file || fallback;
       recordPlay.disabled = !audioPreview || !!audioPreview.failed;
-      recordRetry.hidden = !file?.failed && !audioPreview?.failed;
+      recordRetry.hidden = !file?.qualityDeferred && !file?.failed && !audioPreview?.failed;
+      const retryLabel = file?.qualityDeferred ? qualityLabel : labels.retry;
+      if (recordRetry.textContent !== retryLabel) recordRetry.textContent = retryLabel;
       if (file) {
-        recordStatus.textContent = file.failed ? labels.failed : audioPreview?.failed ? recordPanel.dataset.playFailed :
+        recordStatus.textContent = file.qualityDeferred ? qualityLabel : file.failed ? labels.failed : audioPreview?.failed ? recordPanel.dataset.playFailed :
           file.file ? labels.preparing : file.fileName;
         updateAudioPlayer();
       }
@@ -764,7 +779,7 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     async function startRecording() {
-      const take = recording = {size: 0, keep: false, controller: new AbortController()};
+      const take = recording = {keep: false, controller: new AbortController()};
       const failRecording = (message = recordPanel.dataset.failed) => {
         if (recording !== take) return;
         cancelRecording();
@@ -790,10 +805,6 @@ window.OieRuntime.register('scheduling', life => {
           syncRecordButton();
         });
         plugin.on('record-progress', milliseconds => showAudioTime(milliseconds / 1000));
-        plugin.on('record-data-available', data => {
-          take.size += data.size;
-          if (take.size > maxFileSize) failRecording(labels.limit);
-        });
         plugin.on('record-error', () => failRecording());
         plugin.on('record-ended-externally', () => {
           take.keep = true;
@@ -802,9 +813,7 @@ window.OieRuntime.register('scheduling', life => {
         });
         plugin.on('record-end', blob => {
           if (recording !== take) return;
-          if (blob.size > maxFileSize) {
-            failRecording(labels.limit);
-          } else if (blob.size && canRecord()) {
+          if (blob.size && canRecord()) {
             finishRecording(take);
             const file = new File([blob], recordPanel.dataset.filename + '.' + extension, {
               type: (blob.type || mimeType).split(';')[0],
@@ -869,9 +878,10 @@ window.OieRuntime.register('scheduling', life => {
     });
     life.on(recordRetry, 'click', () => {
       const file = recordingDraft();
-      if (file?.failed && !locked && available()) {
+      if ((file?.failed || file?.qualityDeferred) && !locked && available()) {
         recordRemove.focus({preventScroll: true});
         file.failed = false;
+        file.qualityDeferred = false;
         syncPending();
         stageNext();
       } else if (audioPreview?.failed) {
@@ -947,7 +957,7 @@ window.OieRuntime.register('scheduling', life => {
       if (!available() || locked || nativeSelection || pending.size !== 1 || files.length) return;
       const [file] = pending.values();
       const submitted = runtimeMemory.get(submittedRecordingKey);
-      if (file.recordedAudio && !file.failed && (!submitted || submitted === file)) return file;
+      if (file.recordedAudio && !file.prepareMedia && !file.failed && (!submitted || submitted === file)) return file;
     }
 
     life.on(composer, 'oie:wait-for-recording-upload', ({detail}) => {
@@ -990,7 +1000,7 @@ window.OieRuntime.register('scheduling', life => {
       if (entry.file) return entry.file;
       const {boundedVideoBlob} = await import('/ui/video-frames.js');
       const response = await life.fetch(fileURL(entry.id), {signal, cache:'no-store'});
-      return boundedVideoBlob(response, maxFileSize, entry.type, signal);
+      return boundedVideoBlob(response, videoPreviewBudget, entry.type, signal);
     }
 
     function syncVideos() {
@@ -1044,7 +1054,6 @@ window.OieRuntime.register('scheduling', life => {
       if (!currentVideo) return;
       const id = currentVideo.id;
       currentVideo = null;
-      playback?.abort();
       player.pause();
       player.removeAttribute('src');
       player.load();
@@ -1060,24 +1069,17 @@ window.OieRuntime.register('scheduling', life => {
     async function playVideo(entry) {
       if (!entry || currentVideo) return;
       currentVideo = entry;
-      playback = new AbortController();
-      const {signal} = playback;
       playbackError.hidden = true;
       playerDialog.querySelector('[data-draft-video-title]').textContent = entry.name;
       playerDialog.showModal();
-      const timeout = setTimeout(() => playback?.signal === signal && playback.abort(), 12000);
+      playerURL = entry.file ? URL.createObjectURL(entry.file) : '';
+      player.src = playerURL || fileURL(entry.id) + '&play=1';
       try {
-        const file = await videoBlob(entry, signal);
-        signal.throwIfAborted();
-        playerURL = URL.createObjectURL(file);
-        player.src = playerURL;
         await player.play();
       } catch (error) {
-        if (currentVideo === entry && playback.signal === signal && error.name !== 'NotAllowedError') {
+        if (currentVideo === entry && error.name !== 'NotAllowedError' && error.name !== 'AbortError') {
           playbackError.hidden = false;
         }
-      } finally {
-        clearTimeout(timeout);
       }
     }
 
@@ -1104,7 +1106,7 @@ window.OieRuntime.register('scheduling', life => {
 
     function stageNext() {
       if (uploading || locked || !available() || life.signal.aborted) return;
-      const file = [...pending.values()].find(file => !file.failed && !file.request);
+      const file = [...pending.values()].find(file => !file.failed && !file.qualityDeferred && !file.request);
       if (file) void stage(file);
     }
 
@@ -1112,10 +1114,31 @@ window.OieRuntime.register('scheduling', life => {
       uploading = true;
       const controller = new AbortController();
       file.request = controller;
-      const timeout = setTimeout(() => controller.abort(), 90000);
       let staged;
       try {
         if (/[\x00-\x1f\x7f]/.test(file.fileName)) throw Error('invalid filename');
+        if (file.prepareMedia) {
+          const {chooseMedia} = await import('/ui/media-encoder/choice.mjs');
+          const prepared = await chooseMedia(mediaChoice, file.file, controller.signal, preferredQuality(), file.recordedAudio);
+          if (!prepared) {
+            if (file.recordedAudio && !controller.signal.aborted) file.qualityDeferred = true;
+            else forget(file);
+            return;
+          }
+          if (controller.signal.aborted || file.discarded || !available()) throw Error('draft unavailable');
+          const entry = videos.get(file.id);
+          if (entry && prepared !== file.file) {
+            if (previewing?.entry === entry) previewing.controller.abort();
+            entry.attempted = !!entry.poster;
+            entry.file = prepared;
+            entry.type = prepared.type;
+            entry.name = prepared.name;
+          }
+          file.file = prepared;
+          file.fileName = prepared.name;
+          file.prepareMedia = false;
+          syncPending();
+        }
         // Encode the multipart quoted string directly so quotes and literal %22 stay distinct.
         const boundary = 'oie-' + newID();
         const filename = file.fileName.replace(/["\\]/g, '\\$&');
@@ -1156,7 +1179,6 @@ window.OieRuntime.register('scheduling', life => {
         if (!life.signal.aborted) status.textContent = labels.failed;
         if (file.recordedAudio) errorToast(labels.failed);
       } finally {
-        clearTimeout(timeout);
         delete file.request;
         const submitted = runtimeMemory.get(submittedRecordingKey) === file;
         if (submitted && staged) runtimeMemory.delete(submittedRecordingKey);
@@ -1168,18 +1190,21 @@ window.OieRuntime.register('scheduling', life => {
       }
     }
 
-    function addFiles(picked, recordedAudio = false) {
+    function addFiles(picked, recordedAudio = false, asMedia = 'auto') {
       if (!picked.length || !chat.getClientRects().length) return;
       if (!canAddAttachments() || document.querySelector('dialog[open]')) {
         errorToast(labels.unavailable);
         return;
       }
-      if (files.length + pending.size + picked.length > 16 || picked.some(file => file.size > maxFileSize)) {
+      if (files.length + pending.size + picked.length > 16) {
         errorToast(labels.limit);
         return;
       }
       const selected = picked.map(file => ({
-        file, id: newID(), fileName: file.name, recordedAudio, thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
+        file, id: newID(), fileName: file.name, recordedAudio,
+        prepareMedia: asMedia === true || asMedia === 'auto' && (/^(audio|video)\//.test(file.type) ||
+          /\.(mkv|avi|mov|mp4|m4v|m4a|mp3|aac|flac|ogg|opus|wav|webm|weba|ogv|3gp|ts|wmv|wma)$/i.test(file.name)),
+        thumbnail: raster(file.type) ? URL.createObjectURL(file) : '',
       }));
       for (const file of selected) {
         pending.set(file.id, file);
@@ -1228,6 +1253,7 @@ window.OieRuntime.register('scheduling', life => {
     restoreSubmittedRecording();
 
     function discardPending(keepQueued = false) {
+      nativeSelection?.abort();
       nativeSelection = null;
       for (const file of pending.values()) {
         if (keepQueued && runtimeMemory.get(submittedRecordingKey) === file) {
@@ -1252,19 +1278,24 @@ window.OieRuntime.register('scheduling', life => {
       selectionOrder.clear();
       syncPending();
     });
-    async function chooseNativeFiles(choose, imagesOnly) {
+    async function chooseNativeFiles(desktop, mode) {
       if (pending.size) return;
       const remaining = 16 - files.length;
       if (remaining <= 0) {
         errorToast(labels.limit);
         return;
       }
-      const selection = nativeSelection = {};
+      const selection = nativeSelection = new AbortController();
       syncPending();
       try {
-        const result = await choose(data.engineId, data.conversationId, csrf, remaining, imagesOnly);
+        const result = mode === 'media'
+          ? await desktop.selectMedia(remaining, selection.signal)
+          : await desktop.attachFiles(data.engineId, data.conversationId, csrf, remaining, mode === 'image');
         if (nativeSelection !== selection) return;
-        if (result.files?.length) {
+        if (result.files?.length && mode === 'media') {
+          nativeSelection = null;
+          addFiles(result.files, false, true);
+        } else if (result.files?.length) {
           const detail = {files: [...files, ...result.files]};
           composer.dispatchEvent(new CustomEvent('oie:attachments-change', {detail}));
           if (!detail.applied) throw Error('draft unavailable');
@@ -1283,20 +1314,21 @@ window.OieRuntime.register('scheduling', life => {
     }
 
     life.on(composer, 'oie:compose-add', event => {
-      if (!['image', 'file'].includes(event.detail) || !canAddAttachments()) return;
-      const choose = window.OieDesktop?.attachFiles;
+      if (!['image', 'media', 'file'].includes(event.detail) || !canAddAttachments()) return;
+      const desktop = window.OieDesktop;
       const imagesOnly = event.detail === 'image';
-      if (choose) {
-        void chooseNativeFiles(choose, imagesOnly);
+      if (event.detail === 'media' ? desktop?.selectMedia : desktop?.attachFiles) {
+        void chooseNativeFiles(desktop, event.detail);
         return;
       }
-      picker.accept = imagesOnly ? 'image/*' : '';
+      picker.dataset.asMedia = String(event.detail === 'media');
+      picker.accept = imagesOnly ? 'image/*' : event.detail === 'media' ? 'audio/*,video/*,.mkv,.flac,.opus,.weba' : '';
       picker.click();
     });
     life.on(picker, 'change', () => {
       const picked = [...picker.files];
       picker.value = '';
-      addFiles(picked);
+      addFiles(picked, false, picker.dataset.asMedia === 'true');
     });
     life.on(chat, 'paste', event => {
       if (event.target !== input || !event.clipboardData?.files.length) return;
