@@ -397,6 +397,7 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 
 .oie-avatar-stack{display:inline-grid;vertical-align:middle}
 @media(pointer:coarse){.oie-avatar-stack,.oie-chat-avatar-trigger{-webkit-user-select:none;user-select:none}}
+.oie-avatar-stack .oie-account-filter-avatar{width:24px;height:24px;font-size:10px;padding:0}
 .oie-avatar-initials,.oie-avatar-photo{display:flex;grid-area:1/1}
 .oie-avatar-photo{opacity:0}
 .oie-avatar-stack[data-avatar-ready="true"]>.oie-avatar-initials{visibility:hidden}

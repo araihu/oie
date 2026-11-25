@@ -115,7 +115,7 @@ templ messageSearchFilter(v view, category,label string){
 templ accountFilterAvatar(v view, account engineapi.Account, label string) {
 	{{ border := v.AccountAvatarBorders[account.Id] }}
 	<div aria-hidden="true">
-		@profileAvatar(v, account.Id, account.Address, avatar.Config{Name: label, Size: avatar.SizeXS, Border: border != "", BorderColor: border})
+		@profileAvatar(v, account.Id, account.Address, avatar.Config{Name: label, Size: avatar.SizeXS, RootClass: "oie-account-filter-avatar", Border: border != "", BorderColor: border})
 		// Goshtoso filters the option's text, including this non-displayed address.
 		<span hidden>{ account.Address }</span>
 	</div>
