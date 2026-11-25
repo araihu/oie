@@ -884,7 +884,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else if item.Kind == "audio" {
-			templ_7745c5c3_Err = retainedAudioPlayer(v, item).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = retainedAudioPlayer(sharedCardView(v), item).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -27,7 +27,7 @@ window.OieRuntime.register('shared-content', life => {
    if(controls.dataset.audioSource===source)audio.setAttribute('src',source);
    controls.removeAttribute('aria-busy');
    controls.removeAttribute('data-waveform-player');
-   for(const child of controls.querySelectorAll('[data-message-audio-play],[data-message-audio-wave],.oie-message-audio-time,[data-audio-retry]'))child.hidden=true;
+   for(const child of controls.querySelectorAll('[data-message-audio-play],[data-message-audio-wave],.oie-message-audio-time'))child.hidden=true;
    const wave=controls.querySelector('[data-message-audio-wave]');
    wave.replaceChildren();
    for(const name of wave.getAttributeNames())if(name!=='class'&&name!=='data-message-audio-wave'&&name!=='hidden')wave.removeAttribute(name);
@@ -84,9 +84,7 @@ window.OieRuntime.register('shared-content', life => {
   const play=current.querySelector('[data-message-audio-play]');
   const label=play.querySelector('[data-record-pause-icon]').hidden?current.dataset.audioPlayLabel:current.dataset.audioPauseLabel;
   play.setAttribute('aria-label',label+' · '+filename);
-  for(const selector of ['[data-audio-player]','[data-audio-retry]']){
-   current.querySelector(selector).setAttribute('aria-label',next.querySelector(selector).getAttribute('aria-label'));
-  }
+  current.querySelector('[data-audio-player]').setAttribute('aria-label',next.querySelector('[data-audio-player]').getAttribute('aria-label'));
   // Keep the media and focused controls connected while applying the new footer and menu.
   for(const child of [...node.childNodes])if(child!==currentAudio){
    if(child.nodeType===Node.ELEMENT_NODE)window.Alpine?.destroyTree(child);

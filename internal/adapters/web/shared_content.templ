@@ -133,7 +133,7 @@ templ sharedItem(v view,item engineapi.SharedContentItem){
 if item.Kind=="video" {
 @videoCard(v,item)
 }else if item.Kind=="audio" {
-@retainedAudioPlayer(v,item)
+@retainedAudioPlayer(sharedCardView(v),item)
 }else if item.Kind=="document" {
 @documentCard(v,item)
 }else if item.Preview!=nil {

@@ -17,6 +17,9 @@
 :is(.oie-shared-menu-trigger,.oie-shared-star):focus-visible{outline:2px solid var(--oie-accent-text);outline-offset:2px}
 .oie-shared-action-status{position:absolute;inset-inline-end:8px;top:42px;z-index:3;width:max-content;max-width:calc(100% - 16px);margin:0;padding:8px 10px;border:1px solid var(--oie-border);border-radius:8px;background:var(--oie-panel);color:var(--oie-text);box-shadow:0 2px 8px #0002;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .oie-shared-action-status[hidden]{display:none}
+/* Offer retry only after native playback fails. Keep a selected menu item
+   visible until the dropdown restores focus to its trigger. */
+.oie-shared-item:not(:has(> .oie-audio-card [data-audio-player][hidden])) [id^="shared-retry-audio-"]:not(:focus){display:none}
 /* Keep the title clear of the menu and give controls the whole content width. */
 .oie-shared-item > .oie-audio-card {
   container: shared-audio / inline-size;

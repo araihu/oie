@@ -261,8 +261,11 @@ window.OieRuntime.register('audio', life => {
     const restoreFocus = document.activeElement === player || (document.activeElement === document.body && players.has(player));
     players.delete(player);
     player.hidden = true;
-    retry.hidden = false;
-    if (restoreFocus) retry.focus({preventScroll:true});
+    if (retry) retry.hidden = false;
+    if (restoreFocus) {
+      const trigger = card.closest('[data-shared-item]')?.querySelector('[data-shared-menu-trigger]');
+      (retry || trigger)?.focus({preventScroll:true});
+    }
     window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioError}}));
   }
 
@@ -301,12 +304,15 @@ window.OieRuntime.register('audio', life => {
   });
 
   life.on(document, 'click', event => {
-    const retry = event.target.closest('[data-audio-retry]');
+    const retry = event.target.closest('[data-audio-retry],[id^="shared-retry-audio-"]');
     if (!retry) return;
-    const player = retry.closest('[data-audio-id]').querySelector('[data-audio-player]');
-    retry.hidden = true;
+    const inline = retry.hasAttribute('data-audio-retry');
+    const owner = retry.closest(inline ? '[data-audio-id]' : '[data-shared-item]');
+    const player = owner?.querySelector('[data-audio-player]');
+    if (!player?.hidden) return;
+    if (inline) retry.hidden = true;
     player.hidden = false;
-    player.focus({preventScroll:true});
+    if (inline) player.focus({preventScroll:true});
     player.load();
     player.play().catch(error => { if (error.name !== 'AbortError') recover(player); });
   });

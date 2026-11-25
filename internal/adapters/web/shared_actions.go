@@ -37,7 +37,7 @@ func sharedActionFile(item engineapi.SharedContentItem) string {
 }
 
 func sharedActionDownload(v view, item engineapi.SharedContentItem) string {
-	if item.Kind == "video" || item.Kind == "document" && documentFormat(item) != "unsupported" {
+	if item.Kind == "video" || item.Kind == "audio" || item.Kind == "document" && documentFormat(item) != "unsupported" {
 		return documentSource(v, item)
 	}
 	return ""
@@ -57,10 +57,16 @@ func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section 
 	}
 	if item.Kind == "image" && (sharedActionPreview(item) != "" || sharedActionFile(item) != "") || sharedActionDownload(v, item) != "" {
 		label := v.Text.SharedDownload
-		if item.Kind == "video" {
+		switch item.Kind {
+		case "video":
 			label = v.Text.VideoDownloadOriginal
+		case "audio":
+			label = v.Text.AudioDownload
 		}
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: label, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
+	}
+	if item.Kind == "audio" && sharedActionDownload(v, item) != "" {
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "retry-audio"), Label: v.Text.Retry, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowPath)})
 	}
 	if item.Kind == "link" && sharedActionPreview(item) != "" {
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "refresh"), Label: v.Text.RefreshPreview, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowPath), Disabled: item.Preview.State == "queued"})

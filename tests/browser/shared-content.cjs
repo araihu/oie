@@ -128,6 +128,52 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await page.waitForFunction(audio=>audio.currentTime>.05&&!audio.error,await native.elementHandle());
    await page.close();
   }
+  // The native player uses the card menu for recovery and original downloads.
+  {
+   const page=await browser.newPage({viewport:{width:390,height:844},serviceWorkers:'block'});
+   await watch(page.context());
+   await page.addInitScript(key=>{
+    localStorage.setItem(key,'false');
+    // Exercise the native-only path while still allowing the browser to decode audio.
+    HTMLMediaElement.prototype.canPlayType=()=> '';
+   },preference);
+   let unavailable=true;
+   const item=items[54];
+   await page.route('**/ui/shared-content/'+item.id+'/content?*',route=>
+    unavailable ? route.fulfill({status:503,contentType:'application/problem+json',body:'{}'}) : route.continue());
+   await page.goto(base+'/?section=media&lang=en');
+   await page.locator('[data-shared-item]').first().waitFor();
+   await page.locator('#shared-content-scroll').evaluate(scroll=>scroll.scrollTop=scroll.scrollHeight);
+   const card=tile(page,54),menu=card.locator('[data-shared-menu-trigger]');
+   await card.scrollIntoViewIfNeeded();
+   const native=card.locator('audio[data-audio-player]');
+   const controls=card.locator('[data-message-audio]');
+   const retry=card.getByRole('menuitem',{name:'Try again',exact:true});
+   assert.equal(await card.locator('button[data-audio-retry]').count(),0);
+   await menu.click();
+   await card.getByRole('menuitem',{name:'Download audio',exact:true}).waitFor();
+   assert.equal(await retry.count(),0);
+   await page.keyboard.press('Escape');
+   const height=(await controls.boundingBox()).height;
+   await native.evaluate(player=>{player.focus();void player.play().catch(()=>{});});
+   await native.waitFor({state:'hidden'});
+   assert.equal((await controls.boundingBox()).height,height);
+   await until(()=>menu.evaluate(trigger=>trigger===document.activeElement),'failed audio returns focus to its menu');
+   unavailable=false;
+   await menu.press('Enter');
+   await retry.waitFor();
+   await retry.press('Enter');
+   await page.waitForFunction(player=>player.currentTime>.05&&!player.error,await native.elementHandle());
+   await until(()=>menu.evaluate(trigger=>trigger===document.activeElement&&trigger.getAttribute('aria-expanded')==='false'),'audio retry closes only its menu and restores focus');
+   assert.equal((await controls.boundingBox()).height,height);
+   await menu.press('Enter');
+   const downloadAction=card.getByRole('menuitem',{name:'Download audio',exact:true});
+   await downloadAction.waitFor();
+   assert.equal(await retry.count(),0);
+   const [file]=await Promise.all([page.waitForEvent('download'),downloadAction.press('Enter')]);
+   assert.deepEqual(await fs.readFile(await file.path()),audio);
+   await page.close();
+  }
   // A metadata refresh updates the label without replacing or pausing the player.
   {
    const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'});
