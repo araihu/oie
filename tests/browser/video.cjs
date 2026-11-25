@@ -6,6 +6,7 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const bytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-video.webm'));
+ const hevc=await fs.readFile(path.join(__dirname,'fixtures/tiny-hevc.mkv'));
  const engine=id(1),account=id(2),chat=id(3),revision=id(4),good=id(20),bad=id(21),offline=id(22),streams=new Set();
  const state={seq:0,badUnavailable:true,corrupt:false,reads:new Map(),catalogReads:[],writes:0};
  const messages=[good,bad,offline].map((ref,n)=>({id:id(100+n),revisionId:revision,accountId:account,conversationId:chat,sender:{id:id(9),displayName:'Bob'},originalText:'Video caption '+n+'\nhttps://files.example.test/'+ref+'.webm',createdAt:new Date(Date.UTC(2026,10,8,12,n)).toISOString(),isOwn:false,sendState:'received'}));
@@ -36,9 +37,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const match=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(match){
    assert.equal(u.search,'');const ref=match[1];state.reads.set(ref,count(ref)+1);if(ref===bad&&state.badUnavailable)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});
-   const body=state.corrupt?Buffer.from('not a supported video container'):bytes;let start=0,end=body.length-1,status=200;
-   if(req.headers.range){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}
-   res.setHeader('Content-Type','video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition','inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
+   const body=state.corrupt?Buffer.from('not a supported video container'):state.hevc?hevc:bytes;let start=0,end=body.length-1,status=200;
+   if(req.headers.range&&!state.ignoreRange){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}
+   res.setHeader('Content-Type',state.hevc?'video/x-matroska':'video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition','inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{status:404});
@@ -63,7 +64,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await player(good).evaluate(video=>window.galleryVideo=video);const beforeRefresh=count(good);items[0].fileName='Updated local clip.webm';items[0].revisionId=id(40);emit();await until(async()=>await card(good).locator('[data-video-label]').textContent()==='Updated local clip.webm','live catalog metadata refresh');assert(await player(good).evaluate(video=>video===window.galleryVideo&&!video.paused));assert.equal(count(good),beforeRefresh,'SSE refresh must not restart media requests');
   findings.push('Gallery has no eager video source/body requests; actual64x48 VP8 decoding, finite duration, native play/pause/seek/keyboard and exact same-origin Range bytes work; SSE retains the loaded player');
   const badHeight=(await card(bad).boundingBox()).height;await card(bad).locator('[data-video-play]').click();await until(async()=>await card(bad).locator('[data-video-status]').getAttribute('data-state')==='failed','unavailable video error');const failedReads=count(bad);await page.waitForTimeout(250);emit();await page.waitForTimeout(250);assert.equal(count(bad),failedReads,'failed source must not loop automatically');assert.equal(await card(bad).locator('[data-video-retry]').isVisible(),false);assert(await card(bad).locator('[data-video-play]').isVisible());assert(Math.abs((await card(bad).boundingBox()).height-badHeight)<1,'failed playback must not change gallery card height');assert.equal(await card(bad).locator('[data-video-status]').isVisible(),false);assert.equal(await card(bad).locator('[data-video-label]').isVisible(),false);
-  const alerts=page.locator('[data-toast-container] [role=alert]:visible');await until(async()=>await alerts.count()===1,'Goshtoso playback error toast');assert.equal(await alerts.locator('[x-text="notification.message"]').textContent(),await card(bad).getAttribute('data-video-unsupported'));await player(bad).evaluate(video=>{video.dispatchEvent(new Event('error'));video.dispatchEvent(new Event('error'))});await page.waitForTimeout(100);assert.equal(await alerts.count(),1,'one toast per failed playback attempt');await alerts.getByRole('button',{name:'Close',exact:true}).click();await until(async()=>await alerts.count()===0,'dismiss playback toast');
+  const alerts=page.locator('[data-toast-container] [role=alert]:visible');await until(async()=>await alerts.count()===1,'Goshtoso playback error toast');assert.equal(await alerts.locator('[x-text="notification.message"]').textContent(),await card(bad).getAttribute('data-video-unavailable'));await player(bad).evaluate(video=>{video.dispatchEvent(new Event('error'));video.dispatchEvent(new Event('error'))});await page.waitForTimeout(100);assert.equal(await alerts.count(),1,'one toast per failed playback attempt');await alerts.getByRole('button',{name:'Close',exact:true}).click();await until(async()=>await alerts.count()===0,'dismiss playback toast');
   state.badUnavailable=false;await card(bad).locator('[data-video-play]').click();await until(()=>player(bad).evaluate(video=>video.videoWidth===64&&video.currentTime>0.05),'one explicit video retry');assert.equal(count(bad),failedReads+1);assert.equal(await card(bad).locator('[data-video-status]').isVisible(),false);
   await context.setOffline(true);const beforeOffline=count(offline);await card(offline).locator('[data-video-play]').click();await until(async()=>await card(offline).locator('[data-video-status]').getAttribute('data-state')==='failed','offline video feedback');assert.equal(count(offline),beforeOffline);await context.setOffline(false);await card(offline).locator('[data-video-play]').click();await until(()=>player(offline).evaluate(video=>video.videoWidth===64&&video.currentTime>0.05),'online explicit retry');assert.equal(count(offline),beforeOffline+1);
   findings.push('Unavailable and offline sources show recoverable localized states without automatic fetch loops; explicit retries recover once');
@@ -100,7 +101,37 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await card(good).locator('[data-video-play]').click();await until(()=>player(good).evaluate(video=>video.currentTime>0.05),'stable-sized chat video playback');const after=await measure();assert(Math.abs(before.width-after.width)<1&&Math.abs(before.height-after.height)<1,JSON.stringify({own,viewport:width,before,after}));
   }
   findings.push('Video preview size stays stable across filename lengths and playback for sent and received messages on desktop, tablet and mobile. Collapsing the tablet sidebar gives the preview more space.');
-  state.corrupt=true;await page.setViewportSize({width:390,height:844});await page.goto(base+'/?section=media&lang=pt-BR&theme=light');const beforeUnsupported=count(good);await card(good).locator('[data-video-play]').click();await until(async()=>await card(good).locator('[data-video-status]').getAttribute('data-state')==='failed','unsupported video codec feedback');assert.equal(await card(good).locator('[data-video-status]').isVisible(),false);assert.equal(await card(good).locator('[data-video-status]').textContent(),'');await until(async()=>await alerts.count()===1,'Portuguese unsupported video toast');assert.equal(await alerts.locator('[x-text="notification.message"]').textContent(),'Este vídeo não pode ser reproduzido neste navegador.');assert(await alerts.getByRole('button',{name:'Fechar',exact:true}).isVisible());assert.equal(count(good),beforeUnsupported+1);assert.equal((await card(good).locator('[data-video-retry]').textContent()).trim(),'Tentar vídeo novamente');
+  state.hevc=true;
+  await page.goto(base+'/?section=media&lang=en');
+  assert.equal(await page.evaluate(()=>performance.getEntriesByType('resource').filter(e=>e.name.includes('/libmedia/')).length),0);
+  // Leave while the first codec is still in flight, then replay the same file.
+  let releaseCodec, requestedCodec;
+  const heldCodec=new Promise(resolve=>{releaseCodec=resolve});
+  const codecStarted=new Promise(resolve=>{requestedCodec=resolve});
+  await page.route('**/decode/hevc-simd.wasm',async route=>{
+   requestedCodec();await heldCodec;await route.continue().catch(()=>{});
+  },{times:1});
+  await card(good).locator('[data-video-play]').click();
+  await Promise.race([codecStarted,page.waitForTimeout(9000).then(()=>{throw Error('HEVC decoder was not requested')})]);
+  await card(good).evaluate(c=>window.OieVideos.release(c));
+  releaseCodec();
+  await card(good).locator('[data-video-play]').click();
+  const seek=card(good).locator('[data-fallback-seek]'),toggle=card(good).locator('[data-fallback-toggle]');
+  await until(()=>card(good).evaluate(c=>!!c.querySelector('canvas') && c.querySelector('[data-video-status]').dataset.state==='playing'),'real HEVC fallback frame');
+  await toggle.click();
+  await until(()=>card(good).evaluate(c=>c.querySelector('[data-video-status]').dataset.state==='paused'),'fallback paused');
+  await seek.fill('2');await seek.dispatchEvent('change');
+  await toggle.click();
+  await until(()=>seek.evaluate(e=>Number(e.value)>2),'fallback seek and resume');
+  await page.evaluate(()=>window.OieVideos.release(document.body));
+  await until(()=>card(good).evaluate(c=>!c.querySelector('canvas')&&!c.querySelector('[data-video-cover]').hidden),'release fallback');
+  state.ignoreRange=true;
+  await card(good).locator('[data-video-play]').click();
+  await until(()=>card(good).evaluate(c=>!!c.querySelector('canvas')&&c.querySelector('[data-video-status]').dataset.state==='playing'),'fallback replay after cleanup');
+  state.ignoreRange=false;
+  state.hevc=false;
+  findings.push('HEVC/FLAC Matroska presents frames, pauses, seeks and replays using on-demand local decoders.');
+  state.corrupt=true;await page.setViewportSize({width:390,height:844});await page.goto(base+'/?section=media&lang=pt-BR&theme=light');const beforeUnsupported=count(good);await card(good).locator('[data-video-play]').click();await until(async()=>await card(good).locator('[data-video-status]').getAttribute('data-state')==='failed','unsupported video codec feedback');assert.equal(await card(good).locator('[data-video-status]').isVisible(),false);assert.equal(await card(good).locator('[data-video-status]').textContent(),'');await until(async()=>await alerts.count()===1,'Portuguese unsupported video toast');assert.equal(await alerts.locator('[x-text="notification.message"]').textContent(),'Este vídeo não pode ser reproduzido neste navegador.');assert(await alerts.getByRole('button',{name:'Fechar',exact:true}).isVisible());assert(count(good)>beforeUnsupported);assert.equal((await card(good).locator('[data-video-retry]').textContent()).trim(),'Tentar vídeo novamente');
   findings.push('Playback errors use a dismissible Goshtoso toast in English and Portuguese, once per attempt, with no inline error and an accessible retry');
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'video-report.json'),JSON.stringify({findings,decodedFixture:{bytes:bytes.length,width:64,height:48,codec:'VP8/WebM'},contentReads:[...state.reads],mutations:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: native video decoding, demand-only same-origin ranges, gallery/chat continuity, errors/retry/offline and route cleanup');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Video failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,cards:[...document.querySelectorAll('[data-video-item]')].map(card=>({id:card.dataset.videoItem,status:card.querySelector('[data-video-status]')?.textContent,state:card.querySelector('[data-video-status]')?.dataset.state,source:card.querySelector('video')?.getAttribute('src'),error:card.querySelector('video')?.error?.code})),trace:window.videoTrace})).catch(()=>({unavailable:true}))),JSON.stringify({contentReads:[...state.reads],pageErrors:errors}));throw error}finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}

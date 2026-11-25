@@ -627,7 +627,7 @@ verified on the Mac. Build and integration details remain in
 ## Video previews and playback
 
 Current source builds generate video previews in the browser or desktop WebView
-and use that same media support for playback. The engine still uses a cached
+and try native playback first. The app bundles a browser-side player and video decoders for received files that need them. The browser downloads these components on demand from the Oiê instance. The engine still uses a cached
 or supplied preview image when available. No FFmpeg executable is required.
 The `--ffmpeg` option was removed. Installers built from earlier releases may
 still offer FFmpeg for their server-generated thumbnails.
