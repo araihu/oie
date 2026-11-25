@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmpp/stanza"
@@ -88,6 +89,18 @@ func TestOMEMOAttachmentAvailabilityIncludesAuthenticationTag(t *testing.T) {
 	attachments[0].Size = 84
 	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); err != nil {
 		t.Fatalf("protected upload at the ciphertext limit was rejected: %v", err)
+	}
+	delete(e.uploadLimits, service)
+	attachments[0].Size = omemo.MaxMediaSize
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatalf("protected upload at the local limit was rejected: %v", err)
+	}
+	attachments[0].Size++
+	if err := m.AttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatalf("the OMEMO limit affected ordinary uploads: %v", err)
+	}
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); !errors.Is(err, application.ErrAttachmentTooLarge) {
+		t.Fatalf("oversized protected attachment was accepted: %v", err)
 	}
 }
 

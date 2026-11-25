@@ -13,7 +13,11 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-const MediaTagSize = 16
+const (
+	MediaTagSize = 16
+	// MaxMediaSize bounds the plaintext buffered by one authenticated transfer.
+	MaxMediaSize = 20 << 20
+)
 
 // SealMedia uses the XEP-0454 format: ciphertext followed by the GCM tag.
 func SealMedia(plain []byte) ([]byte, domain.EncryptedAttachment, error) {

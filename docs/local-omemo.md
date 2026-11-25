@@ -64,8 +64,9 @@ are unavailable for protected messages and conversations.
 
 ## Send and download encrypted attachments
 
-Use the attachment picker in a direct chat with OMEMO enabled. The regular
-engine upload limits apply, including the provider limit for the ciphertext.
+Use the attachment picker in a chat with OMEMO enabled. Oiê supports
+encrypted attachments up to 20 MiB. The provider's limit applies to the
+ciphertext, including its authentication tag.
 Oiê encrypts each file before sending its bytes to the XMPP HTTP Upload
 service. The provider sees the upload filename and ciphertext size. The key
 and URL travel inside an OMEMO message. A caption and each attached file

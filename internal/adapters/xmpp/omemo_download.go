@@ -71,7 +71,7 @@ func (m *Manager) OpenOMEMOAttachment(ctx context.Context, file domain.Encrypted
 		return empty, failed
 	}
 	defer func() { _ = res.Body.Close() }()
-	const limit = application.MaxStagedAttachmentSize + omemo.MediaTagSize
+	const limit = omemo.MaxMediaSize + omemo.MediaTagSize
 	if res.StatusCode != http.StatusOK || res.ContentLength > limit ||
 		res.Header.Get("Content-Encoding") != "" && res.Header.Get("Content-Encoding") != "identity" {
 		return empty, failed

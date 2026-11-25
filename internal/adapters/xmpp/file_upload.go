@@ -129,6 +129,11 @@ func (m *Manager) AttachmentAvailability(_ context.Context, a domain.Account, at
 }
 
 func (m *Manager) OMEMOAttachmentAvailability(_ context.Context, a domain.Account, attachments []domain.StagedAttachment) error {
+	for _, file := range attachments {
+		if file.Size > omemo.MaxMediaSize {
+			return application.ErrAttachmentTooLarge
+		}
+	}
 	return m.attachmentAvailability(a, attachments, omemo.MediaTagSize)
 }
 
@@ -440,7 +445,7 @@ func (m *Manager) uploadAttachmentLinks(ctx context.Context, e *entry, session *
 
 func encryptUpload(ctx context.Context, file application.OutgoingAttachment) (application.OutgoingAttachment, domain.EncryptedAttachment, error) {
 	var empty domain.EncryptedAttachment
-	if file.Size < 0 || file.Size > application.MaxStagedAttachmentSize {
+	if file.Size < 0 || file.Size > omemo.MaxMediaSize {
 		return file, empty, errUploadRejected
 	}
 	body, err := file.Open(ctx)
