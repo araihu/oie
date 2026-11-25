@@ -16,7 +16,7 @@ volume to retain accounts, SQLite history, and media across container updates.
 docker run -d --name oie \
   --publish 127.0.0.1:8080:8080 \
   --volume oie-data:/data \
-  ghcr.io/araihu/oie:v0.0.1-rc.54
+  ghcr.io/araihu/oie:v0.0.1-rc.55
 ```
 
 Open [Oiê in your browser](http://127.0.0.1:8080) and add an existing XMPP
@@ -32,7 +32,7 @@ CI builds and tests both architectures on pull requests and pushes to
 `main`. When both container tests pass on `main`, CI publishes
 `sha-<commit>` and updates
 `:main` if the commit is still the branch tip. Application tags such as
-`v0.0.1-rc.54` publish a versioned image after the corresponding source is available on GitHub
+`v0.0.1-rc.55` publish a versioned image after the corresponding source is available on GitHub
 Releases. The image carries its source URL and checksum in `/licenses/SOURCE.txt`. `:latest` follows the highest
 canonical application version by SemVer, including prereleases. Use the
 published digest from the workflow summary to pin an exact image.
@@ -41,12 +41,12 @@ published digest from the workflow summary to pin an exact image.
 
 The [Oiê chart](../charts/oie) runs the engine and browser interface together.
 Use a Kubernetes cluster with persistent storage, Helm and `kubectl`. Install
-the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.32)
+the [Helm chart release](https://github.com/araihu/oie/releases/tag/helm-v0.2.33)
 from GHCR:
 
 ```sh
 helm upgrade --install oie \
-  oci://ghcr.io/araihu/charts/oie --version 0.2.32 \
+  oci://ghcr.io/araihu/charts/oie --version 0.2.33 \
   --namespace oie --create-namespace --wait --timeout 10m
 kubectl --namespace oie port-forward service/oie 8080:80
 ```
@@ -58,7 +58,7 @@ have a writable claim in the namespace, set `persistence.existingClaim` to
 its name. Use one Oiê instance per claim.
 
 The chart version and the application image version follow separate release
-cycles. Chart `0.2.32` uses image `v0.0.1-rc.54` by default. To update, select
+cycles. Chart `0.2.33` uses image `v0.0.1-rc.55` by default. To update, select
 a newer chart version with `--version` or set `image.tag` to a compatible image.
 An update that changes the pod briefly
 interrupts access while Kubernetes replaces it. Uninstalling the release
@@ -88,11 +88,11 @@ one application. In **Settings → General → Engine**, keep **Local** to run
 the engine on this device or choose **Remote** to use a hosted engine.
 Add an existing XMPP account after launching.
 
-The current release candidate is **v0.0.1-rc.54**. See the
-[release notes](releases/v0.0.1-rc.54.md) for changes since rc.53.
+The current release candidate is **v0.0.1-rc.55**. See the
+[release notes](releases/v0.0.1-rc.55.md) for changes since rc.54.
 
 Download packages and the installer from
-[v0.0.1-rc.54 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.54).
+[v0.0.1-rc.55 on GitHub Releases](https://github.com/araihu/oie/releases/tag/v0.0.1-rc.55).
 Source installation from the same immutable tag remains available.
 
 ## Install a release package
@@ -115,8 +115,8 @@ Save the release installer, then run it as your current user:
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output oie-install.sh \
-  https://github.com/araihu/oie/releases/download/v0.0.1-rc.54/install.sh &&
-sh ./oie-install.sh --version v0.0.1-rc.54
+  https://github.com/araihu/oie/releases/download/v0.0.1-rc.55/install.sh &&
+sh ./oie-install.sh --version v0.0.1-rc.55
 ```
 
 You can inspect `oie-install.sh` before running the second command. Do not use
@@ -136,7 +136,7 @@ prefix is the parent of `Oie.app`; on Linux it contains `bin` and `share`.
 For example:
 
 ```sh
-sh ./oie-install.sh --version v0.0.1-rc.54 --prefix "$HOME/Apps/Oie desktop"
+sh ./oie-install.sh --version v0.0.1-rc.55 --prefix "$HOME/Apps/Oie desktop"
 sh ./oie-install.sh --help
 ```
 
@@ -144,14 +144,14 @@ The release assets are:
 
 | Asset | Contents |
 | --- | --- |
-| `oie_v0.0.1-rc.54_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
-| `oie_v0.0.1-rc.54_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
-| `oie_v0.0.1-rc.54_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
+| `oie_v0.0.1-rc.55_darwin_arm64.tar.gz` | `Oie.app` bundle with executable, resources and licenses |
+| `oie_v0.0.1-rc.55_linux_amd64.tar.gz` | Executable, desktop entry, icon and documentation in `bin`/`share` |
+| `oie_v0.0.1-rc.55_<platform>_source.tar.gz` | Corresponding source and build instructions for each binary |
 | `install.sh` | Per-user installer for both targets |
 | `SHA256SUMS` | SHA-256 checksums for the archives, installer and receipt |
 | `packaging-receipt.json` | Source/tooling revisions, archive hashes, platform build metadata and verification scope |
 
-Both archives are built from the immutable `v0.0.1-rc.54` tag. The receipt
+Both archives are built from the immutable `v0.0.1-rc.55` tag. The receipt
 records the application and packaging revisions, and `build-info.json` inside
 each package identifies its application source.
 

@@ -264,7 +264,12 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
   assert.deepEqual(await fs.readFile(await download.path()),bytes);assert.equal(state.ensures,0);
   await open(1);const queued=page.waitForEvent('download');await menu(1).getByRole('menuitem',{name:'Download',exact:true}).click();await until(()=>state.ensures===1&&state.polls>0,'queued image polling');state.ready=true;const original=await queued;assert.deepEqual(await fs.readFile(await original.path()),bytes);assert.equal(state.ensures,1);
   await open(4);assert.equal(await menu(4).getByRole('menuitem',{name:'Download',exact:true}).count(),0);await page.keyboard.press('Escape');
-  await open(2);const video=page.waitForEvent('download');await menu(2).getByRole('menuitem',{name:'Download',exact:true}).click();assert.equal((await video).suggestedFilename(),items[2].fileName);
+  await open(2);
+  const [video]=await Promise.all([
+   page.waitForEvent('download'),
+   menu(2).getByRole('menuitem',{name:'Download original',exact:true}).click(),
+  ]);
+  assert.equal(video.suggestedFilename(),items[2].fileName);
   await page.locator('[data-shared-tab=documents]').click();await card(3).waitFor();await pressed(star(3),false);await open(3);const doc=page.waitForEvent('download');await menu(3).getByRole('menuitem',{name:'Download',exact:true}).click();assert.equal(await fs.readFile(await (await doc).path(),'utf8'),'Document fixture\n');
   await open(6);assert.equal(await menu(6).getByRole('menuitem',{name:'Download',exact:true}).count(),0);await page.keyboard.press('Escape');
   // Native file selection is asynchronous. Cancel must stay quiet, a failed

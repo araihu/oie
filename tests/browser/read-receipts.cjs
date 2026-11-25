@@ -48,8 +48,7 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     const reopenSettings = async () => {
       if (width === 390) await page.getByRole('button', {name: navigation, exact: true}).click();
       await page.locator('[data-navigation-settings]:visible').click();
-      const engineEntry = page.locator('[data-settings-target=engine]');
-      if (await engineEntry.isVisible()) await engineEntry.click();
+      await page.locator('[data-settings-target=engine]').click();
       await settings.scrollIntoViewIfNeeded();
     };
     const holdSave = async change => {
