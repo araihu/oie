@@ -328,3 +328,52 @@ func TestVisibleVideoReferencesRequireExactScopeAndSourceSnapshot(t *testing.T) 
 		})
 	}
 }
+
+func TestVideoIndexProxyRequiresCurrentEngineAndExplicitIndex(t *testing.T) {
+	const mimeType = "application/vnd.oie.video-index+json"
+	const body = `{"codecs":"vp09.00.10.08","size":100,"initLength":16,"segments":[{"duration":2,"length":84}]}`
+	var calls atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/engine" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": testEngine, "role": "hosted", "apiVersion": "0.45.0", "eventCursor": testEngine + ":0"})
+			return
+		}
+		calls.Add(1)
+		if r.URL.Path != videoEnginePath || r.URL.RawQuery != "index=true" || r.Header.Get("Range") != "" {
+			t.Error("wrong index request", r.URL, r.Header)
+		}
+		w.Header().Set("Content-Type", mimeType)
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		_, _ = io.WriteString(w, body)
+	}))
+	defer backend.Close()
+	ui, err := New(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		query, rangeHeader string
+		status             int
+	}{
+		{"?index=1", "", 400},
+		{"?index=1&engineId=" + testAccount, "", 409},
+		{"?index=1&engineId=" + testEngine + "&preview=1", "", 400},
+		{"?index=1&engineId=" + testEngine + "&download=1", "", 400},
+		{"?index=1&engineId=" + testEngine, "bytes=0-0", 400},
+		{"?index=1&engineId=" + testEngine, "", 200},
+	} {
+		request := httptest.NewRequest(http.MethodGet, videoProxyPath+tc.query, nil)
+		if tc.rangeHeader != "" {
+			request.Header.Set("Range", tc.rangeHeader)
+		}
+		w := httptest.NewRecorder()
+		ui.ServeHTTP(w, request)
+		if w.Code != tc.status || tc.status == 200 && (w.Header().Get("Content-Type") != mimeType || w.Body.String() != body) {
+			t.Fatalf("%s: status=%d body=%q headers=%v", tc.query, w.Code, w.Body.String(), w.Header())
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatal("invalid request reached engine media endpoint")
+	}
+}

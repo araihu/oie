@@ -6,12 +6,13 @@ import (
  "github.com/araihu/goshtoso/components/panel"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+ "github.com/araihu/oie/internal/application"
 )
 
 // Native controls receive a same-origin source only after an explicit gesture.
 // Initial markup has neither src nor source children, including in galleries.
 templ videoCard(v view,item engineapi.SharedContentItem){
-<section class="oie-video-card" data-video-compact?={v.Section=="media"||v.SharedInDetails} data-video-thumbnail-state={videoThumbnailState(item)} data-video-poster={videoPoster(item)} data-thumbnail-load-label={v.Text.VideoThumbnailLoad} data-thumbnail-retry-label={v.Text.Retry} data-video-thumbnail-loading={v.Text.VideoThumbnailLoading} data-video-thumbnail-failed={v.Text.VideoThumbnailFailed} data-video-item={item.Id} data-video-engine={v.EngineID} data-video-account={item.Message.AccountId} data-video-conversation={item.Message.ConversationId} data-video-message={item.Message.Id} data-video-revision={item.Message.RevisionId} data-video-source={"/ui/shared-content/"+item.Id+"/content?engineId="+v.EngineID} data-video-loading={v.Text.VideoLoading} data-video-playing={v.Text.VideoPlaying} data-video-paused={v.Text.VideoPaused} data-video-ready={v.Text.VideoReady} data-video-unavailable={v.Text.VideoUnavailable} data-video-unsupported={v.Text.VideoUnsupported}>
+<section class="oie-video-card" data-video-compact?={v.Section=="media"||v.SharedInDetails} data-video-thumbnail-state={videoThumbnailState(item)} data-video-poster={videoPoster(item)} data-thumbnail-load-label={v.Text.VideoThumbnailLoad} data-thumbnail-retry-label={v.Text.Retry} data-video-thumbnail-loading={v.Text.VideoThumbnailLoading} data-video-thumbnail-failed={v.Text.VideoThumbnailFailed} data-video-indexed?={application.PeerTubeVideoID(item.Url)!=""} data-video-item={item.Id} data-video-engine={v.EngineID} data-video-account={item.Message.AccountId} data-video-conversation={item.Message.ConversationId} data-video-message={item.Message.Id} data-video-revision={item.Message.RevisionId} data-video-source={"/ui/shared-content/"+item.Id+"/content?engineId="+v.EngineID} data-video-loading={v.Text.VideoLoading} data-video-playing={v.Text.VideoPlaying} data-video-paused={v.Text.VideoPaused} data-video-ready={v.Text.VideoReady} data-video-unavailable={v.Text.VideoUnavailable} data-video-unsupported={v.Text.VideoUnsupported}>
 if v.Section=="media"||v.SharedInDetails {
 @panel.Panel(panel.Config{Body:videoGalleryMedia(v,item),BodyClass:"oie-video-media",Appearance:panel.AppearancePlain,Density:panel.DensityCompact,RootClass:"oie-video-surface"})
 }else{

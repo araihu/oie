@@ -773,8 +773,17 @@ paths:
         in: query
         description: Requires engineId and excludes download. Returns at most the first 5 MiB of video.
         schema: {type: string, enum: ['1']}
+      - name: index
+        in: query
+        description: Returns the original video's seek index. Requires engineId and excludes Range, preview and download.
+        schema: {type: string, enum: ['1']}
       responses:
-        '200': {description: Complete media or small preview sample}
+        '200':
+          description: Complete media, small preview sample or explicitly requested seek index.
+          content:
+            application/vnd.oie.video-index+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/VideoSeekIndex'}
+              example: {codecs: avc1.640028, size: 751408, initLength: 1408, segments: [{duration: 4, length: 750000}]}
         '206': {description: Partial media or bounded preview sample}
         '400': {description: Invalid request}
         '404': {description: Media not found}

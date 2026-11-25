@@ -1,7 +1,9 @@
 package application
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/url"
@@ -140,6 +142,7 @@ type MediaCondition struct {
 type MediaReadRequest struct {
 	Format    MediaFormat
 	Download  bool
+	Index     bool
 	DeviceID  domain.ID
 	Range     *ByteRange
 	Condition MediaCondition
@@ -179,7 +182,8 @@ func VideoMediaType(value string) bool {
 // SharedContentMedia opens only a current retained reference after explicit
 // activation. Streamed ranges do not mutate downloads, hashes, messages or stars.
 func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request MediaReadRequest) (MediaRead, error) {
-	if !validID(id) || request.DeviceID != "" && (!request.Download || !validID(request.DeviceID)) || (request.Range != nil && !request.Range.Valid()) || (request.Condition.ETag != "" && !request.Condition.ModifiedAt.IsZero()) {
+	if !validID(id) || request.Index && (request.Download || request.Range != nil || request.Condition != (MediaCondition{})) ||
+		request.DeviceID != "" && (!request.Download || !validID(request.DeviceID)) || (request.Range != nil && !request.Range.Valid()) || (request.Condition.ETag != "" && !request.Condition.ModifiedAt.IsZero()) {
 		return MediaRead{}, ErrInvalid
 	}
 	repo, ok := e.repo.(SharedMediaRepository)
@@ -210,6 +214,23 @@ func (e *Engine) SharedContentMedia(ctx context.Context, id domain.ID, request M
 	}
 	if !current {
 		return MediaRead{}, ErrNotFound
+	}
+	if request.Index {
+		reader, ok := e.mediaReader.(VideoIndexReader)
+		if !ok || format != "video" || PeerTubeVideoID(item.URL) == "" {
+			return MediaRead{}, MediaFailure{Code: "media_unsupported"}
+		}
+		index, err := reader.OpenVideoIndex(ctx, item.URL)
+		if err != nil {
+			return MediaRead{}, err
+		}
+		body, err := json.Marshal(index)
+		if err != nil || len(body) > MaxVideoIndex {
+			return MediaRead{}, MediaFailure{Code: "media_fetch_failed"}
+		}
+		size := int64(len(body))
+		return MediaRead{FileName: "video-index.json", Body: io.NopCloser(bytes.NewReader(body)),
+			MediaType: VideoIndexMediaType, Total: size, Length: size}, nil
 	}
 	expected := fileDigests(source, item.URL)
 	var generation int64

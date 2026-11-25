@@ -120,7 +120,9 @@ updates are deferred as B23.
 notarization.
 
 **AGREED:** video previews and playback use the browser or desktop WebView's
-media support first. After Play, Oiê can load browser-side decoders for a received video the native player cannot display.
+media support first. After Play, eligible PeerTube fragmented MP4 files use
+the browser's existing codecs and a seek index scoped to the original. Oiê can
+load browser-side decoders for a received video the native player cannot display.
 
 **RECOMMENDED:** retain any ad-hoc executable signing required by the native
 build tooling and document Apple's manual first-open procedure. The installer
