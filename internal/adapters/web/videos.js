@@ -6,7 +6,13 @@ window.OieRuntime.register('videos', life => {
  const identity=card=>JSON.stringify(['videoEngine','videoAccount','videoConversation','videoMessage','videoItem'].map(key=>card.dataset[key]||''));
  const cards=root=>[...(root.matches?.(selector)?[root]:[]),...root.querySelectorAll(selector)];
  const isLoaded=card=>loaded.has(card.querySelector(playerSelector));
- function status(card,key,state){card.querySelector('[data-video-download]').hidden=state!=='failed';const region=card.querySelector('[data-video-status]'),compact=card.hasAttribute('data-video-compact'),silent=state==='ready'||state==='failed'||compact;if(region){region.textContent=silent?'':card.dataset[key]||'';region.hidden=silent;region.dataset.state=state;region.setAttribute('role','status')}const metadata=card.querySelector('[data-video-metadata]');if(metadata&&compact)metadata.hidden=state!=='failed'}
+ function status(card, key, state) {
+  const region = card.querySelector('[data-video-status]');
+  const silent = state === 'ready' || state === 'failed' || card.hasAttribute('data-video-compact');
+  region.textContent = silent ? '' : card.dataset[key] || '';
+  region.hidden = silent;
+  region.dataset.state = state;
+ }
  let fallbackVideo = null;
  function primeAudio(){
   try {
@@ -31,11 +37,23 @@ window.OieRuntime.register('videos', life => {
  function release(video){
   if(!video)return;stopSession(video);releasing.add(video);loaded.delete(video);failed.delete(video);
   video.pause();video.removeAttribute('src');video.load();video.hidden=true;
-  const card=video.closest(selector);if(card){card.querySelector('[data-video-cover]').hidden=false;card.querySelector('[data-video-retry]').hidden=true;status(card,'videoReady','ready')}
+  const card=video.closest(selector);if(card){card.querySelector('[data-video-cover]').hidden=false;status(card,'videoReady','ready')}
   releasing.delete(video);
  }
  function releaseTree(root){if(root.matches?.(playerSelector))release(root);for(const video of root.querySelectorAll?.(playerSelector)||[])release(video)}
- function failure(card,unsupported=false){const video=card.querySelector(playerSelector);if(failed.has(video))return;stopSession(video);failed.add(video);const key=unsupported?'videoUnsupported':'videoUnavailable';status(card,key,'failed');card.querySelector('[data-video-retry]').hidden=false;video.hidden=true;card.querySelector('[data-video-cover]').hidden=false;window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:card.dataset[key]||''}}))}
+ function failure(card, unsupported = false) {
+  const video = card.querySelector(playerSelector);
+  if (failed.has(video)) return;
+  const restoreFocus = card.contains(document.activeElement);
+  stopSession(video);
+  failed.add(video);
+  const key = unsupported ? 'videoUnsupported' : 'videoUnavailable';
+  status(card, key, 'failed');
+  video.hidden = true;
+  card.querySelector('[data-video-cover]').hidden = false;
+  if (restoreFocus) card.querySelector('[data-video-play]').focus({preventScroll:true});
+  window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast',tone:'danger',message:card.dataset[key]||''}}));
+ }
  function start(card){
   const video=card.querySelector(playerSelector);let source;
   try{source=new URL(card.dataset.videoSource,location.href)}catch{failure(card);return}
@@ -47,8 +65,8 @@ window.OieRuntime.register('videos', life => {
   sessions.set(video,session);
   const signal = session.abort.signal;
   loaded.add(video);failed.delete(video);
-  card.querySelector('[data-video-cover]').hidden=true;card.querySelector('[data-video-retry]').hidden=true;video.hidden=false;status(card,'videoLoading','loading');
-  const hasFocus = !!document.activeElement?.closest('[data-video-play],[data-video-retry]');
+  const hasFocus = !!document.activeElement?.closest('[data-video-play]');
+  card.querySelector('[data-video-cover]').hidden=true;video.hidden=false;status(card,'videoLoading','loading');
   if(hasFocus)video.focus({preventScroll:true});
   let rendered = false;
   function confirmFrame(){
@@ -126,7 +144,7 @@ window.OieRuntime.register('videos', life => {
    }).catch(onFailure);
   }else startNative();
  }
- life.on(document,'click',event=>{const button=event.target.closest('[data-video-play],[data-video-retry]');if(!button)return;const card=button.closest(selector);if(!card)return;event.preventDefault();start(card)});
+ life.on(document,'click',event=>{const button=event.target.closest('[data-video-play]');if(!button)return;const card=button.closest(selector);if(!card)return;event.preventDefault();start(card)});
  for(const [event,key,state]of [['loadstart','videoLoading','loading'],['waiting','videoLoading','loading'],['playing','videoPlaying','playing'],['pause','videoPaused','paused'],['ended','videoReady','ready']])life.on(document,event,e=>{const video=e.target;if(!video.matches?.(playerSelector)||!loaded.has(video)||sessions.get(video)?.fallback||releasing.has(video)||failed.has(video))return;status(video.closest(selector),key,state)},true);
  life.on(document,'error',event=>{
   const video=event.target, session=sessions.get(video);

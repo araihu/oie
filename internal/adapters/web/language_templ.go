@@ -44,18 +44,10 @@ func languageSettings(v view) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div x-data=\"{pendingLanguageFocus:false}\" x-on:drawer:open.window=\"pendingLanguageFocus = $event.detail?.id === 'settings' && new URLSearchParams(location.search).get('settingsFocus') === 'language'\" x-on:focusin.window=\"if (pendingLanguageFocus && $event.target.closest('[role=dialog]')?.contains($el)) { pendingLanguageFocus=false; $el.querySelector('[data-language-trigger]')?.focus({preventScroll:true}); }\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
 		config := languageCombobox(v)
 		templ_7745c5c3_Err = combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
 			SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
 		}).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -306,7 +306,8 @@ async function run() {
         await page.getByRole('button', {name: 'Abrir navegação', exact: true}).click();
       }
       await page.locator('[data-navigation-settings]:visible').click();
-      await page.getByRole('tab', {name: page === first ? 'This device' : 'Este dispositivo'}).click();
+      await page.locator('[data-settings-target=device]:visible').click();
+      await page.locator('[data-settings-target=notifications]:visible').click();
       await page.locator('[data-notification-banners]').waitFor({state: 'visible'});
     };
     assert.equal(soundRequests.length, 0, 'the initial page should not load the sound');
@@ -358,8 +359,12 @@ async function run() {
     assert.equal(await first.locator('#notification-archived').isChecked(), false);
     assert.equal(await first.locator('#notification-focused').isChecked(), false);
     assert.equal(await first.locator('[data-notification-room-sound]').inputValue(), 'attention');
-    const closeSettings = page => page.locator('#settings-body').evaluate(node =>
-      node.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'settings'}, bubbles: true})));
+    const closeSettings = async page => {
+      const drawer = page.getByRole('dialog').filter({has: page.locator('#settings-body')});
+      await drawer.getByRole('button', {name: /^(Close|Fechar)$/}).click();
+      await drawer.waitFor({state: 'hidden'});
+      assert.notEqual(new URL(page.url()).searchParams.get('open'), 'settings');
+    };
     await closeSettings(first);
     await first.evaluate(() => { window.testFocus = true; window.dispatchEvent(new Event('focus')); });
     const total = async field => (await first.evaluate(field => typeof window[field] === 'number' ? window[field] : window[field].length, field)) +
@@ -499,7 +504,7 @@ async function run() {
     await first.evaluate(() => window.alerts[0].onclick());
     await first.waitForURL(url => url.searchParams.get('message') === message.id);
     assert.equal(new URL(first.url()).searchParams.get('chat'), other);
-    await first.goto(base + '/?lang=en&chat=' + other + '&open=details');
+    await first.goto(base + '/?lang=en&chat=' + other + '&open=details&infoView=preferences');
     await first.evaluate(() => { Notification.permission = 'granted'; });
     const mute = first.locator('[data-notification-mute]');
     await first.locator('label:has(#notification-mute)').click();
@@ -576,7 +581,7 @@ async function run() {
     assert.equal(await reopened.locator(target).count(), 0);
     await mobile.close();
 
-    await first.goto(base + '/?lang=en&chat=' + room + '&open=details');
+    await first.goto(base + '/?lang=en&chat=' + room + '&open=details&infoView=preferences');
     await until(() => streams.size === 2, 'room settings stream');
     await first.locator('label:has(#notification-mute)').click();
     assert.equal(await first.locator('[data-notification-mute]').isChecked(), true);
@@ -607,7 +612,7 @@ async function run() {
         return start.apply(this, args);
       };
     });
-    const toneURL = base + '/?lang=pt-BR&chat=' + chat + '&open=settings&settingsTab=device';
+    const toneURL = base + '/?lang=pt-BR&chat=' + chat + '&open=settings&settingsTab=notifications';
     const tone = tonePage.locator('[data-notification-tone-name]');
     const toneFile = tonePage.locator('[data-notification-tone-file]');
     const chooseTone = tonePage.getByRole('button', {name: 'Escolher arquivo', exact: true});

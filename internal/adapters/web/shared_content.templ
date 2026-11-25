@@ -7,6 +7,7 @@ import (
  "github.com/araihu/goshtoso/components/emptystate"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/navbar"
  "github.com/araihu/goshtoso/components/skeleton"
  "github.com/araihu/goshtoso/components/combobox"
  "github.com/araihu/goshtoso/components/textinput"
@@ -44,11 +45,7 @@ templ sharedFragment(v view){
 }
 templ sharedSearchResults(v view){
 <div id="shared-search-results" class="oie-shared-search-results" data-search-query={v.Query}>
-<nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
-@sharedTab(v,"media",v.Text.SharedMediaTab)
-@sharedTab(v,"links",v.Text.SharedLinksTab)
-@sharedTab(v,"documents",v.Text.SharedDocsTab)
-</nav>
+@sharedTypeNavigation(v)
 if v.SharedConversation!="" {
 @link.Link(v.sharedHref("contentConversation","","contentCursor",""),link.WithRootClass("oie-shared-scope")){ {v.Text.SharedAllChats} }
 }
@@ -80,8 +77,28 @@ templ sharedAccountFilter(v view){
 {{ cfg:=sharedAccountCombobox(v) }}
 @combobox.Combobox(cfg,cfg.InitialState())
 }
-templ sharedTab(v view,kind,label string){
-@link.Link(v.sharedHref("contentType",kind,"contentCursor",""),link.WithAttrs(templ.Attributes{"aria-current":strconv.FormatBool(v.SharedType==kind),"data-shared-tab":kind}),link.WithRootClass("oie-shared-segment")){ {label} }
+func sharedTypeNavigation(v view) templ.Component {
+  category := func(kind, label string) navbar.SecondaryLink {
+    current := navbar.SecondaryCurrentNone
+    if v.SharedType == kind {
+      current = navbar.SecondaryCurrentPage
+    }
+    return navbar.SecondaryLink{
+      Label: label,
+      Href: v.sharedHref("contentType", kind, "contentCursor", ""),
+      Current: current,
+      LinkAttrs: templ.Attributes{"data-shared-tab": kind},
+    }
+  }
+  return navbar.SecondaryRow(navbar.SecondaryConfig{
+    AriaLabel: v.Text.SharedContentTypes,
+    RootClass: "oie-shared-navigation",
+    Links: []navbar.SecondaryLink{
+      category("media", v.Text.SharedMediaTab),
+      category("links", v.Text.SharedLinksTab),
+      category("documents", v.Text.SharedDocsTab),
+    },
+  })
 }
 templ sharedStatus(v view){
 if v.Unavailable {
@@ -116,7 +133,7 @@ templ sharedItem(v view,item engineapi.SharedContentItem){
 if item.Kind=="video" {
 @videoCard(v,item)
 }else if item.Kind=="audio" {
-@retainedAudioPlayer(v,item)
+@retainedAudioPlayer(sharedCardView(v),item)
 }else if item.Kind=="document" {
 @documentCard(v,item)
 }else if item.Preview!=nil {

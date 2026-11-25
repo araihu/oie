@@ -118,7 +118,7 @@ window.OieRuntime.register('actions', life => {
  // Public Dropdown item IDs are application hooks. Escape uses its supported
  // keyboard lifecycle to dismiss and restore focus after native actions.
  life.on(document,'click',event=>{
-  const item=event.target.closest('[id^="copy-message-"],[id^="reply-message-"],[id^="star-message-"],[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"],[id^="refresh-preview-"],[id^="save-audio-"]');
+  const item=event.target.closest('[id^="copy-message-"],[id^="reply-message-"],[id^="star-message-"],[id^="load-preview-"],[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"],[id^="refresh-preview-"],[id^="save-audio-"]');
   if(item&&!item.disabled)item.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
  },true);
 });
@@ -145,7 +145,7 @@ window.OieRuntime.register('actions', life => {
 
   for (const type of ['drawer:close', 'drawer:close-request']) {
     window.addEventListener(type, event => {
-      if (event.detail?.id !== 'engine-settings') return;
+      if (event.detail?.id !== 'settings') return;
       queueMicrotask(() => {
         if (!event.defaultPrevented) clearEngineKey();
       });
@@ -261,8 +261,11 @@ window.OieRuntime.register('audio', life => {
     const restoreFocus = document.activeElement === player || (document.activeElement === document.body && players.has(player));
     players.delete(player);
     player.hidden = true;
-    retry.hidden = false;
-    if (restoreFocus) retry.focus({preventScroll:true});
+    if (retry) retry.hidden = false;
+    if (restoreFocus) {
+      const trigger = card.closest('[data-shared-item]')?.querySelector('[data-shared-menu-trigger]');
+      (retry || trigger)?.focus({preventScroll:true});
+    }
     window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioError}}));
   }
 
@@ -301,12 +304,15 @@ window.OieRuntime.register('audio', life => {
   });
 
   life.on(document, 'click', event => {
-    const retry = event.target.closest('[data-audio-retry]');
+    const retry = event.target.closest('[data-audio-retry],[id^="shared-retry-audio-"]');
     if (!retry) return;
-    const player = retry.closest('[data-audio-id]').querySelector('[data-audio-player]');
-    retry.hidden = true;
+    const inline = retry.hasAttribute('data-audio-retry');
+    const owner = retry.closest(inline ? '[data-audio-id]' : '[data-shared-item]');
+    const player = owner?.querySelector('[data-audio-player]');
+    if (!player?.hidden) return;
+    if (inline) retry.hidden = true;
     player.hidden = false;
-    player.focus({preventScroll:true});
+    if (inline) player.focus({preventScroll:true});
     player.load();
     player.play().catch(error => { if (error.name !== 'AbortError') recover(player); });
   });
@@ -624,9 +630,9 @@ window.OieRuntime.register('access-keys', life => {
 
 window.OieRuntime.register('global-read-receipts', life => {
   const section = document.getElementById('engine-read-receipts-settings');
-  const tab = section?.closest('[role=tabpanel]');
+  const page = section?.closest('[data-settings-page]');
   const dialog = section?.closest('[role=dialog]');
-  if (!tab || !dialog) return;
+  if (!page || !dialog) return;
   const form = section.querySelector('[data-read-receipts-settings]');
   const loading = section.querySelector('[data-read-receipts-loading]');
   const error = section.querySelector('[data-read-receipts-load-error]');
@@ -639,7 +645,7 @@ window.OieRuntime.register('global-read-receipts', life => {
     if (showing && !visible && attempted) refresh();
     visible = showing;
   });
-  observer.observe(tab, { attributes: true, attributeFilter: ['hidden', 'style'] });
+  observer.observe(page, { attributes: true, attributeFilter: ['hidden', 'style'] });
   observer.observe(dialog, { attributes: true, attributeFilter: ['hidden', 'style'] });
   life.cleanup(() => observer.disconnect());
   life.on(section.querySelector('[data-read-receipts-retry]'), 'click', refresh);
@@ -682,5 +688,185 @@ window.OieRuntime.register('conversation-read-receipt-settings', life => {
       event.preventDefault();
       target.textContent = target.dataset.unavailable;
     }
+  });
+});
+
+// A docked drawer shares the workspace with the chat. Keep one destination open
+// and return keyboard focus when its own close control dismisses it.
+window.OieRuntime.register('workspace-drawers', life => {
+  let current;
+  let opener;
+  life.on(window, 'drawer:open', event => {
+    const id = event.detail?.id;
+    const panel = document.getElementById(id + '-body')?.closest('.oie-drawer');
+    if (!panel || current === id) return;
+    if (current) window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: current}}));
+    current = id;
+    opener = document.activeElement;
+    const origin = opener;
+    if (panel.getAttribute('aria-modal') === 'false') window.Alpine.nextTick(() => {
+      life.raf(() => life.raf(() => {
+        if (current !== id || !panel.getClientRects().length || document.activeElement !== origin) return;
+        const title = panel.querySelector('header h2');
+        title.tabIndex = -1;
+        title.focus({preventScroll: true});
+      }));
+    });
+  });
+  for (const type of ['drawer:close', 'drawer:close-request']) {
+    life.on(window, type, event => {
+      const id = event.detail?.id;
+      if (!current || current !== id || event.defaultPrevented) return;
+      const panel = document.getElementById(id + '-body')?.closest('.oie-drawer');
+      const origin = opener;
+      current = undefined;
+      if (type === 'drawer:close-request' && panel?.getAttribute('aria-modal') === 'false' && panel.contains(document.activeElement)) {
+        life.raf(() => { if (!current && origin?.isConnected) origin.focus({preventScroll: true}); });
+      }
+    });
+  }
+});
+
+// Subpages can be replaced independently by HTMX. Keep one focusable Back control
+// in the header and resolve its destination from the currently visible subpage.
+window.OieRuntime.register('drawer-back', life => {
+  let panel, body, leading, frame;
+  const origins = new Map();
+  const observer = new MutationObserver(schedule);
+
+  function destination() {
+    if (!body) return;
+    return Array.from(body.querySelectorAll('template[data-drawer-return]')).reverse()
+      .find(marker => !marker.hidden && marker.parentElement.getClientRects().length);
+  }
+
+  function sync() {
+    frame = 0;
+    if (!leading) return;
+    const marker = destination();
+    leading.hidden = !marker;
+    if (!marker) return;
+    const button = leading.querySelector('[data-drawer-back]');
+    const label = marker.dataset.drawerReturn;
+    if (button.getAttribute('aria-label') !== label) {
+      button.setAttribute('aria-label', label);
+      document.getElementById(body.id.replace(/-body$/, '-back-tip')).textContent = label;
+    }
+  }
+
+  function schedule() {
+    if (!frame) frame = life.raf(sync);
+  }
+
+  function watch(nextBody) {
+    observer.disconnect();
+    body = nextBody;
+    panel = body?.closest('.oie-drawer');
+    leading = panel?.querySelector('header [data-drawer-leading]');
+    if (!leading) return;
+    observer.observe(panel, {attributes:true, attributeFilter:['style','hidden']});
+    observer.observe(body, {subtree:true, childList:true, attributes:true, attributeFilter:['hidden','style','aria-selected']});
+    schedule();
+  }
+
+  life.on(window, 'drawer:open', event => watch(document.getElementById(event.detail?.id + '-body')));
+  life.on(window, 'drawer:close', event => {
+    if (body?.id === event.detail?.id + '-body') watch(null);
+  });
+  life.on(document, 'oie:route-ready', () => {
+    const visible = [...document.querySelectorAll('[data-drawer-leading]')].find(node => node.closest('.oie-drawer').getClientRects().length);
+    if (visible) watch(visible.closest('.oie-drawer').querySelector(':scope > [id$="-body"]'));
+  });
+  life.cleanup(() => observer.disconnect());
+
+  life.on(document, 'click', event => {
+    const entry = event.target.closest('[data-drawer-child]');
+    if (!entry) return;
+    const scroll = entry.closest('.oie-settings-scroll, [id$="-body"]');
+    origins.set(entry.dataset.drawerChild, {entry, scroll, top:scroll?.scrollTop});
+  }, true);
+
+  life.on(document, 'click', event => {
+    if (!leading?.contains(event.target.closest('[data-drawer-back]'))) return;
+    const marker = destination();
+    if (!marker) return;
+    if (marker.dataset.returnHref) {
+      window.OieNavigation.go(marker.dataset.returnHref, {workspace:'chat-info-content'});
+    } else if (marker.dataset.returnParent) {
+      const child = body.id.slice(0, -5);
+      const parent = marker.dataset.returnParent;
+      const origin = origins.get(child);
+      window.dispatchEvent(new CustomEvent('drawer:close', {detail:{id:child}}));
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent('drawer:open', {detail:{id:parent}}));
+        if (origin) life.raf(() => life.raf(() => {
+          if (!origin.entry.isConnected || !origin.entry.getClientRects().length) return;
+          if (origin.scroll) origin.scroll.scrollTop = origin.top;
+          origin.entry.focus({preventScroll:true});
+        }));
+      });
+    } else {
+      marker.dispatchEvent(new CustomEvent('oie:drawer-back', {bubbles:true}));
+    }
+  });
+});
+
+window.OieRuntime.register('settings-pages', life => {
+  const stack = document.querySelector('[data-settings-stack]');
+  if (!stack) return;
+  const pages = [...stack.querySelectorAll('[data-settings-page]')];
+  const heading = document.getElementById('settingsTitle');
+  const footer = document.querySelector('#settings-body .oie-engine-sign-out');
+  const scroll = stack.closest('.oie-settings-scroll');
+  const positions = new Map();
+  let current = 'general';
+  function show(id, focus) {
+    const next = pages.find(page => page.dataset.settingsPage === id) || pages[0];
+    const previous = current;
+    positions.set(previous, scroll.scrollTop);
+    current = next.dataset.settingsPage;
+    for (const page of pages) page.hidden = page !== next;
+    if (footer) footer.hidden = current !== 'general';
+    heading.textContent = next.dataset.title || stack.dataset.rootTitle;
+    const returnTo = next.querySelector('[data-settings-target="' + previous + '"]');
+    scroll.scrollTop = returnTo ? positions.get(current) || 0 : 0;
+    if (focus) {
+      heading.tabIndex = -1;
+      (returnTo || heading).focus({preventScroll:true});
+    }
+    if (previous === 'engine' && current !== 'engine') {
+      const form = stack.querySelector('#engine-mode-form');
+      if (form) { form.elements.apiKey.value = ''; form.elements.apiKeyAddress.value = ''; }
+    }
+  }
+  function navigate(page) {
+    show(page, true);
+    document.dispatchEvent(new CustomEvent('oie:settings-navigate', {detail:{page:current}}));
+  }
+  life.on(stack, 'click', event => {
+    const target = event.target.closest('[data-settings-target]');
+    if (target) navigate(target.dataset.settingsTarget);
+  });
+  life.on(stack, 'oie:drawer-back', event => navigate(event.target.dataset.returnPage));
+  life.on(window,'drawer:open',event => {
+    if (event.detail?.id === 'settings') show(event.detail.page || new URL(location.href).searchParams.get('settingsTab') || 'general', Boolean(event.detail.focus));
+  });
+  show(stack.dataset.startPage,false);
+});
+
+// A finite conversation override needs a deliberate day count before submission.
+window.OieRuntime.register('conversation-retention', life => {
+  life.on(document,'change',event => {
+    const field = event.target;
+    const form = field.closest('[data-conversation-retention-form]');
+    if (!form) return;
+    const days = form.elements.namedItem('override-days');
+    if (field.name === 'override-mode' && field.value === 'finite') {
+      days.value = '';
+      queueMicrotask(() => days.focus());
+      return;
+    }
+    if (field.name !== 'override-mode' && field !== days) return;
+    queueMicrotask(() => { if (form.isConnected && form.reportValidity()) form.requestSubmit(); });
   });
 });

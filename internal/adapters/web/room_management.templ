@@ -28,6 +28,7 @@ templ roomManagementDrawer(v view) {
 	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview && !v.conversationRemoved() {
 		@workspaceDrawer(drawer.Config{ID: "room-management", Title: v.Text.RoomManage, PanelClass: "oie-conversation-details-drawer"}) {
 			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-unavailable={ v.Text.RoomManagementUnavailable } data-conflict={ v.Text.RoomManagementConflict }>
+				@drawerReturn(v.Text.InfoBack,templ.Attributes{"data-management-parent":"","data-return-parent":"details","hidden":true})
 				@roomManagementSkeleton(v, "oie-room-management-skeleton")
 				<p data-room-management-error role="alert" hidden>{ v.Text.RoomManagementUnavailable }</p>
 				<div data-room-management-content></div>
@@ -90,12 +91,6 @@ templ roomManagementContent(v view, state engineapi.RoomManagement, messageID st
 templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 	{{ canRename := slices.Contains(state.Actions, engineapi.Rename) }}
 	{{ canEditTopic := slices.Contains(state.Actions, engineapi.Topic) }}
-	<div class="oie-room-management-avatar">
-		@profileAvatar(v, v.Selected.AccountId, v.Selected.Address, avatar.Config{Name: v.infoTitle(), Size: avatar.SizeXL})
-	</div>
-	if slices.Contains(state.Actions, engineapi.SetAvatar) {
-		@roomAvatarControls(v, *state.Revision)
-	}
 	if !canRename {
 		<strong>{ v.infoTitle() }</strong>
 	}
@@ -104,6 +99,12 @@ templ roomManagementDetails(v view, state engineapi.RoomManagement) {
 	}
 	if !canEditTopic && v.managementTopic() != "" {
 		<p class="oie-details-plain">{ v.managementTopic() }</p>
+	}
+	<div class="oie-room-management-avatar">
+		@profileAvatar(v, v.Selected.AccountId, v.Selected.Address, avatar.Config{Name: v.infoTitle(), Size: avatar.SizeXL})
+	</div>
+	if slices.Contains(state.Actions, engineapi.SetAvatar) {
+		@roomAvatarControls(v, *state.Revision)
 	}
 	if slices.Contains(state.Actions, engineapi.Destroy) {
 		@drawerSubpageEntry("room-management", "room-destructive-actions", v.Text.DestructiveActions, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"}))
@@ -134,7 +135,7 @@ templ roomManagementParticipants(v view, state engineapi.RoomManagement) {
 		if len(state.Occupants) > 0 {
 			@roomListSearch("room-participant-search", "room-participant-results", v.Text.RoomSearchParticipants)
 			<div id="room-participant-results">
-		for _, group := range roomParticipantGroups(v.Text, state.Occupants, managedParticipantGroup) {
+				for _, group := range roomParticipantGroups(v.Text, state.Occupants, managedParticipantGroup) {
 					<section class="oie-room-participant-group">
 						<h3>{ group.label }</h3>
 						<ul class="oie-room-participants">
@@ -150,13 +151,13 @@ templ roomManagementParticipants(v view, state engineapi.RoomManagement) {
 			<p>{ v.Text.RoomNoVisibleParticipants }</p>
 		}
 	</div>
-	@roomProfileSlot("room-participant-profile", v.Text.Participants, v.Text.RoomBackToParticipants)
+	@roomProfileSlot("room-participant-profile", v.Text.RoomBackToParticipants)
 }
 
-templ roomProfileSlot(id, label, accessibleLabel string) {
+templ roomProfileSlot(id, accessibleLabel string) {
 	<div id={ id } data-room-profile-slot hidden>
-		<div data-room-profile-pending hidden>
-			@roomParticipantBack(label, accessibleLabel)
+		<div data-room-profile-pending tabindex="-1" hidden>
+			@roomParticipantBack(accessibleLabel)
 			<div data-room-profile-status></div>
 		</div>
 		<div data-room-profile-content></div>
@@ -211,7 +212,7 @@ templ roomManagementBans(v view, state engineapi.RoomManagement) {
 			@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 		</footer>
 	</div>
-	@roomProfileSlot("room-banned-profile", v.Text.RoomBans, v.Text.RoomBackToBans)
+	@roomProfileSlot("room-banned-profile", v.Text.RoomBackToBans)
 }
 
 templ roomBanToggle(v view, id string) {
@@ -234,7 +235,7 @@ templ roomBanList(v view, state engineapi.RoomManagement, bansLoaded bool) {
 					for _, address := range state.Affiliations {
 						{{ nickname := roomBanNickname(state, address) }}
 						{{ name := cmp.Or(nickname, address) }}
-						@roomMemberRow(roomBannedID(address), "room-banned-profile", name, address, nickname + " " + address, roomBannedAvatar(v, address, name, avatar.SizeXS))
+						@roomMemberRow(roomBannedID(address), "room-banned-profile", name, address, nickname+" "+address, roomBannedAvatar(v, address, name, avatar.SizeXS))
 					}
 				</ul>
 				<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingBans }</p>
@@ -266,7 +267,7 @@ templ roomBannedDetails(v view, revision, address, nickname string) {
 	{{ id := roomBannedID(address) }}
 	{{ name := cmp.Or(nickname, address) }}
 	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id }>
-		@roomParticipantBack(v.Text.RoomBans, v.Text.RoomBackToBans)
+		@roomParticipantBack(v.Text.RoomBackToBans)
 		<header class="oie-room-participant-profile">
 			@roomBannedAvatar(v, address, name, avatar.SizeLG)
 			<h3 id={ id + "-name" } tabindex="-1">{ name }</h3>
@@ -361,7 +362,7 @@ templ roomParticipantRow(v view, occupant engineapi.RoomManagedOccupant) {
 
 templ roomMemberRow(id, controls, name, address, match string, picture templ.Component) {
 	<li data-room-list-match={ match }>
-		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-member-row oie-room-participant-row"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": controls})) {
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-room-member-row oie-room-participant-row oie-destination"), button.WithAttrs(templ.Attributes{"id": id, "data-room-participant-open": id, "aria-controls": controls})) {
 			@picture
 			<span>
 				<span>{ name }</span>
@@ -374,18 +375,15 @@ templ roomMemberRow(id, controls, name, address, match string, picture templ.Com
 	</li>
 }
 
-templ roomParticipantBack(label, accessibleLabel string) {
-	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-participant-back": "", "aria-label": accessibleLabel})) {
-		@glyph(heroicons.Icon16SolidChevronLeft)
-		{ label }
-	}
+templ roomParticipantBack(accessibleLabel string) {
+    @drawerReturn(accessibleLabel,templ.Attributes{"data-room-participant-back":""})
 }
 
 templ roomParticipantDetails(v view, revision string, occupant engineapi.RoomManagedOccupant) {
 	{{ id := roomParticipantID(occupant) }}
 	{{ actions := roomParticipantActions(v.Text, occupant) }}
 	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id }>
-		@roomParticipantBack(v.Text.Participants, v.Text.RoomBackToParticipants)
+		@roomParticipantBack(v.Text.RoomBackToParticipants)
 		<header class="oie-room-participant-profile">
 			@roomParticipantAvatar(occupant, avatar.SizeLG)
 			<h3 id={ id + "-name" } tabindex="-1">{ roomParticipantName(v.Text, occupant) }</h3>
@@ -549,17 +547,69 @@ templ roomDetailsForm(v view, revision string, canRename, canEditTopic bool) {
 	}}
 	@form.Form(form.Config{ID: id, Action: "/ui/rooms/manage", Method: "post", RootClass: "oie-room-details-form", RootAttrs: templ.Attributes{"data-oie-action": "room-management", "data-room-details-form": ""}}) {
 		@roomManagementFields(v, revision, "update_details", key)
-		if canRename {
-			<input type="hidden" name="originalName" value={ v.infoTitle() }/>
-			@textinput.TextInput(textinput.Config{ID: id + "-name", Name: "name", Label: v.Text.RoomManagedName, Value: v.infoTitle(), Required: true, InputAttrs: templ.Attributes{"maxlength": "100"}})
-		}
-		if canEditTopic {
-			<input type="hidden" name="originalTopic" value={ v.managementTopic() }/>
-			@textarea.Textarea(textarea.Config{ID: id + "-topic", Name: "topic", Label: v.Text.RoomTopic, Value: v.managementTopic(), Rows: 3, InputAttrs: templ.Attributes{"maxlength": "2000"}})
-		}
-		@button.Button(button.WithType("submit"), button.WithAttrs(templ.Attributes{"disabled": true})) {
-			{ v.Text.RoomSaveDetails }
-		}
+		<div data-details-stage="summary">
+			@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-details-edit": ""})) {
+				@glyph(heroicons.Icon16SolidPencilSquare)
+				if canRename && canEditTopic {
+					{ v.Text.RoomEditText }
+				} else if canRename {
+					{ v.Text.RoomEditName }
+				} else {
+					{ v.Text.RoomEditTopic }
+				}
+			}
+			<dl class="oie-details-facts oie-room-text-summary">
+				if canRename {
+					<dt>{ v.Text.RoomManagedName }</dt>
+					<dd data-summary="name">{ v.infoTitle() }</dd>
+				}
+				if canEditTopic {
+					<dt>{ v.Text.RoomTopic }</dt>
+					<dd data-summary="topic">{ roomTextOr(v.managementTopic(),v.Text.RoomNoTopic) }</dd>
+				}
+			</dl>
+		</div>
+		<div data-details-stage="edit" hidden>
+			if canRename {
+				<input type="hidden" name="originalName" value={ v.infoTitle() }/>
+				@textinput.TextInput(textinput.Config{ID: id + "-name", Name: "name", Label: v.Text.RoomManagedName, Value: v.infoTitle(), Required: true, InputAttrs: templ.Attributes{"maxlength": "100"}})
+			}
+			if canEditTopic {
+				<input type="hidden" name="originalTopic" value={ v.managementTopic() }/>
+				@textarea.Textarea(textarea.Config{ID: id + "-topic", Name: "topic", Label: v.Text.RoomTopic, Value: v.managementTopic(), Rows: 3, InputAttrs: templ.Attributes{"maxlength": "2000"}})
+			}
+			<div class="oie-room-action-buttons">
+				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-details-cancel": ""})) {
+					{ v.Text.RoomCancelAction }
+				}
+				@button.Button(button.WithType("button"), button.WithAttrs(templ.Attributes{"data-details-review": "", "disabled": true})) {
+					{ v.Text.RoomReviewChanges }
+				}
+			</div>
+		</div>
+		<div data-details-stage="review" hidden>
+			<h3 tabindex="-1">{ v.Text.RoomReviewChanges }</h3>
+			<dl class="oie-details-facts oie-room-text-review" data-empty-topic={ v.Text.RoomNoTopic }>
+				for _, field := range []struct{key,label string}{{"name",v.Text.RoomManagedName},{"topic",v.Text.RoomTopic}} {
+					<div data-review-field={ field.key } hidden><dt>{ field.label }</dt><dd><del></del><ins></ins></dd></div>
+				}
+			</dl>
+			<div class="oie-room-action-buttons">
+				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-details-edit": ""})) {
+					{ v.Text.RoomKeepEditing }
+				}
+				@button.Button(button.WithType("submit"), button.WithAttrs(templ.Attributes{"disabled": true})) {
+					{ v.Text.RoomPublishChanges }
+				}
+			</div>
+		</div>
 		<div data-form-feedback role="status" aria-live="polite"></div>
 	}
+}
+
+func roomTextOr(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }

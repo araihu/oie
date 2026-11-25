@@ -641,6 +641,15 @@ func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{
 
 // Keep Goshtoso's drawers, including their focus and dismissal behavior.
 func workspaceDrawer(config drawer.Config) templ.Component {
+ switch config.ID {
+ case "settings", "access-keys", "diagnostics", "about", "destructive-actions", "details", "room-management", "room-destructive-actions":
+    config.HeaderLeading = drawerHeaderBack(config.ID)
+ }
+ // Schedule editing hands off to the composer and then returns to the timeline.
+ // Keep the timeline at the same width throughout that task.
+ if config.ID != "conversation-schedules" {
+    config.NonModalMinWidth = 1100
+ }
  config.PanelClass = strings.TrimSpace("oie-drawer " + config.PanelClass)
  return drawer.Drawer(config)
 }
@@ -719,7 +728,7 @@ if v.Unavailable {
 }else{
 <nav class="oie-account-list" aria-label={v.Text.ManageAccounts}>
 for _,a:=range v.Accounts {
-@link.Link(v.accountsHref(a.Id),link.WithRootClass("oie-account-summary"),link.WithAttrs(templ.Attributes{"data-manage-account":a.Id})){
+@link.Link(v.accountsHref(a.Id),link.WithRootClass("oie-account-summary oie-destination"),link.WithAttrs(templ.Attributes{"data-manage-account":a.Id})){
 @profileAvatar(v,a.Id,a.Address,avatar.Config{Name:a.Label,Size:avatar.SizeSM})
 <span class="oie-profile-identity"><strong>{a.Label}</strong><small>{a.Address}</small><small>{v.connectionLabel(a.Id)}</small></span>
 @glyph(heroicons.Icon16SolidChevronRight)
@@ -756,7 +765,7 @@ templ accountDetail(v view,a engineapi.Account) {
     <div class="oie-profile-field">
      <span class="oie-profile-field-label">{v.Text.AccountProfileName}</span>
      if !v.Preview && !v.Unavailable {
-      @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-row"),button.WithAttrs(templ.Attributes{
+      @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-row oie-destination"),button.WithAttrs(templ.Attributes{
        "aria-label":v.Text.AccountRename, "aria-describedby":"account-profile-name",
        "x-on:click":"$dispatch('modal:open', {id: 'account-name-dialog'})",
       })) {
@@ -772,12 +781,12 @@ templ accountDetail(v view,a engineapi.Account) {
      <div class="oie-profile-row"><span title={a.Address}>{a.Address}</span></div>
     </div>
     if !v.Preview && a.Protocol == "xmpp" {
-     @link.Link(v.contactsHref(a.Id,""),link.WithRootClass("oie-profile-row"),link.WithAttrs(templ.Attributes{"data-account-contacts-link":a.Id})) {
+     @link.Link(v.contactsHref(a.Id,""),link.WithRootClass("oie-profile-row oie-destination"),link.WithAttrs(templ.Attributes{"data-account-contacts-link":a.Id})) {
       <span>{v.Text.ContactsTitle}</span>
       @glyph(heroicons.Icon16SolidChevronRight)
      }
     }
-    @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-profile-row"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})) {
+    @link.Link(v.capabilitiesHref(a.Id),link.WithRootClass("oie-profile-row oie-destination"),link.WithAttrs(templ.Attributes{"data-account-capabilities":a.Id})) {
      <span>{v.Text.Capabilities}</span>
      @glyph(heroicons.Icon16SolidChevronRight)
     }

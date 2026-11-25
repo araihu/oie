@@ -28,7 +28,7 @@ window.OieRuntime.register('shared-content', life => {
    if(controls.dataset.audioSource===source)audio.setAttribute('src',source);
    controls.removeAttribute('aria-busy');
    controls.removeAttribute('data-waveform-player');
-   for(const child of controls.querySelectorAll('[data-message-audio-play],[data-message-audio-wave],.oie-message-audio-time,[data-audio-retry]'))child.hidden=true;
+   for(const child of controls.querySelectorAll('[data-message-audio-play],[data-message-audio-wave],.oie-message-audio-time'))child.hidden=true;
    const wave=controls.querySelector('[data-message-audio-wave]');
    wave.replaceChildren();
    for(const name of wave.getAttributeNames())if(name!=='class'&&name!=='data-message-audio-wave'&&name!=='hidden')wave.removeAttribute(name);
@@ -39,7 +39,7 @@ window.OieRuntime.register('shared-content', life => {
    controls.querySelector('[data-message-audio-time]').textContent='–:––';
    controls.querySelector('[data-message-audio-status]').textContent='';
   }
-  for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),retry=card.querySelector('[data-video-retry]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(retry)retry.hidden=true;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
+  for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
   return copy.outerHTML;
  }
  function records(root){
@@ -54,7 +54,7 @@ window.OieRuntime.register('shared-content', life => {
   heading.className = 'oie-shared-month';
   heading.textContent = window.OieTime.format(date, {month:'long',year:'numeric'});
   grid.className = 'oie-shared-grid';
-  if (results.id === 'shared-content-results') grid.setAttribute('data-masonry-grid', '');
+  if (results.id === 'shared-content-results' || results.dataset.contentType === 'media') grid.setAttribute('data-masonry-grid', '');
   section.append(heading, grid);
   return section;
  }
@@ -85,9 +85,7 @@ window.OieRuntime.register('shared-content', life => {
   const play=current.querySelector('[data-message-audio-play]');
   const label=play.querySelector('[data-record-pause-icon]').hidden?current.dataset.audioPlayLabel:current.dataset.audioPauseLabel;
   play.setAttribute('aria-label',label+' · '+filename);
-  for(const selector of ['[data-audio-player]','[data-audio-retry]']){
-   current.querySelector(selector).setAttribute('aria-label',next.querySelector(selector).getAttribute('aria-label'));
-  }
+  current.querySelector('[data-audio-player]').setAttribute('aria-label',next.querySelector('[data-audio-player]').getAttribute('aria-label'));
   // Keep the media and focused controls connected while applying the new footer and menu.
   for(const child of [...node.childNodes])if(child!==currentAudio){
    if(child.nodeType===Node.ELEMENT_NODE)window.Alpine?.destroyTree(child);
@@ -143,7 +141,7 @@ window.OieRuntime.register('shared-content', life => {
  }
  function render(c,page,pagerHTML,starGeneration){
   const top=c.scroll.scrollTop,anchor=[...c.results.querySelectorAll('[data-shared-item]')].find(item=>item.getBoundingClientRect().bottom>=c.scroll.getBoundingClientRect().top),anchorID=anchor?.dataset.sharedItem,anchorTop=anchor?.getBoundingClientRect().top,active=c.results.contains(document.activeElement)?document.activeElement:null,activeID=active?.id;
-  const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-shared-star","data-video-player","data-video-play","data-video-retry"].find(name=>active?.hasAttribute(name));
+  const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-shared-star","data-video-player","data-video-play"].find(name=>active?.hasAttribute(name));
   // Replacing a loading footer can clamp the scroll position before the new
   // rows are appended. Capture the anchor against the old footer first.
   if(pagerHTML!==undefined)refreshPager(c,pagerHTML);

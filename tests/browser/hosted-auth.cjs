@@ -79,7 +79,7 @@ async function closeSignOutDialog(dialog, close) {
 }
 
 async function signOutConfirmation(page, copy) {
-  const engine = page.getByRole('tabpanel', {name: copy.engine, exact: true});
+  const engine = page.locator('#settings-body .oie-engine-sign-out');
   const open = engine.getByRole('button', {name: copy.action, exact: true});
   const dialog = page.getByRole('dialog', {name: copy.title, exact: true});
   const cancel = dialog.getByRole('button', {name: copy.cancel, exact: true});
@@ -115,7 +115,7 @@ async function verifyMobileSignOut(browser, server, engineID) {
   });
   try {
     const page = await context.newPage();
-    await server.signIn(page, '/?open=settings&settingsTab=engine&lang=pt-BR');
+    await server.signIn(page, '/?open=settings&lang=pt-BR');
     const confirm = await signOutConfirmation(page, {
       engine: 'Motor', action: 'Sair', title: 'Sair do Oiê?', cancel: 'Cancelar',
       description: 'Você vai sair do Oiê em todas as abas deste navegador. O motor continuará rodando no servidor.',
@@ -166,12 +166,12 @@ async function create(api, endpoint, sequence, data) {
 
     await page.goto(url + '/?open=settings&lang=en');
     const settingsDrawer = page.getByRole('dialog', {name: 'Settings', exact: true});
-    await settingsDrawer.getByRole('tab', {name: 'This device', exact: true}).click();
-    const device = settingsDrawer.getByRole('tabpanel', {name: 'This device', exact: true});
-    await device.getByRole('heading', {name: 'Notifications', exact: true}).waitFor();
-    assert.equal(await device.locator('[data-download-retention]').count(), 0);
+    await settingsDrawer.locator('[data-settings-target=device]:visible').click();
+    const device = page.locator('[data-settings-page=device]');
+    await device.getByRole('button', {name: 'Notifications', exact: true}).waitFor();
+    assert.equal(await page.locator('[data-download-retention]').count(), 0);
     assert.equal(await page.locator('#remove-device-downloads-dialog').count(), 0);
-    await settingsDrawer.getByRole('tab', {name: 'General', exact: true}).click();
+    await page.getByRole('button', {name: 'Back to settings', exact: true}).click();
     const access = page.getByRole('button', {name: 'Access keys', exact: true});
     await access.click();
     const keyDrawer = page.getByRole('dialog', {name: 'Access keys', exact: true});
@@ -210,7 +210,7 @@ async function create(api, endpoint, sequence, data) {
     const composer = page.locator('#message-composer');
     await composer.waitFor();
     const settings = await context.newPage();
-    await settings.goto(url + '/?open=settings&settingsTab=engine&lang=en');
+    await settings.goto(url + '/?open=settings&lang=en');
     const confirm = await signOutConfirmation(settings, {
       engine: 'Engine', action: 'Sign out', title: 'Sign out of Oiê?', cancel: 'Cancel',
       description: 'You’ll sign out of Oiê in all tabs in this browser. The engine will keep running on the server.',

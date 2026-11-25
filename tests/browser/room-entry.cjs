@@ -202,7 +202,8 @@ async function waitFor(predicate) {
         const box = el.getBoundingClientRect();
         return [box.x, box.y, box.width, box.height, el.scrollTop];
       }).flat();
-      const initial = sample();
+      let initial = sample();
+      window.measureRoomGeometry = () => { initial = sample(); window.roomDrift = 0; };
       window.roomDrift = 0;
       window.trackRoomGeometry = true;
       function frame() {
@@ -225,11 +226,13 @@ async function waitFor(predicate) {
       await heldPreview;
       await route.fulfill({response}).catch(() => {});
     }, {times: 2});
+    assert.equal(await page.evaluate(() => window.roomDrift), 0);
     await link.focus();
     await page.keyboard.press('Enter');
     const form = page.locator('#join-room-form');
     const preview = form.locator('[data-room-preview]');
     await preview.getByText('Carregando prévia da sala…').waitFor();
+    await page.evaluate(() => window.measureRoomGeometry());
     assert.equal(new URL(page.url()).searchParams.get('chat'), chat);
     assert.equal(new URL(page.url()).searchParams.has('open'), false);
     assert.equal(await form.locator('[name=address]').inputValue(), address);
@@ -291,8 +294,13 @@ async function waitFor(predicate) {
           await route.continue();
         },{times:1});
       }
-      await page.locator('[aria-controls=chat-options-panel]').click();
-      await page.locator('#chat-manage-room').click();
+      if (width === 1440) {
+        await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+        await page.locator('[data-info-manage-room]').click();
+      } else {
+        await page.locator('[aria-controls=chat-options-panel]').click();
+        await page.locator('#chat-manage-room').click();
+      }
       const management = page.locator('[data-room-management]');
       const openingSkeleton = management.getByRole('status',{name:'Carregando ações da sala…',exact:true});
       if (width === 1440) {
@@ -300,7 +308,24 @@ async function waitFor(predicate) {
         assert.equal(await openingSkeleton.locator('[data-skeleton-item]').count(),5);
         finishOpening();
       }
-      const saveDetails = management.getByRole('button', {name:'Salvar alterações'});
+      const headerBack = page.getByRole('button',{name:'Voltar aos detalhes da conversa',exact:true});
+      await management.getByRole('tablist').waitFor();
+      if (width === 1440) {
+        const back = await headerBack.boundingBox();
+        assert(back.width >= 44 && back.height >= 44, 'Back has a touch-sized target');
+        assert(await headerBack.evaluate(button => !!button.closest('header')), 'Back belongs in the header');
+        await headerBack.focus();
+        await page.getByRole('tooltip',{name:'Voltar aos detalhes da conversa'}).waitFor();
+        await headerBack.press('Enter');
+        const manageEntry = page.locator('[data-info-manage-room]:visible');
+        await manageEntry.waitFor();
+        await page.waitForFunction(() => document.activeElement?.matches('[data-info-manage-room]'));
+        await manageEntry.press('Enter');
+      } else {
+        assert.equal(await headerBack.isVisible(), false, 'Direct menu entry has no parent');
+      }
+      await management.locator('[data-details-edit]:visible').click();
+      const saveDetails = management.locator('[data-details-review]');
       await saveDetails.waitFor();
       assert.equal(await management.locator('[data-room-participant-detail]').count(),0);
       assert.equal(await management.locator('[data-room-profile-slot] form').count(),0);
@@ -402,7 +427,7 @@ async function waitFor(predicate) {
       await kick.getByRole('button',{name:'Cancelar'}).click();
       await kick.waitFor({state:'hidden'});
       assert.equal(await kickTrigger.getAttribute('aria-expanded'), 'false');
-      await profile.getByRole('button',{name:'Voltar para participantes'}).click();
+      await page.getByRole('button',{name:'Voltar para participantes'}).click();
       await participant.waitFor();
       assert.deepEqual((await management.getByRole('tab').allTextContents()).map(label => label.trim()),
         ['Detalhes','Participantes','Banimentos']);
@@ -465,6 +490,8 @@ async function waitFor(predicate) {
         const before = await geometry();
         const tabsBefore = await management.getByRole('tablist').boundingBox();
         await saveDetails.click();
+        assert.equal(managementCommands.length, 0);
+        await management.locator('[data-details-stage=review] button[type=submit]').click();
         assert.equal(await saveDetails.isDisabled(), true);
         assert.deepEqual(await geometry(), before);
         releaseRequest.send();
@@ -475,6 +502,7 @@ async function waitFor(predicate) {
         await toast.getByRole('button',{name:'Fechar',exact:true}).click();
         await toast.waitFor({state:'hidden'});
         assert.equal(await saveDetails.isDisabled(), true);
+        await management.locator('[data-details-edit]:visible').click();
         await topic.fill('Próxima leitura\nTraga um conto\n');
         assert.equal(await saveDetails.isDisabled(), true);
         await topic.fill('Próxima leitura\nTraga dois contos');
@@ -489,7 +517,8 @@ async function waitFor(predicate) {
       } else {
         await topic.fill('Rascunho do tópico');
         managementBlocked = true;
-        const submit = management.getByRole('button', {name:'Salvar alterações'});
+        await saveDetails.click();
+        const submit = management.locator('[data-details-stage=review] button[type=submit]');
         await submit.click();
         await management.getByText('A sala mudou. Revise as alterações antes de tentar novamente.', {exact:true}).waitFor();
         await waitFor(() => managementCommands.length === 2);
@@ -507,7 +536,7 @@ async function waitFor(predicate) {
     await page.locator('#chat-manage-room').click();
     const recoveredPanel = page.locator('[data-room-management]');
     await recoveredPanel.getByRole('textbox',{name:'Tópico',exact:true}).waitFor();
-    await waitFor(() => recoveredPanel.getByRole('button',{name:'Salvar alterações'}).isEnabled());
+    await waitFor(() => recoveredPanel.locator('[data-details-review]').isEnabled());
     assert.equal(await recoveredPanel.getByRole('textbox',{name:'Tópico',exact:true}).inputValue(),'Rascunho do tópico');
     await page.keyboard.press('Escape');
     await recoveredPanel.waitFor({state:'hidden'});
@@ -631,7 +660,7 @@ async function waitFor(predicate) {
     await bannedProfile.getByText('Banido',{exact:true}).waitFor();
     assert.equal(await banSearch.isVisible(),false);
     assert.equal(managementCommands.length,beforeUnban);
-    await bannedProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
+    await page.getByRole('button',{name:'Voltar para banimentos'}).click();
     assert.equal(await banSearch.inputValue(),'banido@');
     assert.equal(await bannedRow.evaluate(el => document.activeElement === el),true);
     await bannedRow.click();
@@ -741,7 +770,7 @@ async function waitFor(predicate) {
     await bannedReader.click();
     const bannedReaderProfile = roomPanel.getByRole('region',{name:'Leitora',exact:true});
     await bannedReaderProfile.getByText(readerAddress,{exact:true}).waitFor();
-    await bannedReaderProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
+    await page.getByRole('button',{name:'Voltar para banimentos'}).click();
     await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
     await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).waitFor({state:'detached'});
     assert.equal(managementCommands.length,beforeBan+2);

@@ -40,7 +40,7 @@ templ readReceiptsRegion(v view, id string, p readReceiptsView) {
 				} else {
 					hx-sync="#oie-app:queue last"
 				}
-				x-data="{error:'',pending:false}"
+				x-data="{error:'',pending:false}" x-on:change="if ($event.target.name === 'mode' && !pending) $nextTick(() => $el.requestSubmit())"
 				data-unavailable={v.Text.ReadReceiptsUnavailable} data-invalid={v.Text.InvalidForm} data-forbidden={v.Text.CSRFError}
 				x-on:htmx:before:request="error = ''; pending = true"
 				x-on:htmx:finally:request="pending = false"
@@ -48,15 +48,15 @@ templ readReceiptsRegion(v view, id string, p readReceiptsView) {
 				x-on:htmx:after:request="const status = $event.detail.ctx.response.status; if (status !== 200 && status !== 409) { $event.preventDefault(); error = status === 403 ? $el.dataset.forbidden : status === 422 || status === 400 ? $el.dataset.invalid : $el.dataset.unavailable }"
 			>
 				@retentionIdentity(v,p.Revision)
-				<fieldset class="oie-retention-fields">
+				<fieldset class="oie-retention-fields" x-bind:disabled="pending">
 					{{ label := v.Text.ReadReceiptsGlobal }}
 					if id != "" {
-						{{ label = v.Text.ReadReceiptsConversation }}
+						{{ label = "" }}
 					}
-					@selectfield.Select(selectfield.Config{ID:region+"-mode",Name:"mode",Label:label,Options:readReceiptOptions(v,id,p),Required:true})
+					@selectfield.Select(selectfield.Config{ID:region+"-mode",Name:"mode",Label:label,TriggerAttrs:templ.Attributes{"aria-label":v.Text.CapabilityReadReceipts},Options:readReceiptOptions(v,id,p),Required:true})
 				</fieldset>
 				<div class="oie-retention-actions">
-					@button.Button(button.WithID(region+"-save"),button.WithType("submit"),button.WithTone(button.TonePrimary),button.WithAttrs(templ.Attributes{"x-bind:aria-disabled":"String(pending)"})){ {v.Text.RetentionSave} }
+					@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"x-cloak":true,"x-show":"error && !pending"})){ {v.Text.Retry} }
 					<div>
 						if p.Notice != "" {
 							<p role="alert" x-show="error === ''">{p.Notice}</p>

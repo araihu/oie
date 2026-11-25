@@ -2,7 +2,6 @@ package web
 
 import (
  "github.com/araihu/goshtoso/components/avatar"
- "github.com/araihu/goshtoso/components/accordion"
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/badge"
  "github.com/araihu/goshtoso/components/button"
@@ -56,40 +55,30 @@ case "read-receipts":
     @readReceiptsRegion(v,v.Selected.Id,readReceiptsView{Loading:true})
   }
 </section>
-default:
-<div class="oie-conversation-details">
-<div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
-<nav class="oie-info-rows" aria-label={v.Text.InfoConversationActions}>
-@link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
-if v.OmemoEnabled && (v.Selected.Kind=="direct" || v.Selected.Kind=="room") {
-<a class="oie-info-entry" target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(v.Selected.AccountId,v.Selected.Id))}>{v.Text.OmemoTitle}</a>
-}
-@infoEntry(v,"media",v.Text.SharedMediaTab,glyph(heroicons.Icon16SolidRectangleGroup))
-@infoEntry(v,"links",v.Text.SharedLinksTab,glyph(heroicons.Icon16SolidLink))
-@infoEntry(v,"documents",v.Text.SharedDocsTab,glyph(heroicons.Icon16SolidDocumentText))
-@infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
-if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
-@infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
-if v.canSetReadReceipts(v.Selected) {
-@infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
-}
-@infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
-<template data-info-participants-loading>
-	@infoParticipantsSkeleton(v)
-</template>
-}
-</nav>
-if !v.Preview && v.requestKind()=="" {
+case "connection":
+<section class="oie-drawer-page">
+  @infoBack(v)
+  <h2 tabindex="-1" data-info-heading>{v.Text.InfoConnection}</h2>
+  @infoTechnical(v)
+  if v.ConversationInfo == nil {
+    @link.Link(v.infoHref("connection","connection"),link.WithAttrs(templ.Attributes{"data-info-nav":""})){ {v.Text.Retry} }
+  }
+</section>
+case "preferences":
+<section class="oie-drawer-page">
+  @infoBack(v)
+  <h2 tabindex="-1" data-info-heading>{v.Text.DrawerConversationPreferences}</h2>
+  if !v.Preview && v.requestKind()=="" {
+    <nav class="oie-info-rows">
+      if v.canSetReadReceipts(v.Selected) {
+        @infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
+      }
+      @infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
+    </nav>
 @toggle.Toggle(toggle.Config{
 	ID:"notification-mute",Label:v.Text.NotificationMute,Disabled:true,RootClass:"oie-device-toggle",
 	InputAttrs:templ.Attributes{"data-notification-mute":v.Selected.Id,"data-mute-engine":v.EngineID,"data-unsaved":v.Text.DevicePreferenceUnavailable},
 })
-if v.Selected.Kind!="room" {
-@infoEntry(v,"retention",v.Text.RetentionTitle,retentionIcon())
-if v.canSetReadReceipts(v.Selected) {
-@infoEntry(v,"read-receipts",v.Text.CapabilityReadReceipts,readReceiptsIcon())
-}
-}
 if v.OfflineHistory && !v.conversationRemoved() {
 @toggle.Toggle(toggle.Config{
 	ID:"keep-chat-offline",Label:v.Text.KeepChatOffline,Disabled:true,RootClass:"oie-device-toggle",
@@ -112,12 +101,52 @@ if v.RoomArchive != nil {
   })
   </div>
 }
-<div id="conversation-details-description" data-version={v.detailsVersion("description")}>@infoDescription(v)</div>
-@accordion.Accordion(accordion.AccordionConfig{ID:"chat-info-technical",RootClass:"oie-info-technical",Items:[]accordion.AccordionItem{{ID:"chat-info-connection",Title:v.Text.InfoConnection,Content:infoTechnical(v)}}})
-@link.Link(v.detailsHref(),link.WithAttrs(templ.Attributes{"data-details-refresh":"","data-info-nav":""}),link.WithRootClass("oie-details-refresh")){ {v.Text.DetailsRefresh} }
-<p class="oie-details-help">{v.Text.DetailsSnapshotHelp}</p>
+</section>
+default:
+<div class="oie-conversation-details">
+  <div id="conversation-details-identity" data-version={v.detailsVersion("identity")}>@detailsIdentity(v)</div>
+  if v.Selected.Kind=="room" && !v.Preview && v.requestKind()=="" && !v.conversationRemoved() {
+    @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-destination oie-settings-entry"),button.WithAttrs(templ.Attributes{"data-info-manage-room":"","data-drawer-child":"room-management","aria-haspopup":"dialog"})) {
+      @glyph(heroicons.Icon16SolidPencilSquare)<span>{v.Text.RoomManage}</span>@glyph(heroicons.Icon16SolidChevronRight)
+    }
+  }
+  <div id="conversation-details-description" data-version={v.detailsVersion("description")}>@infoDescription(v)</div>
+  @infoGroup("info-content-heading",v.Text.InfoConversationContent) {
+    @infoEntry(v,"media",v.Text.SharedMediaTab,glyph(heroicons.Icon16SolidRectangleGroup))
+    @infoEntry(v,"links",v.Text.SharedLinksTab,glyph(heroicons.Icon16SolidLink))
+    @infoEntry(v,"documents",v.Text.SharedDocsTab,glyph(heroicons.Icon16SolidDocumentText))
+    @infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
+  }
+  {{
+    scope := v.Text.SenderConversation
+    if v.Selected.Kind == "room" {
+      scope = v.Text.CapabilityScopeRoom
+    }
+  }}
+  @infoGroup("info-scope-heading",scope) {
+    if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
+      @infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
+      <template data-info-participants-loading>@infoParticipantsSkeleton(v)</template>
+    }
+    if !v.Preview && v.requestKind()=="" {
+      @infoEntry(v,"preferences",v.Text.DrawerConversationPreferences,glyph(heroicons.Icon16SolidCog6Tooth))
+    }
+    @infoEntry(v,"connection",v.Text.InfoConnection,glyph(heroicons.Icon16SolidInformationCircle))
+    if v.OmemoEnabled && (v.Selected.Kind=="direct" || v.Selected.Kind=="room") {
+      <a class="oie-info-entry" target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(v.Selected.AccountId,v.Selected.Id))}>{v.Text.OmemoTitle}</a>
+    }
+  }
+  @infoGroup("info-messages-heading",v.Text.SearchMessagesGroup) {
+    @link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry oie-destination"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
+  }
 </div>
 }
+}
+templ infoGroup(headingID, title string) {
+  <nav class="oie-drawer-group" aria-labelledby={headingID}>
+    <h3 id={headingID}>{title}</h3>
+    {children...}
+  </nav>
 }
 templ roomArchiveHelp(v view){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-room-archive-help"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.RoomArchiveMode})){

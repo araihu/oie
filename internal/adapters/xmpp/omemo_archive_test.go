@@ -46,7 +46,7 @@ func TestOMEMOArchiveAuthenticatedCatchupAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeResult := func(sender, id, text string, trusted bool) (*archiveResult, *omemo.Device) {
+	makeResult := func(sender, id, text string, trusted bool, preKeyIndex int) (*archiveResult, *omemo.Device) {
 		t.Helper()
 		peer, err := omemo.Open(filepath.Join(t.TempDir(), "device.json"))
 		if err != nil {
@@ -64,7 +64,11 @@ func TestOMEMOArchiveAuthenticatedCatchupAndReplay(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		env, err := peer.Encrypt(ctx, []omemo.Target{{JID: account.Address, DeviceID: selfID, Bundle: bundle}}, text)
+		// Give each fixture sender a different one-time prekey so this test
+		// exercises archive catchup independently of prekey selection.
+		recipient := bundle
+		recipient.PreKeys = bundle.PreKeys[preKeyIndex : preKeyIndex+1]
+		env, err := peer.Encrypt(ctx, []omemo.Target{{JID: account.Address, DeviceID: selfID, Bundle: recipient}}, text)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -79,8 +83,8 @@ func TestOMEMOArchiveAuthenticatedCatchupAndReplay(t *testing.T) {
 		}
 		return &result, peer
 	}
-	unknown, peer := makeResult("bob@localhost", "blocked", "held for verification", false)
-	known, _ := makeResult("eve@localhost", "recoverable", "recovered from the archive", true)
+	unknown, peer := makeResult("bob@localhost", "blocked", "held for verification", false, 0)
+	known, _ := makeResult("eve@localhost", "recoverable", "recovered from the archive", true, 1)
 	if err := m.captureArchive(e, stanza.Message{From: jid.MustParse("mallory@localhost")}, unknown); err != nil || len(query.OMEMO) != 0 {
 		t.Fatal("accepted an archive result from a foreign sender", err)
 	}

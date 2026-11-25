@@ -48,11 +48,10 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     const reopenSettings = async () => {
       if (width === 390) await page.getByRole('button', {name: navigation, exact: true}).click();
       await page.locator('[data-navigation-settings]:visible').click();
-      const tab = page.getByRole('tab', {name: engine, exact: true});
-      if (await tab.getAttribute('aria-selected') !== 'true') await tab.click();
+      await page.locator('[data-settings-target=engine]').click();
       await settings.scrollIntoViewIfNeeded();
     };
-    const holdSave = async saveButton => {
+    const holdSave = async change => {
       const pending = Promise.withResolvers();
       const release = Promise.withResolvers();
       const route = async request => {
@@ -61,7 +60,7 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
         await request.continue();
       };
       await page.route(policyRoute, route, {times: 1});
-      await saveButton.click();
+      await change();
       await pending.promise;
       return release.resolve;
     };
@@ -88,8 +87,7 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     await expectMode('#engine-read-receipts-mode-trigger', off);
 
     // An overlapping reopen waits for the save instead of rendering old state.
-    await choose(globalMode, on);
-    const releaseGlobal = await holdSave(settings.locator('button[type=submit]'));
+    const releaseGlobal = await holdSave(() => choose(globalMode, on));
     await page.keyboard.press('Escape');
     await settings.waitFor({state: 'hidden'});
     const globalSaved = policyResponse('POST');
@@ -120,21 +118,20 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     assert.equal(await row.locator('button').count(), 0);
     await rowLink.press('Enter');
     await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+    await page.locator('[data-info-entry=preferences]').click();
     const entry = page.locator('[data-info-entry="read-receipts"]');
     await entry.click();
     const modeSelector = '#conversation-read-receipts-mode-trigger';
     const mode = page.locator(modeSelector);
-    const save = page.locator('#conversation-read-receipts-save');
     await expectMode(modeSelector, off);
-    await choose(mode, on);
-    const releaseConversation = await holdSave(save);
-    assert.equal(await save.getAttribute('aria-disabled'), 'true');
+    const releaseConversation = await holdSave(() => choose(mode, on));
+    await page.waitForFunction(() => document.querySelector('#conversation-read-receipts fieldset').disabled);
     const conversationSaved = policyResponse('POST');
     releaseConversation();
     await conversationSaved;
     await expectMode(modeSelector, on);
     assert.equal((await get(conversation)).override, true);
-    await page.locator('#chat-info-content [data-info-back]').click();
+    await page.locator('[aria-labelledby=detailsTitle] [data-drawer-back]').click();
     await mode.waitFor({state: 'hidden'});
     await set(conversation, {override: false});
     await entry.click();

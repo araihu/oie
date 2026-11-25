@@ -372,6 +372,8 @@ type copy struct {
 	RoomManagementSubmitted                                                                                                                                                                                  string
 	RoomManagedName                                                                                                                                                                                          string
 	RoomRoleLabel                                                                                                                                                                                            string
+	BackToDevice, BackToConversationPreferences                                                                                                                                                              string
+	DrawerMediaDisplay, DrawerStorage, DrawerConversationPreferences, RoomEditText, RoomEditName, RoomEditTopic, RoomReviewChanges, RoomPublishChanges, RoomKeepEditing, RoomNoTopic                         string
 	RoomSaveDetails                                                                                                                                                                                          string
 	RoomDetailsPartial                                                                                                                                                                                       string
 	RoomOwners                                                                                                                                                                                               string
@@ -460,6 +462,7 @@ type copy struct {
 	EmojiVariantsFor                                                                                                                                                                                         string
 	EmojiPicker                                                                                                                                                                                              string
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
+	SettingsDeviceAndEngine, SettingsSecurityAndSupport                                                                                                                                                      string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
 	RetentionTitle, RetentionRooms, RetentionDirect, RetentionDays, RetentionFinite, RetentionUnlimited                                                                                                      string
 	RetentionInherit, RetentionInheritDays, RetentionSave, RetentionSaved, RetentionUnavailable, RetentionConflict                                                                                           string
@@ -491,7 +494,6 @@ type copy struct {
 	SharedLoadFailed                                                                                                                                                                                         string
 	VideoPlay                                                                                                                                                                                                string
 	VideoPause, VideoSeek, VideoVolume, VideoEnableSound, VideoDownloadOriginal                                                                                                                              string
-	VideoRetry                                                                                                                                                                                               string
 	VideoLoading                                                                                                                                                                                             string
 	VideoPlaying                                                                                                                                                                                             string
 	VideoPaused                                                                                                                                                                                              string
@@ -534,7 +536,7 @@ type copy struct {
 	OmemoRoomActive, OmemoRoomEnable, OmemoRoomDisable                                 string
 	OmemoReview, OmemoMismatch, OmemoUnavailable                                       string
 
-	InfoConversationActions                                                                                                                                                                                string
+	InfoConversationContent                                                                                                                                                                                string
 	InfoStarred                                                                                                                                                                                            string
 	InfoConnection                                                                                                                                                                                         string
 	InfoBack                                                                                                                                                                                               string

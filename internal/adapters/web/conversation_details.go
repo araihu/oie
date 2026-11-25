@@ -41,9 +41,6 @@ func validConversationDetails(chat engineapi.Conversation, d *engineapi.Conversa
 	return d
 }
 
-func (v view) detailsHref() string {
-	return v.href("open", "details", "lang", v.Locale, "theme", v.Theme)
-}
 func (v view) detailState(state string) string {
 	switch state {
 	case "pending":

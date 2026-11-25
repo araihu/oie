@@ -385,7 +385,6 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
   const settings=inline.getByRole('dialog',{name:'Settings',exact:true});
   const openSettings=async()=>{
     await inline.locator('[data-navigation-settings]:visible').click();
-    await settings.getByRole('tab',{name:'Composition',exact:true}).click();
   };
   const closeSettings=async()=>{
     await settings.getByRole('button',{name:'Close',exact:true}).click();
@@ -395,7 +394,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await field.click();
   };
   await openSettings();
-  const languages=settings.getByRole('tabpanel',{name:'Composition'});
+  const languages=settings.locator('[data-settings-page=general]');
   const languageTrigger=languages.getByRole('combobox',{name:'Emoji shortcut languages'});
   const english=languages.getByRole('option',{name:'English'}),portuguese=languages.getByRole('option',{name:'Português do Brasil'});
   const searchLanguages=languages.getByRole('textbox',{name:'Search languages'});

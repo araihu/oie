@@ -86,7 +86,7 @@ window.OieRuntime.register('shared-actions', life => {
    document.dispatchEvent(new CustomEvent('oie:preview-save-request',{detail:{id:scope.dataset.sharedPreview,engineId:scope.dataset.sharedEngine,accountId:scope.dataset.sharedAccount,conversationId:scope.dataset.sharedConversation,messageId:scope.dataset.sharedMessage,url:address,alive:()=>!life.signal.aborted&&scope.isConnected,onState:state=>{if(state!=='loading')pending.delete(key);if(life.signal.aborted||!scope.isConnected)return;feedback(scope,state==='failed'?labels.failed:state==='loading'?labels.downloading:'');}}}));return;
   }
   const path=scope.dataset.sharedDownload,expected='/ui/shared-content/'+encodeURIComponent(key)+'/content';let target;try{target=new URL(path,location.origin);}catch{return;}
-  if(!['video','document'].includes(scope.dataset.sharedKind)||target.origin!==location.origin||target.pathname!==expected||target.searchParams.get('engineId')!==document.body.dataset.engineId){feedback(scope,labels.failed);return;}
+  if(!['video','audio','document'].includes(scope.dataset.sharedKind)||target.origin!==location.origin||target.pathname!==expected||target.searchParams.get('engineId')!==document.body.dataset.engineId){feedback(scope,labels.failed);return;}
   target.searchParams.set('download','1');pending.add(key);
   try{await save(target.pathname+target.search,scope.dataset.sharedName);if(!life.signal.aborted&&scope.isConnected)feedback(scope,'');}
   catch{if(!life.signal.aborted&&scope.isConnected)feedback(scope,labels.failed);}

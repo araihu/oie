@@ -4,36 +4,38 @@ import (
  "github.com/araihu/goshtoso/components/icon/heroicons"
  "github.com/araihu/goshtoso/components/link"
  "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/goshtoso/expressions"
 )
 
 templ infoEntry(v view,kind,label string,symbol templ.Component){
 {{ screen:="shared" }}
-if kind=="stars" || kind=="participants" || kind=="retention" || kind=="read-receipts" {
+if kind=="stars" || kind=="participants" || kind=="retention" || kind=="read-receipts" || kind=="preferences" || kind=="connection" {
 {{screen=kind}}
 }
-@link.Link(v.infoHref(screen,kind,"infoQuery",""),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){
+@link.Link(v.infoHref(screen,kind,"infoQuery","","infoFocus",""),link.WithRootClass("oie-info-entry oie-destination"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){
 @symbol<span>{label}</span>@glyph(heroicons.Icon16SolidChevronRight)
 }
 }
 templ infoBack(v view){
-@link.Link(v.infoBackHref(),link.WithRootClass("oie-account-back oie-info-back"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{v.Text.InfoBack}</span>}
+{{ label:=v.Text.InfoBack }}
+if v.InfoView=="retention" || v.InfoView=="read-receipts" {
+ {{ label=v.Text.BackToConversationPreferences }}
+}
+@drawerReturn(label,templ.Attributes{"data-return-href":v.infoBackHref()})
 }
 templ infoSharedContent(v view){
 {{ scoped:=v.infoSharedView() }}
+{{ ctx=expressions.With(ctx,expressions.Set{TextInput:expressions.TextInput{SearchAriaLabel:v.Text.SharedSearch}}) }}
 <div id="details-shared-content" class="oie-info-shared" data-info-shared data-content-type={v.InfoType}>
 @infoBack(v)
 <h2 tabindex="-1" data-info-heading>{v.Text.SharedMedia}</h2>
 <form action="/" method="get" id="info-shared-search-form" class="oie-info-search" data-info-search role="search" hx-sync="this:replace">
 @infoSearchFields(v)
-@textinput.TextInput(textinput.Config{ID:"info-shared-search",Name:"infoQuery",Value:v.InfoQuery,Label:v.Text.SharedSearch,RootClass:"oie-info-search-input",Type:textinput.TypeSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#info-shared-search-form","hx-target":"#info-shared-search-results","hx-select":"#info-shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","hx-headers":`{"X-Oie-Fragment":"info"}`,"aria-controls":"info-shared-search-results"}})
+@textinput.TextInput(textinput.Config{ID:"info-shared-search",Name:"infoQuery",Value:v.InfoQuery,Placeholder:v.Text.SharedSearch,RootClass:"oie-info-search-input",Type:textinput.TypeSearch,InputAttrs:templ.Attributes{"hx-get":"/","hx-trigger":"oie:shared-search","hx-include":"#info-shared-search-form","hx-target":"#info-shared-search-results","hx-select":"#info-shared-search-results","hx-swap":"outerHTML show:none","hx-sync":"closest form:replace","hx-push-url":"false","hx-replace-url":"true","hx-headers":`{"X-Oie-Fragment":"info"}`,"aria-controls":"info-shared-search-results"}})
 @sharedRetractionFilter(scoped,"info-include-retracted","infoIncludeRetracted")
 </form>
 <div id="info-shared-search-results" data-search-query={v.InfoQuery}>
-<nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
-@sharedTab(scoped,"media",v.Text.SharedMediaTab)
-@sharedTab(scoped,"links",v.Text.SharedLinksTab)
-@sharedTab(scoped,"documents",v.Text.SharedDocsTab)
-</nav>
+@sharedTypeNavigation(scoped)
 <div class="oie-shared-results-frame">
 <div id="info-shared-page-content">
 <div id="info-shared-status" role="status">@sharedStatus(scoped)</div>

@@ -32,9 +32,14 @@ func TestNativeVideoMarkupRequiresExplicitSameOriginPlayback(t *testing.T) {
 			if native == "" || !strings.Contains(native, `preload="none"`) || !strings.Contains(native, "controls") || !strings.Contains(native, "playsinline") || strings.Contains(native, "src=") || strings.Contains(native, "autoplay") || strings.Contains(html, "<source") || strings.Contains(native, "poster=") {
 				t.Fatalf("eager or non-native video markup: %s", html)
 			}
-			for _, want := range []string{`data-video-item="` + testMessage + `"`, `data-video-engine="` + testEngine + `"`, `data-video-account="` + testAccount + `"`, `data-video-conversation="` + testChat + `"`, `data-video-message="` + testRevision + `"`, `data-video-source="/ui/shared-content/` + testMessage + `/content?engineId=` + testEngine + `"`, catalogs[locale].VideoPlay, catalogs[locale].VideoRetry, "&lt;script&gt;clip.webm"} {
+			for _, want := range []string{`data-video-item="` + testMessage + `"`, `data-video-engine="` + testEngine + `"`, `data-video-account="` + testAccount + `"`, `data-video-conversation="` + testChat + `"`, `data-video-message="` + testRevision + `"`, `data-video-source="/ui/shared-content/` + testMessage + `/content?engineId=` + testEngine + `"`, catalogs[locale].VideoPlay, "&lt;script&gt;clip.webm"} {
 				if !strings.Contains(html, want) {
 					t.Errorf("missing scoped/localized video content %q", want)
+				}
+			}
+			for _, control := range []string{"data-video-thumbnail-load", "data-video-download", "data-video-retry"} {
+				if regexp.MustCompile(`\s` + control + `[\s=>]`).MatchString(html) {
+					t.Errorf("redundant inline control %s", control)
 				}
 			}
 			if strings.Contains(html, "<script>") {

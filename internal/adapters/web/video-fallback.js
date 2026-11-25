@@ -111,9 +111,14 @@ export async function playFallback({card, source, ext, size, signal, takeAudio, 
   const toggle = root.querySelector('[data-fallback-toggle]');
   const seek = root.querySelector('[data-fallback-seek]');
   const volume = root.querySelector('[data-fallback-volume]');
-  const original = new URL(source);
-  original.searchParams.set('download', '1');
-  root.querySelector('[data-fallback-download]').href = original.href;
+  const download = root.querySelector('[data-fallback-download]');
+  if (card.hasAttribute('data-video-compact')) {
+    download.remove();
+  } else {
+    const original = new URL(source);
+    original.searchParams.set('download', '1');
+    download.href = original.href;
+  }
   card.querySelector('.oie-video-stage').append(root);
   const audio = takeAudio();
   if (audio) window.AVPlayer.audioContext = audio;

@@ -37,7 +37,7 @@ func sharedActionFile(item engineapi.SharedContentItem) string {
 }
 
 func sharedActionDownload(v view, item engineapi.SharedContentItem) string {
-	if item.Kind == "video" || item.Kind == "document" && documentFormat(item) != "unsupported" {
+	if item.Kind == "video" || item.Kind == "audio" || item.Kind == "document" && documentFormat(item) != "unsupported" {
 		return documentSource(v, item)
 	}
 	return ""
@@ -52,14 +52,27 @@ func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section 
 	if !v.Preview && item.Message.Retraction == nil && item.Message.Moderation == nil && item.Message.SendState != "cancelled" {
 		items = append(items, forwardAction(v, "shared-"+sharedActionScope(v)+"-"+item.Id+"-", item.Message.Id))
 	}
+	if item.Kind == "image" && item.Preview != nil && item.Preview.Kind == "image" && sharedActionPreview(item) != "" {
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "load-image"), Label: v.Text.LoadImage, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
+	}
 	if item.Kind == "image" && (sharedActionPreview(item) != "" || sharedActionFile(item) != "") || sharedActionDownload(v, item) != "" {
-		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: v.Text.SharedDownload, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
+		label := v.Text.SharedDownload
+		switch item.Kind {
+		case "video":
+			label = v.Text.VideoDownloadOriginal
+		case "audio":
+			label = v.Text.AudioDownload
+		}
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: label, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
+	}
+	if item.Kind == "audio" && sharedActionDownload(v, item) != "" {
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "retry-audio"), Label: v.Text.Retry, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowPath)})
 	}
 	if item.Kind == "link" && sharedActionPreview(item) != "" {
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "refresh"), Label: v.Text.RefreshPreview, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowPath), Disabled: item.Preview.State == "queued"})
 	}
 	if item.Kind == "video" && videoThumbnailState(item) != "" && videoPoster(item) == "" {
-		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "thumbnail"), Label: videoThumbnailActionLabel(v, item), OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowPath)})
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "thumbnail"), Label: videoThumbnailActionLabel(v, item), OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowPath)})
 	}
 	return []dropdown.Section{{Items: items}}
 }

@@ -198,7 +198,7 @@ async function test(base) {
         await page.getByRole('button', {name:'Abrir navegação', exact:true}).click();
       }
       await page.locator('[data-navigation-settings]:visible').click();
-      await page.getByRole('tab', {name: lang === 'en' ? 'This device' : 'Este dispositivo', exact: true}).click();
+      await page.locator('[data-settings-target=device]:visible').click(); await page.locator('[data-settings-target=storage]:visible').click();
       const settings = page.locator('[data-download-retention]');
       const days = settings.locator('select');
       const feedback = settings.getByRole('status');

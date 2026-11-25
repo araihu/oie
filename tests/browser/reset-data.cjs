@@ -8,12 +8,12 @@ const binary = process.env.OIE_WEB_BINARY || path.resolve(__dirname, '../../bin/
 async function openSettings(page, server, fixture) {
   await server.signIn(page, '/?open=settings&lang=' + fixture.locale + '&theme=' + fixture.theme);
   const settings = page.getByRole('dialog', { name: fixture.settings, exact: true });
-  const general = settings.getByRole('tabpanel', { name: fixture.general, exact: true });
+  const general = settings.locator('[data-settings-page=general]');
   for (const name of [fixture.accessKeys, fixture.diagnostics, fixture.about, fixture.destructiveActions]) {
     await general.getByRole('button', { name, exact: true }).waitFor();
   }
-  assert.equal(await settings.getByRole('button', { name: fixture.signOut, exact: true }).count(), 0);
-  assert.equal(await general.getByText(fixture.engineHeading, { exact: true }).count(), 0);
+  assert(await settings.getByRole('button', { name: fixture.signOut, exact: true }).isVisible());
+  assert(await general.getByRole('button', {name: fixture.engineHeading, exact: true}).isVisible());
   assert.equal(await general.getByText(fixture.engineLabel, { exact: true }).count(), 0);
 
   const entry = settings.getByRole('button', { name: fixture.destructiveActions, exact: true });
@@ -26,7 +26,7 @@ async function openSettings(page, server, fixture) {
   await actions.getByRole('button', { name: fixture.back, exact: true }).click();
   await settings.waitFor();
   await actions.waitFor({ state: 'hidden' });
-  assert.equal(await settings.getByRole('tab', { name: fixture.general, exact: true }).getAttribute('aria-selected'), 'true');
+  assert(await general.isVisible());
   await entry.click();
   await actions.waitFor();
   await settings.waitFor({ state: 'hidden' });

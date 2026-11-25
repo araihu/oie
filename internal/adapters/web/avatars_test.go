@@ -185,3 +185,29 @@ func TestAvatarMetadataPaginationIdentityAndFallback(t *testing.T) {
 		t.Fatal("partial metadata fetch was published as a complete snapshot")
 	}
 }
+
+func TestAccountFilterOptionUsesRetainedPhotoAndShortName(t *testing.T) {
+	_, hash := avatarPNG(t, 1)
+	const address = "alice@example.test"
+	v := view{
+		Avatars: map[avatarIdentity]string{{testAccount, address}: hash},
+	}
+	v.setAccounts([]engineapi.Account{{Id: testAccount, Address: address}})
+	option := sharedAccountCombobox(v).Source.Static[0]
+	if option.Value != testAccount || option.Label != "alice" {
+		t.Fatalf("unexpected account option value %q, label %q", option.Value, option.Label)
+	}
+	var rendered bytes.Buffer
+	if option.Leading == nil {
+		t.Fatal("account option is missing its leading avatar")
+	}
+	if err := option.Leading.Render(context.Background(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rendered.String(), `data-avatar-src="/ui/avatars/`+hash+`"`) {
+		t.Fatal("option did not render the account photo")
+	}
+	if !strings.Contains(rendered.String(), v.AccountAvatarBorders[testAccount]) {
+		t.Fatal("option did not render the assigned account color")
+	}
+}

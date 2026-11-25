@@ -72,14 +72,19 @@ function thumbnail(color,width=8,height=8){
  const child=spawn(process.env.OIE_WEB_BINARY||path.resolve(__dirname,'../../bin/oie-preview-ui'),['--role','bff','--listen','127.0.0.1:'+port,'--engine-url','http://127.0.0.1:'+api.address().port],{stdio:['ignore','ignore','pipe']});
  const base='http://127.0.0.1:'+port,browser=await chromium.launch({headless:true}),errors=[],external=[],findings=[];
  const until=async(fn,label)=>{for(let i=0;i<180;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50))}throw Error('Timed out: '+label)};
- const scope=(page,p)=>page.locator(`[data-preview-id="${p.id}"]`);
+ const scope=(page,p)=>page.locator(`#message-timeline [data-preview-id="${p.id}"]`);
+ async function loadFromMessage(page, preview) {
+  const row = page.locator('#message-timeline [data-message-id="' + preview.messageId + '"]');
+  await row.locator('[data-message-menu-trigger]').click();
+  await row.locator('#load-preview-' + preview.id).click();
+ }
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
   const preferenceKey='oie.device.auto-image-downloads.v1';
   const resetImage=p=>{p.downloadState='not_downloaded';delete p.fileHash;delete p.fileMimeType;delete p.fileSize;delete p.integrity;delete p.lastErrorCode;if(p!==previews[2])delete p.imageHash;p.revisionId=id(800+state.seq);};
   const changeSetting=async(page,enabled)=>{
    await page.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));
-   await page.getByRole('tab',{name:'This device',exact:true}).click();
+   await page.locator('[data-settings-target=device]:visible').click(); await page.locator('[data-settings-target=display]:visible').click();
    const control=page.locator('[data-auto-image-downloads]');await page.locator('label[for="auto-image-downloads"]').waitFor({state:'visible'});await page.waitForTimeout(250);
    if(await control.isChecked()!==enabled)await page.locator('label[for="auto-image-downloads"]').click();
    assert.equal(await control.isChecked(),enabled);await page.keyboard.press('Escape');await page.waitForTimeout(250);
@@ -114,8 +119,8 @@ function thumbnail(color,width=8,height=8){
   findings.push('Repeated forwarding image previews share the same dialog observer root');
   await changeSetting(automaticPage,false);assert.equal(await automaticPage.evaluate(key=>localStorage.getItem(key),preferenceKey),'false');
   resetImage(previews[3]);emit('message.preview_changed');const beforeOptOut=state.downloads;
-  await until(async()=>await scope(automaticPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).isVisible(),'opt-out manual action');await automaticPage.waitForTimeout(400);assert.equal(state.downloads,beforeOptOut);
-  await scope(automaticPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).click();await until(()=>previews[3].downloadState==='ready','manual image with auto disabled');assert.equal(state.downloads,beforeOptOut+1);
+  await until(async()=>await scope(automaticPage,previews[3]).getAttribute('data-preview-download')==='not_downloaded','opt-out manual action');await automaticPage.waitForTimeout(400);assert.equal(state.downloads,beforeOptOut);
+  await loadFromMessage(automaticPage,previews[3]);await until(()=>previews[3].downloadState==='ready','manual image with auto disabled');assert.equal(state.downloads,beforeOptOut+1);
   resetImage(previews[1]);emit('message.preview_changed');await automaticPage.reload();await automaticPage.waitForTimeout(400);assert(!(await automaticPage.locator('[data-auto-image-downloads]').isChecked()));assert.equal(state.downloads,beforeOptOut+1);
   findings.push('The device switch persists across reload; disabling automatic downloads has zero ensure effects and manual loading still works');
   await autoContext.close();
@@ -127,7 +132,7 @@ function thumbnail(color,width=8,height=8){
   await deniedPage.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await until(()=>previews[3].downloadState==='failed','default automatic failure with denied storage');assert.equal(state.downloads,beforeFailure+1);
   for(let i=0;i<3;i++){emit('message.preview_changed');await deniedPage.waitForTimeout(150)}
   await deniedPage.evaluate(()=>{const timeline=document.querySelector('#message-timeline');timeline.scrollTop-=80;timeline.scrollTop+=80});await deniedPage.waitForTimeout(150);assert.equal(state.downloads,beforeFailure+1);
-  state.failNext=false;await scope(deniedPage,previews[3]).getByRole('button',{name:'Load image',exact:true}).click();await until(()=>previews[3].downloadState==='ready','explicit failed-image retry');assert.equal(state.downloads,beforeFailure+2);
+  state.failNext=false;await loadFromMessage(deniedPage,previews[3]);await until(()=>previews[3].downloadState==='ready','explicit failed-image retry');assert.equal(state.downloads,beforeFailure+2);
   await changeSetting(deniedPage,false);await deniedPage.evaluate(()=>window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}})));await deniedPage.locator('[data-device-preference-warning]').waitFor({state:'visible'});await deniedPage.waitForTimeout(250);await deniedPage.keyboard.press('Escape');await deniedPage.waitForTimeout(250);resetImage(previews[3]);emit('message.preview_changed');await deniedPage.waitForTimeout(400);assert.equal(state.downloads,beforeFailure+2);
   findings.push('Denied storage keeps the default working and opt-out in memory; failed images never retry on refresh or scroll and one user action retries once');
   await deniedContext.close();
@@ -138,7 +143,7 @@ function thumbnail(color,width=8,height=8){
   await context.addInitScript(key=>{localStorage.setItem(key,'false');window.copied=[];Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}})},preferenceKey);
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await until(()=>streams.size>0,'SSE');
   await until(async()=>await scope(page,previews[2]).locator('img').evaluate(img=>img.naturalWidth===256),'automatic supplied thumbnail');
-  assert.equal(state.downloads,0);assert.equal(state.originalReads,0);assert.equal(await scope(page,previews[1]).locator('img').getAttribute('src'),null);assert(await scope(page,previews[1]).getByRole('button',{name:'Load image',exact:true}).isVisible());
+  assert.equal(state.downloads,0);assert.equal(state.originalReads,0);assert.equal(await scope(page,previews[1]).locator('img').getAttribute('src'),null);assert.equal(await scope(page,previews[1]).locator('button[data-preview-download]').count(),0);
   findings.push('With the device switch off, only supplied thumbnails load; raw originals and provider browser requests stay at zero');
   const messageRow=n=>page.locator(`[data-message-id="${messages[n].id}"]`);
   assert(!(await messageRow(18).textContent()).includes(previews[1].url));assert.equal(await messageRow(18).locator('[data-original-message]').textContent(),'');assert.equal(await messageRow(18).locator('.oie-bubble [data-preview-id]').count(),1);assert((await messageRow(18).locator('.oie-bubble').textContent()).includes('Bob'));
@@ -167,13 +172,13 @@ function thumbnail(color,width=8,height=8){
    const incoming=styles.find(s=>s.mine==='false'),own=styles.find(s=>s.mine==='true');assert(incoming&&own);assert(own.right>incoming.right+50,JSON.stringify(styles));assert.notEqual(own.color,incoming.color);
   };
   await verifyOwn();
-  const raw=scope(page,previews[1]);await raw.getByRole('button',{name:'Load image',exact:true}).click();await until(()=>previews[1].downloadState==='ready','image retained');await until(async()=>await raw.locator('img').evaluate(img=>img.naturalWidth===256),'requested thumbnail');assert.equal(state.downloads,1);assert.equal(state.originalReads,0);assert(!(await page.locator('#oie-image-viewer').evaluate(el=>el.open)));
+  const raw=scope(page,previews[1]);await loadFromMessage(page,previews[1]);await until(()=>previews[1].downloadState==='ready','image retained');await until(async()=>await raw.locator('img').evaluate(img=>img.naturalWidth===256),'requested thumbnail');assert.equal(state.downloads,1);assert.equal(state.originalReads,0);assert(!(await page.locator('#oie-image-viewer').evaluate(el=>el.open)));
   await raw.locator('[data-preview-expand]').first().click();await until(async()=>await page.locator('#oie-image-viewer .oie-expanded-image').evaluate(img=>img.naturalWidth===600),'retained original expands');assert.equal(state.originalReads,1);assert(await page.locator('#oie-image-viewer').evaluate(el=>el.open));assert.equal(await page.locator('.oie-viewer-toolbar [data-viewer-info]').count(),1);assert.equal((await page.locator('[data-viewer-info]').textContent()).trim(),'');await page.locator('[data-viewer-info]').click();await page.locator('#oie-image-info').waitFor({state:'visible'});assert.equal(await page.locator('[data-image-source]').getAttribute('href'),previews[1].url);assert.equal(await page.locator('[data-image-type]').textContent(),'image/png');assert.equal((await page.locator('[data-image-size]').textContent()).replace(/\D/g,''),String(original.length));
   messages.push({...messages[0],id:id(900),revisionId:id(901),originalText:'A new actual message projection',createdAt:'2026-11-08T13:00:00Z'});emit('message.created');await until(async()=>await page.locator('[data-message-id="'+id(900)+'"]').count()===1,'new message while viewer open');assert(await page.locator('#oie-image-viewer').evaluate(el=>el.open));await page.keyboard.press('Escape');await page.locator('#oie-image-info').waitFor({state:'hidden'});assert(await page.locator('#oie-image-viewer').evaluate(el=>el.open));assert(await page.locator('[data-viewer-info]').evaluate(el=>document.activeElement===el));await page.keyboard.press('Escape');await until(async()=>!(await page.locator('#oie-image-viewer').evaluate(el=>el.open)),'viewer closes');await until(async()=>await raw.locator('[data-preview-expand]').first().evaluate(el=>document.activeElement===el),'viewer restores surviving opener');assert.equal(await page.locator('#message-composer').inputValue(),draft);
   findings.push('Load image retains only after an explicit request; expansion fetches the cached original and survives a new message, restoring focus on Escape');
   const supplied=scope(page,previews[2]);await supplied.locator('[data-preview-expand]').first().click();assert(await page.locator('#oie-image-viewer').evaluate(el=>el.open));await page.waitForTimeout(100);await page.locator('[data-viewer-info]').click();await page.locator('#oie-image-info').waitFor({state:'visible'});await page.locator('[data-image-source]').focus();assert(await page.locator('[data-image-source]').evaluate(el=>document.activeElement===el));await until(()=>previews[2].downloadState==='ready','supplied thumbnail explicit original');await until(async()=>await page.locator('#oie-image-viewer .oie-expanded-image').getAttribute('src')==='/ui/media/'+originalHash+'?original=1','supplied image expansion');assert(await page.locator('[data-image-source]').evaluate(el=>document.activeElement===el));await page.locator('#oie-image-info').waitFor({state:'visible'});assert.equal(await page.locator('[data-image-type]').textContent(),'image/png');await page.keyboard.press('Escape');await page.locator('#oie-image-info').waitFor({state:'hidden'});assert(await page.locator('#oie-image-viewer').evaluate(el=>el.open));await page.keyboard.press('Escape');assert.equal(state.downloads,2);
   findings.push('Expanding an automatic small thumbnail explicitly requests the missing original');
-  state.failNext=true;const failed=scope(page,previews[3]);await failed.getByRole('button',{name:'Load image',exact:true}).click();await until(async()=>await failed.locator('.oie-preview-status').textContent()==='The image could not be downloaded. Try again.','failed download visible');assert(await failed.getByRole('button',{name:'Load image',exact:true}).isEnabled());assert.equal(state.downloads,3);state.failNext=false;await failed.getByRole('button',{name:'Load image',exact:true}).click();await until(()=>previews[3].downloadState==='ready','failed image retry');assert.equal(state.downloads,4);
+  state.failNext=true;const failed=scope(page,previews[3]);await loadFromMessage(page,previews[3]);await until(async()=>await failed.locator('.oie-preview-status').textContent()==='The image could not be downloaded. Try again.','failed download visible');assert.equal(state.downloads,3);state.failNext=false;await loadFromMessage(page,previews[3]);await until(()=>previews[3].downloadState==='ready','failed image retry');assert.equal(state.downloads,4);
   findings.push('A failed original download reports a localized error and supports a safe retry');
   state.room=true;await page.goto(`${base}/?account=${account}&chat=${chat}&lang=en&theme=dark`);await verifyOwn();assert(await page.locator('#message-composer').isDisabled());
   findings.push('Canonical isOwn=true messages align right with primary color in both direct and read-only room views');
@@ -252,6 +257,23 @@ function thumbnail(color,width=8,height=8){
   await viewer.waitFor({state:'hidden'});
   assert.equal(await inlineRow.locator('template[data-viewer-source]').count(),0);
   await until(()=>inlineRow.evaluate(row=>row===document.activeElement),'focus returns to message after image removal');
+  const first=preview(22,'image'), second=preview(22,'image',{id:id(950),url:'https://images.example.test/second.png'});
+  resetImage(previews[3]);
+  previews.push(second);
+  messages[22].originalText=first.url+'\n'+second.url;
+  await page.setViewportSize({width:390,height:844});
+  await page.reload();
+  const row=messageRow(22), trigger=row.locator('[data-message-menu-trigger]');
+  assert.equal(await row.locator('button[data-preview-download]').count(),0);
+  await trigger.click();
+  const secondAction=row.locator('#load-preview-'+second.id);
+  assert.match(await secondAction.textContent(),/Carregar imagem.*second\.png/);
+  await secondAction.click();
+  await until(()=>second.downloadState==='ready','selected image loads from the message menu');
+  assert.equal(previews[3].downloadState,'not_downloaded');
+  await trigger.click();
+  await row.locator('#load-preview-'+first.id).waitFor();
+  assert.equal(await secondAction.isVisible(),false);
   console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -21,8 +21,11 @@ func (v view) infoHref(screen, kind string, pairs ...string) string {
 	return v.href(append(base, pairs...)...)
 }
 func (v view) infoBackHref() string {
+	if v.InfoView == "retention" || v.InfoView == "read-receipts" {
+		return v.infoHref("preferences", "", "infoFocus", v.InfoView)
+	}
 	focus := v.InfoType
-	if v.InfoView == "stars" || v.InfoView == "participants" || v.InfoView == "retention" || v.InfoView == "read-receipts" {
+	if v.InfoView == "stars" || v.InfoView == "participants" || v.InfoView == "preferences" || v.InfoView == "connection" {
 		focus = v.InfoView
 	}
 	return v.infoHref("", "", "infoQuery", "", "infoIncludeRetracted", "", "infoFocus", focus)

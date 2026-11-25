@@ -377,7 +377,11 @@ func (v view) messageSearchAccountCombobox() combobox.Config {
 func (v view) searchableAccountCombobox(id, name string, selected []string) combobox.Config {
 	options := make([]combobox.Option, 0, len(v.Accounts))
 	for _, account := range v.Accounts {
-		options = append(options, combobox.Option{Value: account.Id, Label: account.Label + " · " + account.Address})
+		label, _ := searchIdentityParts(account.Label, account.Address)
+		options = append(options, combobox.Option{
+			Value: account.Id, Label: label,
+			Leading: accountFilterAvatar(v, account, label),
+		})
 	}
 	return combobox.Config{
 		ID: id, Name: name, Label: v.Text.Accounts, Placeholder: v.Text.AllAccounts,
