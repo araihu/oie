@@ -380,7 +380,7 @@ func (v view) searchableAccountCombobox(id, name string, selected []string) comb
 		label, _ := searchIdentityParts(account.Label, account.Address)
 		options = append(options, combobox.Option{
 			Value: account.Id, Label: label,
-			Trailing: accountFilterAvatar(v, account, label),
+			Leading: accountFilterAvatar(v, account, label),
 		})
 	}
 	return combobox.Config{

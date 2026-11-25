@@ -402,6 +402,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await pickerSearch.fill('Work');assert.equal(await picker.getByRole('option').count(),1);assert(await picker.getByRole('option',{name:'Work',exact:true}).isVisible());
   const workRow=picker.getByRole('option',{name:'Work',exact:true});
   assert(await workRow.locator('[data-avatar-account="'+beta+'"][data-avatar-address="work@fixture"] [data-avatar-initials]').isVisible());
+  const optionLayout=await workRow.evaluate(row=>{
+   const checkbox=row.querySelector('input[type=checkbox]').getBoundingClientRect();
+   const avatar=row.querySelector('[data-avatar-initials] > *');
+   const name=row.querySelector('[data-combobox-option-label]').getBoundingClientRect();
+   const bounds=avatar.getBoundingClientRect();
+   return {ordered:checkbox.right<=bounds.left && bounds.right<=name.left,hasBorder:avatar.classList.contains('border-2')};
+  });
+  assert.deepEqual(optionLayout,{ordered:true,hasBorder:true});
   assert(!(await workRow.innerText()).includes('work@fixture'));
   await pickerSearch.fill('work@fixture');assert.equal(await picker.getByRole('option').count(),1);assert.deepEqual(await page.locator('#shared-content-search').evaluate(form=>new FormData(form).getAll('q')),['CAFÉ']);await page.waitForTimeout(350);assert.equal(page.url(),beforeSelection);assert.equal(accountRequests.length,beforeSelectionRequests,'picker typeahead stays local');
   await page.keyboard.press('ArrowDown');await until(async()=>await picker.getByRole('option',{name:'Work',exact:true}).evaluate(option=>document.activeElement===option),'keyboard focuses filtered Work option');await page.keyboard.press('Enter');await until(async()=>await selected()===beta&&new URL(page.url()).searchParams.get('contentAccount')===beta,'keyboard account choice applies immediately');assert.equal(accountRequests.length,beforeSelectionRequests+1);assert.equal(pageDocuments,beforeSelectionDocuments);assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);assert.equal(new URL(page.url()).searchParams.get('contentType'),'links');

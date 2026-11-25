@@ -6,7 +6,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/a-h/templ v0.3.1118
-	github.com/araihu/goshtoso v0.6.5-0.20261125150635-4230a5e09624
+	github.com/araihu/goshtoso v0.6.5-0.20261125173214-fdd8b47d3f7f
 	github.com/araihu/margo v0.0.36
 	github.com/blevesearch/bleve/v2 v2.6.1
 	github.com/coreos/go-oidc/v3 v3.21.0
