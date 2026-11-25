@@ -338,15 +338,23 @@ func sharedActionFeedback(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\"><template data-copy-result=\"success\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = toast.Toast(toast.Config{Tone: toast.ToneSuccess, Message: v.Text.SharedLinkCopied, DisplayDuration: 2500}).WithExpressions(expressions.Toast{DismissAriaLabel: v.Text.Close}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = toast.Toast(toast.Config{Tone: toast.ToneSuccess, Message: v.Text.SharedLinkCopied, DisplayDuration: -1}).WithExpressions(expressions.Toast{DismissAriaLabel: v.Text.Close}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</template>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</template><template data-copy-result=\"failure\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = toast.Toast(toast.Config{Tone: toast.ToneDanger, Message: v.Text.SharedActionFailed, DisplayDuration: -1}).WithExpressions(expressions.Toast{DismissAriaLabel: v.Text.Close}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</template></template>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

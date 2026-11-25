@@ -8,15 +8,20 @@ window.OieRuntime.register('masonry', life => {
   const cardSelector = '[data-favorite-source],[data-shared-item]';
 
   function measure(grid) {
-    // Read the responsive column count and intrinsic sizes in normal grid flow.
-    // Old column assignments could otherwise create implicit columns on resize.
-    grid.removeAttribute('data-masonry');
     const items = [...grid.children].filter(item => !item.hidden);
-    if (!items.some(item => item.matches(cardSelector))) return;
+    if (!items.some(item => item.matches(cardSelector))) return {grid};
     const style = getComputedStyle(grid);
     const columns = style.gridTemplateColumns.split(' ').length;
     const gap = parseFloat(style.columnGap) || 0;
     const heights = items.map(item => item.offsetHeight);
+    return {grid, items, heights, columns, gap};
+  }
+
+  function place({grid, items, heights, columns, gap}) {
+    if (!items) {
+      grid.removeAttribute('data-masonry');
+      return;
+    }
     const bottoms = Array(columns).fill(0);
 
     // Place cards in one grid row, so long galleries never exhaust CSS tracks.
@@ -26,14 +31,14 @@ window.OieRuntime.register('masonry', life => {
       const bottom = top + heights[index] + gap;
       if (card) {
         const column = bottoms.indexOf(top);
-        item.style.setProperty('--masonry-column', String(column + 1));
+        setPosition(item, '--masonry-column', String(column + 1));
         bottoms[column] = bottom;
       } else {
         bottoms.fill(bottom);
       }
-      item.style.setProperty('--masonry-top', top + 'px');
+      setPosition(item, '--masonry-top', top + 'px');
     });
-    grid.setAttribute('data-masonry', '');
+    if (!grid.hasAttribute('data-masonry')) grid.setAttribute('data-masonry', '');
     // The scrollport changes width when the sidebar opens. Observing the
     // grid's height here would feed our own placement back into the observer.
     for (const node of [grid.closest(scroller), ...items]) {
@@ -41,6 +46,21 @@ window.OieRuntime.register('masonry', life => {
       sizes.observe(node, {box: 'border-box'});
       observed.add(node);
     }
+  }
+
+  function setPosition(item, property, value) {
+    if (item.style.getPropertyValue(property) !== value) item.style.setProperty(property, value);
+  }
+
+  function layoutGrids(grids) {
+    // A narrower grid can leave stale placements in implicit columns. CSS
+    // gives those tracks zero width, so reset only the affected grids.
+    const narrowed = [...grids].filter(grid => grid.hasAttribute('data-masonry') &&
+      getComputedStyle(grid).gridTemplateColumns.split(' ').includes('0px'));
+    for (const grid of narrowed) grid.removeAttribute('data-masonry');
+
+    const layouts = Array.from(grids, measure);
+    for (const layout of layouts) place(layout);
   }
 
   const sizes = new ResizeObserver(entries => {
@@ -53,7 +73,7 @@ window.OieRuntime.register('masonry', life => {
         grids.add(target.parentElement);
       }
     }
-    for (const grid of grids) measure(grid);
+    layoutGrids(grids);
   });
 
   window.OieMasonry = {
@@ -64,8 +84,7 @@ window.OieRuntime.register('masonry', life => {
         observed.delete(item);
       }
       if (!root) return;
-      if (root.matches(selector)) measure(root);
-      else for (const grid of root.querySelectorAll(selector)) measure(grid);
+      layoutGrids(root.matches(selector) ? [root] : root.querySelectorAll(selector));
     }
   };
   life.cleanup(() => {

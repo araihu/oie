@@ -40,6 +40,11 @@ templ sharedStarButton(v view, state engineapi.MessageStar){
 
 templ sharedActionFeedback(v view){
 <template data-shared-action-copy data-failed={v.Text.SharedActionFailed} data-downloading={v.Text.SharedDownloading}>
-@toast.Toast(toast.Config{Tone:toast.ToneSuccess,Message:v.Text.SharedLinkCopied,DisplayDuration:2500}).WithExpressions(expressions.Toast{DismissAriaLabel:v.Text.Close})
+<template data-copy-result="success">
+@toast.Toast(toast.Config{Tone:toast.ToneSuccess,Message:v.Text.SharedLinkCopied,DisplayDuration:-1}).WithExpressions(expressions.Toast{DismissAriaLabel:v.Text.Close})
+</template>
+<template data-copy-result="failure">
+@toast.Toast(toast.Config{Tone:toast.ToneDanger,Message:v.Text.SharedActionFailed,DisplayDuration:-1}).WithExpressions(expressions.Toast{DismissAriaLabel:v.Text.Close})
+</template>
 </template>
 }
