@@ -3,53 +3,88 @@ window.OieRuntime.register('masonry', life => {
   if (typeof ResizeObserver !== 'function') return;
 
   const selector = '[data-masonry-grid]';
+  const scroller = '.oie-shared-scroll';
   const observed = new Set();
-  const dirty = new Set();
-  let frame;
+  const cardSelector = '[data-favorite-source],[data-shared-item]';
 
-  // Measure intrinsic card heights and keep the chronological DOM order.
-  // The grid's 1px tracks represent the height plus the gap below each card.
   function measure(grid) {
     const items = [...grid.children].filter(item => !item.hidden);
-    const hasCards = items.some(item => item.matches('[data-favorite-source],[data-shared-item]'));
-    grid.toggleAttribute('data-masonry', hasCards);
-    if (!hasCards) {
-      for (const item of items) item.style.removeProperty('grid-row-end');
+    if (!items.some(item => item.matches(cardSelector))) return {grid};
+    const style = getComputedStyle(grid);
+    const columns = style.gridTemplateColumns.split(' ').length;
+    const gap = parseFloat(style.columnGap) || 0;
+    const heights = items.map(item => item.offsetHeight);
+    return {grid, items, heights, columns, gap};
+  }
+
+  function place({grid, items, heights, columns, gap}) {
+    if (!items) {
+      grid.removeAttribute('data-masonry');
       return;
     }
-    const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
-    const spans = items.map(item => `span ${Math.max(1, Math.ceil(item.offsetHeight + gap))}`);
+    const bottoms = Array(columns).fill(0);
+
+    // Place cards in one grid row, so long galleries never exhaust CSS tracks.
     items.forEach((item, index) => {
-      if (item.style.gridRowEnd !== spans[index]) item.style.gridRowEnd = spans[index];
-      if (!observed.has(item)) {
-        sizes.observe(item, {box: 'border-box'});
-        observed.add(item);
+      const card = item.matches(cardSelector);
+      const top = card ? Math.min(...bottoms) : Math.max(...bottoms);
+      const bottom = top + heights[index] + gap;
+      if (card) {
+        const column = bottoms.indexOf(top);
+        setPosition(item, '--masonry-column', String(column + 1));
+        bottoms[column] = bottom;
+      } else {
+        bottoms.fill(bottom);
       }
+      setPosition(item, '--masonry-top', top + 'px');
     });
+    if (!grid.hasAttribute('data-masonry')) grid.setAttribute('data-masonry', '');
+    // The scrollport changes width when the sidebar opens. Observing the
+    // grid's height here would feed our own placement back into the observer.
+    for (const node of [grid.closest(scroller), ...items]) {
+      if (!node || observed.has(node)) continue;
+      sizes.observe(node, {box: 'border-box'});
+      observed.add(node);
+    }
+  }
+
+  function setPosition(item, property, value) {
+    if (item.style.getPropertyValue(property) !== value) item.style.setProperty(property, value);
+  }
+
+  function layoutGrids(grids) {
+    // A narrower grid can leave stale placements in implicit columns. CSS
+    // gives those tracks zero width, so reset only the affected grids.
+    const narrowed = [...grids].filter(grid => grid.hasAttribute('data-masonry') &&
+      getComputedStyle(grid).gridTemplateColumns.split(' ').includes('0px'));
+    for (const grid of narrowed) grid.removeAttribute('data-masonry');
+
+    const layouts = Array.from(grids, measure);
+    for (const layout of layouts) place(layout);
   }
 
   const sizes = new ResizeObserver(entries => {
+    const grids = new Set();
     for (const {target} of entries) {
-      const grid = target.parentElement;
-      if (grid?.matches(selector)) dirty.add(grid);
+      if (!target.isConnected) continue;
+      if (target.matches(scroller)) {
+        for (const grid of target.querySelectorAll(selector)) grids.add(grid);
+      } else if (target.parentElement?.matches(selector)) {
+        grids.add(target.parentElement);
+      }
     }
-    if (!frame) frame = life.raf(() => {
-      frame = 0;
-      for (const grid of dirty) if (grid.isConnected) measure(grid);
-      dirty.clear();
-    });
+    layoutGrids(grids);
   });
 
   window.OieMasonry = {
     layout(root) {
       for (const item of observed) {
-        if (item.isConnected && item.parentElement?.matches(selector)) continue;
+        if (item.isConnected && (item.matches(scroller) || item.parentElement?.matches(selector))) continue;
         sizes.unobserve(item);
         observed.delete(item);
       }
       if (!root) return;
-      if (root.matches(selector)) measure(root);
-      else for (const grid of root.querySelectorAll(selector)) measure(grid);
+      layoutGrids(root.matches(selector) ? [root] : root.querySelectorAll(selector));
     }
   };
   life.cleanup(() => {

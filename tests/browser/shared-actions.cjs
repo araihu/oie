@@ -182,9 +182,77 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    await pressed(action,true);
    await action.tap();
    await pressed(action,false);
+   await mobile.evaluate(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{window.lastCopied=value}}}));
+   const tile=mobile.locator(`[data-shared-item="${items[0].id}"]`);
+   await tile.locator('[data-shared-menu-trigger]').tap();
+   await tile.getByRole('menuitem',{name:'Copiar link',exact:true}).tap();
+   const toast=mobile.getByRole('alert').filter({hasText:'Link copiado.'});
+   await toast.getByRole('button',{name:'Fechar'}).tap();
+   await toast.waitFor({state:'detached'});
+   assert.equal(await mobile.evaluate(()=>window.lastCopied),items[0].url);
   }finally{await touch.close()}
 
-  await open(0);assert.equal(state.ensures,0);const before=state.media;await menu(0).getByRole('menuitem',{name:'Copy link',exact:true}).click();await until(async()=>await page.evaluate(()=>copied.length)===1,'URL copied');assert.equal(await page.evaluate(()=>copied[0]),items[0].url);assert.equal(state.media,before);await until(async()=>card(0).locator('[data-shared-menu-trigger]').evaluate(n=>n===document.activeElement),'menu focus restored');
+  const copyLink=async n=>{
+   await open(n);
+   await menu(n).getByRole('menuitem',{name:'Copy link',exact:true}).click();
+  };
+  const copiedToast=page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Link copied.'});
+  const before=state.media, beforeCopy=await card(0).boundingBox();
+  await page.evaluate(()=>{
+   const clipboard=navigator.clipboard,write=clipboard.writeText;
+   clipboard.writeText=value=>new Promise(resolve=>{
+    window.finishCopy=()=>{clipboard.writeText=write;resolve(write(value));};
+   });
+  });
+  await copyLink(0);
+  assert.equal(await copiedToast.count(),0);
+  const duringCopy=await card(0).evaluate(async tile=>{
+   const scroll=tile.closest('.oie-shared-scroll');
+   const sample=()=>({rect:tile.getBoundingClientRect().toJSON(),scrollTop:scroll.scrollTop});
+   const before=sample();
+   let drift=0;
+   for(let frame=0;frame<8;frame++){
+    await new Promise(requestAnimationFrame);
+    const current=sample();
+    drift=Math.max(drift,Math.abs(current.scrollTop-before.scrollTop),
+     ...['x','y','width','height'].map(key=>Math.abs(current.rect[key]-before.rect[key])));
+   }
+   return drift;
+  });
+  assert(duringCopy<=1,'pending clipboard write keeps card and scroll position stable');
+  assert.deepEqual(await card(0).boundingBox(),beforeCopy);
+  await page.evaluate(()=>window.finishCopy());
+  await copiedToast.waitFor();
+  assert.equal(await page.evaluate(()=>copied[0]),items[0].url);
+  assert.equal(state.media,before);
+  assert.equal(state.ensures,0);
+  await until(()=>card(0).locator('[data-shared-menu-trigger]').evaluate(n=>n===document.activeElement),'menu focus restored');
+  assert.deepEqual(await card(0).boundingBox(),beforeCopy);
+  await copyLink(1);
+  await copiedToast.waitFor();
+  assert.equal(await copiedToast.count(),1);
+  assert.deepEqual(await page.evaluate(()=>copied),[items[0].url,items[1].url]);
+  await copiedToast.waitFor({state:'detached',timeout:6000});
+  await copyLink(0);
+  const closeToast=copiedToast.getByRole('button',{name:'Close'});
+  await closeToast.focus();
+  await page.waitForTimeout(3000);
+  assert.equal(await closeToast.evaluate(button=>button===document.activeElement),true);
+  await closeToast.press('Enter');
+  await copiedToast.waitFor({state:'detached'});
+  assert.equal(await card(0).locator('[data-shared-menu-trigger]').evaluate(n=>n===document.activeElement),true);
+  await copyLink(0);
+  await copiedToast.waitFor();
+  await page.evaluate(()=>{
+   const clipboard=navigator.clipboard,write=clipboard.writeText;
+   clipboard.writeText=async()=>{clipboard.writeText=write;throw Error('clipboard denied');};
+  });
+  await copyLink(1);
+  const failedToast=page.getByRole('alert').filter({hasText:'This action could not be completed.'});
+  await failedToast.waitFor();
+  assert.equal(await copiedToast.count(),0,'a failed copy replaces the prior confirmation');
+  await failedToast.getByRole('button',{name:'Close'}).click();
+  await failedToast.waitFor({state:'detached'});
   await open(0);
   state.registrationPending=new Promise(resolve=>{acknowledgeRegistration=resolve});
   const saved=page.waitForEvent('download'),beforeSave=state.media;
@@ -335,6 +403,25 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    const focus=await copy.evaluate(painted);assert(normal.reduce((sum,v,i)=>sum+Math.abs(v-focus[i]),0)>20,`${width}/${mode}: visible keyboard focus`);
    await page.keyboard.press('Escape');await copy.waitFor({state:'hidden'});await until(async()=>await trigger.evaluate(el=>el===document.activeElement),'message menu restores trigger focus');
   }
+  await page.goto(base+'/?'+new URLSearchParams({chat,account,open:'details',infoView:'shared',infoType:'media',lang:'en',theme:'dark'}));
+  const drawer=page.getByRole('dialog').filter({has:page.locator('#info-shared-results')});
+  const drawerTile=drawer.locator(`[data-shared-item="${items[0].id}"]`);
+  const drawerTrigger=drawerTile.locator('[data-shared-menu-trigger]');
+  await drawerTrigger.focus();
+  await drawerTrigger.press('ArrowDown');
+  await drawerTile.getByRole('menuitem',{name:'Copy link',exact:true}).press('Enter');
+  const drawerToast=drawer.getByRole('alert').filter({hasText:'Link copied.'});
+  await drawerToast.waitFor();
+  assert.deepEqual(await page.evaluate(()=>copied),[items[0].url]);
+  assert.equal(await drawerTrigger.getAttribute('aria-expanded'),'false');
+  await until(()=>drawerTrigger.evaluate(el=>el===document.activeElement),'drawer copy restores menu focus');
+  const closeDrawerToast=drawerToast.getByRole('button',{name:'Close'});
+  await closeDrawerToast.focus();
+  assert.equal(await closeDrawerToast.evaluate(el=>el===document.activeElement),true);
+  await closeDrawerToast.press('Enter');
+  await drawerToast.waitFor({state:'detached'});
+  assert(await drawer.isVisible(),'copy and dismissal keep the drawer open');
+  assert.equal(await drawerTrigger.evaluate(el=>el===document.activeElement),true);
   assert.deepEqual(errors,[]);await c.close();
   for(const locale of ['en','pt-BR']){const m=await browser.newContext({viewport:{width:390,height:844},locale,hasTouch:true,reducedMotion:'reduce'});await m.addInitScript(()=>localStorage.setItem('oie.device.auto-image-downloads.v1','false'));const p=await m.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/?section=media&lang='+locale);await p.waitForFunction(()=>window.OieRuntime?.generation>0);const first=p.locator('[data-shared-item]').first();await first.locator('[data-shared-menu-trigger]').tap();await first.getByRole('menuitem',{name:locale==='en'?'Copy link':'Copiar link',exact:true}).waitFor({state:'visible'});await until(async()=>{const b=await first.locator('[role=menu]').boundingBox();return b&&b.x>=0&&b.x+b.width<=390},'mobile menu placement settles inside viewport');await p.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await p.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);
    await first.getByRole('menuitem',{name:locale==='en'?'Go to message':'Ir para a mensagem',exact:true}).tap();
