@@ -212,6 +212,54 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
   }
 }
 
+async function verifyConversation(browser, server) {
+  const create = async (path, data, key) => {
+    const response = await server.api.post(path, {data, headers: {'Idempotency-Key': key}});
+    assert(response.ok(), await response.text());
+    return response.json();
+  };
+  const account = await create('/api/v1/accounts', {protocol:'xmpp', address:'owner@example.test', label:'Owner'},
+    '019a5df0-0000-7000-8000-000000000011');
+  const chat = await create('/api/v1/conversations', {accountId:account.id, address:'reader@example.test'},
+    '019a5df0-0000-7000-8000-000000000012');
+  const page = await browser.newPage({ignoreHTTPSErrors:true, viewport:{width:390,height:860}, reducedMotion:'reduce'});
+  try {
+    await server.signIn(page, '/?chat=' + chat.id + '&open=details&lang=en');
+    await page.locator('[data-info-entry=preferences]').click();
+    await page.locator('[data-info-entry=retention]').click();
+    const form = page.locator('[data-conversation-retention-form]');
+    const trigger = form.locator('#retention-override-trigger');
+    const days = form.locator('#retention-days-override');
+    const posts = [];
+    page.on('request', request => {
+      if (request.method() === 'POST' && request.url().includes('/ui/settings/retention?')) posts.push(request);
+    });
+    const read = async () => (await server.api.get('/api/v1/conversations/' + chat.id + '/retention')).json();
+    const choose = async index => {
+      await trigger.click();
+      await form.getByRole('option').nth(index).click();
+    };
+    const saved = () => page.waitForResponse(response => response.request().method() === 'POST' &&
+      response.url().includes('/ui/settings/retention?') && response.ok());
+    await choose(1);
+    await days.fill('48');
+    await page.waitForTimeout(200);
+    assert.equal(posts.length, 0);
+    await Promise.all([saved(), days.press('Enter')]);
+    assert.equal((await read()).days, 48);
+    await Promise.all([saved(), choose(2)]);
+    assert.equal((await read()).days, 0);
+    await Promise.all([saved(), choose(0)]);
+    assert.equal((await read()).days, null);
+    assert.equal(posts.length, 3);
+    await form.locator('button[type=submit]').waitFor({state:'hidden'});
+    await page.locator('[data-info-back]').click();
+    await page.waitForFunction(() => document.activeElement?.dataset.infoEntry === 'retention');
+  } finally {
+    await page.close();
+  }
+}
+
 (async () => {
   const server = await startHostedOie(binary);
   let browser;
@@ -219,7 +267,8 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
     browser = await chromium.launch();
     await verify(browser, server, {width: 1440, lang: 'en', theme: 'light', engine: 'Engine', device: 'This device'});
     await verify(browser, server, {width: 390, lang: 'pt-BR', theme: 'dark', engine: 'Motor', device: 'Este dispositivo'});
-    console.log('PASS: engine retention tab, blur saving, stable focus and geometry, invalid input, retry and concurrent revisions');
+    await verifyConversation(browser, server);
+    console.log('PASS: engine and conversation retention, blur saving, stable focus and geometry, invalid input, retry and concurrent revisions');
   } finally {
     await browser?.close();
     await server.stop();

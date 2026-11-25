@@ -589,7 +589,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
         await context.setOffline(false);
         let field;
         if (width === 390) {
-          await page.goto(route + '&open=details&infoView=preferences');
+          await page.goto(route + '&open=details');
           await page.locator('[data-open-conversation-search]').filter({visible: true}).click();
           field = page.locator('#conversation-search-query');
         } else {

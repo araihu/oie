@@ -42,7 +42,7 @@ const roomChat = () => state.chat === 'room';
 const chatPage = () => roomChat() ? 'room' : 'dminfo';
 const chatName = () => roomChat() ? state.name : people.ana;
 const inboxDraft = {room:'',direct:''}, sent = {room:[],direct:[]};
-const shared = {media:{q:'',retracted:false},links:{q:'',retracted:false},documents:{q:'',retracted:false}};
+const shared = new Map(['media', 'links', 'documents'].map(id => [id, {q:'', retracted:false}]));
 let queryPeople='', queryMessages='', draft=null, current='', statusTimer;
 const historyFrames = new Map();
 const parents = {engine:'settings',device:'settings',emoji:'settings',keys:'settings',about:'settings',diagnostics:'settings',danger:'settings',signout:'settings',storage:'device',notifications:'device',display:'device',access:'engine',edit:'manage',review:'edit',manage:'room',bans:'manage',person:'participants',participants:'room',connection:'room',pref:'room',media:'room',documents:'room',links:'room',stars:'room',retention:'pref',receipts:'pref',viewer:'media',account:'accounts',addaccount:'accounts',search:'room'};
@@ -126,10 +126,10 @@ const files = [
   {id:'oldnotes',cat:'documents',label:'Rascunho.txt|Draft.txt',time:'14:10',text:'Rascunho do roteiro.|Draft outline.',retracted:true},
   {id:'site',cat:'links',label:'Oiê · XMPP',time:'14:12',text:'https://github.com/araihu/oie'}
 ];
-const isShared = id => Object.hasOwn(shared,id);
+const isShared = id => shared.has(id);
 const fileMeta = f => f.time+(f.retracted?' · '+t('Retraída|Retracted'):'');
 function results() {
-  const filter = shared[current];
+  const filter = shared.get(current);
   const found = files.filter(f=>f.cat===current && (!f.retracted || filter.retracted) && t(f.label).toLocaleLowerCase().includes(filter.q.toLocaleLowerCase().trim()));
   if(!found.length) return `<p class="empty" role="status">${t('Nenhum resultado. Tente outra busca.|No results. Try another search.')}</p>`;
   const section = `<h2 class="dateheading">${t('24 de novembro|November 24')}</h2>`;
@@ -141,8 +141,8 @@ const observer = new ResizeObserver(entries => {
 });
 function measureMedia(){observer.disconnect();document.querySelectorAll('.tile').forEach(tile=>observer.observe(tile));}
 function gallery(){
-  const f=shared[current];
-  return `<nav class="segment" aria-label="${t('Compartilhados|Shared content')}">${Object.keys(shared).map(k=>`<a href="#${k}" data-go="${k}" ${k===current?'aria-current="page"':''}>${nameOf(k)}</a>`).join('')}</nav><div class="searchbar">${searchBox('file-search','Buscar arquivos e links|Search files and links',f.q)}${check('retracted','Incluir retraídas|Include retracted',f.retracted)}</div><div id="results">${results()}</div>`;
+  const f=shared.get(current);
+  return `<nav class="segment" aria-label="${t('Compartilhados|Shared content')}">${[...shared.keys()].map(k=>`<a href="#${k}" data-go="${k}" ${k===current?'aria-current="page"':''}>${nameOf(k)}</a>`).join('')}</nav><div class="searchbar">${searchBox('file-search','Buscar arquivos e links|Search files and links',f.q)}${check('retracted','Incluir retraídas|Include retracted',f.retracted)}</div><div id="results">${results()}</div>`;
 }
 function filteredPeople(){
   const match=id=>people[id].toLocaleLowerCase().includes(queryPeople.toLocaleLowerCase());
@@ -276,7 +276,7 @@ function findTarget(key,root){
   if(key.startsWith('go-'))return [...root.querySelectorAll(`[data-go="${CSS.escape(key.slice(3))}"]`)].find(e=>e.getClientRects().length);
   if(key.startsWith('person-'))return root.querySelector(`[data-person="${CSS.escape(key.slice(7))}"]`);
   if(key.startsWith('file-'))return root.querySelector(`[data-file="${CSS.escape(key.slice(5))}"]`);
-  return $(key);
+  return document.getElementById(key);
 }
 function modalMode(){
   const lock=phone.matches&&Boolean(current);
@@ -407,7 +407,7 @@ document.addEventListener('input',e=>{
   const el=e.target;
   if(el.form?.id==='add-account')el.setCustomValidity('');
   switch(el.id){
-    case 'file-search':shared[current].q=el.value;stopAudio();renderResults();break;
+    case 'file-search':if (!shared.has(current)) return;shared.get(current).q=el.value;stopAudio();renderResults();break;
     case 'people-search':queryPeople=el.value;$('people-list').innerHTML=filteredPeople();break;
     case 'msg-search':queryMessages=el.value;$('msg-results').innerHTML=messageResults();break;
     case 'draft':inboxDraft[state.chat]=el.value;break;
@@ -422,7 +422,7 @@ document.addEventListener('change',e=>{
     $('remote-fields').hidden=value==='local';
     $('mode-url').disabled=value==='local';return;
   }
-  if(key==='retracted'){shared[current].retracted=value;stopAudio();renderResults();return;}
+  if(key==='retracted'){if (!shared.has(current)) return;shared.get(current).retracted=value;stopAudio();renderResults();return;}
   if(key==='retention'){
     $('custom-field').hidden=value!=='custom';
     if(value==='custom'){$('custom-days').value=prefValue('retention')==='custom'?prefValue('days'):'';$('custom-days').focus();return;}
@@ -430,7 +430,7 @@ document.addEventListener('change',e=>{
   if(['retention','receipts'].includes(key)){savePolicy(key,{[key]:value});return;}
   if(['quiet','offline','archive'].includes(key))prefs[state.chat][key]=value;
   else if(key==='lang'){english=value==='en';renderChat();paint();$('body').querySelector('[data-key=lang]').focus();}
-  else state[key]=value;
+  else if (Object.hasOwn(state,key)) state[key]=value;
   announce('Preferência atualizada|Preference updated');
 });
 document.addEventListener('focusout',e=>{if(e.target.id==='custom-days'&&e.target.value)confirmDays(e.target)});
