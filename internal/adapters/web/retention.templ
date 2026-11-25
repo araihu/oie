@@ -57,7 +57,7 @@ templ retentionForm(v view, id string, p retentionView) {
 	{{ region := retentionRegionID(id) }}
 	<form class="oie-retention-form" method="post" action={templ.URL(v.retentionHref(id))}
 		hx-post={v.retentionHref(id)} hx-target={"#"+region} hx-swap="outerHTML settle:0ms show:none" hx-disable="find fieldset" hx-sync="this:drop"
-		x-data="{error:'', sent:false, pending:false}"
+		data-conversation-retention-form x-data="{error:'', sent:false, pending:false}"
 		data-unavailable={v.Text.RetentionUnavailable} data-invalid={v.Text.InvalidForm} data-forbidden={v.Text.CSRFError}
 		x-on:htmx:before:request="error = ''; sent = true; pending = true"
 		x-on:htmx:finally:request="pending = false"
@@ -65,12 +65,12 @@ templ retentionForm(v view, id string, p retentionView) {
 		x-on:htmx:after:request="const status = $event.detail.ctx.response.status; if (status !== 200 && status !== 409) { $event.preventDefault(); error = status === 403 ? $el.dataset.forbidden : status === 422 ? $el.dataset.invalid : $el.dataset.unavailable }"
 	>
 		@retentionIdentity(v, p.Local.Revision)
-		<fieldset class="oie-retention-fields">
+		@retentionHelp(v)
+		<fieldset class="oie-retention-fields" x-bind:disabled="pending">
 			@retentionChoice(v,"override",p.Conversation.Title,p.Local.Days,p.Local.GlobalDays,true)
 		</fieldset>
-		@retentionHelp(v)
 		<div class="oie-retention-actions">
-			@button.Button(button.WithID(region+"-save"),button.WithType("submit"),button.WithTone(button.TonePrimary),button.WithAttrs(templ.Attributes{"x-bind:aria-disabled":"String(pending)"})){ {v.Text.RetentionSave} }
+			@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"x-cloak":true,"x-show":"error && !pending"})){ {v.Text.Retry} }
 			<div>
 				if p.Notice != "" {
 					<p role="alert" x-show="!sent">{p.Notice}</p>

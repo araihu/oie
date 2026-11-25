@@ -53,7 +53,7 @@ window.OieRuntime.register('shared-content', life => {
   heading.className = 'oie-shared-month';
   heading.textContent = window.OieTime.format(date, {month:'long',year:'numeric'});
   grid.className = 'oie-shared-grid';
-  if (results.id === 'shared-content-results') grid.setAttribute('data-masonry-grid', '');
+  if (results.id === 'shared-content-results' || results.dataset.contentType === 'media') grid.setAttribute('data-masonry-grid', '');
   section.append(heading, grid);
   return section;
  }

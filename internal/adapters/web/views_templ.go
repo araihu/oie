@@ -3997,6 +3997,7 @@ func sendKey(v view) string {
 
 // Keep Goshtoso's drawers, including their focus and dismissal behavior.
 func workspaceDrawer(config drawer.Config) templ.Component {
+	config.NonModalMinWidth = 1100
 	config.PanelClass = strings.TrimSpace("oie-drawer " + config.PanelClass)
 	return drawer.Drawer(config)
 }
@@ -4678,7 +4679,7 @@ func accountOverview(v view) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = link.Link(v.accountsHref(a.Id), link.WithRootClass("oie-account-summary"), link.WithAttrs(templ.Attributes{"data-manage-account": a.Id})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var215), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = link.Link(v.accountsHref(a.Id), link.WithRootClass("oie-account-summary oie-destination"), link.WithAttrs(templ.Attributes{"data-manage-account": a.Id})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var215), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -4937,7 +4938,7 @@ func accountDetail(v view, a engineapi.Account) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-profile-row"), button.WithAttrs(templ.Attributes{
+			templ_7745c5c3_Err = button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-profile-row oie-destination"), button.WithAttrs(templ.Attributes{
 				"aria-label": v.Text.AccountRename, "aria-describedby": "account-profile-name",
 				"x-on:click": "$dispatch('modal:open', {id: 'account-name-dialog'})",
 			})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var231), templ_7745c5c3_Buffer)
@@ -5037,7 +5038,7 @@ func accountDetail(v view, a engineapi.Account) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = link.Link(v.contactsHref(a.Id, ""), link.WithRootClass("oie-profile-row"), link.WithAttrs(templ.Attributes{"data-account-contacts-link": a.Id})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var235), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = link.Link(v.contactsHref(a.Id, ""), link.WithRootClass("oie-profile-row oie-destination"), link.WithAttrs(templ.Attributes{"data-account-contacts-link": a.Id})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var235), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -5077,7 +5078,7 @@ func accountDetail(v view, a engineapi.Account) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = link.Link(v.capabilitiesHref(a.Id), link.WithRootClass("oie-profile-row"), link.WithAttrs(templ.Attributes{"data-account-capabilities": a.Id})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var237), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = link.Link(v.capabilitiesHref(a.Id), link.WithRootClass("oie-profile-row oie-destination"), link.WithAttrs(templ.Attributes{"data-account-capabilities": a.Id})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var237), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

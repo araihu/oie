@@ -1,8 +1,8 @@
 # XMPP room management
 
-Open **More → Manage room** in a joined room. The available actions depend on
+Select the room avatar and open **Manage room** below its name, or choose **More → Manage room**. The available actions depend on
 the account's room permissions. **Details** shows the room image and offers
-editable name and multiline topic fields with one **Save changes** button.
+**Edit name and topic** when both fields can be edited. Review the old and proposed values, then choose **Publish changes** or return to editing. The room description is displayed when supplied by the service.
 Owners can change the name and can replace or remove the room image when
 the service supports room vCards. Moderators can change the topic and adjust current occupants' roles.
 To delete a room you own, open **Destructive actions** in **Details**, select

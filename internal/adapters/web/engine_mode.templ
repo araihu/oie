@@ -9,40 +9,38 @@ import (
 )
 
 templ engineModeSettings(v view) {
-	@settingsSubpage("engine-settings", v.Text.EngineMode, v.Text.BackToSettings) {
-		<form id="engine-mode-form" class="oie-engine-mode" action="/ui/engine-mode" method="post" novalidate data-failed={ v.Text.EngineModeUnavailable }>
-			<input type="hidden" name="csrf" value={ v.CSRF }/>
-			<input type="hidden" name="selection" value={ v.EngineMode.selection }/>
-			<input type="hidden" name="apiKeyAddress"/>
-			<fieldset class="grid gap-3">
-				<div role="radiogroup" aria-label={ v.Text.EngineMode }>
-					@radio.RadioBar() {
-						@radio.Radio(radio.Config{ID: "engine-mode-local", Name: "mode", Value: "local", Label: v.Text.EngineModeLocal, Checked: v.EngineMode.url == "", Segmented: true})
-						@radio.Radio(radio.Config{ID: "engine-mode-remote", Name: "mode", Value: "remote", Label: v.Text.EngineModeRemote, Checked: v.EngineMode.url != "", Segmented: true})
-					}
-				</div>
-				<div class="grid gap-3" data-engine-address>
-					@textinput.TextInput(textinput.Config{
-						ID: "engine-mode-url", Name: "url", Label: v.Text.EngineModeAddress,
-						Type: textinput.TypeURL, Value: v.EngineMode.url, MaxLength: 2048, Autocomplete: "off",
-					})
-					@textinput.TextInput(textinput.Config{
-						ID: "engine-mode-key", Name: "apiKey", Label: v.Text.EngineModeKey,
-						Type: textinput.TypePassword, MaxLength: 512, Autocomplete: "off",
-						Placeholder: engineKeyPlaceholder(v),
-						InputAttrs: templ.Attributes{"data-saved-placeholder": engineKeyPlaceholder(v)},
-					})
-				</div>
-				<div class="flex flex-wrap items-center gap-2">
-					@button.Button(button.WithType("submit"), button.WithRootClass("oie-engine-mode-submit")) {
-						<span data-engine-save-label>{ v.Text.EngineModeSave }</span>
-						<span data-engine-save-pending>{ v.Text.EngineModeConnecting }</span>
-					}
-					<p class="sr-only" role="status" data-engine-connecting={ v.Text.EngineModeConnecting }></p>
-				</div>
-			</fieldset>
-		</form>
-	}
+	<form id="engine-mode-form" class="oie-engine-mode" action="/ui/engine-mode" method="post" novalidate data-failed={ v.Text.EngineModeUnavailable }>
+		<input type="hidden" name="csrf" value={ v.CSRF }/>
+		<input type="hidden" name="selection" value={ v.EngineMode.selection }/>
+		<input type="hidden" name="apiKeyAddress"/>
+		<fieldset class="grid gap-3">
+			<div role="radiogroup" aria-label={ v.Text.EngineMode }>
+				@radio.RadioBar() {
+					@radio.Radio(radio.Config{ID: "engine-mode-local", Name: "mode", Value: "local", Label: v.Text.EngineModeLocal, Checked: v.EngineMode.url == "", Segmented: true})
+					@radio.Radio(radio.Config{ID: "engine-mode-remote", Name: "mode", Value: "remote", Label: v.Text.EngineModeRemote, Checked: v.EngineMode.url != "", Segmented: true})
+				}
+			</div>
+			<div class="grid gap-3" data-engine-address>
+				@textinput.TextInput(textinput.Config{
+					ID: "engine-mode-url", Name: "url", Label: v.Text.EngineModeAddress,
+					Type: textinput.TypeURL, Value: v.EngineMode.url, MaxLength: 2048, Autocomplete: "off",
+				})
+				@textinput.TextInput(textinput.Config{
+					ID: "engine-mode-key", Name: "apiKey", Label: v.Text.EngineModeKey,
+					Type: textinput.TypePassword, MaxLength: 512, Autocomplete: "off",
+					Placeholder: engineKeyPlaceholder(v),
+					InputAttrs:  templ.Attributes{"data-saved-placeholder": engineKeyPlaceholder(v)},
+				})
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				@button.Button(button.WithType("submit"), button.WithRootClass("oie-engine-mode-submit")) {
+					<span data-engine-save-label>{ v.Text.EngineModeSave }</span>
+					<span data-engine-save-pending>{ v.Text.EngineModeConnecting }</span>
+				}
+				<p class="sr-only" role="status" data-engine-connecting={ v.Text.EngineModeConnecting }></p>
+			</div>
+		</fieldset>
+	</form>
 }
 
 func engineKeyPlaceholder(v view) string {
@@ -59,12 +57,14 @@ templ engineUnavailableState(v view) {
 			@link.Link(v.RemoteSignInURL, link.WithAppearance(link.AppearanceButton), link.WithAttrs(templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"})) {
 				{ v.Text.EngineModeOpenBrowser }
 			}
-			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id: 'engine-settings'})"})) {
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('drawer:open', {id:'settings', page:'engine'})"})) {
 				{ v.Text.EngineModeEnterKey }
 			}
 		</div>
 	} else {
 		@emptystate.EmptyState(emptystate.Config{Title: v.Text.Unavailable, Description: v.Text.UnavailableBody})
-		@link.Link(v.href()) { { v.Text.Retry } }
+		@link.Link(v.href()) {
+			{ v.Text.Retry }
+		}
 	}
 }

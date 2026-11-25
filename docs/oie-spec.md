@@ -864,7 +864,7 @@ See [message notifications](notifications.md) for platform behavior.
 
 Use Goshtoso for the web UI, guided by the four supplied WhatsApp desktop screenshots. On wide screens, use navigation, a searchable/filterable conversation list, and the active conversation workspace. Include account identity, message bubbles, composer, media/link cards, room/contact details, and settings.
 
-**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. The General tab groups About and Diagnostics with the other settings pages. In hosted settings, Sign out lives in the Engine tab and asks for confirmation. Signing out ends the session for that browser while the engine keeps running. About shows the Oiê logo, license, and third-party attributions.
+**AGREED:** general app settings have one entry in the main navigation footer beside the account switcher. On mobile, use that same footer inside the navigation menu. Do not repeat general settings in the conversation-list footer, chat actions, or Media and Links header. Account connection management remains available through the account switcher. The desktop navigation has no logo header. General settings groups About and Diagnostics with the other settings pages. In hosted settings, Sign out lives in the drawer footer and asks for confirmation. Signing out ends the session for that browser while the engine keeps running. About shows the Oiê logo, license, and third-party attributions.
 
 **AGREED:** the default conversation wallpaper uses a dense arrangement of subtle outline doodles. The artwork includes a hammer, sickle, GNU mascot, Brazil outline, Christ the Redeemer, football, mobile phone, paper plane, speech balloon, stars and Go gopher, along with Brazilian motifs such as the berimbau, caju, mandacaru and jangada. Small details fill the spaces between larger drawings. The 480 × 480 CSS-pixel tile joins seamlessly in both directions and stays subtle behind messages in light and dark themes.
 
@@ -993,9 +993,7 @@ Internationalization is required from the start. Ship **English (`en`) and Brazi
 
 **AGREED:** General settings uses searchable comboboxes for language and display time zone. The language selector shows a leading flag emoji in each option and in the selected value.
 
-**AGREED:** the settings drawer groups preferences into General, Composition,
-and This device tabs. Composition uses a searchable multi-select for emoji
-shortcut languages.
+**AGREED:** the settings drawer groups appearance, locale, display time zone and the searchable emoji shortcut language multi-select on its first page. This device groups media and display, notifications and storage according to capability. Engine groups shared retention and read-receipt defaults with eligible engine connection settings.
 
 Use and expand reusable Goshtoso expression support rather than hardcoding user-facing expressions. Oiê owns product copy, locale selection, complete parameterized/plural messages, and locale-aware date/time/number/size formatting. Cover labels, statuses, errors, notifications, accessibility text, and offline UI.
 

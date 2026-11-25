@@ -44,7 +44,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 		}
 	}
 	v.InfoView = q.Get("infoView")
-	if v.InfoView != "shared" && v.InfoView != "stars" && v.InfoView != "participants" && v.InfoView != "retention" && v.InfoView != "read-receipts" {
+	if v.InfoView != "shared" && v.InfoView != "stars" && v.InfoView != "participants" && v.InfoView != "retention" && v.InfoView != "read-receipts" && v.InfoView != "preferences" && v.InfoView != "connection" {
 		v.InfoView = ""
 	}
 	v.InfoType = q.Get("infoType")
@@ -58,7 +58,7 @@ func (v *view) configureWorkspace(r *http.Request) {
 		v.InfoQuery = string([]rune(v.InfoQuery)[:200])
 	}
 	v.InfoFocus = q.Get("infoFocus")
-	if tab := q.Get("settingsTab"); q.Get("open") == "settings" && (tab == "device" || tab == "engine") {
+	if tab := q.Get("settingsTab"); q.Get("open") == "settings" && (tab == "device" || tab == "engine" || tab == "display" || tab == "notifications" || tab == "storage") {
 		v.SettingsTab = tab
 	}
 	v.SharedType = q.Get("contentType")

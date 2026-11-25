@@ -372,6 +372,7 @@ type copy struct {
 	RoomManagementSubmitted                                                                                                                                                                                  string
 	RoomManagedName                                                                                                                                                                                          string
 	RoomRoleLabel                                                                                                                                                                                            string
+	DrawerMediaDisplay, DrawerStorage, DrawerConversationPreferences, RoomEditText, RoomEditName, RoomEditTopic, RoomReviewChanges, RoomPublishChanges, RoomKeepEditing, RoomNoTopic                         string
 	RoomSaveDetails                                                                                                                                                                                          string
 	RoomDetailsPartial                                                                                                                                                                                       string
 	RoomOwners                                                                                                                                                                                               string

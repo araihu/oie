@@ -10,25 +10,58 @@ import (
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/modal"
 	selectfield "github.com/araihu/goshtoso/components/select"
-	"github.com/araihu/goshtoso/components/tabs"
 	"github.com/araihu/goshtoso/components/toggle"
 	"github.com/araihu/goshtoso/expressions"
 	"github.com/araihu/oie/internal/adapters/web/appicons"
 )
 
 templ settings(v view) {
-	{{ ctx = expressions.With(ctx, expressions.Set{Tabs: expressions.Tabs{OptionsAriaLabel: v.Text.Settings}}) }}
+	{{ engine := v.EngineMode != nil || v.HostedSignIn || (!v.Preview && v.EngineID != "") }}
 	@workspaceDrawer(drawer.Config{ID: "settings", Title: v.Text.Settings}) {
 		<div class="oie-settings oie-settings-scroll">
-			@tabs.Tabs(settingsTabs(v))
+			<div data-settings-stack data-root-title={ v.Text.Settings } data-start-page={ v.SettingsTab }>
+				<section data-settings-page="general">
+					@generalSettings(v)
+				</section>
+				@settingsPage("device", v.Text.DevicePreferences, "general", v.Text.BackToSettings) {
+					@settingsDestination("display", v.Text.DrawerMediaDisplay, glyph(heroicons.Icon16SolidRectangleGroup))
+					if !v.Preview && v.EngineID != "" {
+						@settingsDestination("notifications", v.Text.NotificationSettings, glyph(heroicons.Icon16SolidBell))
+					}
+					if v.canManageLocalDownloads() || (v.OfflineHistory && !v.Preview && v.EngineID!="") {
+						@settingsDestination("storage", v.Text.DrawerStorage, retentionIcon())
+					}
+				}
+				@settingsPage("display", v.Text.DrawerMediaDisplay, "device", v.Text.DevicePreferences) {
+					@deviceDisplay(v)
+				}
+				if !v.Preview && v.EngineID!="" {
+					@settingsPage("notifications", v.Text.NotificationSettings, "device", v.Text.DevicePreferences) {
+						@notificationSettings(v)
+					}
+				}
+				if v.canManageLocalDownloads() || (v.OfflineHistory && !v.Preview && v.EngineID!="") {
+					@settingsPage("storage", v.Text.DrawerStorage, "device", v.Text.DevicePreferences) {
+						@deviceStorage(v)
+					}
+				}
+				if engine {
+					@settingsPage("engine", v.Text.EngineMode, "general", v.Text.BackToSettings) {
+						if v.EngineMode != nil {
+							@engineModeSettings(v)
+						}
+						@engineSettings(v)
+					}
+				}
+			</div>
 			<p class="oie-settings-note" data-device-preference-warning role="status" hidden>{ v.Text.DevicePreferenceUnavailable }</p>
 		</div>
+		if v.HostedSignIn {
+			@settingsSignOut(v)
+		}
 	}
 	if v.canManageLocalDownloads() {
 		@removeDownloadsDialog(v)
-	}
-	if v.EngineMode != nil {
-		@engineModeSettings(v)
 	}
 	if v.HostedSignIn {
 		@accessKeysSettings(v)
@@ -39,23 +72,19 @@ templ settings(v view) {
 	}
 }
 
-func settingsTabs(v view) tabs.Config {
-	options := []tabs.Tab{
-		{ID: "general", Label: v.Text.SettingsGeneral, Content: generalSettings(v)},
-		{ID: "composition", Label: v.Text.Composition, Content: compositionSettings(v)},
-		{ID: "device", Label: v.Text.DevicePreferences, Content: deviceSettings(v)},
-	}
-	if v.HostedSignIn || (!v.Preview && v.EngineID != "") {
-		options = append(options, tabs.Tab{ID: "engine", Label: v.Text.EngineMode, Content: engineSettings(v)})
-	}
-	config := tabs.Config{ID: "settings-tabs", DefaultTab: options[0].ID, Tabs: options}
-	for _, option := range options {
-		if option.ID == v.SettingsTab {
-			config.DefaultTab = option.ID
-			break
+templ settingsPage(id, title, parent, back string) {
+	<section data-settings-page={ id } data-title={ title } hidden class="oie-settings-section">
+		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-settings-back"), button.WithAttrs(templ.Attributes{"data-settings-target": parent, "data-settings-back": ""})) {
+			@glyph(heroicons.Icon16SolidChevronLeft)<span>{ back }</span>
 		}
+		{ children... }
+	</section>
+}
+
+templ settingsDestination(id, title string, leading templ.Component) {
+	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-settings-entry oie-destination"), button.WithAttrs(templ.Attributes{"data-settings-target": id})) {
+		@leading<span>{ title }</span>@glyph(heroicons.Icon16SolidChevronRight)
 	}
-	return config
 }
 
 func settingsDrawerTransition(from, to string) string {
@@ -70,7 +99,7 @@ templ drawerSubpageEntry(parent, id, title string, leading templ.Component) {
 	@button.Button(
 		button.WithType("button"),
 		button.WithAppearance(button.AppearancePlain),
-		button.WithRootClass("oie-settings-entry"),
+		button.WithRootClass("oie-settings-entry oie-destination"),
 		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": id + "-body"}),
 		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition(parent, id)}),
 	) {
@@ -116,12 +145,14 @@ templ generalSettings(v view) {
 		@appearanceSettings(v)
 		@languageSettings(v)
 		@timeZoneSettings(v)
+		@compositionSettings(v)
 		if v.Preview {
 			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
 		}
 		<div class="oie-settings-links">
-			if v.EngineMode != nil {
-				@settingsSubpageEntry("engine-settings", v.Text.EngineMode, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRetention16SolidCircleStack, Decorative: true, RootClass: "oie-icon"}))
+			@settingsDestination("device", v.Text.DevicePreferences, glyph(heroicons.Icon16SolidWindow))
+			if v.EngineMode != nil || v.HostedSignIn || (!v.Preview && v.EngineID!="") {
+				@settingsDestination("engine", v.Text.EngineMode, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRetention16SolidCircleStack, Decorative: true, RootClass: "oie-icon"}))
 			}
 			if v.HostedSignIn {
 				@settingsSubpageEntry("access-keys", v.Text.AccessKeys, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsKey16SolidKey, Decorative: true, RootClass: "oie-icon"}))
@@ -138,13 +169,15 @@ templ generalSettings(v view) {
 }
 
 templ timeZoneSettings(v view) {
-	{{ config := combobox.Config{
-		ID: "settings-time-zone", Name: "time-zone", Label: v.Text.PresentationTimeZone,
-		Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true, Disabled: true,
-		Source: combobox.Source{Static: []combobox.Option{{Value: "", Label: v.Text.SystemTimeZone}}},
-		Selected: []string{""},
-		TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable, "data-system-label": v.Text.SystemTimeZone},
-	} }}
+	{{
+		config := combobox.Config{
+			ID: "settings-time-zone", Name: "time-zone", Label: v.Text.PresentationTimeZone,
+			Mode: combobox.ModeSingle, EnableSearch: true, DisablePersistence: true, Disabled: true,
+			Source:       combobox.Source{Static: []combobox.Option{{Value: "", Label: v.Text.SystemTimeZone}}},
+			Selected:     []string{""},
+			TriggerAttrs: templ.Attributes{"data-unsaved": v.Text.DevicePreferenceUnavailable, "data-system-label": v.Text.SystemTimeZone},
+		}
+	}}
 	@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
 		SearchPlaceholder: v.Text.SearchTimeZones, EmptyText: v.Text.NoTimeZonesFound,
 	})
@@ -164,40 +197,47 @@ func emojiLanguageCombobox(v view) combobox.Config {
 }
 
 templ compositionSettings(v view) {
-	{{ ctx = expressions.With(ctx, expressions.Set{Combobox: expressions.Combobox{
-		SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
-		SelectedLabel: func(count int) string { return strings.ReplaceAll(v.Text.EmojiShortcutLanguageCount, "{count}", strconv.Itoa(count)) },
-	}}) }}
+	{{
+		ctx = expressions.With(ctx, expressions.Set{Combobox: expressions.Combobox{
+			SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
+			SelectedLabel: func(count int) string {
+				return strings.ReplaceAll(v.Text.EmojiShortcutLanguageCount, "{count}", strconv.Itoa(count))
+			},
+		}})
+	}}
 	{{ config := emojiLanguageCombobox(v) }}
 	@combobox.Combobox(config, config.InitialState())
 }
 
-templ deviceSettings(v view) {
+templ deviceDisplay(v view) {
 	<div class="oie-settings-section">
-		<label for="outgoing-media-default">{v.Text.MediaQuality}</label>
-  <select id="outgoing-media-default" class="oie-download-select" data-media-default>
-   <option value="SD">{v.Text.MediaSD}</option>
-   <option value="HD">{v.Text.MediaHD}</option>
-   <option value="OG">{v.Text.MediaPreferOG}</option>
-  </select>
-  @toggle.Toggle(toggle.Config{ID:"render-markdown",Label:v.Text.RenderMarkdown,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-render-markdown":"","aria-describedby":"render-markdown-help"}})
+		<label for="outgoing-media-default">{ v.Text.MediaQuality }</label>
+		<select id="outgoing-media-default" class="oie-download-select" data-media-default>
+			<option value="SD">{ v.Text.MediaSD }</option>
+			<option value="HD">{ v.Text.MediaHD }</option>
+			<option value="OG">{ v.Text.MediaPreferOG }</option>
+		</select>
+		@toggle.Toggle(toggle.Config{ID: "render-markdown", Label: v.Text.RenderMarkdown, Checked: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-render-markdown": "", "aria-describedby": "render-markdown-help"}})
 		<p id="render-markdown-help">{ v.Text.RenderMarkdownHelp }</p>
-		@toggle.Toggle(toggle.Config{ID:"auto-image-downloads",Label:v.Text.AutoImageDownloads,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-image-downloads":"","aria-describedby":"auto-image-downloads-help"}})
+		@toggle.Toggle(toggle.Config{ID: "auto-image-downloads", Label: v.Text.AutoImageDownloads, Checked: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-auto-image-downloads": "", "aria-describedby": "auto-image-downloads-help"}})
 		<p id="auto-image-downloads-help">{ v.Text.AutoImageDownloadsHelp }</p>
-		@toggle.Toggle(toggle.Config{ID:"auto-video-thumbnails",Label:v.Text.AutoVideoThumbnails,Checked:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-auto-video-thumbnails":"","aria-describedby":"auto-video-thumbnails-help"}})
+		@toggle.Toggle(toggle.Config{ID: "auto-video-thumbnails", Label: v.Text.AutoVideoThumbnails, Checked: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-auto-video-thumbnails": "", "aria-describedby": "auto-video-thumbnails-help"}})
 		<p id="auto-video-thumbnails-help">{ v.Text.AutoVideoThumbnailsHelp }</p>
 	</div>
+}
+
+templ deviceStorage(v view) {
 	if v.OfflineHistory && !v.Preview && v.EngineID != "" {
-		<section class="oie-settings-section" aria-labelledby="offline-storage-title" data-offline-storage hidden data-engine={v.EngineID} data-usage={v.Text.OfflineStorageUsage} data-excess={v.Text.OfflineStorageExcess} data-failed={v.Text.OfflineStorageFailed}>
-			<h2 id="offline-storage-title">{v.Text.OfflineStorageTitle}</h2>
-			<label for="offline-storage-limit">{v.Text.OfflineStorageLimit}</label>
+		<section class="oie-settings-section" aria-labelledby="offline-storage-title" data-offline-storage hidden data-engine={ v.EngineID } data-usage={ v.Text.OfflineStorageUsage } data-excess={ v.Text.OfflineStorageExcess } data-failed={ v.Text.OfflineStorageFailed }>
+			<h2 id="offline-storage-title">{ v.Text.OfflineStorageTitle }</h2>
+			<label for="offline-storage-limit">{ v.Text.OfflineStorageLimit }</label>
 			<select class="oie-download-select" id="offline-storage-limit" aria-describedby="offline-storage-help offline-storage-used" disabled>
 				<option value="262144">256 KiB</option>
 				<option value="524288">512 KiB</option>
 				<option value="1048576" selected>1 MiB</option>
 				<option value="2097152">2 MiB</option>
 			</select>
-			<p id="offline-storage-help">{v.Text.OfflineStorageHelp}</p>
+			<p id="offline-storage-help">{ v.Text.OfflineStorageHelp }</p>
 			<p id="offline-storage-used" class="oie-download-feedback"></p>
 			<p role="status" class="oie-download-feedback"></p>
 		</section>
@@ -205,34 +245,32 @@ templ deviceSettings(v view) {
 	if v.canManageLocalDownloads() {
 		@downloadRetentionSettings(v)
 	}
-	if !v.Preview && v.EngineID != "" {
-		@notificationSettings(v)
-	}
 }
 
 templ engineSettings(v view) {
 	if !v.Preview && v.EngineID != "" {
 		<section class="oie-settings-section oie-engine-retention" aria-labelledby="engine-retention-title">
-			<h2 id="engine-retention-title">@retentionIcon()<span>{v.Text.RetentionTitle}</span></h2>
-			@retentionRegion(v,"",retentionView{Loading:true})
+			<h2 id="engine-retention-title">@retentionIcon()<span>{ v.Text.RetentionTitle }</span></h2>
+			@retentionRegion(v, "", retentionView{Loading: true})
 		</section>
-		}
+	}
 	if v.ReadReceiptsSupported && !v.Preview {
 		@globalReadReceiptsSettings(v)
 	}
-	if v.HostedSignIn {
-		<div class="oie-engine-sign-out">
-			@button.Button(
-				button.WithType("button"),
-				button.WithTone(button.ToneWarning),
-				button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": "hosted-sign-out"}),
-				button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('modal:open', {id:'hosted-sign-out'})"}),
-			) {
-				@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsArrowLeftStartOnRectangle16SolidArrowLeftStartOnRectangle, Decorative: true, RootClass: "oie-icon"})
-				<span>{ v.Text.SignOutLabel }</span>
-			}
-		</div>
-	}
+}
+
+templ settingsSignOut(v view) {
+	<footer class="oie-engine-sign-out">
+		@button.Button(
+			button.WithType("button"),
+			button.WithTone(button.ToneWarning),
+			button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": "hosted-sign-out"}),
+			button.WithAlpine(&button.AlpineConfig{OnClick: "$dispatch('modal:open', {id:'hosted-sign-out'})"}),
+		) {
+			@appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsArrowLeftStartOnRectangle16SolidArrowLeftStartOnRectangle, Decorative: true, RootClass: "oie-icon"})
+			<span>{ v.Text.SignOutLabel }</span>
+		}
+	</footer>
 }
 
 templ signOutForm(v view) {
@@ -255,48 +293,48 @@ templ signOutForm(v view) {
 }
 
 templ notificationSettings(v view) {
-	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={v.Text.NotificationDenied} data-unavailable={v.Text.NotificationUnavailable} data-sound-unavailable={v.Text.NotificationSoundUnavailable} data-unsaved={v.Text.NotificationToneUnsaved} data-invalid-tone={v.Text.NotificationToneInvalid} data-large-tone={v.Text.NotificationToneLarge} data-trimmed-tone={v.Text.NotificationToneTrimmed} data-message-title={v.Text.NotificationNewMessage} data-background-failed={v.Text.NotificationBackgroundFailed} data-background-paused={v.Text.NotificationBackgroundPaused} data-csrf={v.CSRF}>
-		<h2 id="notification-settings-title">@glyph(heroicons.Icon16SolidBell)<span>{v.Text.NotificationSettings}</span></h2>
-		@toggle.Toggle(toggle.Config{ID:"notification-banners",Label:v.Text.NotificationBanners,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-banners":"","aria-describedby":"notification-status"}})
+	<section class="oie-settings-section oie-notification-settings" aria-labelledby="notification-settings-title" data-notification-settings data-denied={ v.Text.NotificationDenied } data-unavailable={ v.Text.NotificationUnavailable } data-sound-unavailable={ v.Text.NotificationSoundUnavailable } data-unsaved={ v.Text.NotificationToneUnsaved } data-invalid-tone={ v.Text.NotificationToneInvalid } data-large-tone={ v.Text.NotificationToneLarge } data-trimmed-tone={ v.Text.NotificationToneTrimmed } data-message-title={ v.Text.NotificationNewMessage } data-background-failed={ v.Text.NotificationBackgroundFailed } data-background-paused={ v.Text.NotificationBackgroundPaused } data-csrf={ v.CSRF }>
+		<h2 id="notification-settings-title">@glyph(heroicons.Icon16SolidBell)<span>{ v.Text.NotificationSettings }</span></h2>
+		@toggle.Toggle(toggle.Config{ID: "notification-banners", Label: v.Text.NotificationBanners, Disabled: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-notification-banners": "", "aria-describedby": "notification-status"}})
 		if v.BrowserPush {
 			<div data-notification-background-option hidden>
-				@toggle.Toggle(toggle.Config{ID:"notification-background",Label:v.Text.NotificationBackground,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-background":"","aria-describedby":"notification-status"}})
+				@toggle.Toggle(toggle.Config{ID: "notification-background", Label: v.Text.NotificationBackground, Disabled: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-notification-background": "", "aria-describedby": "notification-status"}})
 			</div>
 		}
-		@toggle.Toggle(toggle.Config{ID:"notification-sound",Label:v.Text.NotificationSound,Checked:true,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound":"","aria-describedby":"notification-status"}})
+		@toggle.Toggle(toggle.Config{ID: "notification-sound", Label: v.Text.NotificationSound, Checked: true, Disabled: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-notification-sound": "", "aria-describedby": "notification-status"}})
 		<div class="oie-notification-tone">
 			<div class="oie-notification-tone-label">
-				<span>{v.Text.NotificationTone}</span>
+				<span>{ v.Text.NotificationTone }</span>
 				<div class="oie-notification-tone-current">
 					<strong data-notification-tone-name>Oiê</strong>
-					@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-notification-tone-reset":"","aria-label":v.Text.NotificationToneReset,"title":v.Text.NotificationToneReset,"hidden":true})) {
+					@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-icon-button"), button.WithAttrs(templ.Attributes{"data-notification-tone-reset": "", "aria-label": v.Text.NotificationToneReset, "title": v.Text.NotificationToneReset, "hidden": true})) {
 						@glyph(heroicons.Icon16SolidXMark)
 					}
 				</div>
 			</div>
-			@button.Button(button.WithType("button"),button.WithSize(button.SizeSmall),button.WithTone(button.ToneAlternate),button.Disabled(),button.WithAttrs(templ.Attributes{"data-notification-preview":"","aria-label":v.Text.NotificationPreview,"title":v.Text.NotificationPreview,"aria-describedby":"notification-status"})) {
+			@button.Button(button.WithType("button"), button.WithSize(button.SizeSmall), button.WithTone(button.ToneAlternate), button.Disabled(), button.WithAttrs(templ.Attributes{"data-notification-preview": "", "aria-label": v.Text.NotificationPreview, "title": v.Text.NotificationPreview, "aria-describedby": "notification-status"})) {
 				@glyph(heroicons.Icon16SolidPlay)
 			}
 			<div class="oie-notification-tone-actions">
 				<input type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.opus,.flac" data-notification-tone-file hidden/>
-				@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.Disabled(),button.WithAttrs(templ.Attributes{"data-notification-tone-choose":""})) {
+				@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.Disabled(), button.WithAttrs(templ.Attributes{"data-notification-tone-choose": ""})) {
 					@glyph(heroicons.Icon16SolidCloudArrowUp)
-					{v.Text.NotificationToneChoose}
+					{ v.Text.NotificationToneChoose }
 				}
 			</div>
 		</div>
-		@toggle.Toggle(toggle.Config{ID:"notification-direct",Label:v.Text.NotificationDirectSound,Checked:true,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound-scope":"direct"}})
+		@toggle.Toggle(toggle.Config{ID: "notification-direct", Label: v.Text.NotificationDirectSound, Checked: true, Disabled: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-notification-sound-scope": "direct"}})
 		@selectfield.Select(selectfield.Config{
-			ID:"notification-room-sound",Name:"notification-room-sound",Label:v.Text.NotificationRoomSound,
-			InputAttrs:templ.Attributes{"data-notification-room-sound":""},
-			Options:[]selectfield.Option{
-				{Value:"attention",Label:v.Text.NotificationRoomAttention,Selected:true},
-				{Value:"all",Label:v.Text.NotificationRoomAll},
-				{Value:"off",Label:v.Text.NotificationRoomOff},
+			ID: "notification-room-sound", Name: "notification-room-sound", Label: v.Text.NotificationRoomSound,
+			InputAttrs: templ.Attributes{"data-notification-room-sound": ""},
+			Options: []selectfield.Option{
+				{Value: "attention", Label: v.Text.NotificationRoomAttention, Selected: true},
+				{Value: "all", Label: v.Text.NotificationRoomAll},
+				{Value: "off", Label: v.Text.NotificationRoomOff},
 			},
 		})
-		@toggle.Toggle(toggle.Config{ID:"notification-archived",Label:v.Text.NotificationArchivedSound,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound-scope":"archived"}})
-		@toggle.Toggle(toggle.Config{ID:"notification-focused",Label:v.Text.NotificationFocusedSound,Disabled:true,RootClass:"oie-device-toggle",InputAttrs:templ.Attributes{"data-notification-sound-scope":"focused"}})
+		@toggle.Toggle(toggle.Config{ID: "notification-archived", Label: v.Text.NotificationArchivedSound, Disabled: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-notification-sound-scope": "archived"}})
+		@toggle.Toggle(toggle.Config{ID: "notification-focused", Label: v.Text.NotificationFocusedSound, Disabled: true, RootClass: "oie-device-toggle", InputAttrs: templ.Attributes{"data-notification-sound-scope": "focused"}})
 		<p id="notification-status" role="status"></p>
 	</section>
 }

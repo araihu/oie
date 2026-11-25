@@ -534,7 +534,7 @@
   event.preventDefault();event.stopImmediatePropagation();
   cancelConversationLoading();
  },true);
- function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;rememberInfoSharedPage(root);upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;root.querySelector('[data-info-heading]')?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
+ function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;rememberInfoSharedPage(root);upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;const origin=new URL(location.href).searchParams.get('infoFocus');const target=origin && root.querySelector(`[data-info-entry="${CSS.escape(origin)}"]`);(target || root.querySelector('[data-info-heading]'))?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
  function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
  function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','diagnostics','engine-settings','destructive-actions','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  function workspaceResponse(ctx,nextApp,next){
@@ -891,6 +891,15 @@
  });
  function go(value,{history=false,latest=false,workspace,noInboxReuse=false}={}){
   const url=new URL(value,location.href);if(url.origin!==location.origin||!['/','/search'].includes(url.pathname)||!window.htmx){location.assign(url.href);return}
+  const targetSettings = url.searchParams.get('open') === 'settings';
+  const leavingSettings = new URL(currentURL).searchParams.get('open') === 'settings' && !url.searchParams.has('open');
+  if (history && (targetSettings || leavingSettings) && sameRoute(url, ['open', 'settingsTab'])) {
+    currentURL = url.href;
+    window.dispatchEvent(new CustomEvent(targetSettings ? 'drawer:open' : 'drawer:close', {
+      detail: {id: 'settings', page: url.searchParams.get('settingsTab') || 'general', focus: true},
+    }));
+    return;
+  }
   const mountedInbox=document.getElementById(inboxID);
   const listChanged=mountedInbox&&(mountedInbox.dataset.inboxFilter!==inboxFilter(url.searchParams)||mountedInbox.dataset.inboxPage!==(url.searchParams.get('inboxCursor')||''));
   const themeChanged=history&&sameRoute(url,['theme','open'])&&url.searchParams.get('theme')!==document.documentElement.dataset.mode&&url.searchParams.has('theme');
@@ -920,6 +929,25 @@
   return true;
  }
  document.addEventListener('htmx:before:history:restore',event=>{event.preventDefault();go(event.detail.path,{history:true});});
+ document.addEventListener('oie:settings-navigate', event => {
+  const url = new URL(location.href);
+  if (url.searchParams.get('open') !== 'settings') {
+   url.searchParams.set('open', 'settings');
+   url.searchParams.delete('settingsTab');
+   addressSearch(url, true);
+  }
+  if (event.detail.page === 'general') url.searchParams.delete('settingsTab');
+  else url.searchParams.set('settingsTab', event.detail.page);
+  addressSearch(url, true);
+ });
+ window.addEventListener('drawer:close-request', event => {
+  if (event.detail?.id !== 'settings' || event.defaultPrevented) return;
+  const url = new URL(location.href);
+  if (url.searchParams.get('open') !== 'settings') return;
+  url.searchParams.delete('settingsTab');
+  url.searchParams.delete('open');
+  addressSearch(url);
+ });
  function addressSearch(url,push=false){remember();history[push?'pushState':'replaceState'](history.state,'',url.pathname+url.search+url.hash);currentURL=location.href;syncFilterLinks();}
  window.OieNavigation={go,pinConversation,addressSearch,showError};
  runtime.register('drawer-pickers',life=>{

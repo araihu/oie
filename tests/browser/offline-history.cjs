@@ -392,7 +392,7 @@ async function checkSavedSearch(page, until, {root, account, chat, latest, withd
 async function checkStorageLimit({browser, base, account, chat, id, until}) {
   const context = await browser.newContext({viewport: {width: 390, height: 760}});
   const separate = await browser.newContext();
-  const settingsURL = base + '/?lang=en&inbox=1&open=settings&settingsTab=device';
+  const settingsURL = base + '/?lang=en&inbox=1&open=settings&settingsTab=storage';
   async function openSettings(profile) {
     const page = await profile.newPage();
     await page.goto(settingsURL);
@@ -417,7 +417,7 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
       'failed worker installation reports the error');
     assert(await otherLimit.isDisabled());
     await separate.unroute(shellRequest);
-    await other.getByRole('tab', {name: 'General'}).click();
+    await other.locator('[data-settings-target=device]:visible').click();
     // Return after the browser has observed the device panel leaving the viewport.
     await otherLimit.evaluate(node => new Promise(resolve => {
       const observer = new IntersectionObserver(([entry]) => {
@@ -427,7 +427,7 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
       });
       observer.observe(node);
     }));
-    await other.getByRole('tab', {name: 'This device'}).click();
+    await other.locator('[data-settings-target=storage]:visible').click();
     await otherLimit.scrollIntoViewIfNeeded();
     await until(() => otherLimit.isEnabled(), 'returning to device settings retries a failed worker installation');
     const select = settings.locator('#offline-storage-limit');
@@ -548,9 +548,10 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       const keepLabel = lang === 'pt-BR' ? 'Manter disponível sem conexão' : 'Keep available offline';
       const keepControl = page.getByLabel(keepLabel, {exact: true});
       await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+      await page.locator('[data-info-entry=preferences]').click();
       assert.equal(await keepControl.isChecked(), false);
       const observer = await newPage();
-      await observer.goto(route + '&open=details');
+      await observer.goto(route + '&open=details&infoView=preferences');
       const observerControl = observer.getByLabel(keepLabel, {exact: true});
       await until(() => observerControl.isEnabled(), 'offline control in the second tab');
       await page.bringToFront();
@@ -588,7 +589,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
         await context.setOffline(false);
         let field;
         if (width === 390) {
-          await page.goto(route + '&open=details');
+          await page.goto(route + '&open=details&infoView=preferences');
           await page.locator('[data-open-conversation-search]').filter({visible: true}).click();
           field = page.locator('#conversation-search-query');
         } else {
@@ -638,7 +639,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
         doc.getElementById('offline-full').remove();
         await cache.put(key, new Response('<!doctype html>' + doc.documentElement.outerHTML, {headers: response.headers}));
       });
-      await page.goto(route + '&open=details');
+      await page.goto(route + '&open=details&infoView=preferences');
       await timeline.getByText(latest, {exact: true}).waitFor();
       assert.equal(await page.locator('[data-keep-chat-offline]').count(), 0, 'offline details URL opens the read-only chat');
       if (lang === 'en') assert.equal(await page.locator('#offline-full').count(), 0, 'older cached shell still renders the saved messages');
@@ -665,6 +666,7 @@ module.exports = async function checkOfflineHistory({browser, base, account, cha
       });
       await until(async () => (await page.evaluate(savedHistory))?.entries.length === 1, 'second chat removed');
       await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+      await page.locator('[data-info-entry=preferences]').click();
       const reopenedControl = page.getByLabel(keepLabel, {exact: true});
       await until(() => reopenedControl.isChecked(), 'offline preference persists after reopening the browser page');
       await changeKeep(page, reopenedControl, until, false);

@@ -17,6 +17,30 @@ function filterRoomList(search, scope) {
 }
 
 window.OieRuntime.register('room-management', life => {
+  let rosterOrigin;
+  let rosterScroll = 0;
+  life.on(document, 'click', event => {
+    const roster = event.target.closest('[data-info-room-participants]');
+    if (!roster) return;
+    const person = event.target.closest('[data-roster-person]');
+    const back = event.target.closest('[data-roster-back]');
+    if (!person && !back) return;
+    const list = roster.querySelector('[data-roster-list]');
+    const detail = roster.querySelector('[data-roster-detail]');
+    const scroll = roster.closest('#details-body');
+    if (person) {
+      rosterOrigin = person;
+      rosterScroll = scroll.scrollTop;
+      detail.querySelector('[data-roster-avatar]').replaceChildren(person.querySelector('.oie-room-participant-avatar').cloneNode(true));
+      detail.querySelector('[data-roster-name]').textContent = person.dataset.rosterPerson;
+      detail.querySelector('[data-roster-role]').textContent = person.dataset.role;
+      detail.querySelector('[data-roster-affiliation]').textContent = person.dataset.affiliation;
+    }
+    list.hidden = Boolean(person);
+    detail.hidden = !person;
+    scroll.scrollTop = person ? 0 : rosterScroll;
+    (person ? detail.querySelector('h3') : rosterOrigin)?.focus({preventScroll: true});
+  });
   life.on(document, 'input', event => {
     if (event.target.id === 'info-room-participants-search') {
       filterRoomList(event.target, event.target.closest('[data-info-room-participants]'));
@@ -225,8 +249,63 @@ window.OieRuntime.register('room-management', life => {
   }
 
   function syncDetailsSave(form) {
-    form.querySelector('[type=submit]').disabled =
-      form.dataset.busy === 'true' || form.dataset.permissionLost === 'true' || !detailsChanged(form);
+    const blocked = form.dataset.busy === 'true' || form.dataset.permissionLost === 'true' || !detailsChanged(form);
+    form.querySelector('[data-details-review]').disabled = blocked;
+    form.querySelector('[type=submit]').disabled = blocked || form.dataset.stage !== 'review';
+  }
+
+  function detailsStage(form, stage, focus = true) {
+    form.dataset.stage = stage;
+    for (const panel of form.querySelectorAll('[data-details-stage]')) panel.hidden = panel.dataset.detailsStage !== stage;
+    syncDetailsSave(form);
+    if (focus) {
+      const panel = form.querySelector('[data-details-stage="' + stage + '"]');
+      panel.querySelector('h3, input:not([type=hidden]), textarea, button')?.focus();
+    }
+  }
+
+  function reviewDetails(form) {
+    if (!detailsChanged(form) || !form.reportValidity() || form.dataset.permissionLost === 'true') return;
+    for (const [name, original] of detailsFields) {
+      const row = form.querySelector('[data-review-field="' + name + '"]');
+      const field = form.elements.namedItem(name);
+      const before = form.elements.namedItem(original)?.value;
+      const after = field && roomDetailsValue(name, field.value);
+      row.hidden = !field || after === roomDetailsValue(name, before);
+      if (!row.hidden) {
+        const empty = row.parentElement.dataset.emptyTopic;
+        row.querySelector('del').textContent = before || empty;
+        row.querySelector('ins').textContent = after || empty;
+      }
+    }
+    detailsStage(form,'review');
+  }
+
+  life.on(content, 'click', event => {
+    const button = event.target.closest('button');
+    const form = button?.closest('[data-room-details-form]');
+    if (!form || isPending(form)) return;
+    if (button.hasAttribute('data-details-edit')) detailsStage(form,'edit');
+    if (button.hasAttribute('data-details-review')) reviewDetails(form);
+    if (button.hasAttribute('data-details-cancel')) {
+      for (const [name, original] of detailsFields) {
+        if (form.elements[name]) form.elements[name].value = form.elements[original].value;
+      }
+      detailsStage(form,'summary');
+    }
+  });
+  life.on(content, 'submit', event => {
+    const form = event.target;
+    if (!form.hasAttribute('data-room-details-form') || form.dataset.stage === 'review') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (form.dataset.stage === 'edit') reviewDetails(form);
+  });
+  function updateDetailsSummary(form) {
+    for (const [name, original] of detailsFields) {
+      const node = form.querySelector('[data-summary="' + name + '"]');
+      if (node) node.textContent = form.elements[original].value || form.querySelector('[data-empty-topic]').dataset.emptyTopic;
+    }
   }
 
   life.on(content, 'input', event => {
@@ -304,7 +383,7 @@ window.OieRuntime.register('room-management', life => {
               }
             }
             // An open destructive confirmation keeps the revision the owner reviewed.
-            if (revision && (form.elements.managementAction.value !== 'destroy' || form.hidden)) {
+            if (revision && (!form.hasAttribute('data-room-details-form') || !detailsChanged(form)) && (form.elements.managementAction.value !== 'destroy' || form.hidden)) {
               form.elements.expectedRevision.value = revision;
             }
           }
@@ -345,6 +424,7 @@ window.OieRuntime.register('room-management', life => {
           field.value = draft.get(name);
         }
         field.dispatchEvent(new Event('input', {bubbles:true}));
+        if (form.hasAttribute('data-room-details-form')) detailsStage(form,'edit',false);
       }
     }
   }
@@ -520,9 +600,12 @@ window.OieRuntime.register('room-management', life => {
   });
 
   life.on(document, 'click', event => {
-    const trigger = event.target.closest('#chat-manage-room,#chat-invite-room,[id^=moderate-room-message-]');
+    const trigger = event.target.closest('#chat-manage-room,[data-info-manage-room],#chat-invite-room,[id^=moderate-room-message-]');
     if (!trigger) return;
-    opener = trigger.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]') ||
+    const fromDetails = trigger.hasAttribute('data-info-manage-room');
+    root.querySelector('[data-management-parent]').hidden = !fromDetails;
+    if (fromDetails) window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'details'}}));
+    opener = (fromDetails && document.querySelector('#chat-header .oie-chat-avatar-trigger')) || trigger.closest('[data-message-id]')?.querySelector('[data-message-menu-trigger]') ||
       document.querySelector('#chat-options [aria-controls="chat-options-panel"]');
     const menu = trigger.closest('[role=menu]');
     if (opener?.getAttribute('aria-expanded') === 'true') opener.click();
@@ -593,15 +676,24 @@ window.OieRuntime.register('room-management', life => {
     if (event.detail?.id === 'room-destructive-actions') dismissDestroyConfirmation();
   });
 
-  life.on(window, 'drawer:close-request', event => {
-    const id = event.detail?.id;
-    if (id !== 'room-management' && id !== 'room-destructive-actions') return;
-    if (id === 'room-destructive-actions') dismissDestroyConfirmation();
+  life.on(window, 'drawer:open', event => {
+    if (active && !['room-management', 'room-destructive-actions'].includes(event.detail?.id)) stopManagement();
+  });
+
+  function stopManagement() {
     active = false;
     request?.abort();
     stopBans();
     bansFresh = false;
     for (const view of participantViews.values()) view.controller.abort();
+  }
+
+  life.on(window, 'drawer:close-request', event => {
+    if (!active || event.defaultPrevented) return;
+    const id = event.detail?.id;
+    if (id !== 'room-management' && id !== 'room-destructive-actions') return;
+    if (id === 'room-destructive-actions') dismissDestroyConfirmation();
+    stopManagement();
     life.timeout(() => opener?.isConnected && opener.focus({preventScroll: true}), 220);
   });
 
@@ -643,7 +735,8 @@ window.OieRuntime.register('room-management', life => {
         if (field && baseline && (result.ok || name === 'name' && result.state === 'name_confirmed')) baseline.value = field.value;
       }
       // The live submit handler restores the form controls before this runs.
-      queueMicrotask(() => syncDetailsSave(form));
+      updateDetailsSummary(form);
+      queueMicrotask(() => detailsStage(form, result.ok ? 'summary' : 'edit', form.contains(document.activeElement)));
     }
     if (result.ok && action === 'invite') {
       form.elements.target.value = '';

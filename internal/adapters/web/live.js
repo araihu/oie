@@ -2610,7 +2610,7 @@ window.OieRuntime.register('live', (life, route) => {
   if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
     const show = () => {
       dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
-      if(open==='settings'&&new URLSearchParams(location.search).get('settingsFocus')!=='language')life.timeout(()=>document.querySelector('#settings-body input[name="theme"]:checked')?.focus({preventScroll:true}),230);
+      if(open==='settings'&&!new URLSearchParams(location.search).has('settingsTab')&&new URLSearchParams(location.search).get('settingsFocus')!=='language')life.timeout(()=>document.querySelector('#settings-body input[name="theme"]:checked')?.focus({preventScroll:true}),230);
       if(open==='accounts')life.timeout(()=>{
         const query=new URLSearchParams(location.search);
         const target=query.get('accountPage')==='capabilities'?document.querySelector('[data-account-capabilities-title]'):query.get('accountFocus')==='capabilities'?document.querySelector('[data-account-capabilities]'):null;

@@ -283,7 +283,7 @@ func readReceiptsRegion(v view, id string, p readReceiptsView) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " x-data=\"{error:'',pending:false}\" data-unavailable=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " x-data=\"{error:'',pending:false}\" x-on:change=\"if ($event.target.name === 'mode' && !pending) $nextTick(() => $el.requestSubmit())\" data-unavailable=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -330,15 +330,15 @@ func readReceiptsRegion(v view, id string, p readReceiptsView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<fieldset class=\"oie-retention-fields\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<fieldset class=\"oie-retention-fields\" x-bind:disabled=\"pending\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			label := v.Text.ReadReceiptsGlobal
 			if id != "" {
-				label = v.Text.ReadReceiptsConversation
+				label = ""
 			}
-			templ_7745c5c3_Err = selectfield.Select(selectfield.Config{ID: region + "-mode", Name: "mode", Label: label, Options: readReceiptOptions(v, id, p), Required: true}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = selectfield.Select(selectfield.Config{ID: region + "-mode", Name: "mode", Label: label, TriggerAttrs: templ.Attributes{"aria-label": v.Text.CapabilityReadReceipts}, Options: readReceiptOptions(v, id, p), Required: true}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -359,9 +359,9 @@ func readReceiptsRegion(v view, id string, p readReceiptsView) templ.Component {
 				}
 				ctx = templ.InitializeContext(ctx)
 				var templ_7745c5c3_Var20 string
-				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.RetentionSave)
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Retry)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/read_receipts.templ`, Line: 59, Col: 212}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/read_receipts.templ`, Line: 59, Col: 187}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -369,7 +369,7 @@ func readReceiptsRegion(v view, id string, p readReceiptsView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.WithID(region+"-save"), button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithAttrs(templ.Attributes{"x-bind:aria-disabled": "String(pending)"})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.WithType("submit"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"x-cloak": true, "x-show": "error && !pending"})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

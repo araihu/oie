@@ -2,6 +2,8 @@ package web
 
 import (
 	"github.com/araihu/goshtoso/components/avatar"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/skeleton"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -13,49 +15,69 @@ func sessionParticipantGroup(p engineapi.RoomSessionParticipant) int {
 
 templ infoRoomParticipants(v view) {
 	<div class="oie-info-room-participants" data-info-room-participants>
-		@infoBack(v)
-		<h2 tabindex="-1" data-info-heading>{ v.Text.Participants }</h2>
-		if roster := v.InfoParticipants; roster != nil && roster.State == "available" {
-			if len(roster.Participants) > 0 {
-				@roomListSearch("info-room-participants-search", "info-room-participants-results", v.Text.RoomSearchParticipants)
-				if roster.Truncated {
-					<p class="oie-details-help">{ v.Text.DetailsParticipantsTruncated }</p>
-				}
-				<div id="info-room-participants-results">
-					for _, group := range roomParticipantGroups(v.Text, roster.Participants, sessionParticipantGroup) {
-						<section class="oie-room-participant-group">
-							<h3>{ group.label }</h3>
-							<ul class="oie-room-participants">
-								for _, participant := range group.occupants {
-									<li class="oie-info-participant" data-room-list-match={ participant.Nickname }>
-										<span class="oie-room-participant-avatar" aria-hidden="true">
-											@avatar.Avatar(roomParticipantAvatarConfig(participant.Nickname, participant.AvatarHash, avatar.SizeXS))
-										</span>
-										<span>{ roomParticipantLabel(v.Text, participant.Nickname, participant.Self) }</span>
-									</li>
-								}
-							</ul>
-						</section>
+		<div data-roster-list>
+			@infoBack(v)
+			<h2 tabindex="-1" data-info-heading>{ v.Text.Participants }</h2>
+			if roster := v.InfoParticipants; roster != nil && roster.State == "available" {
+				if len(roster.Participants) > 0 {
+					@roomListSearch("info-room-participants-search", "info-room-participants-results", v.Text.RoomSearchParticipants)
+					if roster.Truncated {
+						<p class="oie-details-help">{ v.Text.DetailsParticipantsTruncated }</p>
 					}
-					<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingParticipants }</p>
-				</div>
+					<div id="info-room-participants-results">
+						for _, group := range roomParticipantGroups(v.Text, roster.Participants, sessionParticipantGroup) {
+							<section class="oie-room-participant-group">
+								<h3>{ group.label }</h3>
+								<ul class="oie-room-participants">
+									for _, participant := range group.occupants {
+										<li data-room-list-match={ participant.Nickname }>
+											@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-destination"), button.WithAttrs(templ.Attributes{
+												"data-roster-person": roomParticipantLabel(v.Text, participant.Nickname, participant.Self),
+												"data-role":          roomManagementLabel(v.Text, string(participant.Role)), "data-affiliation": roomManagementLabel(v.Text, string(participant.Affiliation)),
+											})) {
+												<span class="oie-room-participant-avatar" aria-hidden="true">
+													@avatar.Avatar(roomParticipantAvatarConfig(participant.Nickname, participant.AvatarHash, avatar.SizeXS))
+												</span>
+												<span>{ roomParticipantLabel(v.Text, participant.Nickname, participant.Self) }</span>
+												@glyph(heroicons.Icon16SolidChevronRight)
+											}
+										</li>
+									}
+								</ul>
+							</section>
+						}
+						<p data-room-list-no-results role="status" hidden>{ v.Text.RoomNoMatchingParticipants }</p>
+					</div>
+				} else {
+					<p>{ v.Text.RoomNoVisibleParticipants }</p>
+				}
+			} else if roster != nil && roster.State == "not_joined" {
+				<p>{ v.Text.RoomParticipantsJoinRequired }</p>
 			} else {
-				<p>{ v.Text.RoomNoVisibleParticipants }</p>
+				<p role="status">{ v.Text.RoomParticipantsUnavailable }</p>
+				@link.Link(v.infoHref("participants", "participants", "infoQuery", ""), link.WithAttrs(templ.Attributes{"data-info-nav": ""})) {
+					{ v.Text.Retry }
+				}
+				<template data-info-participants-loading>@infoParticipantsSkeleton(v)</template>
 			}
-		} else if roster != nil && roster.State == "not_joined" {
-			<p>{ v.Text.RoomParticipantsJoinRequired }</p>
-		} else {
-			<p role="status">{ v.Text.RoomParticipantsUnavailable }</p>
-			@link.Link(v.infoHref("participants", "participants", "infoQuery", ""), link.WithAttrs(templ.Attributes{"data-info-nav":""})) {
-				{ v.Text.Retry }
+		</div>
+		<section data-roster-detail hidden>
+			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-settings-back"), button.WithAttrs(templ.Attributes{"data-roster-back": ""})) {
+				@glyph(heroicons.Icon16SolidChevronLeft) {
+					v.Text.Participants
+				}
 			}
-			<template data-info-participants-loading>@infoParticipantsSkeleton(v)</template>
-		}
+			<header class="oie-room-participant-profile">
+				<span data-roster-avatar aria-hidden="true"></span>
+				<h3 tabindex="-1" data-roster-name></h3>
+				<p><span data-roster-role></span> · <span data-roster-affiliation></span></p>
+			</header>
+		</section>
 	</div>
 }
 
 templ infoParticipantsSkeleton(v view) {
 	<div class="oie-info-room-participants oie-info-participants-loading">
-		@skeleton.Skeleton(skeleton.Config{Shape:skeleton.ShapeRectangle, Count:6, Label:v.Text.RoomParticipantsLoading, ItemClass:"oie-room-management-placeholder"})
+		@skeleton.Skeleton(skeleton.Config{Shape: skeleton.ShapeRectangle, Count: 6, Label: v.Text.RoomParticipantsLoading, ItemClass: "oie-room-management-placeholder"})
 	</div>
 }

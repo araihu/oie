@@ -33,12 +33,11 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
       if (request.method() === 'POST' && request.url().includes('/ui/settings/retention?')) writes++;
     });
     await server.signIn(page, '/?open=settings&lang=' + lang + '&theme=' + theme);
-    const tab = page.getByRole('tab', {name: engine, exact: true});
-    await page.getByRole('tab', {name: device, exact: true}).click();
-    assert.equal(await page.getByRole('tabpanel', {name: device, exact: true}).locator('#engine-retention').count(), 0);
-    await tab.press('Enter');
-
-    const panel = page.getByRole('tabpanel', {name: engine, exact: true});
+    await page.locator('[data-settings-target=device]:visible').click();
+    assert.equal(await page.locator('[data-settings-page=device] #engine-retention').count(), 0);
+    await page.locator('[data-settings-back]:visible').click();
+    await page.locator('[data-settings-target=engine]:visible').press('Enter');
+    const panel = page.locator('[data-settings-page=engine]');
     const form = panel.locator('[data-engine-retention]');
     const room = form.locator('#retention-days-room');
     const direct = form.locator('#retention-days-direct');
@@ -204,8 +203,7 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
     assert.equal((await policy(server.api)).roomDays, 95, 'a lost response cannot discard a queued undo');
 
     await page.goto(server.url + '/settings/retention?lang=' + lang + '&theme=' + theme);
-    await tab.waitFor();
-    assert.equal(await tab.getAttribute('aria-selected'), 'true');
+    await panel.waitFor();
     await room.waitFor();
     assert.equal(await room.inputValue(), '95');
     assert.deepEqual(errors, []);

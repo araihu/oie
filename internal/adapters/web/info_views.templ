@@ -8,15 +8,19 @@ import (
 
 templ infoEntry(v view,kind,label string,symbol templ.Component){
 {{ screen:="shared" }}
-if kind=="stars" || kind=="participants" || kind=="retention" || kind=="read-receipts" {
+if kind=="stars" || kind=="participants" || kind=="retention" || kind=="read-receipts" || kind=="preferences" || kind=="connection" {
 {{screen=kind}}
 }
-@link.Link(v.infoHref(screen,kind,"infoQuery",""),link.WithRootClass("oie-info-entry"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){
+@link.Link(v.infoHref(screen,kind,"infoQuery","","infoFocus",""),link.WithRootClass("oie-info-entry oie-destination"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-entry":kind})){
 @symbol<span>{label}</span>@glyph(heroicons.Icon16SolidChevronRight)
 }
 }
 templ infoBack(v view){
-@link.Link(v.infoBackHref(),link.WithRootClass("oie-account-back oie-info-back"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{v.Text.InfoBack}</span>}
+{{ label:=v.Text.InfoBack }}
+if v.InfoView=="retention" || v.InfoView=="read-receipts" {
+ {{ label=v.Text.DrawerConversationPreferences }}
+}
+@link.Link(v.infoBackHref(),link.WithRootClass("oie-account-back oie-info-back"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{label}</span>}
 }
 templ infoSharedContent(v view){
 {{ scoped:=v.infoSharedView() }}

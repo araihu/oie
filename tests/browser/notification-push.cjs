@@ -57,7 +57,8 @@ async function check() {
     const page = await context.newPage();
     const entry = '/?open=settings&lang=pt-BR';
     await hosted.signIn(page, entry);
-    await page.getByRole('tab', {name: 'Este dispositivo', exact: true}).click();
+    await page.locator('[data-settings-target=device]:visible').click();
+    await page.locator('[data-settings-target=notifications]').click();
     const toggle = page.locator('[data-notification-background]');
     await page.waitForFunction(() => !document.querySelector('[data-notification-background]').disabled);
     assert.equal(await toggle.isChecked(), false);
@@ -123,7 +124,7 @@ async function check() {
     assert.equal((await getStatus()).subscriptionTag, renewed.subscriptionTag);
 
     const second = await context.newPage();
-    await second.goto(hosted.url + entry + '&settingsTab=device');
+    await second.goto(hosted.url + entry + '&settingsTab=notifications');
     const browserSound = '[data-notification-sound]';
     const initialSound = page.locator(browserSound);
     const otherSound = second.locator(browserSound);
@@ -279,7 +280,8 @@ async function check() {
       response.url().endsWith(pushPath) && response.request().method() === 'GET');
     const startup = statusLoaded();
     await reopened.goto(hosted.url + entry);
-    await reopened.getByRole('tab', {name: 'Este dispositivo', exact: true}).click();
+    await reopened.locator('[data-settings-target=device]:visible').click();
+    await reopened.locator('[data-settings-target=notifications]').click();
     assert.equal((await startup).status(), 200);
     const reopenedToggle = reopened.locator('[data-notification-background]');
     const banners = reopened.locator('[data-notification-banners]');

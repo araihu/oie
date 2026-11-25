@@ -67,7 +67,7 @@ const second = 'https://two.example.test';
     for (const type of ['drawer:close', 'drawer:close-request', 'pagehide']) {
       await key.fill('abandoned-fixture-key');
       await page.evaluate(eventType => {
-        window.dispatchEvent(new CustomEvent(eventType, {detail: {id: 'engine-settings'}}));
+        window.dispatchEvent(new CustomEvent(eventType, {detail: {id: 'settings'}}));
       }, type);
       assert.equal(await key.inputValue(), '');
       const request = await save();
