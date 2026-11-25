@@ -45,12 +45,6 @@ window.OieRuntime.register('shared-actions', life => {
   outlet.append(toast);
   scheduleDismissal();
  }
- function closeMenu(scope) {
-  const trigger = scope.querySelector('[data-shared-menu-trigger]');
-  if (trigger?.getAttribute('aria-expanded') !== 'true') return;
-  trigger.click();
-  trigger.focus({preventScroll:true});
- }
  async function save(url,name){if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(url,name||'');const anchor=document.createElement('a');anchor.href=url;anchor.download=name||'';document.body.append(anchor);anchor.click();anchor.remove();return true;}
  async function copy(value){
   if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return;}
@@ -63,7 +57,7 @@ window.OieRuntime.register('shared-actions', life => {
   const item=event.target.closest('[id^="shared-copy-"],[id^="shared-download-"],[id^="shared-refresh-"]');
   if(!item||item.disabled)return;
   const scope=item.closest('[data-shared-actions]');if(!scope)return;
-  event.preventDefault();closeMenu(scope);
+  event.preventDefault();
   const key=scope.dataset.sharedActions;if(pending.has(key))return;
   const address=scope.dataset.sharedUrl;let url;try{url=new URL(address);}catch{return;}
   if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return;

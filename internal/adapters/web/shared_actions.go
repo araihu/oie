@@ -46,17 +46,17 @@ func sharedActionDownload(v view, item engineapi.SharedContentItem) string {
 func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section {
 	items := []dropdown.Item{
 		{ID: sharedActionID(v, item, "source"), Label: v.Text.SharedGoToMessage, Href: v.sharedSourceHref(item), Icon: goToMessageIcon()},
-		{ID: sharedActionID(v, item, "copy"), Label: v.Text.SharedCopyLink, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)},
+		{ID: sharedActionID(v, item, "copy"), Label: v.Text.SharedCopyLink, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidDocumentDuplicate)},
 		{ID: sharedActionID(v, item, "open"), Label: v.Text.SharedOpenLink, Href: safePreviewURL(item.Url), Target: "_blank", Rel: "noopener noreferrer", Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare)},
 	}
 	if !v.Preview && item.Message.Retraction == nil && item.Message.Moderation == nil && item.Message.SendState != "cancelled" {
 		items = append(items, forwardAction(v, "shared-"+sharedActionScope(v)+"-"+item.Id+"-", item.Message.Id))
 	}
 	if item.Kind == "image" && (sharedActionPreview(item) != "" || sharedActionFile(item) != "") || sharedActionDownload(v, item) != "" {
-		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: v.Text.SharedDownload, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: v.Text.SharedDownload, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
 	}
 	if item.Kind == "link" && sharedActionPreview(item) != "" {
-		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "refresh"), Label: v.Text.RefreshPreview, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowPath), Disabled: item.Preview.State == "queued"})
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "refresh"), Label: v.Text.RefreshPreview, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowPath), Disabled: item.Preview.State == "queued"})
 	}
 	if item.Kind == "video" && videoThumbnailState(item) != "" && videoPoster(item) == "" {
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "thumbnail"), Label: videoThumbnailActionLabel(v, item), OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowPath)})
