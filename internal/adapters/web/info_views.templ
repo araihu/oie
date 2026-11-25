@@ -33,11 +33,7 @@ templ infoSharedContent(v view){
 @sharedRetractionFilter(scoped,"info-include-retracted","infoIncludeRetracted")
 </form>
 <div id="info-shared-search-results" data-search-query={v.InfoQuery}>
-<nav class="oie-shared-segments" aria-label={v.Text.SharedContentTypes}>
-@sharedTab(scoped,"media",v.Text.SharedMediaTab)
-@sharedTab(scoped,"links",v.Text.SharedLinksTab)
-@sharedTab(scoped,"documents",v.Text.SharedDocsTab)
-</nav>
+@sharedTypeNavigation(scoped)
 <div class="oie-shared-results-frame">
 <div id="info-shared-page-content">
 <div id="info-shared-status" role="status">@sharedStatus(scoped)</div>

@@ -818,7 +818,17 @@
     document.dispatchEvent(new CustomEvent('oie:shared-account',{detail:{page}}));
    }
    const type=page?.querySelector('#shared-content-results')?.dataset.contentType;
-   if(type){const field=document.querySelector('#shared-content-search input[name=contentType]');if(field)field.value=type;for(const tab of document.querySelectorAll('#shared-search-results [data-shared-tab]'))tab.setAttribute('aria-current',String(tab.dataset.sharedTab===type));}
+   if(type)form.elements.contentType.value=type;
+   if(root.id==='shared-content-scroll'){
+    // The category links stay mounted when only the results are replaced.
+    for(const link of document.querySelectorAll('#shared-search-results [data-shared-tab]')){
+     const next=page.querySelector(`#shared-search-results [data-shared-tab="${CSS.escape(link.dataset.sharedTab)}"]`);
+     if(!next)continue;
+     link.className=next.className;
+     if(next.hasAttribute('aria-current'))link.setAttribute('aria-current',next.getAttribute('aria-current'));
+     else link.removeAttribute('aria-current');
+    }
+   }
    const region=document.getElementById('shared-search-results'),fresh=page?.querySelector('#shared-search-results');if(region&&fresh)region.dataset.searchQuery=fresh.dataset.searchQuery||'';
    rememberSharedPage(fresh?.querySelector('[data-shared-page]'));
    document.dispatchEvent(new CustomEvent('oie:shared-search-settled',{detail:{root:region,page}}));

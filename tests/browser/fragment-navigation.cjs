@@ -371,12 +371,12 @@ async function assertMobileControlOwnership(page) {
     await scoped.locator('[data-info-entry=media]:visible').click();
     await scoped.locator('#chat-info-content[data-info-view=shared]').waitFor();
     await scoped.locator('#chat-info-content [data-shared-tab=links]').click();
-    await scoped.locator('#chat-info-content [data-shared-tab=links][aria-current=true]').waitFor();
+    await scoped.locator('#chat-info-content [data-shared-tab=links][aria-current=page]').waitFor();
     await scoped.goBack();
-    await scoped.locator('#chat-info-content [data-shared-tab=media][aria-current=true]').waitFor();
+    await scoped.locator('#chat-info-content [data-shared-tab=media][aria-current=page]').waitFor();
     await keepChat();
     await scoped.goForward();
-    await scoped.locator('#chat-info-content [data-shared-tab=links][aria-current=true]').waitFor();
+    await scoped.locator('#chat-info-content [data-shared-tab=links][aria-current=page]').waitFor();
     await keepChat();
     await scoped.keyboard.press('Escape');
     await scoped.locator('#details-body').waitFor({state:'hidden'});
@@ -409,7 +409,7 @@ async function assertMobileControlOwnership(page) {
         const params=new URL(location.href).searchParams;return{generation:window.OieRuntime.generation,context:Object.fromEntries(['account','q','lang','theme'].map(key=>[key,params.get(key)||'']))};
       }),beforeRequests=hx.length;
       await page.locator('[data-shared-tab="'+kind+'"]').click();
-      await until(async()=>await page.evaluate(({kind,count})=>window.sharedTabSettles===1&&new URL(location.href).searchParams.get('contentType')===kind&&document.querySelector('#shared-content-results')?.dataset.contentType===kind&&document.querySelectorAll('[data-shared-item]').length===count&&document.querySelector('[data-shared-tab="'+kind+'"]')?.getAttribute('aria-current')==='true'&&!document.querySelector('#shared-content-scroll')?.hasAttribute('aria-busy'),{kind,count}),'settled shared-content tab partial');
+      await until(async()=>await page.evaluate(({kind,count})=>window.sharedTabSettles===1&&new URL(location.href).searchParams.get('contentType')===kind&&document.querySelector('#shared-content-results')?.dataset.contentType===kind&&document.querySelectorAll('[data-shared-item]').length===count&&document.querySelector('[data-shared-tab="'+kind+'"]')?.getAttribute('aria-current')==='page'&&!document.querySelector('#shared-content-scroll')?.hasAttribute('aria-busy'),{kind,count}),'settled shared-content tab partial');
       const current=await page.evaluate(()=>{const params=new URL(location.href).searchParams;return{generation:window.OieRuntime.generation,context:Object.fromEntries(['account','q','lang','theme'].map(key=>[key,params.get(key)||''])),retained:window.sharedTabBefore.app===document.getElementById('oie-app')&&window.sharedTabBefore.sidebar===document.querySelector('.oie-sidebar')&&window.sharedTabBefore.search===document.getElementById('shared-content-search')&&window.sharedTabBefore.scroll===document.getElementById('shared-content-scroll'),type:document.querySelector('#shared-content-search input[name=contentType]')?.value}});
       assert.equal(current.generation,previous.generation,'shared tabs must retain the application runtime');assert.equal(current.generation,settledGeneration);assert.deepEqual(current.context,previous.context);assert.equal(current.retained,true);assert.equal(current.type,kind);assert.equal(hx.length,beforeRequests+1,'one HTMX request per tab change');await until(()=>streams.size===1,'one live stream after tab partial');assert.equal(await page.evaluate(()=>window.documentToken),token);assert.equal(documents.length,1);
     };
