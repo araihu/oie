@@ -123,7 +123,7 @@ templ drawerSubpage(parent, id, title, backLabel string) {
 }
 
 templ generalSettings(v view) {
-	<section class="oie-settings-group" aria-labelledby="settings-general-heading">
+	<section class="oie-drawer-group" aria-labelledby="settings-general-heading">
 		<h3 id="settings-general-heading">{ v.Text.SettingsGeneral }</h3>
 		<div class="oie-settings-section">
 			@appearanceSettings(v)
@@ -135,7 +135,7 @@ templ generalSettings(v view) {
 			}
 		</div>
 	</section>
-	<section class="oie-settings-group" aria-labelledby="settings-device-engine-heading">
+	<section class="oie-drawer-group" aria-labelledby="settings-device-engine-heading">
 		<h3 id="settings-device-engine-heading">{ v.Text.SettingsDeviceAndEngine }</h3>
 		<div class="oie-settings-links">
 			@settingsDestination("device", v.Text.DevicePreferences, glyph(heroicons.Icon16SolidWindow))
@@ -144,7 +144,7 @@ templ generalSettings(v view) {
 			}
 		</div>
 	</section>
-	<section class="oie-settings-group" aria-labelledby="settings-security-support-heading">
+	<section class="oie-drawer-group" aria-labelledby="settings-security-support-heading">
 		<h3 id="settings-security-support-heading">{ v.Text.SettingsSecurityAndSupport }</h3>
 		<div class="oie-settings-links">
 			if v.HostedSignIn {

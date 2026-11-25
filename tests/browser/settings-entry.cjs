@@ -51,7 +51,7 @@ const id='019a5df0-0000-7000-8000-000000000001';
     const pt=locale==='pt-BR';
     const device=dialog.locator('[data-settings-target=device]:visible');
     const general=dialog.locator('[data-settings-page=general]');
-    const groups=general.locator('.oie-settings-group');
+    const groups=general.getByRole('region');
     assert.deepEqual(await groups.getByRole('heading',{level:3}).allTextContents(),pt?
       ['Geral','Dispositivo e motor','Segurança e suporte']:['General','Device and engine','Security and support']);
     assert.deepEqual(await groups.evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).borderBlockStartWidth)),['0px','1px','1px']);

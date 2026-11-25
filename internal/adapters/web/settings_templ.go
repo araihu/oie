@@ -633,7 +633,7 @@ func generalSettings(v view) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<section class=\"oie-settings-group\" aria-labelledby=\"settings-general-heading\"><h3 id=\"settings-general-heading\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<section class=\"oie-drawer-group\" aria-labelledby=\"settings-general-heading\"><h3 id=\"settings-general-heading\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -685,7 +685,7 @@ func generalSettings(v view) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div></section><section class=\"oie-settings-group\" aria-labelledby=\"settings-device-engine-heading\"><h3 id=\"settings-device-engine-heading\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div></section><section class=\"oie-drawer-group\" aria-labelledby=\"settings-device-engine-heading\"><h3 id=\"settings-device-engine-heading\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -712,7 +712,7 @@ func generalSettings(v view) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</div></section><section class=\"oie-settings-group\" aria-labelledby=\"settings-security-support-heading\"><h3 id=\"settings-security-support-heading\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</div></section><section class=\"oie-drawer-group\" aria-labelledby=\"settings-security-support-heading\"><h3 id=\"settings-security-support-heading\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

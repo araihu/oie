@@ -584,7 +584,7 @@
   "SearchAccountsSelected": "{count} contas selecionadas",
   "SearchClearAccounts": "Limpar seleção",
   "NoAccountsFound": "Nenhuma conta encontrada",
-  "InfoConversationActions": "Ações da conversa",
+  "InfoConversationContent": "Conteúdo da conversa",
   "InfoStarred": "Mensagens favoritadas",
   "InfoConnection": "Conexão e informações da sala",
   "InfoBack": "Voltar aos detalhes da conversa",

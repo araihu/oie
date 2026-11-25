@@ -111,28 +111,42 @@ default:
     }
   }
   <div id="conversation-details-description" data-version={v.detailsVersion("description")}>@infoDescription(v)</div>
-  <nav class="oie-info-rows" aria-label={v.Text.SharedContentTypes}>
-@infoEntry(v,"media",v.Text.SharedMediaTab,glyph(heroicons.Icon16SolidRectangleGroup))
-@infoEntry(v,"links",v.Text.SharedLinksTab,glyph(heroicons.Icon16SolidLink))
-@infoEntry(v,"documents",v.Text.SharedDocsTab,glyph(heroicons.Icon16SolidDocumentText))
-@infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
-</nav>
-  <nav class="oie-info-rows" aria-label={v.Text.InfoConversationActions}>
-  if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
-    @infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
-    <template data-info-participants-loading>@infoParticipantsSkeleton(v)</template>
+  @infoGroup("info-content-heading",v.Text.InfoConversationContent) {
+    @infoEntry(v,"media",v.Text.SharedMediaTab,glyph(heroicons.Icon16SolidRectangleGroup))
+    @infoEntry(v,"links",v.Text.SharedLinksTab,glyph(heroicons.Icon16SolidLink))
+    @infoEntry(v,"documents",v.Text.SharedDocsTab,glyph(heroicons.Icon16SolidDocumentText))
+    @infoEntry(v,"stars",v.Text.InfoStarred,glyph(heroicons.Icon16SolidStar))
   }
-  if !v.Preview && v.requestKind()=="" {
-    @infoEntry(v,"preferences",v.Text.DrawerConversationPreferences,glyph(heroicons.Icon16SolidCog6Tooth))
+  {{
+    scope := v.Text.SenderConversation
+    if v.Selected.Kind == "room" {
+      scope = v.Text.CapabilityScopeRoom
+    }
+  }}
+  @infoGroup("info-scope-heading",scope) {
+    if v.Selected.Kind=="room" && v.requestKind()=="" && !v.Preview {
+      @infoEntry(v,"participants",v.Text.Participants,glyph(heroicons.Icon16SolidUsers))
+      <template data-info-participants-loading>@infoParticipantsSkeleton(v)</template>
+    }
+    if !v.Preview && v.requestKind()=="" {
+      @infoEntry(v,"preferences",v.Text.DrawerConversationPreferences,glyph(heroicons.Icon16SolidCog6Tooth))
+    }
+    @infoEntry(v,"connection",v.Text.InfoConnection,glyph(heroicons.Icon16SolidInformationCircle))
+    if v.OmemoEnabled && (v.Selected.Kind=="direct" || v.Selected.Kind=="room") {
+      <a class="oie-info-entry" target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(v.Selected.AccountId,v.Selected.Id))}>{v.Text.OmemoTitle}</a>
+    }
   }
-  @infoEntry(v,"connection",v.Text.InfoConnection,glyph(heroicons.Icon16SolidInformationCircle))
-@link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry oie-destination"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
-if v.OmemoEnabled && (v.Selected.Kind=="direct" || v.Selected.Kind=="room") {
-<a class="oie-info-entry" target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(v.Selected.AccountId,v.Selected.Id))}>{v.Text.OmemoTitle}</a>
-}
-</nav>
+  @infoGroup("info-messages-heading",v.Text.SearchMessagesGroup) {
+    @link.Link(v.messageSearchHref(v.Selected.AccountId,v.Selected.Id),link.WithRootClass("oie-info-entry oie-destination"),link.WithAttrs(templ.Attributes{"data-open-conversation-search":"","data-search-conversation":v.Selected.Id,"data-search-conversation-title":v.Selected.Title})){@glyph(heroicons.Icon16SolidMagnifyingGlass)<span>{v.Text.SearchMessages}</span>@glyph(heroicons.Icon16SolidChevronRight)}
+  }
 </div>
 }
+}
+templ infoGroup(headingID, title string) {
+  <nav class="oie-drawer-group" aria-labelledby={headingID}>
+    <h3 id={headingID}>{title}</h3>
+    {children...}
+  </nav>
 }
 templ roomArchiveHelp(v view){
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-room-archive-help"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.RoomArchiveMode})){

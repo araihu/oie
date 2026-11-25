@@ -584,7 +584,7 @@
   "SearchAccountsSelected": "{count} accounts selected",
   "SearchClearAccounts": "Clear selection",
   "NoAccountsFound": "No accounts found",
-  "InfoConversationActions": "Conversation actions",
+  "InfoConversationContent": "Conversation content",
   "InfoStarred": "Starred messages",
   "InfoConnection": "Connection and room information",
   "InfoBack": "Back to chat info",

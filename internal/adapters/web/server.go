@@ -537,7 +537,7 @@ type copy struct {
 	OmemoRoomActive, OmemoRoomEnable, OmemoRoomDisable                                 string
 	OmemoReview, OmemoMismatch, OmemoUnavailable                                       string
 
-	InfoConversationActions                                                                                                                                                                                string
+	InfoConversationContent                                                                                                                                                                                string
 	InfoStarred                                                                                                                                                                                            string
 	InfoConnection                                                                                                                                                                                         string
 	InfoBack                                                                                                                                                                                               string
