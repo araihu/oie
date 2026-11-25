@@ -61,7 +61,22 @@ window.OieRuntime.register('previews', life => {
   if(typeof IntersectionObserver!=='function'){life.on(document,'scroll',()=>{measureImages();scheduleAutomatic();},{capture:true,passive:true});life.on(window,'resize',()=>{measureImages();scheduleAutomatic();});}
   life.on(document,'visibilitychange',scheduleAutomatic);
   life.raf(()=>{trackImages();for(const menu of document.querySelectorAll('[id^="save-preview-"]')){const scope=menu.closest('[data-preview-id]')||document.querySelector(`[data-preview-id="${CSS.escape(menu.id.slice(13))}"]`);menu.hidden=!scope?.dataset.previewFile;menu.disabled=!scope?.dataset.previewFile;}});
+  function messageImage(action) {
+    const id = action.id.slice('load-preview-'.length);
+    return action.closest('[data-message-id]')?.querySelector('[data-preview-id="' + CSS.escape(id) + '"]');
+  }
+  function syncLoadAction(action) {
+    const scope = messageImage(action);
+    action.hidden = !scope || !!scope.dataset.previewImage && !state(scope)?.previewImageFailed;
+    action.disabled = action.hidden || downloading.has(scope.dataset.previewId) ||
+      ['queued', 'downloading'].includes(scope.dataset.previewDownload);
+  }
+  function syncMessageImage(scope) {
+    const action = scope.closest('[data-message-id]')?.querySelector('#load-preview-' + CSS.escape(scope.dataset.previewId));
+    if (action) syncLoadAction(action);
+  }
   life.on(document,'oie:actions-refreshed',()=>{
+    document.querySelectorAll('[data-message-menu-slot] [id^="load-preview-"]').forEach(syncLoadAction);
     for(const save of document.querySelectorAll('[data-message-menu-slot] [id^="save-preview-"]')){
       const scope=document.querySelector('[data-preview-id="'+CSS.escape(save.id.slice(13))+'"]');
       save.hidden=save.disabled=!scope?.dataset.previewFile;
@@ -87,6 +102,7 @@ window.OieRuntime.register('previews', life => {
     const refresh=scope.querySelector('[id^="refresh-preview-"]');if(refresh)refresh.disabled=scope.dataset.previewState==='queued'||refreshing.has(scope.dataset.previewId);
     const save=scope.querySelector('[id^="save-preview-"]')||document.getElementById('save-preview-'+scope.dataset.previewId);
     if(save){save.disabled=!scope.dataset.previewFile;save.hidden=!scope.dataset.previewFile;}
+    syncMessageImage(scope);
     if(viewing===scope.dataset.previewId&&contextOf(scope)===viewerOrigin)updateViewer(scope);
   }
   function updateViewer(scope) {
@@ -282,10 +298,16 @@ window.OieRuntime.register('previews', life => {
     if(downloading.has(id))return downloading.get(id);
     const pending=requestDownload(scope).finally(()=>{
       downloading.delete(id);
-      if(!life.signal.aborted)for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=false;
+      if(!life.signal.aborted)for(const matching of findAll(id)){
+        if(state(matching))state(matching).previewBusy=false;
+        syncMessageImage(matching);
+      }
     });
     downloading.set(id,pending);
-    for(const matching of findAll(id))if(state(matching))state(matching).previewBusy=true;
+    for(const matching of findAll(id)){
+      if(state(matching))state(matching).previewBusy=true;
+      syncMessageImage(matching);
+    }
     return pending;
   }
   async function requestDownload(scope) {
@@ -332,6 +354,12 @@ window.OieRuntime.register('previews', life => {
   }
   life.on(document,'click',event=>{const button=event.target.closest('[id^="refresh-preview-"]');if(!button)return;const scope=button.closest('[data-preview-id]');if(!scope||scope.dataset.previewKind!=='link')return;event.preventDefault();refreshLink(scope)});
   life.on(document,'click',async event=>{
+    const load = event.target.closest('[id^="load-preview-"]');
+    if (load) {
+      const scope = messageImage(load);
+      if (scope && !load.disabled) await download(scope);
+      return;
+    }
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
     const button=menu||event.target.closest('button[data-preview-download],button[data-preview-expand]');if(!button)return;
     const id=menu?menu.id.slice(menu.id.indexOf('-preview-')+9):'';

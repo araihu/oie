@@ -19,7 +19,7 @@ if p.Kind=="link" {
 }else{
 <div class="oie-image-preview">
 if !v.SharedCard && len(v.imagePreviews(p.MessageId))>1 {
-@dropdown.Dropdown(dropdown.Config{ID:v.previewControlID("image-menu",p.Id),Label:v.Text.ImageActions,Trigger:imageMenuTrigger(v,p.Id),RootClass:"oie-image-menu",MenuAlign:dropdown.AlignEnd,Sections:imageActions(v,p)})
+@dropdown.Dropdown(dropdown.Config{ID:v.previewControlID("image-menu",p.Id),Label:v.Text.ImageActions,Trigger:imageMenuTrigger(v,p.Id),RootClass:"oie-image-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:imageActionItems(v,p)}}})
 }
 <div class="oie-image-frame">@previewThumbnail(v,p)</div>
 <p class="oie-preview-status" x-show="previewStatus" x-text="previewStatus">{v.previewStatus(p)}</p>
@@ -54,7 +54,9 @@ templ previewDescription(v view,p engineapi.MessagePreview){
 
 templ previewImageActions(v view){
 <div class="oie-preview-image-actions" if v.SharedCard { x-show="!previewImage || previewImageFailed" }>
+if v.SharedCard || v.PreviewScope!="" {
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-download":"","x-cloak":"","x-show":"!previewImage || previewImageFailed","x-bind:disabled":"previewBusy || previewDownload==='queued' || previewDownload==='downloading'"})){ {v.Text.LoadImage} }
+}
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-expand":"","x-cloak":"","x-show":"previewFile && (!previewImage || previewImageFailed)","x-bind:disabled":"previewBusy"})){ {v.Text.OpenImage} }
 <p data-preview-feedback role="status" aria-live="polite"></p>
 </div>

@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -200,8 +201,23 @@ func messageActions(v view, message messageView) []dropdown.Section {
 	if messageEdited(message) {
 		sections = append(sections, dropdown.Section{Items: []dropdown.Item{{ID: "history-message-" + id, Icon: historyIcon(), Label: v.Text.ViewEditHistory, Href: v.editHistoryHref(message)}}})
 	}
-	if images := v.imagePreviews(id); len(images) == 1 {
-		sections = append(sections, imageActions(v, images[0])...)
+	images := v.imagePreviews(id)
+	if len(images) > 0 {
+		var loads []dropdown.Item
+		for index, image := range images {
+			label := v.Text.LoadImage
+			if len(images) > 1 {
+				label += " " + strconv.Itoa(index+1)
+				if name := previewFilename(image); name != "" {
+					label += " · " + name
+				}
+			}
+			loads = append(loads, dropdown.Item{ID: "load-preview-" + image.Id, Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: label, OnClick: "void 0"})
+		}
+		if len(images) == 1 {
+			loads = append(loads, imageActionItems(v, images[0])...)
+		}
+		sections = append(sections, dropdown.Section{Items: loads})
 	}
 	if videos := v.messageVideos(id); len(videos) > 0 {
 		items := make([]dropdown.Item, 0, len(videos))
@@ -251,10 +267,9 @@ func audioDownloadActions(v view, message messageView) []dropdown.Item {
 	return items
 }
 
-func imageActions(v view, p engineapi.MessagePreview) []dropdown.Section {
-	return []dropdown.Section{{Items: []dropdown.Item{
+func imageActionItems(v view, p engineapi.MessagePreview) []dropdown.Item {
+	return []dropdown.Item{
 		{ID: v.previewControlID("open-preview", p.Id), Icon: glyph(heroicons.Icon16SolidMagnifyingGlass), Label: v.Text.OpenImage, OnClick: "void 0"},
 		{ID: v.previewControlID("info-preview", p.Id), Icon: glyph(heroicons.Icon16SolidInformationCircle), Label: v.Text.ImageInfo, OnClick: "void 0"},
-		{ID: v.previewControlID("save-preview", p.Id), Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.SaveOriginalImage, OnClick: "void 0", Disabled: mediaSource(p.FileHash) == ""},
-	}}}
+		{ID: v.previewControlID("save-preview", p.Id), Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.SaveOriginalImage, OnClick: "void 0", Disabled: mediaSource(p.FileHash) == ""}}
 }
