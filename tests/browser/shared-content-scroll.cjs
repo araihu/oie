@@ -95,6 +95,34 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   release();await until(async()=>await region.results.locator('[data-shared-item]').count()===100,'second page append');assert(await native.evaluate(video=>video===window.scrollVideo&&document.activeElement===video&&!video.paused));
   const drift=await page.evaluate(()=>window.appendGeometry);assert(drift.scrollDrift<=1&&drift.anchorDrift<=1,`append moved the viewport: ${JSON.stringify(drift)}`);assert.equal(page.url(),startURL);assert.equal(await page.evaluate(()=>window.history.length),history);
   await bottom(region);await until(async()=>await region.results.locator('[data-shared-item]').count()===120,'terminal page append');assert.equal(count(first),1);assert.equal(count(second),1);assert.equal(await region.pagination.locator('[data-shared-next]:visible').count(),0);let content=await consistent(region);assert.equal(content.months.length,2);
+  // A long month must reserve space for its last card, including after resize.
+  // At two columns these previews exceed Firefox's 10,000 implicit row limit
+  // with the old one-track-per-pixel layout.
+  const tallPreviews=await page.addStyleTag({content:'.oie-shared-item .oie-image-preview {min-height:400px}'});
+  for(const width of [390,1100]){
+   await page.setViewportSize({width,height:700});
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   const geometry=await region.results.evaluate(root=>[...root.querySelectorAll('[data-masonry]')].map(grid=>{
+    const bottoms=new Map(),bounds=grid.getBoundingClientRect();
+    let minGap=Infinity;
+    for(const card of grid.querySelectorAll('[data-shared-item]')){
+     const rect=card.getBoundingClientRect();
+     if(bottoms.has(rect.x))minGap=Math.min(minGap,rect.top-bottoms.get(rect.x));
+     bottoms.set(rect.x,rect.bottom);
+    }
+    return {minGap,overflow:Math.max(...bottoms.values())-bounds.bottom,height:bounds.height,
+     rows:getComputedStyle(grid).gridTemplateRows.split(' ').length,cards:grid.children.length};
+   }));
+   assert.equal(geometry.length,2);
+   if(width===390)assert(geometry.some(month=>month.height>10000));
+   for(const month of geometry){
+    assert(month.rows<=month.cards,'the number of CSS tracks is bounded by the card count');
+    assert(month.minGap>=9,'cards keep a gutter in each column');
+    assert(month.overflow<=1,'the month contains its last card');
+   }
+  }
+  await tallPreviews.evaluate(style=>style.remove());
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await region.scroll.evaluate(scroll=>scroll.scrollTop=Math.min(1600,scroll.scrollHeight-scroll.clientHeight));const anchor=await region.results.locator('[data-shared-item]').evaluateAll(items=>{const scroll=document.querySelector('#shared-content-scroll').getBoundingClientRect();const item=items.find(item=>item.getBoundingClientRect().bottom>scroll.top);return{id:item.dataset.sharedItem,top:item.getBoundingClientRect().top}});const beforeHead=state.reads.length;state.head=true;await refresh(page);await until(async()=>await region.results.locator(`[data-shared-item="${newest.id}"]`).count()===1,'SSE fresh head');await until(async()=>await region.results.locator('[data-shared-item]').count()===121,'SSE keeps loaded tail and old head spill');assert(await native.evaluate(video=>video===window.scrollVideo&&!video.paused));const anchorAfter=(await region.results.locator(`[data-shared-item="${anchor.id}"]`).boundingBox()).y;assert(Math.abs(anchorAfter-anchor.top)<3,`SSE moved visible anchor ${anchor.id}: ${anchor.top} -> ${anchorAfter}`);await consistent(region);
   await waitForMediaPage(region,beforeHead,'window revalidation after new head');
   state.older=true;

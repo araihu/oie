@@ -431,3 +431,84 @@ func TestSharedDocumentHTTPPlainTextPDFRangesAndNoMutation(t *testing.T) {
 		t.Fatal("viewing mutated outbox", err)
 	}
 }
+
+type indexedMediaFixture struct {
+	streamedFixture
+	indexCalls atomic.Int32
+	source     string
+}
+
+func (f *indexedMediaFixture) OpenVideoIndex(_ context.Context, source string) (application.VideoIndex, error) {
+	f.indexCalls.Add(1)
+	if source != f.source {
+		return application.VideoIndex{}, application.ErrNotFound
+	}
+	return application.VideoIndex{Codecs: "vp09.00.10.08", Size: 100, InitLength: 16,
+		Segments: []application.VideoSegment{{Duration: 2, Length: 84}}}, nil
+}
+
+func TestSharedVideoIndexResolvesOnlyRetainedPeerTubeOriginal(t *testing.T) {
+	dir := t.TempDir()
+	engine, _, server := newMessagingEngine(t, dir, &protocolStub{})
+	conversation := openTestConversation(t, engine, "alice@localhost")
+	const source = "https://video.example/download/streaming-playlists/hls/videos/82832f71-7871-42e1-b533-4ea53dc936e4-1080-fragmented.mp4"
+	fixture := &indexedMediaFixture{source: source}
+	engine.SetMediaReader(fixture)
+	for i, url := range []string{source, "https://files.example/native.mp4"} {
+		if err := engine.Receive(t.Context(), application.Incoming{AccountID: conversation.AccountID,
+			Address: conversation.Address, ProviderID: fmt.Sprint("index-", i), OriginalText: url,
+			Historical: true, CreatedAt: time.Unix(int64(1000+i), 0)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	startMediaEngine(t, engine)
+	page := waitVideoCatalog(t, engine)
+	if len(page.Items) != 2 || fixture.indexCalls.Load() != 0 {
+		t.Fatalf("listing made a source request or lost an item: %+v", page)
+	}
+	var eligible, native string
+	for _, item := range page.Items {
+		if item.URL == source {
+			eligible = string(item.ID)
+		} else {
+			native = string(item.ID)
+		}
+	}
+	for _, tc := range []struct {
+		item, query, byteRange string
+		status                 int
+	}{
+		{native, "?index=true", "", 415},
+		{eligible, "?index=true&download=true", "", 400},
+		{eligible, "?index=true", "bytes=0-0", 400},
+		{eligible, "?index=true", "", 200},
+	} {
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			server.URL+"/api/v1/shared-content/"+tc.item+"/content"+tc.query, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.byteRange != "" {
+			request.Header.Set("Range", tc.byteRange)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if err != nil || response.StatusCode != tc.status {
+			t.Fatalf("%v: %d %s %v", tc, response.StatusCode, body, err)
+		}
+		if tc.status == http.StatusOK {
+			var index application.VideoIndex
+			if response.Header.Get("Content-Type") != application.VideoIndexMediaType ||
+				json.Unmarshal(body, &index) != nil || index.Size != 100 || len(index.Segments) != 1 {
+				t.Fatal("invalid playback index", response.Header, string(body))
+			}
+		}
+	}
+	if fixture.indexCalls.Load() != 1 || fixture.calls.Load() != 0 {
+		t.Fatal("index request read original video bytes or used an ineligible source")
+	}
+}

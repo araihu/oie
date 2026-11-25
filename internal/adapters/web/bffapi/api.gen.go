@@ -528,6 +528,21 @@ func (e GetBrowserSharedMediaParamsPreview) Valid() bool {
 	}
 }
 
+// Defines values for GetBrowserSharedMediaParamsIndex.
+const (
+	GetBrowserSharedMediaParamsIndexN1 GetBrowserSharedMediaParamsIndex = "1"
+)
+
+// Valid indicates whether the value is a known member of the GetBrowserSharedMediaParamsIndex enum.
+func (e GetBrowserSharedMediaParamsIndex) Valid() bool {
+	switch e {
+	case GetBrowserSharedMediaParamsIndexN1:
+		return true
+	default:
+		return false
+	}
+}
+
 // BrowserEditIntent Frozen command, never a mutation of a pending original send.
 //
 // Example: {"accountId":"019a5df0-0000-7000-8000-000000000002","conversationId":"019a5df0-0000-7000-8000-000000000003","csrf":"browser-csrf-token","engineId":"019a5df0-0000-7000-8000-000000000001","expectedRevisionId":"019a5df0-0000-7000-8000-000000000005","messageId":"019a5df0-0000-7000-8000-000000000004","operationKey":"019a5df0-0000-7000-8000-000000000006","originalText":"Corrected text"}
@@ -1745,6 +1760,9 @@ type GetBrowserSharedMediaParams struct {
 
 	// Preview Requires engineId and excludes download. Returns at most the first 5 MiB of video.
 	Preview *GetBrowserSharedMediaParamsPreview `form:"preview,omitempty" json:"preview,omitempty"`
+
+	// Index Returns the original video's seek index. Requires engineId and excludes Range, preview and download.
+	Index *GetBrowserSharedMediaParamsIndex `form:"index,omitempty" json:"index,omitempty"`
 }
 
 // GetBrowserSharedMediaParamsDownload defines parameters for GetBrowserSharedMedia.
@@ -1752,6 +1770,9 @@ type GetBrowserSharedMediaParamsDownload string
 
 // GetBrowserSharedMediaParamsPreview defines parameters for GetBrowserSharedMedia.
 type GetBrowserSharedMediaParamsPreview string
+
+// GetBrowserSharedMediaParamsIndex defines parameters for GetBrowserSharedMedia.
+type GetBrowserSharedMediaParamsIndex string
 
 // CreateHostedAccessKeyFormdataRequestBody defines body for CreateHostedAccessKey for application/x-www-form-urlencoded ContentType.
 type CreateHostedAccessKeyFormdataRequestBody CreateHostedAccessKeyFormdataBody

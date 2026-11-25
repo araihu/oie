@@ -114,8 +114,9 @@ window.OieRuntime.register('stars', life => {
         const id=next.dataset.infoStarMessage;
         let child=id?findRow(id):null;
         if(!child&&cursor&&!cursor.matches(rows)&&!next.matches(rows)){
-          // The incoming pagination has no client-computed span.
-          if(cursor.style.gridRowEnd)next.style.gridRowEnd=cursor.style.gridRowEnd;
+          // The incoming pagination has no client-computed position.
+          const top=cursor.style.getPropertyValue('--masonry-top');
+          if(top)next.style.setProperty('--masonry-top',top);
           if(cursor.isEqualNode(next))child=cursor;
         }
         if(!child){

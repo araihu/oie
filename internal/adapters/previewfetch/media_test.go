@@ -81,6 +81,89 @@ func TestMediaReaderValidatesRangesAndProviderFallback(t *testing.T) {
 	}
 }
 
+func TestMediaReaderNegotiatesWebMRedirect(t *testing.T) {
+	data := []byte("webm fixture")
+	f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/talk.webm" {
+			if strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"MirrorList":[]}`)
+				return
+			}
+			http.Redirect(w, r, "/mirror/talk.webm", http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "video/webm")
+		http.ServeContent(w, r, "talk.webm", time.Time{}, bytes.NewReader(data))
+	})
+	for _, format := range []application.MediaFormat{"", "video"} {
+		read, err := f.Open(t.Context(), "http://public.example/talk.webm", application.MediaReadRequest{
+			Format: format, Range: &application.ByteRange{Start: 0, End: 3},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(read.Body)
+		_ = read.Body.Close()
+		if err != nil || !read.Partial || read.MediaType != "video/webm" || string(body) != "webm" {
+			t.Fatalf("unexpected mirror response: %+v, %q, %v", read, body, err)
+		}
+	}
+}
+
+func TestMediaReaderNormalizesGenericMP4Responses(t *testing.T) {
+	data := []byte("0123456789")
+	f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			http.Redirect(w, r, "/clip.MP4", http.StatusFound)
+			return
+		case "/html.mp4":
+			w.Header().Set("Content-Type", "text/html")
+		default:
+			w.Header().Set("Content-Type", "application/octet-stream")
+		}
+		http.ServeContent(w, r, "clip.mp4", time.Time{}, bytes.NewReader(data))
+	})
+	for _, test := range []struct {
+		name, path, expected string
+		format               application.MediaFormat
+		span                 *application.ByteRange
+	}{
+		{name: "full", path: "/clip.mp4", expected: "0123456789", format: "video"},
+		{name: "default video reader", path: "/clip.mp4", expected: "0123456789"},
+		{name: "two-byte probe after redirect", path: "/redirect", expected: "01", format: "video", span: &application.ByteRange{Start: 0, End: 1}},
+		{name: "nonzero range", path: "/clip.m4v", expected: "456", format: "video", span: &application.ByteRange{Start: 4, End: 6}},
+		{name: "extension in query", path: "/blob?file=clip.mp4", format: "video"},
+		{name: "explicit HTML", path: "/html.mp4", format: "video"},
+		{name: "audio request", path: "/clip.mp4", format: "audio"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := f.Open(t.Context(), "http://public.example"+test.path, application.MediaReadRequest{Format: test.format, Range: test.span})
+			if test.expected == "" {
+				if mediaCode(err) != "media_unsupported" {
+					if result.Body != nil {
+						_ = result.Body.Close()
+					}
+					t.Fatalf("expected media_unsupported, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(result.Body)
+			if closeErr := result.Body.Close(); err != nil || closeErr != nil {
+				t.Fatal(err, closeErr)
+			}
+			if result.MediaType != "video/mp4" || result.Partial != (test.span != nil) ||
+				result.Total != int64(len(data)) || string(body) != test.expected {
+				t.Fatalf("unexpected response: %+v, body %q", result, body)
+			}
+		})
+	}
+}
+
 func TestMediaReaderRejectsInvalidResponseWithoutConsumingOriginal(t *testing.T) {
 	f, _ := fixtureFetcher(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp4")

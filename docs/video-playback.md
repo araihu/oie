@@ -7,12 +7,23 @@ and the required WebAssembly decoders load on demand from this Oiê instance.
 Versioned decoder assets can be reused from the browser cache. The application
 does not store a converted file. Slow devices can download the original.
 
+An eligible PeerTube single-file fragmented MP4 can use Media Source with
+the browser's codecs. After Play, the engine reads the same-origin PeerTube
+metadata and the playlist for the exact rendition. It requires the original
+URL to match the video metadata and a finite, contiguous index for the full
+original. It gives the browser only the codec identifiers and bounded byte
+ranges and durations. The browser requests those ranges through Oiê and can
+seek immediately beyond its buffered data. If indexed startup fails, Oiê tries
+the regular native player and may use the on-demand decoder.
+
 `GET /api/v1/shared-content/{itemId}/content` opens a current retained video
 reference through the owning engine. It accepts one byte range and a strong
 entity tag or HTTP date through `If-Range`. A provider that ignores Range
 returns a complete 200 response. Valid partial responses retain their byte
 positions and complete size. Unsatisfiable selections return 416 with a known
 complete size. HEAD returns 405 without a provider request.
+An explicit `index=true` request returns the seek index when eligible and
+cannot be combined with byte ranges or downloads.
 
 The catalog supports `type=video` and up to 100 unique `messageId` filters when a
 conversation is supplied. Both filters apply before pagination. The effective
@@ -42,8 +53,9 @@ cards still starts no video transfer.
 The reader accepts `video/mp4`, `video/webm`, `video/ogg` and
 `video/quicktime`, plus Matroska and AVI. It requires a known complete size no greater than 2 GiB,
 identity encoding and consistent range metadata. Unknown-size responses,
-HTML, multipart ranges, playlists, HLS/DASH manifests, transcoding and codec
-conversion are not supported. DNS results and redirect destinations follow the
+HTML, multipart ranges, arbitrary HLS/DASH streams, transcoding and codec
+conversion are outside this reader's scope. Eligible MP4 or M4V video URLs
+served as `application/octet-stream` use the MP4 MIME type for playback. DNS results and redirect destinations follow the
 same public-address policy as preview retrieval. Connections use verified
 literal addresses; proxies, cookies, authorization and referrer forwarding are
 disabled for media reads.
@@ -75,12 +87,17 @@ It covers explicit retries, offline recovery, unsupported content, focus/drafts,
 reference removal and cleanup on navigation or drawer close. The shared-content
 regression passes all 16 responsive/theme/locale accessibility variants.
 
-The committed source also passes isolated web/API package tests independently
+Indexed MP4 regression coverage uses a fragmented VP9 fixture and seeks past
+the initial buffer. The reported PeerTube 1080p H.264/AAC original also plays
+and seeks across its full 53-minute timeline in Chrome using the provider's
+byte ranges. Neither MP4 test needs the WebAssembly decoder.
+
+The initial video player source also passed isolated web/API package tests independently
 of concurrent working-tree changes. A read-only live check finds three mounted
 players with no source, autoplay, video-body requests or mutations before Play.
 The compact controls fit at 390 and 1290 pixels. No real provider video was
-retrieved during validation. Actual MP4 codec support was not claimed from the
-VP8 test; unsupported formats retain the original link and explicit retry.
+retrieved during that initial validation. Unsupported formats retain the
+original link and explicit retry.
 
 The live engine advertises API 0.13.0. Its existing data directory remains in
 place with clean migration version 10; retained messages increased from 5746

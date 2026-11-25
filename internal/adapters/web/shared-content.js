@@ -10,7 +10,8 @@ window.OieRuntime.register('shared-content', life => {
  const keyCompare=(a,b)=>a.ms===b.ms?(a.id>b.id?1:a.id<b.id?-1:0):(a.ms>b.ms?1:-1),sorted=items=>[...items].sort((a,b)=>-keyCompare(a,b));
  function rawItem(node){
   const copy=node.cloneNode(true);
-  copy.style.removeProperty('grid-row-end');
+  copy.style.removeProperty('--masonry-column');
+  copy.style.removeProperty('--masonry-top');
   if (!copy.style.length) copy.removeAttribute('style');
   for(const media of copy.querySelectorAll('video')){media.removeAttribute('src');media.hidden=true;media.removeAttribute('autoplay')}
   for(const source of copy.querySelectorAll('source'))source.removeAttribute('src');

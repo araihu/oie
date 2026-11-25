@@ -551,6 +551,11 @@ paths:
         description: Complete the download and calculate its integrity before delivering any bytes.
         schema:
           type: boolean
+      - name: index
+        in: query
+        description: Read a bounded seek index for an eligible fragmented MP4. Excludes Range and downloads.
+        schema:
+          type: boolean
       - name: X-Oie-Download-Device
         in: header
         description: Device scope for durable retention of an explicit download.
@@ -572,7 +577,7 @@ paths:
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '200':
-          description: Complete media/document response; the provider may have ignored Range.
+          description: Complete media, document, or explicitly requested seek index.
           headers:
             X-Oie-SHA256:
               description: Lowercase SHA-256 fingerprint of all original bytes when verified or downloaded.
@@ -612,6 +617,10 @@ paths:
               schema:
                 type: string
           content:
+            application/vnd.oie.video-index+json:
+              schema:
+                $ref: '#/components/schemas/VideoSeekIndex'
+              example: {codecs: avc1.640028, size: 751408, initLength: 1408, segments: [{duration: 4, length: 750000}]}
             text/plain:
               schema:
                 type: string
@@ -5445,6 +5454,52 @@ components:
         title: Shared article
         siteName: Example
         updatedAt: '2026-11-08T12:00:00Z'
+    VideoSeekIndex:
+      type: object
+      description: Byte ranges for the original fragmented MP4. Every fragment follows the previous range without gaps.
+      required: [codecs, size, initLength, segments]
+      properties:
+        codecs:
+          type: string
+          description: Codec identifiers for the original audio and video tracks.
+          maxLength: 128
+          example: avc1.640028
+        size:
+          type: integer
+          format: int64
+          description: Size of the complete original in bytes.
+          minimum: 1
+          example: 751408
+        initLength:
+          type: integer
+          format: int64
+          description: Number of initialization bytes at the start of the file.
+          minimum: 1
+          example: 1408
+        segments:
+          type: array
+          description: Ordered time and length for each original fragment.
+          minItems: 1
+          maxItems: 16000
+          example: [{duration: 4, length: 750000}]
+          items:
+            type: object
+            example: {duration: 4, length: 750000}
+            required: [duration, length]
+            properties:
+              duration:
+                type: number
+                format: double
+                description: Playback duration of this fragment in seconds.
+                minimum: 0
+                exclusiveMinimum: true
+                example: 4
+              length:
+                type: integer
+                format: int64
+                description: Byte count of this fragment.
+                minimum: 1
+                example: 750000
     VideoThumbnail:
       type: object
       description: Cached frame metadata for one canonical retained video reference. A ready imageHash is a normalized static thumbnail; original video bytes are never retained by this operation.

@@ -20,6 +20,7 @@
 /* Offer retry only after native playback fails. Keep a selected menu item
    visible until the dropdown restores focus to its trigger. */
 .oie-shared-item:not(:has(> .oie-audio-card [data-audio-player][hidden])) [id^="shared-retry-audio-"]:not(:focus){display:none}
+.oie-drawer-copy-toast{position:absolute;inset-inline:12px;inset-block-end:max(12px,env(safe-area-inset-bottom));z-index:11}
 /* Keep the title clear of the menu and give controls the whole content width. */
 .oie-shared-item > .oie-audio-card {
   container: shared-audio / inline-size;
