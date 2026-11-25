@@ -19,10 +19,8 @@ func languageCombobox(v view) combobox.Config {
 }
 
 templ languageSettings(v view) {
-	<div x-data="{pendingLanguageFocus:false}" x-on:drawer:open.window="pendingLanguageFocus = $event.detail?.id === 'settings' && new URLSearchParams(location.search).get('settingsFocus') === 'language'" x-on:focusin.window="if (pendingLanguageFocus && $event.target.closest('[role=dialog]')?.contains($el)) { pendingLanguageFocus=false; $el.querySelector('[data-language-trigger]')?.focus({preventScroll:true}); }">
-		{{ config := languageCombobox(v) }}
-		@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
-			SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
-		})
-	</div>
+	{{ config := languageCombobox(v) }}
+	@combobox.Combobox(config, config.InitialState()).WithExpressions(expressions.Combobox{
+		SearchPlaceholder: v.Text.SearchLanguages, EmptyText: v.Text.NoLanguagesFound,
+	})
 }
