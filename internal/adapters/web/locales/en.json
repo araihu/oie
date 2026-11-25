@@ -794,6 +794,8 @@
   "EngineModeUnavailable": "Could not connect to the engine.",
   "EngineModeSaveFailed": "Could not save the engine setting.",
   "EngineModeChanged": "The engine setting changed. Reload and try again.",
+  "SettingsDeviceAndEngine": "Device and engine",
+  "SettingsSecurityAndSupport": "Security and support",
   "SettingsGeneral": "General",
   "RetentionTitle": "Message retention",
   "RetentionRooms": "Rooms",

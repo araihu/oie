@@ -50,7 +50,13 @@ const id='019a5df0-0000-7000-8000-000000000001';
    if(section==='chats'){
     const pt=locale==='pt-BR';
     const device=dialog.locator('[data-settings-target=device]:visible');
-    assert(await dialog.locator('[data-settings-page=general]').isVisible());
+    const general=dialog.locator('[data-settings-page=general]');
+    const groups=general.locator('.oie-settings-group');
+    assert.deepEqual(await groups.getByRole('heading',{level:3}).allTextContents(),pt?
+      ['Geral','Dispositivo e motor','Segurança e suporte']:['General','Device and engine','Security and support']);
+    assert.deepEqual(await groups.evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).borderBlockStartWidth)),['0px','1px','1px']);
+    assert(await groups.nth(1).locator('[data-settings-target=device]').isVisible());
+    assert(await groups.nth(2).locator('[data-drawer-child=about]').isVisible());
     const languages=dialog.getByRole('combobox',{name:pt?'Idiomas dos atalhos de emoji':'Emoji shortcut languages'});
     await languages.click();
     const languageOptions=dialog.getByRole('listbox');

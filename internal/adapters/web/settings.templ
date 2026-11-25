@@ -123,19 +123,30 @@ templ drawerSubpage(parent, id, title, backLabel string) {
 }
 
 templ generalSettings(v view) {
-	<div class="oie-settings-section">
-		@appearanceSettings(v)
-		@languageSettings(v)
-		@timeZoneSettings(v)
-		@compositionSettings(v)
-		if v.Preview {
-			<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
-		}
+	<section class="oie-settings-group" aria-labelledby="settings-general-heading">
+		<h3 id="settings-general-heading">{ v.Text.SettingsGeneral }</h3>
+		<div class="oie-settings-section">
+			@appearanceSettings(v)
+			@languageSettings(v)
+			@timeZoneSettings(v)
+			@compositionSettings(v)
+			if v.Preview {
+				<p class="oie-settings-note">{ v.Text.PreviewOnly }</p>
+			}
+		</div>
+	</section>
+	<section class="oie-settings-group" aria-labelledby="settings-device-engine-heading">
+		<h3 id="settings-device-engine-heading">{ v.Text.SettingsDeviceAndEngine }</h3>
 		<div class="oie-settings-links">
 			@settingsDestination("device", v.Text.DevicePreferences, glyph(heroicons.Icon16SolidWindow))
 			if v.EngineMode != nil || v.HostedSignIn || (!v.Preview && v.EngineID!="") {
 				@settingsDestination("engine", v.Text.EngineMode, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsRetention16SolidCircleStack, Decorative: true, RootClass: "oie-icon"}))
 			}
+		</div>
+	</section>
+	<section class="oie-settings-group" aria-labelledby="settings-security-support-heading">
+		<h3 id="settings-security-support-heading">{ v.Text.SettingsSecurityAndSupport }</h3>
+		<div class="oie-settings-links">
 			if v.HostedSignIn {
 				@settingsSubpageEntry("access-keys", v.Text.AccessKeys, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsKey16SolidKey, Decorative: true, RootClass: "oie-icon"}))
 			}
@@ -147,7 +158,7 @@ templ generalSettings(v view) {
 				@settingsSubpageEntry("destructive-actions", v.Text.DestructiveActions, appicons.Icon(appicons.Config{Symbol: appicons.IconHeroiconsFire16SolidFire, Decorative: true, RootClass: "oie-icon"}))
 			}
 		</div>
-	</div>
+	</section>
 }
 
 templ timeZoneSettings(v view) {

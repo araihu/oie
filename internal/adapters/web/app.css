@@ -1042,6 +1042,8 @@ html:not(.dark) #favorites-results .oie-bubble { --color-surface-alt: var(--oie-
 .oie-message-omemo {font-size: .75em; margin-inline-end: .3em}
 
 .oie-settings-scroll{padding:16px 20px}
+.oie-settings-group + .oie-settings-group{margin-block-start:18px;border-block-start:1px solid var(--oie-border);padding-block-start:16px}
+.oie-settings-group > h3{margin:0 0 8px;color:var(--oie-muted);font-size:.8125rem;font-weight:650;letter-spacing:.02em}
 [data-settings-page][hidden],.oie-engine-sign-out[hidden]{display:none}
 .oie-engine-sign-out{flex:none;margin:0;padding:12px 20px max(12px,var(--oie-safe-bottom))}
 .oie-drawer-page{display:grid;gap:14px;padding:16px 20px}

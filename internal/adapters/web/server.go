@@ -462,6 +462,7 @@ type copy struct {
 	EmojiVariantsFor                                                                                                                                                                                         string
 	EmojiPicker                                                                                                                                                                                              string
 	Composition, EmojiShortcutLanguages, EmojiSuggestions                                                                                                                                                    string
+	SettingsDeviceAndEngine, SettingsSecurityAndSupport                                                                                                                                                      string
 	SettingsGeneral, SearchLanguages, NoLanguagesFound, EmojiShortcutsOff, EmojiShortcutLanguageCount                                                                                                        string
 	RetentionTitle, RetentionRooms, RetentionDirect, RetentionDays, RetentionFinite, RetentionUnlimited                                                                                                      string
 	RetentionInherit, RetentionInheritDays, RetentionSave, RetentionSaved, RetentionUnavailable, RetentionConflict                                                                                           string
