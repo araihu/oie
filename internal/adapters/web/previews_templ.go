@@ -441,7 +441,7 @@ func previewThumbnail(v view, p engineapi.MessagePreview) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" x-bind:src=\"previewImage || null\" x-effect=\"previewImage; previewImageFailed=false\" x-on:error=\"previewImageFailed=true\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" x-bind:src=\"previewImage || null\" x-effect=\"previewImage; previewImageFailed=false\" x-on:error=\"previewImageFailed=true; $dispatch('oie:image-preview-error')\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -564,7 +564,7 @@ func previewImageActions(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if v.SharedCard || v.PreviewScope != "" {
+		if v.PreviewScope != "" && !v.SharedCard {
 			templ_7745c5c3_Var33 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)

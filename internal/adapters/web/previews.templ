@@ -38,7 +38,7 @@ src={source}
 @button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-preview-image-button"),button.WithAttrs(templ.Attributes{"type":"button","data-preview-expand":"","x-cloak":"","aria-label":v.Text.OpenImage,"x-show":"previewImage && !previewImageFailed","x-bind:disabled":"previewBusy"})){
 <img class="oie-preview-thumbnail" if source:=mediaSource(p.ImageHash);source!="" {
 src={source}
-} alt={v.Text.OpenImage} x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="previewImageFailed=true"/>
+} alt={v.Text.OpenImage} x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="previewImageFailed=true; $dispatch('oie:image-preview-error')"/>
 }
 }
 }
@@ -54,7 +54,7 @@ templ previewDescription(v view,p engineapi.MessagePreview){
 
 templ previewImageActions(v view){
 <div class="oie-preview-image-actions" if v.SharedCard { x-show="!previewImage || previewImageFailed" }>
-if v.SharedCard || v.PreviewScope!="" {
+if v.PreviewScope!="" && !v.SharedCard {
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-download":"","x-cloak":"","x-show":"!previewImage || previewImageFailed","x-bind:disabled":"previewBusy || previewDownload==='queued' || previewDownload==='downloading'"})){ {v.Text.LoadImage} }
 }
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-preview-expand":"","x-cloak":"","x-show":"previewFile && (!previewImage || previewImageFailed)","x-bind:disabled":"previewBusy"})){ {v.Text.OpenImage} }

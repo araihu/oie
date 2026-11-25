@@ -385,7 +385,7 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-preview-title{font-size:13px;font-weight:650;line-height:1.4;margin:0 0 5px;overflow-wrap:anywhere}
 .oie-preview-excerpt,.oie-preview-site,.oie-preview-status{font-size:11px;line-height:1.4;margin:4px 0;overflow-wrap:anywhere;color:var(--oie-muted)}
 .oie-preview-excerpt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-[id^="load-preview-"][hidden]{display:none}
+[id^="load-preview-"][hidden],[id^="shared-load-image-"][hidden]{display:none}
 .oie-preview-image-actions{padding-top:4px;font-size:12px}
 .oie-preview-image-actions [data-preview-feedback]:empty{display:none}
 .oie-image-viewer-layout{display:flex;flex-direction:column;gap:16px;height:100%}
