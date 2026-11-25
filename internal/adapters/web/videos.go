@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
 	"slices"
@@ -14,10 +15,24 @@ import (
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-	"github.com/araihu/oie/internal/application"
 )
 
-const videoSampleLimit = 5 << 20
+const (
+	videoSampleLimit    = 5 << 20
+	videoSeekIndexLimit = 2 << 20
+	videoSeekIndexType  = "application/vnd.oie.video-index+json"
+)
+
+// The engine validates the exact rendition and decides whether an index is
+// available. This check limits which cards ask for one during playback.
+func videoIndexCandidate(address string) bool {
+	source, err := url.Parse(address)
+	if err != nil || source.Scheme != "https" || source.RawQuery != "" || !strings.HasSuffix(source.Path, "-fragmented.mp4") {
+		return false
+	}
+	return strings.HasPrefix(source.Path, "/download/streaming-playlists/hls/videos/") ||
+		strings.HasPrefix(source.Path, "/static/streaming-playlists/hls/")
+}
 
 // A media source is a retained catalog identity, never a client-supplied URL.
 func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
@@ -135,11 +150,11 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	maximum := sharedMediaMaximum(mediaType)
 	if index {
-		if response.StatusCode != http.StatusOK || mediaType != application.VideoIndexMediaType {
+		if response.StatusCode != http.StatusOK || mediaType != videoSeekIndexType {
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		maximum = application.MaxVideoIndex
+		maximum = videoSeekIndexLimit
 	}
 	if err != nil || maximum == 0 || response.Header.Get("Content-Encoding") != "" && response.Header.Get("Content-Encoding") != "identity" {
 		w.WriteHeader(http.StatusBadGateway)
