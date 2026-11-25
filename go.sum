@@ -23,8 +23,8 @@ github.com/alecthomas/repr v0.5.2 h1:SU73FTI9D1P5UNtvseffFSGmdNci/O6RsqzeXJtP0Qs
 github.com/alecthomas/repr v0.5.2/go.mod h1:Fr0507jx4eOXV7AlPV6AVZLYrLIuIeSOWtW57eE/O/4=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
-github.com/araihu/goshtoso v0.6.5-0.20261125204924-e3f91f3d0818 h1:jnoecjkn3tZvLoomWxcyeJNFEDbx+OhvMm+98iK73aI=
-github.com/araihu/goshtoso v0.6.5-0.20261125204924-e3f91f3d0818/go.mod h1:eBd8JNsZw6NJ5wQH3ewtsObx9K3wmbAK09f/2la7j6Q=
+github.com/araihu/goshtoso v0.6.5-0.20261125205222-ba78a4334fc5 h1:uYEzZa56fejI6VPBHuzMJ/Lf+6elssXCipyxmKU+X6A=
+github.com/araihu/goshtoso v0.6.5-0.20261125205222-ba78a4334fc5/go.mod h1:eBd8JNsZw6NJ5wQH3ewtsObx9K3wmbAK09f/2la7j6Q=
 github.com/araihu/margo v0.0.36 h1:VV+plQdiHGRXY83v3/hwt2OfR4v00fpiwuYfmg7LIP0=
 github.com/araihu/margo v0.0.36/go.mod h1:Cvt4KcHzu/OLH9Dy8XvdiqlOneGffUw1CaK7A9f2bd0=
 github.com/araihu/xmpp v0.24.0-araihu.2 h1:7MDKpEf1hizDNz9EZVQLzMCF63W61yd2SSv+bapgfdE=
