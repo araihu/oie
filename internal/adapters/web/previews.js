@@ -369,7 +369,13 @@ window.OieRuntime.register('previews', life => {
     const load = event.target.closest(loadActions);
     if (load) {
       const scope = imageForLoadAction(load);
-      if (scope && !load.disabled) await download(scope);
+      if (!scope || load.disabled) return;
+      const trigger = load.closest('[data-shared-actions]')?.querySelector('[data-shared-menu-trigger]');
+      if (trigger) {
+        trigger.click();
+        trigger.focus({preventScroll:true});
+      }
+      await download(scope);
       return;
     }
     const menu=event.target.closest('[id^="open-preview-"],[id^="info-preview-"],[id^="save-preview-"]');
