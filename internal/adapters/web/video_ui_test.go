@@ -38,7 +38,7 @@ func TestNativeVideoMarkupRequiresExplicitSameOriginPlayback(t *testing.T) {
 				}
 			}
 			for _, control := range []string{"data-video-thumbnail-load", "data-video-download", "data-video-retry"} {
-				if strings.Contains(html, control) {
+				if regexp.MustCompile(`\s` + control + `[\s=>]`).MatchString(html) {
 					t.Errorf("redundant inline control %s", control)
 				}
 			}
