@@ -5481,8 +5481,10 @@ components:
           description: Ordered time and length for each original fragment.
           minItems: 1
           maxItems: 16000
+          example: [{duration: 4, length: 750000}]
           items:
             type: object
+            example: {duration: 4, length: 750000}
             required: [duration, length]
             properties:
               duration:
