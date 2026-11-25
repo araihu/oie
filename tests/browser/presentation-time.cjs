@@ -153,7 +153,7 @@ async function assertDisplay(page, value) {
         assert.deepEqual(openResult.violations.map(item=>item.id),[]);
         await page.screenshot({path:path.join(artifacts, 'presentation-time-' + width + '-' + theme + '-' + mode + '.png')});
         await search.press('Escape');
-        const language=dialog.getByRole('combobox',{name:locale==='en'?'Language':'Idioma'});
+        const language=dialog.getByRole('combobox',{name:locale==='en'?'Language':'Idioma',exact:true});
         await language.click();
         await dialog.getByRole('textbox',{name:locale==='en'?'Search languages':'Buscar idiomas'}).fill('English');
         await dialog.getByRole('option',{name:'English',exact:true}).waitFor();
