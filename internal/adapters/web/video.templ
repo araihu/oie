@@ -28,7 +28,11 @@ templ videoGalleryMedia(v view,item engineapi.SharedContentItem){
 
 templ videoPlayer(v view,item engineapi.SharedContentItem){
 <div class="oie-video-stage">
-<video data-video-player controls playsinline preload="none" tabindex="0" hidden aria-label={v.Text.SharedVideo}>{v.Text.VideoUnsupported}</video>
+<video data-video-player controls playsinline preload="none" tabindex="0" hidden aria-label={v.Text.SharedVideo}
+if v.Section=="media"||v.SharedInDetails {
+controlslist="nodownload"
+}
+>{v.Text.VideoUnsupported}</video>
 <div class="oie-video-cover" data-video-cover>
 <img class="oie-video-poster" data-video-poster-image alt="" aria-hidden="true" hidden?={videoPoster(item)==""} if videoPoster(item)!="" { src={videoPoster(item)} }/>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-video-play"),button.WithAttrs(templ.Attributes{"data-video-play":"","aria-label":v.Text.VideoPlay,"title":v.Text.VideoPlay})){@glyph(heroicons.Icon16SolidPlay)}

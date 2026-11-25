@@ -70,17 +70,22 @@ window.OieRuntime.register('video-thumbnails', life => {
       status.hidden = !text;
     }
     const button = card.closest('[data-shared-item]')?.querySelector('[id^="shared-thumbnail-"]');
-    if (button) {
-      const label = state === 'unavailable' ? card.dataset.thumbnailRetryLabel : card.dataset.thumbnailLoadLabel;
-      const copy = button.querySelector('span.block') || button;
-      if (copy.textContent !== label) copy.textContent = label;
-      button.setAttribute('aria-label', label);
-      button.title = state === 'unavailable' ? card.dataset.videoThumbnailFailed + ' ' + label : label;
-      button.hidden = !!card.dataset.videoPoster;
-      button.disabled = state === 'queued';
-    }
+    if (button) syncSharedAction(button, card);
     const action = card.closest('[data-message-id]')?.querySelector('#message-thumbnail-' + CSS.escape(card.dataset.videoItem));
     if (action) syncMessageAction(action, card);
+  }
+
+  function syncSharedAction(button, card) {
+    const state = card.dataset.videoThumbnailState;
+    const label = state === 'unavailable' ? card.dataset.thumbnailRetryLabel : card.dataset.thumbnailLoadLabel;
+    const copy = button.querySelector('span.block') || button;
+    if (copy.textContent !== label) copy.textContent = label;
+    button.setAttribute('aria-label', label);
+    button.title = state === 'unavailable' ? card.dataset.videoThumbnailFailed + ' ' + label : label;
+    // Retain focus during the dropdown's closing transition so it can return to the trigger.
+    if (button === document.activeElement) return;
+    button.hidden = !!card.dataset.videoPoster;
+    button.disabled = state === 'queued';
   }
 
   function syncMessageAction(action, card) {
@@ -256,13 +261,19 @@ window.OieRuntime.register('video-thumbnails', life => {
       if (card) syncMessageAction(action, card);
     }
   });
+  life.on(document, 'focusout', event => {
+    const button = event.target.closest('[id^="shared-thumbnail-"]');
+    const card = button?.closest('[data-shared-item]')?.querySelector(selector);
+    if (card) life.raf(() => syncSharedAction(button, card));
+  });
   life.on(document, 'click', event => {
     const button = event.target.closest('[id^="message-thumbnail-"], [id^="shared-thumbnail-"]');
     if (!button || button.disabled) return;
-    const card = button.closest('[data-shared-item]')?.querySelector(selector) || messageCard(button);
+    const shared = button.closest('[data-shared-item]');
+    const card = shared ? shared.querySelector(selector) : messageCard(button);
     if (!card) return;
     event.preventDefault();
-    button.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
+    if (!shared) button.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
     request(card, true);
   });
 
