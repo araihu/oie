@@ -47,7 +47,7 @@ func about(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = settingsSubpageBack("about", v.Text.BackToSettings).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = drawerReturn(v.Text.BackToSettings, templ.Attributes{"data-return-parent": "settings"}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -417,7 +417,7 @@ async function checkStorageLimit({browser, base, account, chat, id, until}) {
       'failed worker installation reports the error');
     assert(await otherLimit.isDisabled());
     await separate.unroute(shellRequest);
-    await other.locator('[data-settings-target=device]:visible').click();
+    await other.locator('[aria-labelledby=settingsTitle] [data-drawer-back]').click();
     // Return after the browser has observed the device panel leaving the viewport.
     await otherLimit.evaluate(node => new Promise(resolve => {
       const observer = new IntersectionObserver(([entry]) => {

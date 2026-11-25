@@ -308,11 +308,21 @@ async function waitFor(predicate) {
         assert.equal(await openingSkeleton.locator('[data-skeleton-item]').count(),5);
         finishOpening();
       }
+      const headerBack = page.getByRole('button',{name:'Voltar aos detalhes da conversa',exact:true});
+      await management.getByRole('tablist').waitFor();
       if (width === 1440) {
-        const back = await management.locator('[data-management-parent] button').boundingBox();
-        await management.getByRole('tablist').waitFor();
-        const tabs = await management.getByRole('tablist').boundingBox();
-        assert(tabs.y - (back.y + back.height) < 40, 'room controls follow Back without a blank row');
+        const back = await headerBack.boundingBox();
+        assert(back.width >= 44 && back.height >= 44, 'Back has a touch-sized target');
+        assert(await headerBack.evaluate(button => !!button.closest('header')), 'Back belongs in the header');
+        await headerBack.focus();
+        await page.getByRole('tooltip',{name:'Voltar aos detalhes da conversa'}).waitFor();
+        await headerBack.press('Enter');
+        const manageEntry = page.locator('[data-info-manage-room]:visible');
+        await manageEntry.waitFor();
+        await page.waitForFunction(() => document.activeElement?.matches('[data-info-manage-room]'));
+        await manageEntry.press('Enter');
+      } else {
+        assert.equal(await headerBack.isVisible(), false, 'Direct menu entry has no parent');
       }
       await management.locator('[data-details-edit]:visible').click();
       const saveDetails = management.locator('[data-details-review]');
@@ -417,7 +427,7 @@ async function waitFor(predicate) {
       await kick.getByRole('button',{name:'Cancelar'}).click();
       await kick.waitFor({state:'hidden'});
       assert.equal(await kickTrigger.getAttribute('aria-expanded'), 'false');
-      await profile.getByRole('button',{name:'Voltar para participantes'}).click();
+      await page.getByRole('button',{name:'Voltar para participantes'}).click();
       await participant.waitFor();
       assert.deepEqual((await management.getByRole('tab').allTextContents()).map(label => label.trim()),
         ['Detalhes','Participantes','Banimentos']);
@@ -650,7 +660,7 @@ async function waitFor(predicate) {
     await bannedProfile.getByText('Banido',{exact:true}).waitFor();
     assert.equal(await banSearch.isVisible(),false);
     assert.equal(managementCommands.length,beforeUnban);
-    await bannedProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
+    await page.getByRole('button',{name:'Voltar para banimentos'}).click();
     assert.equal(await banSearch.inputValue(),'banido@');
     assert.equal(await bannedRow.evaluate(el => document.activeElement === el),true);
     await bannedRow.click();
@@ -760,7 +770,7 @@ async function waitFor(predicate) {
     await bannedReader.click();
     const bannedReaderProfile = roomPanel.getByRole('region',{name:'Leitora',exact:true});
     await bannedReaderProfile.getByText(readerAddress,{exact:true}).waitFor();
-    await bannedReaderProfile.getByRole('button',{name:'Voltar para banimentos'}).click();
+    await page.getByRole('button',{name:'Voltar para banimentos'}).click();
     await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
     await roomPanel.locator('#room-participant-results').getByRole('button',{name:'Leitora',exact:true}).waitFor({state:'detached'});
     assert.equal(managementCommands.length,beforeBan+2);

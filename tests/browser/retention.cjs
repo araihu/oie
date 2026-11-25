@@ -35,7 +35,7 @@ async function verify(browser, server, {width, lang, theme, engine, device}) {
     await server.signIn(page, '/?open=settings&lang=' + lang + '&theme=' + theme);
     await page.locator('[data-settings-target=device]:visible').click();
     assert.equal(await page.locator('[data-settings-page=device] #engine-retention').count(), 0);
-    await page.locator('[data-settings-back]:visible').click();
+    await page.locator('[aria-labelledby=settingsTitle] [data-drawer-back]:visible').click();
     await page.locator('[data-settings-target=engine]:visible').press('Enter');
     const panel = page.locator('[data-settings-page=engine]');
     const form = panel.locator('[data-engine-retention]');
@@ -253,7 +253,7 @@ async function verifyConversation(browser, server) {
     assert.equal((await read()).days, null);
     assert.equal(posts.length, 3);
     await form.locator('button[type=submit]').waitFor({state:'hidden'});
-    await page.locator('[data-info-back]').click();
+    await page.locator('[aria-labelledby=detailsTitle] [data-drawer-back]').click();
     await page.waitForFunction(() => document.activeElement?.dataset.infoEntry === 'retention');
   } finally {
     await page.close();

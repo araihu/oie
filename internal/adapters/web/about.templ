@@ -8,7 +8,7 @@ import (
 templ about(v view) {
 	@workspaceDrawer(drawer.Config{ID: "about", Title: v.Text.About}) {
 		<div class="oie-about">
-			@settingsSubpageBack("about", v.Text.BackToSettings)
+			@drawerReturn(v.Text.BackToSettings, templ.Attributes{"data-return-parent": "settings"})
 			<div class="oie-about-brand">
 				@brand(v)
 			</div>

@@ -718,6 +718,90 @@ window.OieRuntime.register('workspace-drawers', life => {
   }
 });
 
+// Subpages can be replaced independently by HTMX. Keep one focusable Back control
+// in the header and resolve its destination from the currently visible subpage.
+window.OieRuntime.register('drawer-back', life => {
+  let panel, body, leading, frame;
+  const origins = new Map();
+  const observer = new MutationObserver(schedule);
+
+  function destination() {
+    if (!body) return;
+    return Array.from(body.querySelectorAll('template[data-drawer-return]')).reverse()
+      .find(marker => !marker.hidden && marker.parentElement.getClientRects().length);
+  }
+
+  function sync() {
+    frame = 0;
+    if (!leading) return;
+    const marker = destination();
+    leading.hidden = !marker;
+    if (!marker) return;
+    const button = leading.querySelector('[data-drawer-back]');
+    const label = marker.dataset.drawerReturn;
+    if (button.getAttribute('aria-label') !== label) {
+      button.setAttribute('aria-label', label);
+      document.getElementById(body.id.replace(/-body$/, '-back-tip')).textContent = label;
+    }
+  }
+
+  function schedule() {
+    if (!frame) frame = life.raf(sync);
+  }
+
+  function watch(nextBody) {
+    observer.disconnect();
+    body = nextBody;
+    panel = body?.closest('.oie-drawer');
+    leading = panel?.querySelector('header [data-drawer-leading]');
+    if (!leading) return;
+    observer.observe(panel, {attributes:true, attributeFilter:['style','hidden']});
+    observer.observe(body, {subtree:true, childList:true, attributes:true, attributeFilter:['hidden','style','aria-selected']});
+    schedule();
+  }
+
+  life.on(window, 'drawer:open', event => watch(document.getElementById(event.detail?.id + '-body')));
+  life.on(window, 'drawer:close', event => {
+    if (body?.id === event.detail?.id + '-body') watch(null);
+  });
+  life.on(document, 'oie:route-ready', () => {
+    const visible = [...document.querySelectorAll('[data-drawer-leading]')].find(node => node.closest('.oie-drawer').getClientRects().length);
+    if (visible) watch(visible.closest('.oie-drawer').querySelector(':scope > [id$="-body"]'));
+  });
+  life.cleanup(() => observer.disconnect());
+
+  life.on(document, 'click', event => {
+    const entry = event.target.closest('[data-drawer-child]');
+    if (!entry) return;
+    const scroll = entry.closest('.oie-settings-scroll, [id$="-body"]');
+    origins.set(entry.dataset.drawerChild, {entry, scroll, top:scroll?.scrollTop});
+  }, true);
+
+  life.on(document, 'click', event => {
+    if (!leading?.contains(event.target.closest('[data-drawer-back]'))) return;
+    const marker = destination();
+    if (!marker) return;
+    if (marker.dataset.returnHref) {
+      window.OieNavigation.go(marker.dataset.returnHref, {workspace:'chat-info-content'});
+    } else if (marker.dataset.returnParent) {
+      const child = body.id.slice(0, -5);
+      const parent = marker.dataset.returnParent;
+      const origin = origins.get(child);
+      window.dispatchEvent(new CustomEvent('drawer:close', {detail:{id:child}}));
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent('drawer:open', {detail:{id:parent}}));
+        if (origin) life.raf(() => life.raf(() => {
+          if (!origin.entry.isConnected || !origin.entry.getClientRects().length) return;
+          if (origin.scroll) origin.scroll.scrollTop = origin.top;
+          origin.entry.focus({preventScroll:true});
+        }));
+      });
+    } else {
+      marker.dispatchEvent(new CustomEvent('oie:drawer-back', {bubbles:true}));
+    }
+  });
+});
+
 window.OieRuntime.register('settings-pages', life => {
   const stack = document.querySelector('[data-settings-stack]');
   if (!stack) return;
@@ -735,7 +819,7 @@ window.OieRuntime.register('settings-pages', life => {
     for (const page of pages) page.hidden = page !== next;
     if (footer) footer.hidden = current !== 'general';
     heading.textContent = next.dataset.title || stack.dataset.rootTitle;
-    const returnTo = next.querySelector('[data-settings-target="' + previous + '"]:not([data-settings-back])');
+    const returnTo = next.querySelector('[data-settings-target="' + previous + '"]');
     scroll.scrollTop = returnTo ? positions.get(current) || 0 : 0;
     if (focus) {
       heading.tabIndex = -1;
@@ -746,12 +830,15 @@ window.OieRuntime.register('settings-pages', life => {
       if (form) { form.elements.apiKey.value = ''; form.elements.apiKeyAddress.value = ''; }
     }
   }
-  life.on(stack,'click',event => {
+  function navigate(page) {
+    show(page, true);
+    document.dispatchEvent(new CustomEvent('oie:settings-navigate', {detail:{page:current}}));
+  }
+  life.on(stack, 'click', event => {
     const target = event.target.closest('[data-settings-target]');
-    if (!target) return;
-    show(target.dataset.settingsTarget, true);
-    document.dispatchEvent(new CustomEvent('oie:settings-navigate', {detail: {page: current}}));
+    if (target) navigate(target.dataset.settingsTarget);
   });
+  life.on(stack, 'oie:drawer-back', event => navigate(event.target.dataset.returnPage));
   life.on(window,'drawer:open',event => {
     if (event.detail?.id === 'settings') show(event.detail.page || new URL(location.href).searchParams.get('settingsTab') || 'general', Boolean(event.detail.focus));
   });

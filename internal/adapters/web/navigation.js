@@ -2,9 +2,10 @@
  'use strict';
  const runtime=window.OieRuntime;
  const inbox=window.OieInbox;
- let booted=false,epoch=0,currentURL=location.href,infoReturnScroll=0,infoRequestGeneration=0,inboxScroll=0;
+ let booted=false,epoch=0,currentURL=location.href,infoScrollChat,infoRequestGeneration=0,inboxScroll=0;
  let restoreFilterFocus=false,focusFirstRow=false,filterScroll=0;
  let pendingConversation, pendingShared, pendingParticipants, settling, historyRequest;
+ const infoScroll=new Map();
  const sharedPageCounts=new Map();
  let sharedCountEngine;
  let earlyRestoredTimeline,dependenciesReady=false;
@@ -534,7 +535,21 @@
   event.preventDefault();event.stopImmediatePropagation();
   cancelConversationLoading();
  },true);
- function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;rememberInfoSharedPage(root);upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;const origin=new URL(location.href).searchParams.get('infoFocus');const target=origin && root.querySelector(`[data-info-entry="${CSS.escape(origin)}"]`);(target || root.querySelector('[data-info-heading]'))?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
+ function infoReady(starGeneration){
+  const root=document.getElementById('chat-info-content');
+  if(!root)return;
+  rememberInfoSharedPage(root);
+  upgrade(root);
+  document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));
+  const origin=new URL(location.href).searchParams.get('infoFocus');
+  const view=root.dataset.infoView;
+  const body=document.getElementById('details-body');
+  const returning=(!view||origin)&&infoScrollChat===root.dataset.detailsConversation;
+  if(body)body.scrollTop=returning?(infoScroll.get(view)||0):0;
+  const entry=origin||(!view?'media':'');
+  const target=entry&&root.querySelector(`[data-info-entry="${CSS.escape(entry)}"]`);
+  (target||root.querySelector('[data-info-heading]'))?.focus({preventScroll:true});
+ }
  function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
  function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','diagnostics','destructive-actions','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  function workspaceResponse(ctx,nextApp,next){
@@ -610,7 +625,9 @@
    if(snapshot.editBlocked!==false){event.preventDefault();showError(ctx);return;}
   }
   if(ctx.oieKind==='chat-info-content'){
-   if(!ctx.target.dataset.infoView)infoReturnScroll=document.getElementById('details-body')?.scrollTop||0;
+   const chat=ctx.target.dataset.detailsConversation;
+   if(chat!==infoScrollChat){infoScroll.clear();infoScrollChat=chat;}
+   infoScroll.set(ctx.target.dataset.infoView,document.getElementById('details-body')?.scrollTop||0);
    const query=new URL(ctx.request.action,location.href).searchParams;
    if(query.get('infoView')==='shared')startSharedLoading(ctx,true);
    if(query.get('infoView')==='participants')startParticipantsLoading(ctx);

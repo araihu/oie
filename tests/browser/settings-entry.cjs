@@ -71,6 +71,13 @@ const id='019a5df0-0000-7000-8000-000000000001';
     await device.press('Enter');
     await dialog.locator('[data-settings-target=display]:visible').click();
     await dialog.locator('label[for="auto-image-downloads"]').waitFor({state:'visible'});
+    const deviceBack=dialog.getByRole('button',{name:pt?'Voltar às configurações deste dispositivo':'Back to device settings',exact:true});
+    await deviceBack.press('Enter');
+    assert(await dialog.locator('[data-settings-target=display]:visible').evaluate(node=>node===document.activeElement));
+    await dialog.getByRole('button',{name:pt?'Voltar às configurações':'Back to settings',exact:true}).press('Enter');
+    assert(await device.evaluate(node=>node===document.activeElement));
+    await dialog.locator('[data-drawer-back]').waitFor({state:'hidden'});
+
    }
    assert.deepEqual(await audit(),[]);
    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await context.close();

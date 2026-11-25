@@ -668,6 +668,8 @@
   "RoomManagementSubmitted": "Request sent.",
   "RoomManagedName": "Room name",
   "RoomRoleLabel": "Role",
+  "BackToDevice": "Back to device settings",
+  "BackToConversationPreferences": "Back to conversation preferences",
   "DrawerMediaDisplay": "Media and display",
   "DrawerStorage": "Storage",
   "DrawerConversationPreferences": "Conversation preferences",

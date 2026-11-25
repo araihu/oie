@@ -28,9 +28,7 @@ templ roomManagementDrawer(v view) {
 	if v.Selected != nil && v.Selected.Kind == "room" && v.requestKind() == "" && !v.Preview && !v.conversationRemoved() {
 		@workspaceDrawer(drawer.Config{ID: "room-management", Title: v.Text.RoomManage, PanelClass: "oie-conversation-details-drawer"}) {
 			<div class="oie-settings oie-room-management" data-room-management data-invite-title={ v.Text.RoomInvitePeople } data-manage-title={ v.Text.RoomManage } data-chat={ v.Selected.Id } data-account={ v.Selected.AccountId } data-engine={ v.EngineID } data-lang={ v.Locale } data-unavailable={ v.Text.RoomManagementUnavailable } data-conflict={ v.Text.RoomManagementConflict }>
-				<div data-management-parent hidden>
-					@drawerSubpageBack("details", "room-management", v.Text.InfoBack)
-				</div>
+				@drawerReturn(v.Text.InfoBack,templ.Attributes{"data-management-parent":"","data-return-parent":"details","hidden":true})
 				@roomManagementSkeleton(v, "oie-room-management-skeleton")
 				<p data-room-management-error role="alert" hidden>{ v.Text.RoomManagementUnavailable }</p>
 				<div data-room-management-content></div>
@@ -153,13 +151,13 @@ templ roomManagementParticipants(v view, state engineapi.RoomManagement) {
 			<p>{ v.Text.RoomNoVisibleParticipants }</p>
 		}
 	</div>
-	@roomProfileSlot("room-participant-profile", v.Text.Participants, v.Text.RoomBackToParticipants)
+	@roomProfileSlot("room-participant-profile", v.Text.RoomBackToParticipants)
 }
 
-templ roomProfileSlot(id, label, accessibleLabel string) {
+templ roomProfileSlot(id, accessibleLabel string) {
 	<div id={ id } data-room-profile-slot hidden>
-		<div data-room-profile-pending hidden>
-			@roomParticipantBack(label, accessibleLabel)
+		<div data-room-profile-pending tabindex="-1" hidden>
+			@roomParticipantBack(accessibleLabel)
 			<div data-room-profile-status></div>
 		</div>
 		<div data-room-profile-content></div>
@@ -214,7 +212,7 @@ templ roomManagementBans(v view, state engineapi.RoomManagement) {
 			@roomTargetAction(v, *state.Revision, id, "", "affiliation", "outcast", v.Text.RoomBan, button.ToneDanger, "")
 		</footer>
 	</div>
-	@roomProfileSlot("room-banned-profile", v.Text.RoomBans, v.Text.RoomBackToBans)
+	@roomProfileSlot("room-banned-profile", v.Text.RoomBackToBans)
 }
 
 templ roomBanToggle(v view, id string) {
@@ -269,7 +267,7 @@ templ roomBannedDetails(v view, revision, address, nickname string) {
 	{{ id := roomBannedID(address) }}
 	{{ name := cmp.Or(nickname, address) }}
 	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id }>
-		@roomParticipantBack(v.Text.RoomBans, v.Text.RoomBackToBans)
+		@roomParticipantBack(v.Text.RoomBackToBans)
 		<header class="oie-room-participant-profile">
 			@roomBannedAvatar(v, address, name, avatar.SizeLG)
 			<h3 id={ id + "-name" } tabindex="-1">{ name }</h3>
@@ -377,18 +375,15 @@ templ roomMemberRow(id, controls, name, address, match string, picture templ.Com
 	</li>
 }
 
-templ roomParticipantBack(label, accessibleLabel string) {
-	@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithAttrs(templ.Attributes{"data-room-participant-back": "", "aria-label": accessibleLabel})) {
-		@glyph(heroicons.Icon16SolidChevronLeft)
-		{ label }
-	}
+templ roomParticipantBack(accessibleLabel string) {
+    @drawerReturn(accessibleLabel,templ.Attributes{"data-room-participant-back":""})
 }
 
 templ roomParticipantDetails(v view, revision string, occupant engineapi.RoomManagedOccupant) {
 	{{ id := roomParticipantID(occupant) }}
 	{{ actions := roomParticipantActions(v.Text, occupant) }}
 	<section id={ id + "-details" } class="oie-room-participant-details" aria-labelledby={ id + "-name" } data-room-participant-detail={ id }>
-		@roomParticipantBack(v.Text.Participants, v.Text.RoomBackToParticipants)
+		@roomParticipantBack(v.Text.RoomBackToParticipants)
 		<header class="oie-room-participant-profile">
 			@roomParticipantAvatar(occupant, avatar.SizeLG)
 			<h3 id={ id + "-name" } tabindex="-1">{ roomParticipantName(v.Text, occupant) }</h3>

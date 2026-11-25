@@ -641,6 +641,10 @@ func sendKey(v view)string{if v.FormTarget=="send"&&v.field("operationKey")!=""{
 
 // Keep Goshtoso's drawers, including their focus and dismissal behavior.
 func workspaceDrawer(config drawer.Config) templ.Component {
+ switch config.ID {
+ case "settings", "access-keys", "diagnostics", "about", "destructive-actions", "details", "room-management", "room-destructive-actions":
+    config.HeaderLeading = drawerHeaderBack(config.ID)
+ }
  config.NonModalMinWidth = 1100
  config.PanelClass = strings.TrimSpace("oie-drawer " + config.PanelClass)
  return drawer.Drawer(config)

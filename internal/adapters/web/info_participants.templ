@@ -62,12 +62,8 @@ templ infoRoomParticipants(v view) {
 			}
 		</div>
 		<section data-roster-detail hidden>
-			@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-settings-back"), button.WithAttrs(templ.Attributes{"data-roster-back": ""})) {
-				@glyph(heroicons.Icon16SolidChevronLeft) {
-					v.Text.Participants
-				}
-			}
-			<header class="oie-room-participant-profile">
+			@drawerReturn(v.Text.RoomBackToParticipants,templ.Attributes{"data-roster-back":""})
+            <header class="oie-room-participant-profile">
 				<span data-roster-avatar aria-hidden="true"></span>
 				<h3 tabindex="-1" data-roster-name></h3>
 				<p><span data-roster-role></span> · <span data-roster-affiliation></span></p>

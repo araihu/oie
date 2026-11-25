@@ -171,7 +171,7 @@ async function create(api, endpoint, sequence, data) {
     await device.getByRole('button', {name: 'Notifications', exact: true}).waitFor();
     assert.equal(await page.locator('[data-download-retention]').count(), 0);
     assert.equal(await page.locator('#remove-device-downloads-dialog').count(), 0);
-    await device.locator('[data-settings-back]').click();
+    await page.getByRole('button', {name: 'Back to settings', exact: true}).click();
     const access = page.getByRole('button', {name: 'Access keys', exact: true});
     await access.click();
     const keyDrawer = page.getByRole('dialog', {name: 'Access keys', exact: true});

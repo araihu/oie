@@ -32,16 +32,16 @@ templ settings(v view) {
 						@settingsDestination("storage", v.Text.DrawerStorage, retentionIcon())
 					}
 				}
-				@settingsPage("display", v.Text.DrawerMediaDisplay, "device", v.Text.DevicePreferences) {
+				@settingsPage("display", v.Text.DrawerMediaDisplay, "device", v.Text.BackToDevice) {
 					@deviceDisplay(v)
 				}
 				if !v.Preview && v.EngineID!="" {
-					@settingsPage("notifications", v.Text.NotificationSettings, "device", v.Text.DevicePreferences) {
+					@settingsPage("notifications", v.Text.NotificationSettings, "device", v.Text.BackToDevice) {
 						@notificationSettings(v)
 					}
 				}
 				if v.canManageLocalDownloads() || (v.OfflineHistory && !v.Preview && v.EngineID!="") {
-					@settingsPage("storage", v.Text.DrawerStorage, "device", v.Text.DevicePreferences) {
+					@settingsPage("storage", v.Text.DrawerStorage, "device", v.Text.BackToDevice) {
 						@deviceStorage(v)
 					}
 				}
@@ -74,9 +74,7 @@ templ settings(v view) {
 
 templ settingsPage(id, title, parent, back string) {
 	<section data-settings-page={ id } data-title={ title } hidden class="oie-settings-section">
-		@button.Button(button.WithType("button"), button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-settings-back"), button.WithAttrs(templ.Attributes{"data-settings-target": parent, "data-settings-back": ""})) {
-			@glyph(heroicons.Icon16SolidChevronLeft)<span>{ back }</span>
-		}
+        @drawerReturn(back,templ.Attributes{"data-return-page":parent})
 		{ children... }
 	</section>
 }
@@ -100,28 +98,12 @@ templ drawerSubpageEntry(parent, id, title string, leading templ.Component) {
 		button.WithType("button"),
 		button.WithAppearance(button.AppearancePlain),
 		button.WithRootClass("oie-settings-entry oie-destination"),
-		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": id + "-body"}),
+		button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": id + "-body", "data-drawer-child":id}),
 		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition(parent, id)}),
 	) {
 		@leading
 		<span>{ title }</span>
 		@glyph(heroicons.Icon16SolidChevronRight)
-	}
-}
-
-templ settingsSubpageBack(id, label string) {
-	@drawerSubpageBack("settings", id, label)
-}
-
-templ drawerSubpageBack(parent, id, label string) {
-	@button.Button(
-		button.WithType("button"),
-		button.WithAppearance(button.AppearancePlain),
-		button.WithRootClass("oie-settings-back"),
-		button.WithAlpine(&button.AlpineConfig{OnClick: settingsDrawerTransition(id, parent)}),
-	) {
-		@glyph(heroicons.Icon16SolidChevronLeft)
-		<span>{ label }</span>
 	}
 }
 
@@ -134,7 +116,7 @@ templ settingsSubpage(id, title, backLabel string) {
 templ drawerSubpage(parent, id, title, backLabel string) {
 	@workspaceDrawer(drawer.Config{ID: id, Title: title}) {
 		<div class="oie-settings-section oie-settings-subpage">
-			@drawerSubpageBack(parent, id, backLabel)
+			@drawerReturn(backLabel, templ.Attributes{"data-return-parent": parent})
 			{ children... }
 		</div>
 	}

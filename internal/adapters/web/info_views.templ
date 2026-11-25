@@ -18,9 +18,9 @@ if kind=="stars" || kind=="participants" || kind=="retention" || kind=="read-rec
 templ infoBack(v view){
 {{ label:=v.Text.InfoBack }}
 if v.InfoView=="retention" || v.InfoView=="read-receipts" {
- {{ label=v.Text.DrawerConversationPreferences }}
+ {{ label=v.Text.BackToConversationPreferences }}
 }
-@link.Link(v.infoBackHref(),link.WithRootClass("oie-account-back oie-info-back"),link.WithAttrs(templ.Attributes{"data-info-nav":"","data-info-back":""})){@glyph(heroicons.Icon16SolidChevronLeft)<span>{label}</span>}
+@drawerReturn(label,templ.Attributes{"data-return-href":v.infoBackHref()})
 }
 templ infoSharedContent(v view){
 {{ scoped:=v.infoSharedView() }}

@@ -132,7 +132,7 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
     await conversationSaved;
     await expectMode(modeSelector, on);
     assert.equal((await get(conversation)).override, true);
-    await page.locator('#chat-info-content [data-info-back]').click();
+    await page.locator('[aria-labelledby=detailsTitle] [data-drawer-back]').click();
     await mode.waitFor({state: 'hidden'});
     await set(conversation, {override: false});
     await entry.click();

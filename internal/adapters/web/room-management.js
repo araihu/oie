@@ -19,7 +19,7 @@ function filterRoomList(search, scope) {
 window.OieRuntime.register('room-management', life => {
   let rosterOrigin;
   let rosterScroll = 0;
-  life.on(document, 'click', event => {
+  function navigateRoster(event) {
     const roster = event.target.closest('[data-info-room-participants]');
     if (!roster) return;
     const person = event.target.closest('[data-roster-person]');
@@ -40,7 +40,9 @@ window.OieRuntime.register('room-management', life => {
     detail.hidden = !person;
     scroll.scrollTop = person ? 0 : rosterScroll;
     (person ? detail.querySelector('h3') : rosterOrigin)?.focus({preventScroll: true});
-  });
+  }
+  life.on(document, 'click', navigateRoster);
+  life.on(document, 'oie:drawer-back', navigateRoster);
   life.on(document, 'input', event => {
     if (event.target.id === 'info-room-participants-search') {
       filterRoomList(event.target, event.target.closest('[data-info-room-participants]'));
@@ -132,7 +134,7 @@ window.OieRuntime.register('room-management', life => {
       profile.replaceChildren();
       pendingPane.hidden = false;
       status.replaceChildren(root.querySelector('[data-room-profile-loading]').content.cloneNode(true));
-      if (focus && tabSelected(panel.id)) pendingPane.querySelector('button').focus({preventScroll:true});
+      if (focus && tabSelected(panel.id)) pendingPane.focus({preventScroll:true});
     }
     slot.setAttribute('aria-busy', 'true');
     try {
@@ -446,7 +448,7 @@ window.OieRuntime.register('room-management', life => {
       const confirmation = destructive.querySelector('#room-destroy-form:not([hidden])');
       const button = focused?.matches('[type=submit]') ? '[type=submit]' : '[data-room-action-cancel]';
       const target = confirmation?.querySelector(button) || destructive.querySelector('#room-destroy-open') ||
-        destructive.parentElement.querySelector('.oie-settings-back');
+        destructive.closest('.oie-drawer').querySelector('[data-drawer-back]');
       target?.focus({preventScroll:true});
     }
     const currentTabs = content.querySelector('.oie-room-management-tabs');
@@ -550,6 +552,11 @@ window.OieRuntime.register('room-management', life => {
     else openForms.delete(id);
   }
 
+  life.on(content, 'oie:drawer-back', event => {
+    const panel = event.target.closest('[role=tabpanel]');
+    if (panel && !hasPending()) closeParticipant(panel, true);
+  });
+
   let avatarRefresh;
   life.on(document, 'oie:room-participant-avatar-changed', event => {
     if (event.detail.accountId !== root.dataset.account || !active || !content.querySelector('[data-room-participant-avatar]')) return;
@@ -561,11 +568,6 @@ window.OieRuntime.register('room-management', life => {
     const row = event.target.closest('[data-room-participant-open]');
     if (row && content.contains(row)) {
       if (!hasPending()) void openParticipant(row.closest('[role=tabpanel]'), row.dataset.roomParticipantOpen);
-      return;
-    }
-    const back = event.target.closest('[data-room-participant-back]');
-    if (back && content.contains(back)) {
-      if (!hasPending()) closeParticipant(back.closest('[role=tabpanel]'), true);
       return;
     }
     const cancel = event.target.closest('[data-room-action-cancel]');
