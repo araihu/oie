@@ -597,7 +597,7 @@ func (q *Queries) RecordDiscardedMessageReference(ctx context.Context, arg Recor
 
 const resetAccountDiscoveryCheckpoints = `-- name: ResetAccountDiscoveryCheckpoints :exec
 DELETE FROM archive_checkpoints WHERE EXISTS (
- SELECT 1 FROM accounts a WHERE a.id=archive_checkpoints.account_id AND a.address=archive_checkpoints.scope
+ SELECT 1 FROM accounts a WHERE a.id=archive_checkpoints.account_id AND (a.address=archive_checkpoints.scope OR 'omemo:'||a.address=archive_checkpoints.scope)
 )
 `
 

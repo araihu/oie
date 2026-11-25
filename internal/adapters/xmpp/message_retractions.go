@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,6 +70,20 @@ func prepareRetractionLocked(e *entry, a domain.Account, c domain.Conversation, 
 		a.ID != c.AccountID || target.AccountID != a.ID || target.ConversationID != c.ID ||
 		!target.IsOwn || target.Sender.ID != a.ID || target.IsWithdrawn() {
 		return empty, false
+	}
+	if target.DirectEncryption == "omemo" {
+		parts := len(target.OMEMOWireDigests)
+		if parts == 0 {
+			parts = len(target.Attachments)
+			if strings.TrimSpace(target.OriginalText) != "" {
+				parts++
+			}
+		}
+		// The current command withdraws one stanza. An incomplete set of
+		// room echoes must not make a multipart message look retractable.
+		if parts > 1 || c.Kind == "direct" && target.ProviderID != string(target.ID) {
+			return empty, false
+		}
 	}
 	if c.Kind == "direct" && usableID(target.ProviderID) {
 		plan := application.IncomingRetraction{Scope: "xmpp:correct:sender:" + a.Address, RemoteID: target.ProviderID}
@@ -294,7 +309,7 @@ func (m *Manager) confirmRetraction(ctx context.Context, e *entry, session *mx.S
 	}
 	// Stream management proves submission to the account server. It cannot
 	// confirm that the recipient has processed the retraction.
-	if typingAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
+	if stanzaAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
 		// A failed request may coincide with a final acknowledgement already
 		// being read by the stream. The bounded wait checks both possibilities.
 		_ = session.RequestStreamManagementAck(ctx)
@@ -310,7 +325,7 @@ func awaitRetraction(ctx context.Context, session *mx.Session, attempt *retracti
 		poll = ticker.C
 	}
 	for {
-		if attempt.last != nil && !typingAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
+		if attempt.last != nil && !stanzaAwaitingAck(attempt.last, session.StreamManagement().Acknowledged) {
 			// The read loop processes earlier errors before the acknowledgement.
 			attempt.complete(nil)
 			return attempt.err
@@ -334,7 +349,7 @@ func (m *Manager) awaitArchivedRetraction(ctx context.Context, e *entry, session
 	for range 2 {
 		if release, err := m.acquireArchive(ctx, e.account.Address, archiveInteractive); err == nil {
 			page, err := m.readArchivePage(ctx, e, session, e.account.Address, archivePageRequest{
-				With: attempt.target.Bare().String(), Backward: true, Limit: 20,
+				With: attempt.target.Bare().String(), Backward: true, Limit: 20, ConfirmRetractionID: id,
 			})
 			release()
 			select {

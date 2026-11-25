@@ -346,7 +346,7 @@ func (s *Server) engineIdentity(ctx context.Context) (engineapi.Engine, error) {
 	return engineapi.Engine{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
 		ApiVersion: s.apiVersion, EventCursor: cursor(state.ID, state.Sequence),
-		CanResetData: &supported,
+		CanResetData: &supported, OmemoEnabled: new(s.engine.OMEMOEnabled()),
 	}, nil
 }
 

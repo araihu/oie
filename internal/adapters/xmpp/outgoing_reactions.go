@@ -275,8 +275,12 @@ func sendFrozenReaction(ctx context.Context, e *entry, session *mx.Session, raw 
 	if _, err = xmlstream.Copy(writer, xmlstream.ReaderFunc(decoder.RawToken)); err == nil {
 		err = writer.Flush()
 	}
+	status := session.StreamManagement()
+	if out.Kind == "room" && e.omemoDevice != nil {
+		e.recordProtectedSequence(status, err)
+	}
 	if err != nil {
-		if definitivelyUnsent(session.StreamManagement().Enabled, err) {
+		if definitivelyUnsent(status.Enabled, err) {
 			return application.NotSent
 		}
 		_ = raw.Close()

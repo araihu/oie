@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
@@ -32,12 +33,15 @@ type archiveMessage struct {
 	correctionMetadata
 	reactionMetadata
 	roomModerationMetadata
+	Encrypted         *omemo.Envelope        `xml:"eu.siacs.conversations.axolotl encrypted"`
+	OMEMO2            *struct{}              `xml:"urn:xmpp:omemo:2 encrypted"`
 	Body              string                 `xml:"jabber:client body"`
 	DirectInvitations []directRoomInvitation `xml:"jabber:x:conference x"`
 	Users             []struct {
 		Invites []struct{} `xml:"invite"`
 		Items   []struct {
-			JID string `xml:"jid,attr"`
+			JID         string `xml:"jid,attr"`
+			Affiliation string `xml:"affiliation,attr"`
 		} `xml:"item"`
 	} `xml:"http://jabber.org/protocol/muc#user x"`
 }
@@ -59,14 +63,21 @@ type archiveTrust struct {
 
 type archiveQuery struct {
 	archiveTrust
-	ID, Scope       string
-	FirstID, LastID string
-	Messages        []application.Incoming
-	FirstAt, LastAt time.Time
-	Start, End      time.Time
-	Deferred        domain.DeferredRoomReactions
-	Bytes, Seen     int
-	Err             error
+	ID, Scope           string
+	FirstID, LastID     string
+	Messages            []application.Incoming
+	OMEMO               []archivedOMEMO
+	RecoverOMEMO        bool
+	RecoverPlainDirect  bool
+	ConfirmRetractionID string
+	RoomOMEMO           bool
+	With                string
+	FirstAt, LastAt     time.Time
+	Start, End          time.Time
+	Deferred            domain.DeferredRoomReactions
+	OMEMOGaps           domain.ArchiveTimeRange
+	Bytes, Seen         int
+	Err                 error
 }
 
 func archiveSender(from jid.JID, scope, account string) bool {
@@ -101,6 +112,57 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 		q.FirstAt, q.FirstID = at.UTC(), r.ID
 	}
 	q.LastAt, q.LastID = at.UTC(), r.ID
+	if e.omemoDevice != nil && q.Scope == e.account.Address {
+		if q.RecoverOMEMO {
+			record, ok := archiveOMEMO(e.account, r, at)
+			if ok && (q.With == "" || record.in.Address == q.With) {
+				q.Bytes += record.size
+				if q.Bytes > 8<<20 {
+					q.Err = errArchive
+				} else {
+					q.OMEMO = append(q.OMEMO, record)
+				}
+				return nil
+			}
+		}
+		msg := r.Forwarded.Message
+		if msg == nil || q.With == "" ||
+			msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage {
+			return nil
+		}
+		from, to := msg.From.Bare().String(), msg.To.Bare().String()
+		own := from == e.account.Address && to == q.With
+		confirm := own && q.ConfirmRetractionID != "" && msg.ID == q.ConfirmRetractionID && len(msg.Retractions) == 1
+		plain := q.RecoverPlainDirect && (own || from == q.With && to == e.account.Address)
+		if !confirm && !plain {
+			return nil
+		}
+		if !plain {
+			in, ok, err := archivedIncoming(e.account, q.Scope, r, q.archiveTrust)
+			if err != nil {
+				q.Err = err
+			} else if ok && in.Kind == "direct" && in.IsOwn && in.Retraction != nil {
+				q.Messages = append(q.Messages, in)
+			}
+			return nil
+		}
+	}
+	if q.RoomOMEMO {
+		record, ok := archiveRoomOMEMO(e.account, q, r, at)
+		if ok {
+			q.Bytes += record.size
+			if q.Bytes > 8<<20 {
+				q.Err = errArchive
+			} else {
+				q.OMEMO = append(q.OMEMO, record)
+			}
+			return nil
+		}
+		msg := r.Forwarded.Message
+		if msg == nil || len(msg.Retractions)+len(msg.Tombstones)+len(msg.LegacyTombstones) == 0 {
+			return nil
+		}
+	}
 	in, ok, err := archivedIncoming(e.account, q.Scope, r, q.archiveTrust)
 	if err != nil {
 		q.Err = err
@@ -123,6 +185,9 @@ func (m *Manager) captureArchive(e *entry, outer stanza.Message, r *archiveResul
 }
 func archivedIncoming(account domain.Account, scope string, r *archiveResult, trust archiveTrust) (application.Incoming, bool, error) {
 	msg := r.Forwarded.Message
+	if msg != nil && (msg.Encrypted != nil || msg.OMEMO2 != nil) {
+		return application.Incoming{}, false, nil
+	}
 	withdrawal := msg != nil && (len(msg.Retractions) != 0 || len(msg.Tombstones) != 0 || len(msg.LegacyTombstones) != 0)
 	if withdrawal {
 		in, ok := archivedRoomModeration(account, scope, r)
@@ -503,24 +568,25 @@ func (m *Manager) recoverHistory(ctx context.Context, e *entry, s *mx.Session) {
 	}
 	_ = host.HistoryChanged(ctx, status)
 }
-func (m *Manager) recoverArchive(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session, scope string) error {
-	return m.recoverArchiveRange(ctx, host, e, s, scope, scope, "", nil)
-}
-
-func (m *Manager) recoverArchiveRange(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session, scope, checkpoint, peer string, known map[string]bool) error {
+func (m *Manager) recoverArchiveRange(ctx context.Context, host application.HistoryHost, e *entry, s *mx.Session, scope, checkpoint, peer string, known map[string]bool, recoverPlainDirect bool) error {
 	after, err := host.HistoryCheckpoint(ctx, e.account.ID, checkpoint)
 	if err != nil {
 		return err
 	}
 	seen := map[string]bool{}
 	reset := false
+	var omemoGap bool
+	now := time.Now().UTC()
+	recoverOMEMO := scope == e.account.Address && e.omemoDevice != nil
+	recoverPlainDirect = recoverPlainDirect && recoverOMEMO && peer != ""
 	var reactionAnchor domain.ArchiveReactionAnchor
 	for ctx.Err() == nil {
 		release, err := m.acquireArchive(ctx, scope, archiveAutomatic)
 		if err != nil {
 			return err
 		}
-		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after, With: peer, ReactionAnchor: reactionAnchor})
+		page, err := m.readArchivePage(ctx, e, s, scope, archivePageRequest{After: after, With: peer, ReactionAnchor: reactionAnchor,
+			RecoverOMEMO: recoverOMEMO, RecoverPlainDirect: recoverPlainDirect})
 		release()
 		if errors.Is(err, errArchiveCursor) && after != "" && !reset {
 			after = ""
@@ -537,17 +603,38 @@ func (m *Manager) recoverArchiveRange(ctx context.Context, host application.Hist
 		if len(known) != 0 {
 			filterKnownDirectPeers(&page, known)
 		}
-		if err = m.ingestArchivePage(ctx, page); err != nil {
+		if recoverPlainDirect {
+			var admitted bool
+			admitted, err = e.omemoDevice.WithPlaintextPeer(ctx, peer, func() error {
+				if err := m.checkArchiveRetention(ctx, e.account.ID); err != nil {
+					return err
+				}
+				return m.ingestArchivePage(ctx, page)
+			})
+			if err == nil && !admitted {
+				return application.ErrStateConflict
+			}
+		} else {
+			err = m.ingestArchivePage(ctx, page)
+		}
+		if err != nil {
 			return err
 		}
+		gaps, err := m.ingestOMEMOArchive(ctx, e, page, now)
+		if err != nil {
+			return err
+		}
+		omemoGap = omemoGap || !gaps.Start.IsZero()
 		last := page.Last
 		if last != "" {
 			if len(last) > 4096 || last == after || seen[last] {
 				return errArchive
 			}
 			seen[last] = true
-			if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, checkpoint, last); err != nil {
-				return err
+			if !omemoGap {
+				if err = host.CommitHistoryCheckpoint(ctx, e.account.ID, checkpoint, last); err != nil {
+					return err
+				}
 			}
 			after, reactionAnchor = last, page.nextReactionAnchor(false)
 		} else if !page.Complete {
@@ -557,6 +644,9 @@ func (m *Manager) recoverArchiveRange(ctx context.Context, host application.Hist
 			return err
 		}
 		if page.Complete {
+			if omemoGap {
+				return errOMEMOHistoryIncomplete
+			}
 			return nil
 		}
 

@@ -82,6 +82,9 @@ func (m *Manager) checkDirectRequests(ctx context.Context, host application.Conv
 }
 
 func (m *Manager) hasPriorDirectHistory(ctx context.Context, e *entry, session *mx.Session, chat domain.Conversation) bool {
+	if e.omemoDevice != nil {
+		return false
+	}
 	check := chat.DirectHistoryCheck
 	if supported, err := m.supportsArchive(ctx, e, session, e.account.Address); err != nil || !supported {
 		return false

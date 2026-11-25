@@ -276,3 +276,16 @@ func TestManualBackupUpgradesOnlyThePrivateSnapshot(t *testing.T) {
 		t.Fatalf("the updated backup could not be restored: %+v %v", result, err)
 	}
 }
+
+func TestOMEMOProfileRejectsUnencryptedBackup(t *testing.T) {
+	store, _, _ := outboxFixture(t)
+	if err := os.MkdirAll(filepath.Join(store.dir, "private", "omemo"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, media := range []bool{false, true} {
+		var dst bytes.Buffer
+		if err := writeBackup(t.Context(), store.readDB, store.dir, &dst, media); err == nil || dst.Len() != 0 {
+			t.Fatal("expected export to stop before writing any bytes")
+		}
+	}
+}

@@ -172,8 +172,8 @@ func (m *Manager) configuredPresence(ctx context.Context, account domain.ID) (st
 	return "", nil
 }
 
-func presencePayload(show string) xml.TokenReader {
-	caps := avatarCaps().TokenReader()
+func presencePayload(show string, protected bool) xml.TokenReader {
+	caps := clientCaps(localClientInfo(protected)).TokenReader()
 	if show == "" {
 		return caps
 	}
@@ -237,7 +237,7 @@ func (m *Manager) applyPresence(ctx context.Context, e *entry, s *mx.Session) er
 	if e.presenceShow == show {
 		return nil
 	}
-	err = s.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show)))
+	err = s.Send(ctx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show, m.omemoDir != "")))
 	if err == nil {
 		e.presenceShow = show
 	}

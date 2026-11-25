@@ -781,6 +781,9 @@ templ accountDetail(v view,a engineapi.Account) {
      @glyph(heroicons.Icon16SolidChevronRight)
     }
    </div>
+   if v.OmemoEnabled{
+<a target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(a.Id,""))}>{v.Text.OmemoTitle}</a>
+}
    if v.AccountCommunication != nil {
     @accountCommunication(v,a.Id,*v.AccountCommunication)
    }
@@ -1155,6 +1158,13 @@ if m.Moderation!=nil || m.Retraction!=nil {
 }
 </div>
 <div class="oie-message-stamp">
+if m.Omemo!=nil && *m.Omemo {
+if m.IsOwn && m.SendState=="queued" && !v.Preview {
+<a class="oie-message-omemo" target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(m.AccountId,m.ConversationId))} title={v.Text.OmemoTitle}>OMEMO</a>
+}else{
+<span class="oie-message-omemo">OMEMO</span>
+}
+}
 @messageLeadingIndicators(v,m)
 @messageSendIndicator(v,m)
 @messageStarIndicator(v,m.Id)

@@ -54,7 +54,7 @@ func TestOwnPEPNotificationsAndCapabilityDiscovery(t *testing.T) {
 	if _, ok := e.avatarDirty["alice@localhost"]; !ok {
 		t.Fatal("own server PEP notification ignored")
 	}
-	caps := avatarCaps()
+	caps := clientCaps(clientInfo())
 	node := caps.Node + "#" + caps.Ver
 	reply := handle(`<iq xmlns="jabber:client" type="get" id="caps" from="localhost"><query xmlns="http://jabber.org/protocol/disco#info" node="` + node + `"/></iq>`)
 	var response struct {
@@ -86,8 +86,23 @@ func TestOnlyKnownProfileIdentitiesCanInvalidateAvatar(t *testing.T) {
 	if _, ok := e.avatarDirty["bob@localhost"]; !ok {
 		t.Fatal("known peer update ignored")
 	}
-	caps := avatarCaps()
+	caps := clientCaps(clientInfo())
 	if caps.Ver == "" || caps.Ver != clientInfo().Hash(sha1.New()) {
 		t.Fatal("entity caps mismatch")
+	}
+}
+
+func TestOMEMOProfileCapabilities(t *testing.T) {
+	basic, protected := localClientInfo(false), localClientInfo(true)
+	hasOMEMO := func(value disco.Info) bool {
+		for _, f := range value.Features {
+			if f.Var == deviceNode+"+notify" {
+				return true
+			}
+		}
+		return false
+	}
+	if hasOMEMO(basic) || !hasOMEMO(protected) || clientCaps(basic).Ver == clientCaps(protected).Ver {
+		t.Fatal("incorrect OMEMO capability advertisement")
 	}
 }

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Oie Engine API",
-    "version": "0.42.0",
+    "version": "0.45.0",
     "description": "Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps are UTC and entity/operation IDs are UUIDv7. HTML belongs to the BFF. Known problem responses link to their catalog entry in the Link header with rel=\"help\". Send Prefer: oie-problem-documentation to include the URL in the Problem Details body. Hosted engines require an Oiê-issued bearer key on every API request over HTTPS. The empty security alternative represents local development engines only.",
     "contact": {
       "name": "Arai Hû",
@@ -3401,6 +3401,101 @@
         }
       }
     },
+    "/api/v1/accounts/{accountId}/omemo": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AccountID"
+        },
+        {
+          "name": "peer",
+          "in": "query",
+          "description": "Bare peer JID. Omit to inspect devices of the account itself.",
+          "schema": {
+            "type": "string",
+            "maxLength": 1023
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getOmemoDevices",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Inspect public OMEMO fingerprints",
+        "description": "Returns the current policy, this endpoint and known devices belonging to the selected owner.",
+        "responses": {
+          "200": {
+            "description": "Public device information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OmemoDevices"
+                },
+                "example": {
+                  "address": "alice@example.org",
+                  "encrypted": true,
+                  "devices": []
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setOmemoDecision",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Confirm an OMEMO device or change protection for future messages",
+        "description": "Device decisions require an exact public fingerprint. Policy changes apply to future submissions for the selected peer.",
+        "requestBody": {
+          "description": "Explicit decision for the selected address.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OmemoDecision"
+              },
+              "example": {
+                "action": "encrypt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Decision applied"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{accountId}/connection": {
       "parameters": [
         {
@@ -6154,6 +6249,170 @@
         "x-cli-name": "get"
       }
     },
+    "/api/v1/conversations/{conversationId}/omemo": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ConversationID"
+        }
+      ],
+      "get": {
+        "operationId": "getRoomOmemo",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Review encryption for a private room",
+        "description": "Lists the current eligible room members when their affiliations are available to the connected account.",
+        "responses": {
+          "200": {
+            "description": "Room encryption preference and member addresses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomOmemo"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setRoomOmemo",
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Change OMEMO for the room",
+        "description": "Enable protected sends and encrypted receive and recovery in a confirmed members-only non-anonymous room. Accepted sends keep their selected protection after the setting changes.",
+        "requestBody": {
+          "required": true,
+          "description": "Desired room encryption.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Require OMEMO for new room sends.",
+                    "example": true
+                  }
+                }
+              },
+              "example": {
+                "enabled": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Saved room policy."
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{messageId}/omemo-attachments/{index}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageID"
+        },
+        {
+          "name": "index",
+          "in": "path",
+          "required": true,
+          "description": "Zero-based position in the message's omemoAttachments array.",
+          "schema": {
+            "type": "integer",
+            "maximum": 15,
+            "minimum": 0
+          },
+          "example": 0
+        }
+      ],
+      "get": {
+        "operationId": "downloadOmemoAttachment",
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Download an authenticated OMEMO attachment",
+        "description": "Fetches ciphertext for the retained message and returns the complete file after verification.",
+        "responses": {
+          "200": {
+            "description": "Verified attachment bytes.",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Safe download filename.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=photo.jpg"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "422": {
+            "description": "Blocked attachment destination.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "description": "Failed download or authentication.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{messageId}/retraction": {
       "parameters": [
         {
@@ -7656,8 +7915,15 @@
               "0.39.0",
               "0.40.0",
               "0.41.0",
-              "0.42.0"
+              "0.42.0",
+              "0.43.0",
+              "0.44.0",
+              "0.45.0"
             ]
+          },
+          "omemoEnabled": {
+            "type": "boolean",
+            "description": "The owning engine has an OMEMO profile. Hosted engines keep its private keys on the server."
           },
           "eventCursor": {
             "type": "string",
@@ -11055,6 +11321,157 @@
           "at": "2026-11-13T15:00:00Z"
         }
       },
+      "RoomOmemo": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Room policy, verified configuration and complete affiliation list when available.",
+        "required": [
+          "address",
+          "enabled",
+          "eligible",
+          "members"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Bare room address.",
+            "example": "team@rooms.example.org"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Saved room encryption preference.",
+            "example": true
+          },
+          "eligible": {
+            "type": "boolean",
+            "description": "The joined room is members-only and non-anonymous.",
+            "example": true
+          },
+          "members": {
+            "type": "array",
+            "description": "Current affiliated account addresses.",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "alice@example.org"
+            ]
+          }
+        },
+        "example": {
+          "address": "team@rooms.example.org",
+          "enabled": true,
+          "eligible": true,
+          "members": [
+            "alice@example.org"
+          ]
+        }
+      },
+      "OmemoDevices": {
+        "type": "object",
+        "description": "Public OMEMO keys for an account or direct peer.",
+        "additionalProperties": false,
+        "example": {
+          "address": "alice@example.org",
+          "encrypted": true,
+          "devices": []
+        },
+        "required": [
+          "address",
+          "encrypted",
+          "devices"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Bare address of the key owner.",
+            "example": "alice@example.org"
+          },
+          "encrypted": {
+            "type": "boolean",
+            "description": "Future direct messages require OMEMO."
+          },
+          "devices": {
+            "type": "array",
+            "description": "Known devices in numeric order.",
+            "items": {
+              "$ref": "#/components/schemas/OmemoDevice"
+            }
+          }
+        }
+      },
+      "OmemoDevice": {
+        "type": "object",
+        "description": "Public identity of a single device.",
+        "additionalProperties": false,
+        "example": {
+          "id": 42,
+          "fingerprint": "abcdef01abcdef01abcdef01abcdef01abcdef01abcdef01abcdef01abcdef01",
+          "verified": true,
+          "active": true,
+          "own": false
+        },
+        "required": [
+          "id",
+          "fingerprint",
+          "verified",
+          "active",
+          "own"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 2147483647,
+            "minimum": 1
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "own": {
+            "type": "boolean",
+            "description": "Identity of this engine."
+          }
+        }
+      },
+      "OmemoDecision": {
+        "type": "object",
+        "description": "One explicit device or chat encryption decision.",
+        "additionalProperties": false,
+        "example": {
+          "action": "encrypt"
+        },
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "verify",
+              "distrust",
+              "encrypt",
+              "plaintext"
+            ],
+            "example": "encrypt"
+          },
+          "device": {
+            "type": "integer",
+            "maximum": 2147483647,
+            "minimum": 1
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
       "Message": {
         "type": "object",
         "description": "Retained original text and actual send evidence. submitted means the stanza was written to the authenticated stream; it does not prove provider acceptance, recipient delivery, or read state. unknown is not automatically resent.",
@@ -11071,6 +11488,21 @@
           "sendState"
         ],
         "properties": {
+          "omemoAttachments": {
+            "type": "array",
+            "description": "File names in download order. The engine keeps the key and remote URL.",
+            "maxItems": 16,
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "photo.jpg"
+            ]
+          },
+          "omemo": {
+            "type": "boolean",
+            "description": "The message was received through OMEMO or accepted with an immutable OMEMO send intent."
+          },
           "retraction": {
             "$ref": "#/components/schemas/MessageRetraction"
           },

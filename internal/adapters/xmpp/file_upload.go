@@ -1,6 +1,7 @@
 package xmpp
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/xml"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
@@ -32,8 +34,19 @@ const (
 type attachmentUploadProgress struct {
 	service    string
 	roomIntent domain.ID
+	files      []domain.StagedAttachment
 	links      []string
 	updatedAt  time.Time
+	protected  bool
+}
+
+func (p attachmentUploadProgress) reusable(out application.Outgoing, service string, protected bool) bool {
+	return p.service == service && p.roomIntent == out.RoomIntentRevisionID && p.protected == protected &&
+		time.Since(p.updatedAt) < attachmentProgressLifetime && len(p.files) == len(p.links) &&
+		len(p.files) <= len(out.Attachments) &&
+		slices.EqualFunc(p.files, out.Attachments[:len(p.files)], func(saved domain.StagedAttachment, current application.OutgoingAttachment) bool {
+			return saved == current.StagedAttachment
+		})
 }
 
 var errUploadRejected = errors.New("upload rejected")
@@ -112,6 +125,19 @@ func uploadService(e *entry, largest int64) (string, error) {
 }
 
 func (m *Manager) AttachmentAvailability(_ context.Context, a domain.Account, attachments []domain.StagedAttachment) error {
+	return m.attachmentAvailability(a, attachments, 0)
+}
+
+func (m *Manager) OMEMOAttachmentAvailability(_ context.Context, a domain.Account, attachments []domain.StagedAttachment) error {
+	for _, file := range attachments {
+		if file.Size > omemo.MaxMediaSize {
+			return application.ErrAttachmentTooLarge
+		}
+	}
+	return m.attachmentAvailability(a, attachments, omemo.MediaTagSize)
+}
+
+func (m *Manager) attachmentAvailability(a domain.Account, attachments []domain.StagedAttachment, overhead int64) error {
 	m.mu.RLock()
 	e := m.entries[a.ID]
 	m.mu.RUnlock()
@@ -124,7 +150,7 @@ func (m *Manager) AttachmentAvailability(_ context.Context, a domain.Account, at
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	_, err := uploadService(e, largest)
+	_, err := uploadService(e, largest+overhead)
 	return err
 }
 
@@ -144,7 +170,7 @@ type uploadSlot struct {
 func secureSlotURL(raw string) bool {
 	parsed, err := url.Parse(raw)
 	return err == nil && len(raw) <= 4096 && parsed.Scheme == "https" && parsed.Hostname() != "" && parsed.User == nil && parsed.Fragment == "" &&
-		!strings.ContainsAny(raw, " \t\r\n")
+		!strings.ContainsAny(raw, "# \t\r\n")
 }
 
 func decodeUploadSlot(payload string) (uploadSlot, error) {
@@ -227,7 +253,7 @@ func (e *entry) attachmentUploadCurrent(session *mx.Session, out application.Out
 	return room != nil && room.session == session && room.snapshot.State == "joined" && room.snapshot.IntentRevisionID == out.RoomIntentRevisionID
 }
 
-func (e *entry) saveAttachmentUpload(session *mx.Session, out application.Outgoing, service string, links []string) bool {
+func (e *entry) saveAttachmentUpload(session *mx.Session, out application.Outgoing, service string, links []string, protected bool) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.attachmentUploadCurrent(session, out) {
@@ -247,7 +273,13 @@ func (e *entry) saveAttachmentUpload(session *mx.Session, out application.Outgoi
 		}
 		delete(e.attachmentUploads, oldestID)
 	}
-	e.attachmentUploads[out.ID] = attachmentUploadProgress{service: service, roomIntent: out.RoomIntentRevisionID, links: slices.Clone(links), updatedAt: now}
+	files := make([]domain.StagedAttachment, len(links))
+	for index := range links {
+		files[index] = out.Attachments[index].StagedAttachment
+	}
+	e.attachmentUploads[out.ID] = attachmentUploadProgress{
+		service: service, roomIntent: out.RoomIntentRevisionID, files: files, links: slices.Clone(links), updatedAt: now, protected: protected,
+	}
 	return true
 }
 
@@ -259,10 +291,55 @@ func (e *entry) forgetAttachmentUpload(session *mx.Session, id domain.ID) {
 	}
 }
 
+type roomOperationScope struct {
+	account domain.ID
+	room    string
+}
+
+// Beginning a clear operation and activating OMEMO are ordered for an
+// account and room, even while its XMPP connection is being replaced.
+func (m *Manager) beginPlainRoomOperation(device *omemo.Device, scope roomOperationScope) (bool, error) {
+	m.plainRoomOperationsMu.Lock()
+	defer m.plainRoomOperationsMu.Unlock()
+	enabled, err := device.RoomEncryption(scope.room)
+	if err != nil || enabled {
+		return false, err
+	}
+	if m.plainRoomOperations == nil {
+		m.plainRoomOperations = make(map[roomOperationScope]int)
+	}
+	m.plainRoomOperations[scope]++
+	return true, nil
+}
+
+func (m *Manager) endPlainRoomOperation(scope roomOperationScope) {
+	m.plainRoomOperationsMu.Lock()
+	defer m.plainRoomOperationsMu.Unlock()
+	if m.plainRoomOperations[scope] == 1 {
+		delete(m.plainRoomOperations, scope)
+	} else {
+		m.plainRoomOperations[scope]--
+	}
+}
+
 func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, session *mx.Session, out application.Outgoing) (string, string) {
+	links, outcome := m.uploadAttachmentLinks(ctx, e, session, out, false)
+	if outcome != "" {
+		return "", outcome
+	}
+	if out.OriginalText != "" {
+		links = append([]string{out.OriginalText}, links...)
+	}
+	return strings.Join(links, "\n"), ""
+}
+
+func (m *Manager) uploadAttachmentLinks(ctx context.Context, e *entry, session *mx.Session, out application.Outgoing, protected bool) ([]string, string) {
 	var largest int64
 	for _, file := range out.Attachments {
 		largest = max(largest, file.Size)
+	}
+	if protected {
+		largest += omemo.MediaTagSize
 	}
 	e.mu.RLock()
 	service, err := uploadService(e, largest)
@@ -272,7 +349,7 @@ func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, sessio
 	e.mu.RUnlock()
 	canceled := func() bool { return ctx.Err() != nil || (sessionCtx != nil && sessionCtx.Err() != nil) }
 	if !current || canceled() {
-		return "", application.NotSent
+		return nil, application.NotSent
 	}
 	if sessionCtx != nil {
 		var cancel context.CancelFunc
@@ -282,64 +359,116 @@ func (m *Manager) uploadMessageAttachments(ctx context.Context, e *entry, sessio
 		defer stop()
 	}
 	if err != nil {
-		return "", application.Failed
+		return nil, application.Failed
 	}
 	if service == "" {
-		return "", application.NotSent
+		return nil, application.NotSent
 	}
 
-	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: m.roots, MinVersion: tls.VersionTLS12}}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var client *http.Client
+	if !protected {
+		transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: m.roots, MinVersion: tls.VersionTLS12}}
+		defer transport.CloseIdleConnections()
+		client = &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	}
 	var links []string
-	if progress.service == service && progress.roomIntent == out.RoomIntentRevisionID &&
-		time.Since(progress.updatedAt) < attachmentProgressLifetime && len(progress.links) <= len(out.Attachments) {
-		// Once dispatch starts the composition cannot change. Reuse completed
-		// uploads only for this message, provider service and connection.
+	if progress.reusable(out, service, protected) {
+		// A pre-wire protected send can become editable again. Reuse only
+		// uploads that still match the accepted attachment list.
 		links = slices.Clone(progress.links)
 	}
 	for _, file := range out.Attachments[len(links):] {
+		var sealed domain.EncryptedAttachment
+		if protected {
+			file, sealed, err = encryptUpload(ctx, file)
+			if canceled() {
+				return nil, application.NotSent
+			}
+			if err != nil {
+				return nil, application.Failed
+			}
+		}
 		request := fmt.Sprintf(`<request xmlns="%s" filename="%s" size="%d" content-type="%s"/>`, uploadNamespace, escaped(file.FileName), file.Size, escaped(file.MediaType))
 		reply, err := readArchiveIQ(ctx, e, session, service, stanza.GetIQ, request)
 		if canceled() {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		if err != nil {
 			if errors.Is(err, errArchive) || errors.Is(err, errDetailPermission) || errors.Is(err, errArchiveCursor) {
-				return "", application.Failed
+				return nil, application.Failed
 			}
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		slot, err := decodeUploadSlot(reply)
 		if err != nil {
-			return "", application.Failed
+			return nil, application.Failed
 		}
 		e.mu.RLock()
 		current = e.attachmentUploadCurrent(session, out)
 		e.mu.RUnlock()
 		if !current {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
-		err = sendUpload(ctx, client, slot, file)
+		if protected {
+			destination, _ := url.Parse(slot.Put.URL) // decodeUploadSlot validated the URL.
+			// The file-specific deadline also applies to slower uploads.
+			guarded := *m.omemoMediaClient(destination)
+			guarded.Timeout = 0
+			err = sendUpload(ctx, &guarded, slot, file)
+		} else {
+			err = sendUpload(ctx, client, slot, file)
+		}
 		if canceled() {
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
 		if err != nil {
-			if errors.Is(err, errUploadRejected) {
-				return "", application.Failed
+			var denial application.PreviewFailure
+			if errors.Is(err, errUploadRejected) || errors.As(err, &denial) && denial.Code == "blocked" {
+				return nil, application.Failed
 			}
-			return "", application.NotSent
+			return nil, application.NotSent
 		}
-		links = append(links, slot.Get.URL)
-		if !e.saveAttachmentUpload(session, out, service, links) {
-			return "", application.NotSent
+		link := slot.Get.URL
+		if protected {
+			link = omemo.MediaURI(link, sealed)
+		}
+		links = append(links, link)
+		if !e.saveAttachmentUpload(session, out, service, links, protected) {
+			return nil, application.NotSent
 		}
 	}
 	if canceled() {
-		return "", application.NotSent
+		return nil, application.NotSent
 	}
-	if out.OriginalText != "" {
-		links = append([]string{out.OriginalText}, links...)
+	return links, ""
+}
+
+func encryptUpload(ctx context.Context, file application.OutgoingAttachment) (application.OutgoingAttachment, domain.EncryptedAttachment, error) {
+	var empty domain.EncryptedAttachment
+	if file.Size < 0 || file.Size > omemo.MaxMediaSize {
+		return file, empty, errUploadRejected
 	}
-	return strings.Join(links, "\n"), ""
+	body, err := file.Open(ctx)
+	if err != nil {
+		return file, empty, err
+	}
+	defer func() { _ = body.Close() }()
+	plain, err := io.ReadAll(io.LimitReader(body, file.Size+1))
+	if err != nil {
+		return file, empty, err
+	}
+	if int64(len(plain)) != file.Size {
+		return file, empty, errUploadRejected
+	}
+	ciphertext, sealed, err := omemo.SealMedia(plain)
+	clear(plain)
+	if err != nil {
+		return file, empty, err
+	}
+	file.Size = int64(len(ciphertext))
+	file.MediaType = "application/octet-stream"
+	file.Open = func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(ciphertext)), nil
+	}
+	return file, sealed, nil
 }
