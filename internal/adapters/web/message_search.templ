@@ -112,14 +112,22 @@ templ messageSearchFilter(v view, category,label string){
 @link.Link(v.messageSearchFilterHref(category),link.WithRootClass("oie-search-category"),link.WithAttrs(templ.Attributes{"data-message-search-filter":category,"aria-current":strconv.FormatBool(v.MessageSearch.Category==category)})){ {label} }
 }
 
+templ accountFilterAvatar(v view, account engineapi.Account, label string) {
+	<div aria-hidden="true">
+		@profileAvatar(v, account.Id, account.Address, avatar.Config{Name:label, Size:avatar.SizeXS})
+		// Goshtoso filters the option's text, including this non-displayed address.
+		<span hidden>{ account.Address }</span>
+	</div>
+}
+
 templ messageSearchAccountFilter(v view){
 {{ ctx=expressions.With(ctx,expressions.Set{Combobox:expressions.Combobox{ClearLabel:v.Text.SearchClearAccounts,SelectedLabel:v.messageSearchAccountCount}});cfg:=v.messageSearchAccountCombobox();selected:=v.MessageSearch.accounts() }}
 @combobox.Combobox(cfg,cfg.InitialState())
 <noscript>
 <fieldset data-message-search-native-accounts><legend>{v.Text.Accounts}</legend>
 <input type="hidden" name="nativeAccountFilter" value="1"/>
-for _,a:=range v.Accounts {
-@checkbox.Checkbox(checkbox.Config{ID:"message-search-native-"+a.Id,Name:"nativeAccountId",Value:a.Id,Label:a.Label+" · "+a.Address,Checked:slices.Contains(selected,a.Id)})
+for _,option:=range cfg.Source.Static {
+@checkbox.Checkbox(checkbox.Config{ID:"message-search-native-"+option.Value,Name:"nativeAccountId",Value:option.Value,Label:option.Label,Checked:slices.Contains(selected,option.Value)})
 }
 </fieldset>
 </noscript>

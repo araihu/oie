@@ -569,7 +569,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     await catalogPicker.click();
     await multi.locator('#shared-account [data-combobox-option][data-value="'+work+'"]').click();
     await multi.waitForURL(url=>url.searchParams.getAll('contentAccount').join(',')===account);
-    assert.equal(await catalogPicker.innerText(),'Personal · alice@fixture');
+    assert.equal(await catalogPicker.innerText(),'Personal');
     assert.equal(await catalogPicker.getAttribute('aria-expanded'),'true');
     await multi.locator('#shared-account [data-combobox-clear-all]').click();
     await multi.waitForURL(url=>!url.searchParams.has('contentAccount'));
