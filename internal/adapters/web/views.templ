@@ -188,7 +188,7 @@ if !v.CompactSource {
 <div data-route-shared-copy>
 @liveCopy(v)
 <p class="sr-only" data-read-status data-read-failed={v.Text.ReadFailed} role="status" aria-live="polite" hidden></p>
-<div data-shared-action-copy hidden data-failed={v.Text.SharedActionFailed} data-copied={v.Text.SharedLinkCopied} data-downloading={v.Text.SharedDownloading}></div>
+@sharedActionFeedback(v)
 <div class="sr-only" data-live-status role="status" aria-live="polite" hidden></div>
 </div>
 }

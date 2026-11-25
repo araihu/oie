@@ -1,8 +1,17 @@
 window.OieRuntime.register('shared-actions', life => {
  'use strict';
- const labels=document.querySelector('[data-shared-action-copy]')?.dataset||{};
+ const copyTemplate = document.querySelector('template[data-shared-action-copy]');
+ const labels = copyTemplate?.dataset || {};
  const pending=new Set();
  function feedback(scope,message){const node=scope.closest('[data-shared-item]')?.querySelector('[data-shared-action-status]');if(node){node.textContent=message||'';node.hidden=!message;}}
+ function copyConfirmation() {
+  const outlet = document.getElementById('toast-container-oob');
+  if (!outlet || !copyTemplate) return;
+  const toast = copyTemplate.content.firstElementChild.cloneNode(true);
+  outlet.querySelector('[data-shared-copy-confirmation]')?.remove();
+  toast.setAttribute('data-shared-copy-confirmation', '');
+  outlet.append(toast);
+ }
  function close(item){item.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));}
  async function save(url,name){if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(url,name||'');const anchor=document.createElement('a');anchor.href=url;anchor.download=name||'';document.body.append(anchor);anchor.click();anchor.remove();return true;}
  async function copy(value){
@@ -24,7 +33,18 @@ window.OieRuntime.register('shared-actions', life => {
    item.disabled=true;document.dispatchEvent(new CustomEvent('oie:preview-refresh-request',{detail:{id:scope.dataset.sharedPreview}}));return;
   }
   if(item.id.startsWith('shared-copy-')){
-   pending.add(key);try{await copy(address);if(!life.signal.aborted&&scope.isConnected)feedback(scope,labels.copied);}catch{if(!life.signal.aborted&&scope.isConnected)feedback(scope,labels.failed);}finally{pending.delete(key);}return;
+   pending.add(key);
+   try {
+    await copy(address);
+    if (!life.signal.aborted && scope.isConnected) copyConfirmation();
+   } catch {
+    if (!life.signal.aborted && scope.isConnected) {
+     window.dispatchEvent(new CustomEvent('notify', {detail: {kind:'toast', tone:'danger', message:labels.failed}}));
+    }
+   } finally {
+    pending.delete(key);
+   }
+   return;
   }
   if(scope.dataset.sharedEngine!==document.body.dataset.engineId){feedback(scope,labels.failed);return;}
   if(scope.dataset.sharedKind==='image'){

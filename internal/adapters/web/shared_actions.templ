@@ -6,6 +6,8 @@ import (
  "github.com/araihu/goshtoso/components/button"
  "github.com/araihu/goshtoso/components/dropdown"
  "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/toast"
+ "github.com/araihu/goshtoso/expressions"
  "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
@@ -34,4 +36,10 @@ templ sharedStarButton(v view, state engineapi.MessageStar){
  })){
   @glyph(heroicons.Icon16SolidStar)
  }
+}
+
+templ sharedActionFeedback(v view){
+<template data-shared-action-copy data-failed={v.Text.SharedActionFailed} data-downloading={v.Text.SharedDownloading}>
+@toast.Toast(toast.Config{Tone:toast.ToneSuccess,Message:v.Text.SharedLinkCopied,DisplayDuration:2500}).WithExpressions(expressions.Toast{DismissAriaLabel:v.Text.Close})
+</template>
 }

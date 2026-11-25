@@ -182,9 +182,54 @@ function png(){const crc=b=>{let n=0xffffffff;for(const v of b){n^=v;for(let j=0
    await pressed(action,true);
    await action.tap();
    await pressed(action,false);
+   await mobile.evaluate(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{window.lastCopied=value}}}));
+   const tile=mobile.locator(`[data-shared-item="${items[0].id}"]`);
+   await tile.locator('[data-shared-menu-trigger]').tap();
+   await tile.getByRole('menuitem',{name:'Copiar link',exact:true}).tap();
+   const toast=mobile.getByRole('alert').filter({hasText:'Link copiado.'});
+   await toast.getByRole('button',{name:'Fechar'}).tap();
+   await toast.waitFor({state:'detached'});
+   assert.equal(await mobile.evaluate(()=>window.lastCopied),items[0].url);
   }finally{await touch.close()}
 
-  await open(0);assert.equal(state.ensures,0);const before=state.media;await menu(0).getByRole('menuitem',{name:'Copy link',exact:true}).click();await until(async()=>await page.evaluate(()=>copied.length)===1,'URL copied');assert.equal(await page.evaluate(()=>copied[0]),items[0].url);assert.equal(state.media,before);await until(async()=>card(0).locator('[data-shared-menu-trigger]').evaluate(n=>n===document.activeElement),'menu focus restored');
+  const copyLink=async n=>{
+   await open(n);
+   await menu(n).getByRole('menuitem',{name:'Copy link',exact:true}).click();
+  };
+  const copiedToast=page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'Link copied.'});
+  const before=state.media, beforeCopy=await card(0).boundingBox();
+  await page.evaluate(()=>{
+   const clipboard=navigator.clipboard,write=clipboard.writeText;
+   clipboard.writeText=value=>new Promise(resolve=>{
+    window.finishCopy=()=>{clipboard.writeText=write;resolve(write(value));};
+   });
+  });
+  await copyLink(0);
+  assert.equal(await copiedToast.count(),0);
+  assert.deepEqual(await card(0).boundingBox(),beforeCopy);
+  await page.evaluate(()=>window.finishCopy());
+  await copiedToast.waitFor();
+  assert.equal(await page.evaluate(()=>copied[0]),items[0].url);
+  assert.equal(state.media,before);
+  assert.equal(state.ensures,0);
+  await until(()=>card(0).locator('[data-shared-menu-trigger]').evaluate(n=>n===document.activeElement),'menu focus restored');
+  assert.deepEqual(await card(0).boundingBox(),beforeCopy);
+  await copyLink(1);
+  await copiedToast.waitFor();
+  assert.equal(await copiedToast.count(),1);
+  assert.deepEqual(await page.evaluate(()=>copied),[items[0].url,items[1].url]);
+  await copiedToast.waitFor({state:'detached',timeout:6000});
+  await copyLink(0);
+  await copiedToast.getByRole('button',{name:'Close'}).click();
+  await copiedToast.waitFor({state:'detached'});
+  await page.evaluate(()=>{
+   const clipboard=navigator.clipboard,write=clipboard.writeText;
+   clipboard.writeText=async()=>{clipboard.writeText=write;throw Error('clipboard denied');};
+  });
+  await copyLink(1);
+  const failedToast=page.getByRole('alert').filter({hasText:'This action could not be completed.'});
+  await failedToast.getByRole('button',{name:'Close'}).click();
+  await failedToast.waitFor({state:'detached'});
   await open(0);
   state.registrationPending=new Promise(resolve=>{acknowledgeRegistration=resolve});
   const saved=page.waitForEvent('download'),beforeSave=state.media;
