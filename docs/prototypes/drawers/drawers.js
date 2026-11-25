@@ -483,4 +483,3 @@ if(start==='dminfo')state.chat='direct';
 frame.path=deepPath(start);frame.origin='go-'+(frame.path[0]||'room');
 history.replaceState({drawerFrame:frame},'',`#${start}`);
 setTheme();renderChat();paint();
-

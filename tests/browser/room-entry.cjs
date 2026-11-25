@@ -294,14 +294,25 @@ async function waitFor(predicate) {
           await route.continue();
         },{times:1});
       }
-      await page.locator('[aria-controls=chat-options-panel]').click();
-      await page.locator('#chat-manage-room').click();
+      if (width === 1440) {
+        await page.locator('#chat-header .oie-chat-avatar-trigger').click();
+        await page.locator('[data-info-manage-room]').click();
+      } else {
+        await page.locator('[aria-controls=chat-options-panel]').click();
+        await page.locator('#chat-manage-room').click();
+      }
       const management = page.locator('[data-room-management]');
       const openingSkeleton = management.getByRole('status',{name:'Carregando ações da sala…',exact:true});
       if (width === 1440) {
         await openingSkeleton.waitFor();
         assert.equal(await openingSkeleton.locator('[data-skeleton-item]').count(),5);
         finishOpening();
+      }
+      if (width === 1440) {
+        const back = await management.locator('[data-management-parent] button').boundingBox();
+        await management.getByRole('tablist').waitFor();
+        const tabs = await management.getByRole('tablist').boundingBox();
+        assert(tabs.y - (back.y + back.height) < 40, 'room controls follow Back without a blank row');
       }
       await management.locator('[data-details-edit]:visible').click();
       const saveDetails = management.locator('[data-details-review]');
