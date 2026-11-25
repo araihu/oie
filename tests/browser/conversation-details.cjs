@@ -120,7 +120,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   await opened(page);
   await entry.click();
   await roomRead.waitFor();
-  assert.deepEqual(await roomRead.locator('section h3').allTextContents(),['Owners','Administrators','Moderators','Participants','Visitors']);
+  assert.deepEqual(await roomRead.locator('[data-roster-list] section h3').allTextContents(),['Owners','Administrators','Moderators','Participants','Visitors']);
   assert.equal(await rows.count(),38);
   assert.equal(await rows.locator('img').count(),1);
   assert.equal(await rows.locator('a, form').count(),0);
