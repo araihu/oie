@@ -306,7 +306,8 @@ async function run() {
         await page.getByRole('button', {name: 'Abrir navegação', exact: true}).click();
       }
       await page.locator('[data-navigation-settings]:visible').click();
-      await page.locator('[data-settings-target=device]:visible').click(); await page.locator('[data-settings-target=notifications]:visible').click();
+      await page.locator('[data-settings-target=device]:visible').click();
+      await page.locator('[data-settings-target=notifications]:visible').click();
       await page.locator('[data-notification-banners]').waitFor({state: 'visible'});
     };
     assert.equal(soundRequests.length, 0, 'the initial page should not load the sound');
@@ -358,8 +359,12 @@ async function run() {
     assert.equal(await first.locator('#notification-archived').isChecked(), false);
     assert.equal(await first.locator('#notification-focused').isChecked(), false);
     assert.equal(await first.locator('[data-notification-room-sound]').inputValue(), 'attention');
-    const closeSettings = page => page.locator('#settings-body').evaluate(node =>
-      node.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: 'settings'}, bubbles: true})));
+    const closeSettings = async page => {
+      const drawer = page.getByRole('dialog').filter({has: page.locator('#settings-body')});
+      await drawer.getByRole('button', {name: /^(Close|Fechar)$/}).click();
+      await drawer.waitFor({state: 'hidden'});
+      assert.notEqual(new URL(page.url()).searchParams.get('open'), 'settings');
+    };
     await closeSettings(first);
     await first.evaluate(() => { window.testFocus = true; window.dispatchEvent(new Event('focus')); });
     const total = async field => (await first.evaluate(field => typeof window[field] === 'number' ? window[field] : window[field].length, field)) +

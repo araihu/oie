@@ -645,7 +645,11 @@ func workspaceDrawer(config drawer.Config) templ.Component {
  case "settings", "access-keys", "diagnostics", "about", "destructive-actions", "details", "room-management", "room-destructive-actions":
     config.HeaderLeading = drawerHeaderBack(config.ID)
  }
- config.NonModalMinWidth = 1100
+ // Schedule editing hands off to the composer and then returns to the timeline.
+ // Keep the timeline at the same width throughout that task.
+ if config.ID != "conversation-schedules" {
+    config.NonModalMinWidth = 1100
+ }
  config.PanelClass = strings.TrimSpace("oie-drawer " + config.PanelClass)
  return drawer.Drawer(config)
 }

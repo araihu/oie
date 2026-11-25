@@ -703,11 +703,14 @@ window.OieRuntime.register('workspace-drawers', life => {
     if (current) window.dispatchEvent(new CustomEvent('drawer:close', {detail: {id: current}}));
     current = id;
     opener = document.activeElement;
-    if (panel.getAttribute('aria-modal') === 'false') life.raf(() => {
-      if (current !== id || panel.contains(document.activeElement)) return;
-      const title = panel.querySelector('header h2');
-      title.tabIndex = -1;
-      title.focus({preventScroll: true});
+    const origin = opener;
+    if (panel.getAttribute('aria-modal') === 'false') window.Alpine.nextTick(() => {
+      life.raf(() => life.raf(() => {
+        if (current !== id || !panel.getClientRects().length || document.activeElement !== origin) return;
+        const title = panel.querySelector('header h2');
+        title.tabIndex = -1;
+        title.focus({preventScroll: true});
+      }));
     });
   });
   for (const type of ['drawer:close', 'drawer:close-request']) {
