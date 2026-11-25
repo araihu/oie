@@ -85,6 +85,8 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   const manualAction=mobileTile.locator('[id^="shared-thumbnail-"]');
   assert.equal((await manualAction.textContent()).trim(),'Carregar prévia do vídeo');
   state.holdThumbnail=true;
+  await manualAction.waitFor({state:'visible'});
+  await until(()=>mobileTile.getByRole('menu').evaluate(menu=>menu.contains(document.activeElement)),'keyboard menu focus is established');
   await manualAction.press('Enter');
   await until(()=>typeof state.releaseThumbnail==='function','manual thumbnail queued');
   await until(()=>manualAction.isDisabled(),'queued thumbnail action disabled');
@@ -114,7 +116,17 @@ async function until(fn, label) { for(let n=0;n<180;n++){if(await fn())return;aw
   await manual.close();
   state.status='unavailable';state.ensures=0;state.sampleFails=true;
   const failed=await browser.newContext({viewport:{width:1100,height:850}}),failurePage=await failed.newPage();await failed.addInitScript(()=>localStorage.setItem('oie.device.auto-video-previews.v1','false'));await failurePage.goto(base+'/?section=media&lang=en');await sleep(400);assert.equal(state.ensures,0,'failed previews must not retry just because a route opens');assert.equal(await failurePage.locator('[data-video-thumbnail-load]').count(),0);const failedTile=failurePage.locator('[data-shared-item="'+itemID+'"]');await failedTile.locator('[data-shared-menu-trigger]').click();const retryAction=failedTile.locator('[id^="shared-thumbnail-"]');assert.equal((await retryAction.textContent()).trim(),'Try again');assert.match(await failurePage.locator('[data-video-thumbnail-status]').textContent(),/unavailable/);const failedStage=await failurePage.locator('.oie-video-stage').boundingBox(),failedImage=await failurePage.locator('.oie-image-preview').boundingBox();assert(Math.abs(failedStage.height-failedImage.height)<1,'failure must retain the common preview frame');
-  state.fail=true;await retryAction.click();await until(async()=>state.ensures===1&&!await retryAction.isDisabled(),'failed retry becomes available again');assert.equal((await retryAction.textContent()).trim(),'Try again');await sleep(350);assert.equal(state.ensures,1,'failed retry must not loop automatically');state.fail=false;await failedTile.locator('[data-shared-menu-trigger]').click();await retryAction.click();await until(()=>failurePage.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'explicit failed-preview retry');assert.equal(state.ensures,2);await failed.close();
+  state.fail=true;
+  await retryAction.click();
+  await until(async()=>state.ensures===1&&(await retryAction.textContent()).trim()==='Try again'&&!await retryAction.isDisabled(),'failed retry becomes available again');
+  await sleep(350);
+  assert.equal(state.ensures,1,'failed retry must not loop automatically');
+  state.fail=false;
+  await failedTile.locator('[data-shared-menu-trigger]').click();
+  await retryAction.click();
+  await until(()=>failurePage.locator('[data-video-poster-image]').evaluate(image=>image.naturalWidth===64),'explicit failed-preview retry');
+  assert.equal(state.ensures,2);
+  await failed.close();
   const queue = await browser.newContext({viewport:{width:1100,height:850},locale:'en'});
   const queuePage = await queue.newPage();
   queuePage.on('pageerror', error => errors.push(error.message));
