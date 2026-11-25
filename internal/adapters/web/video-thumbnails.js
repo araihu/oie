@@ -69,17 +69,23 @@ window.OieRuntime.register('video-thumbnails', life => {
       status.textContent = text;
       status.hidden = !text;
     }
-    const menu = card.closest('[data-shared-item]')?.querySelector('[id^="shared-thumbnail-"]');
-    for (const button of [card.querySelector('[data-video-thumbnail-load]'), menu]) {
-      if (!button) continue;
+    const button = card.closest('[data-shared-item]')?.querySelector('[id^="shared-thumbnail-"]');
+    if (button) {
       const label = state === 'unavailable' ? card.dataset.thumbnailRetryLabel : card.dataset.thumbnailLoadLabel;
-      const copy = button.querySelector('[data-video-thumbnail-action-label],span.block') || button;
+      const copy = button.querySelector('span.block') || button;
       if (copy.textContent !== label) copy.textContent = label;
       button.setAttribute('aria-label', label);
       button.title = state === 'unavailable' ? card.dataset.videoThumbnailFailed + ' ' + label : label;
       button.hidden = !!card.dataset.videoPoster;
       button.disabled = state === 'queued';
     }
+    const action = card.closest('[data-message-id]')?.querySelector('#message-thumbnail-' + CSS.escape(card.dataset.videoItem));
+    if (action) syncMessageAction(action, card);
+  }
+
+  function syncMessageAction(action, card) {
+    action.hidden = !!card.dataset.videoPoster;
+    action.disabled = card.dataset.videoThumbnailState === 'queued';
   }
 
   function apply(card, result) {
@@ -239,10 +245,21 @@ window.OieRuntime.register('video-thumbnails', life => {
 
   const changes = new MutationObserver(observe);
   changes.observe(document.querySelector('#oie-app') || document.body, {childList:true, subtree:true});
+  function messageCard(action) {
+    const item = action.id.slice('message-thumbnail-'.length);
+    return action.closest('[data-message-id]')?.querySelector('[data-video-item="' + CSS.escape(item) + '"]');
+  }
+
+  life.on(document, 'oie:actions-refreshed', () => {
+    for (const action of document.querySelectorAll('[id^="message-thumbnail-"]')) {
+      const card = messageCard(action);
+      if (card) syncMessageAction(action, card);
+    }
+  });
   life.on(document, 'click', event => {
-    const button = event.target.closest('[data-video-thumbnail-load], [id^="shared-thumbnail-"]');
+    const button = event.target.closest('[id^="message-thumbnail-"], [id^="shared-thumbnail-"]');
     if (!button || button.disabled) return;
-    const card = button.closest(selector) || button.closest('[data-shared-item]')?.querySelector(selector);
+    const card = button.closest('[data-shared-item]')?.querySelector(selector) || messageCard(button);
     if (!card) return;
     event.preventDefault();
     button.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));

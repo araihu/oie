@@ -17,13 +17,13 @@ if v.Section=="media"||v.SharedInDetails {
 }else{
 @card.Card(card.Config{Media:videoPlayer(v,item),MediaClass:"oie-video-media",Body:videoMetadata(v,item),Density:card.DensityCompact,RootClass:"oie-video-surface"})
 }
+<p class="sr-only" data-video-thumbnail-status role="status" aria-live="polite" hidden></p>
 </section>
 }
 
 templ videoGalleryMedia(v view,item engineapi.SharedContentItem){
 @videoPlayer(v,item)
 @videoMetadata(v,item)
-@videoThumbnailControls(v,item)
 }
 
 templ videoPlayer(v view,item engineapi.SharedContentItem){
@@ -39,24 +39,7 @@ templ videoPlayer(v view,item engineapi.SharedContentItem){
 templ videoMetadata(v view,item engineapi.SharedContentItem){
 <div data-video-metadata hidden?={v.Section=="media"||v.SharedInDetails}>
 <strong data-video-label hidden?={v.Section=="media"||v.SharedInDetails}>{v.sharedTitle(item)}</strong>
-<p data-video-status role="status" aria-live="polite" data-state="ready" hidden></p>
-if v.Section!="media" && !v.SharedInDetails {
-@videoThumbnailControls(v,item)
-}
-<a data-video-download hidden href={templ.SafeURL(documentSource(v,item)+"&download=1")} download>{v.Text.VideoDownloadOriginal}</a>
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-video-retry":"","hidden":true})){ {v.Text.VideoRetry} }
-</div>
-}
-
-
-templ videoThumbnailControls(v view,item engineapi.SharedContentItem){
-<div data-video-thumbnail-controls if v.Section=="media"||v.SharedInDetails {class="sr-only"}>
-<p class="sr-only" data-video-thumbnail-status role="status" aria-live="polite" hidden></p>
-if v.Section!="media" && !v.SharedInDetails {
-@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithRootClass("oie-video-thumbnail-action"),button.WithAttrs(templ.Attributes{"aria-label":videoThumbnailActionLabel(v,item),"title":videoThumbnailActionLabel(v,item),"data-video-thumbnail-load":"","data-thumbnail-load-label":v.Text.VideoThumbnailLoad,"data-thumbnail-retry-label":v.Text.Retry,"hidden":videoThumbnailState(item)==""||videoPoster(item)!=""})){
-<span data-video-thumbnail-action-label>{videoThumbnailActionLabel(v,item)}</span>
-}
-}
+<p class="sr-only" data-video-status role="status" aria-live="polite" data-state="ready" hidden></p>
 </div>
 }
 

@@ -1079,12 +1079,16 @@ async function launch() {
         state.oversize = true;
         const response = await page.request.get(base + '/ui/shared-content/' + clips[index].id + '/content?engineId=' + engine + '&preview=1');
         assert.equal(response.status(),422);
-        await videoCard.locator('[data-video-thumbnail-load]').click();
-        await videoCard.locator('[data-video-thumbnail-load][aria-label="Tentar novamente"]').waitFor();
+        const actions = page.locator('[data-message-menu-trigger="' + clips[index].message.id + '"]');
+        const loadPreview = page.locator('#message-thumbnail-' + clips[index].id);
+        await actions.click();
+        await loadPreview.click();
+        await page.locator('[data-video-item="' + clips[index].id + '"][data-video-thumbnail-state="unavailable"]').waitFor();
         assert.equal(await player.getAttribute('src'),null);
         state.oversize = false;
         if (process.env.OIE_VIDEO_RECEIVED_SCREENSHOT) {
-          await videoCard.locator('[data-video-thumbnail-load]').click();
+          await actions.click();
+          await loadPreview.click();
           await receive.waitFor({state:'visible'});
           await videoCard.screenshot({path:process.env.OIE_VIDEO_RECEIVED_SCREENSHOT});
         }

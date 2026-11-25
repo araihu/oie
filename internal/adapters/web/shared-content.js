@@ -38,7 +38,7 @@ window.OieRuntime.register('shared-content', life => {
    controls.querySelector('[data-message-audio-time]').textContent='–:––';
    controls.querySelector('[data-message-audio-status]').textContent='';
   }
-  for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),retry=card.querySelector('[data-video-retry]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(retry)retry.hidden=true;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
+  for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
   return copy.outerHTML;
  }
  function records(root){
@@ -142,7 +142,7 @@ window.OieRuntime.register('shared-content', life => {
  }
  function render(c,page,pagerHTML,starGeneration){
   const top=c.scroll.scrollTop,anchor=[...c.results.querySelectorAll('[data-shared-item]')].find(item=>item.getBoundingClientRect().bottom>=c.scroll.getBoundingClientRect().top),anchorID=anchor?.dataset.sharedItem,anchorTop=anchor?.getBoundingClientRect().top,active=c.results.contains(document.activeElement)?document.activeElement:null,activeID=active?.id;
-  const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-shared-star","data-video-player","data-video-play","data-video-retry"].find(name=>active?.hasAttribute(name));
+  const activeItem=active?.closest("[data-shared-item]")?.dataset.sharedItem,activeAction=["data-preview-expand","data-preview-download","data-shared-source","data-image-menu-trigger","data-shared-star","data-video-player","data-video-play"].find(name=>active?.hasAttribute(name));
   // Replacing a loading footer can clamp the scroll position before the new
   // rows are appended. Capture the anchor against the old footer first.
   if(pagerHTML!==undefined)refreshPager(c,pagerHTML);

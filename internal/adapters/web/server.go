@@ -494,7 +494,6 @@ type copy struct {
 	SharedLoadFailed                                                                                                                                                                                         string
 	VideoPlay                                                                                                                                                                                                string
 	VideoPause, VideoSeek, VideoVolume, VideoEnableSound, VideoDownloadOriginal                                                                                                                              string
-	VideoRetry                                                                                                                                                                                               string
 	VideoLoading                                                                                                                                                                                             string
 	VideoPlaying                                                                                                                                                                                             string
 	VideoPaused                                                                                                                                                                                              string

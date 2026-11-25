@@ -206,11 +206,17 @@ func messageActions(v view, message messageView) []dropdown.Section {
 	if videos := v.messageVideos(id); len(videos) > 0 {
 		items := make([]dropdown.Item, 0, len(videos))
 		for _, video := range videos {
-			label := v.Text.SharedOpenLink
+			suffix := ""
 			if len(videos) > 1 {
-				label += " · " + v.sharedTitle(video)
+				suffix = " · " + v.sharedTitle(video)
 			}
-			items = append(items, dropdown.Item{ID: "open-video-" + video.Id, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), Label: label, Href: safePreviewURL(video.Url), Target: "_blank", Rel: "noopener noreferrer"})
+			items = append(items,
+				dropdown.Item{ID: "open-video-" + video.Id, Icon: glyph(heroicons.Icon16SolidArrowTopRightOnSquare), Label: v.Text.SharedOpenLink + suffix, Href: safePreviewURL(video.Url), Target: "_blank", Rel: "noopener noreferrer"},
+				dropdown.Item{ID: "download-video-" + video.Id, Icon: glyph(heroicons.Icon16SolidArrowDownTray), Label: v.Text.VideoDownloadOriginal + suffix, Href: documentSource(v, video) + "&download=1"},
+			)
+			if videoPoster(video) == "" {
+				items = append(items, dropdown.Item{ID: "message-thumbnail-" + video.Id, Icon: glyph(heroicons.Icon16SolidArrowPath), Label: v.Text.VideoThumbnailLoad + suffix, OnClick: "void 0"})
+			}
 		}
 		sections = append(sections, dropdown.Section{Items: items})
 	}
