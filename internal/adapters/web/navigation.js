@@ -536,7 +536,7 @@
  },true);
  function infoReady(starGeneration){const root=document.getElementById('chat-info-content');if(!root)return;rememberInfoSharedPage(root);upgrade(root);document.dispatchEvent(new CustomEvent('oie:info-content',{detail:{root,generation:starGeneration}}));const body=document.getElementById('details-body');if(root.dataset.infoView){if(body)body.scrollTop=0;const origin=new URL(location.href).searchParams.get('infoFocus');const target=origin && root.querySelector(`[data-info-entry="${CSS.escape(origin)}"]`);(target || root.querySelector('[data-info-heading]'))?.focus({preventScroll:true})}else{if(body)body.scrollTop=infoReturnScroll;const kind=new URL(location.href).searchParams.get('infoFocus');root.querySelector(`[data-info-entry="${CSS.escape(kind||'media')}"]`)?.focus({preventScroll:true})}}
  function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
- function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','diagnostics','engine-settings','destructive-actions','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
+ function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','diagnostics','destructive-actions','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  function workspaceResponse(ctx,nextApp,next){
   if(ctx.oieKind===routeID){
    if(!next||!nextApp||ctx.response?.status!==200)return false;
