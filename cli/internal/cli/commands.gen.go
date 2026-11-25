@@ -1080,6 +1080,9 @@ func build99(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "download", &params.Download); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "index", &params.Index); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("header", "X-Oie-Download-Device", &params.XOieDownloadDevice); err != nil {
 		return nil, err
 	}

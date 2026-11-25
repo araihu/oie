@@ -1,12 +1,12 @@
 {
   "format": 1,
   "module": "github.com/araihu/oie/cli",
-  "specSHA256": "6852ba1e15b9ee4e149bd9e917a40f6624d0886b10c5e4d7f50135e7bee5f4ac",
+  "specSHA256": "43feb1e20562e7a36b0b4900c1462823954eb98f343b0e81eb959d0e72d0d6f0",
   "oapiCodegen": "v2.8.1",
   "files": {
     "cmd/oiectl/main.go": "933b986e8583aac3749f121f0447e68af4285e4e5c7621d4976163d003ac8d38",
-    "internal/api/client.gen.go": "8a87e38ab1517094e026ed8a3f07d368a22375257aeeb6490df101d2c0c3973a",
-    "internal/cli/commands.gen.go": "1afa2b864d115a2542682df3f7c2706ff0618e805a8da4afac29c072e7493f27",
+    "internal/api/client.gen.go": "0a96d1da7f25c25c4eb0f3f0a70db64e400477a2352fc007640b8ce626b41928",
+    "internal/cli/commands.gen.go": "15f1e0deec28ad5c1bdf45e75b2e6e369e3f88725879a0ab58bc51b9dbb216fe",
     "internal/cliruntime/auth.gen.go": "175ce220dec11b83d1d95c85302cbc11c7a6108e0c82cab4e9f63e0687c9d1db",
     "internal/cliruntime/input.gen.go": "46154c2b6d1b695394a4d5938470bfb169908aa99761a34f1d11670545f00843",
     "internal/cliruntime/output.gen.go": "c11d0bf4006e10b4219462d94eaa234206fba7756202b8af9c1142411f58d21c",

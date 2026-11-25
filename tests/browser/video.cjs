@@ -7,6 +7,15 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const bytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-video.webm'));
  const hevc=await fs.readFile(path.join(__dirname,'fixtures/tiny-hevc.mkv'));
+ const indexed=await fs.readFile(path.join(__dirname,'fixtures/indexed-vp9.mp4'));
+ const fragmentOffsets=[];
+ for(let offset=0;offset<indexed.length;offset+=indexed.readUInt32BE(offset)){
+  if(indexed.toString('ascii',offset+4,offset+8)==='moof') fragmentOffsets.push(offset);
+ }
+ const indexBody=JSON.stringify({codecs:'vp09.00.10.08',size:indexed.length,initLength:fragmentOffsets[0],
+  segments:fragmentOffsets.map((offset,i)=>({duration:2,length:(fragmentOffsets[i+1]??indexed.length)-offset}))});
+ const indexType='application/vnd.oie.video-index+json';
+ const indexedRanges=[];
  const engine=id(1),account=id(2),chat=id(3),revision=id(4),good=id(20),bad=id(21),offline=id(22),streams=new Set();
  const state={seq:0,badUnavailable:true,corrupt:false,reads:new Map(),catalogReads:[],writes:0};
  const messages=[good,bad,offline].map((ref,n)=>({id:id(100+n),revisionId:revision,accountId:account,conversationId:chat,sender:{id:id(9),displayName:'Bob'},originalText:'Video caption '+n+'\nhttps://files.example.test/'+ref+'.webm',createdAt:new Date(Date.UTC(2026,10,8,12,n)).toISOString(),isOwn:false,sendState:'received'}));
@@ -36,10 +45,17 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   const match=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(match){
-   assert.equal(u.search,'');const ref=match[1];state.reads.set(ref,count(ref)+1);if(ref===bad&&state.badUnavailable)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});
-   const body=state.corrupt?Buffer.from('not a supported video container'):state.hevc?hevc:bytes;let start=0,end=body.length-1,status=200;
+   const ref=match[1],useIndex=state.indexed&&ref===good;
+   if(useIndex&&u.search==='?index=true'){
+    res.writeHead(200,{'Content-Type':indexType,'Content-Length':Buffer.byteLength(indexBody)});
+    res.end(indexBody);
+    return;
+   }
+   assert.equal(u.search,'');
+   if(useIndex) indexedRanges.push(req.headers.range);state.reads.set(ref,count(ref)+1);if(ref===bad&&state.badUnavailable)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});
+   const body=useIndex?indexed:state.corrupt?Buffer.from('not a supported video container'):state.hevc?hevc:bytes;let start=0,end=body.length-1,status=200;
    if(req.headers.range&&!state.ignoreRange){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}
-   res.setHeader('Content-Type',state.hevc?'video/x-matroska':'video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition','inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
+   res.setHeader('Content-Type',useIndex?'video/mp4':state.hevc?'video/x-matroska':'video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition','inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{status:404});
@@ -133,6 +149,29 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   findings.push('HEVC/FLAC Matroska presents frames, pauses, seeks and replays using on-demand local decoders.');
   state.corrupt=true;await page.setViewportSize({width:390,height:844});await page.goto(base+'/?section=media&lang=pt-BR&theme=light');const beforeUnsupported=count(good);await card(good).locator('[data-video-play]').click();await until(async()=>await card(good).locator('[data-video-status]').getAttribute('data-state')==='failed','unsupported video codec feedback');assert.equal(await card(good).locator('[data-video-status]').isVisible(),false);assert.equal(await card(good).locator('[data-video-status]').textContent(),'');await until(async()=>await alerts.count()===1,'Portuguese unsupported video toast');assert.equal(await alerts.locator('[x-text="notification.message"]').textContent(),'Este vídeo não pode ser reproduzido neste navegador.');assert(await alerts.getByRole('button',{name:'Fechar',exact:true}).isVisible());assert(count(good)>beforeUnsupported);assert.equal((await card(good).locator('[data-video-retry]').textContent()).trim(),'Tentar vídeo novamente');
   findings.push('Playback errors use a dismissible Goshtoso toast in English and Portuguese, once per attempt, with no inline error and an accessible retry');
+  state.corrupt=false;
+  state.indexed=true;
+  const peer='https://peertube.example/download/streaming-playlists/hls/videos/82832f71-7871-42e1-b533-4ea53dc936e4-1080-fragmented.mp4';
+  items[0].url=peer;
+  items[0].fileName='Indexed VP9 sample.mp4';
+  messages[0].originalText=peer;
+  await page.goto(base+'/?section=media&lang=en');
+  const indexedPlayer=player(good);
+  await card(good).locator('[data-video-play]').waitFor({state:'visible'});
+  assert.equal(await card(good).getAttribute('data-video-indexed'),'');
+  assert.equal(indexedRanges.length,0);
+  await card(good).locator('[data-video-play]').click();
+  await until(()=>indexedPlayer.evaluate(video=>video.videoWidth===80&&video.currentTime>.1),'indexed MP4 playback');
+  const originalDuration=await indexedPlayer.evaluate(video=>video.seekable.end(0));
+  assert.equal(originalDuration,28);
+  await indexedPlayer.evaluate(video=>{video.currentTime=25.1});
+  await until(()=>indexedPlayer.evaluate(video=>!video.seeking&&video.currentTime>25.3&&video.getVideoPlaybackQuality().totalVideoFrames>1),'indexed MP4 seek beyond the initial buffer');
+  assert(indexedRanges.some(range=>range?.startsWith('bytes='+fragmentOffsets[12]+'-')));
+  assert(!indexedRanges.some(range=>!range||range.endsWith('-')));
+  assert.equal(await page.evaluate(()=>performance.getEntriesByType('resource').filter(e=>e.name.includes('/libmedia/')).length),0);
+  await card(good).evaluate(c=>window.OieVideos.release(c));
+  assert.equal(await indexedPlayer.getAttribute('src'),null);
+  findings.push('An indexed fragmented VP9/MP4 keeps the native controls and seeks beyond initial buffered ranges without loading a decoder.');
   assert.equal(state.writes,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});await fs.writeFile(path.join(artifacts,'video-report.json'),JSON.stringify({findings,decodedFixture:{bytes:bytes.length,width:64,height:48,codec:'VP8/WebM'},contentReads:[...state.reads],mutations:state.writes,pageErrors:errors,externalBrowserRequests:external},null,2));console.log('PASS: native video decoding, demand-only same-origin ranges, gallery/chat continuity, errors/retry/offline and route cleanup');
  }catch(error){if(debugPage&&!debugPage.isClosed())console.error('Video failure evidence',JSON.stringify(await debugPage.evaluate(()=>({url:location.href,cards:[...document.querySelectorAll('[data-video-item]')].map(card=>({id:card.dataset.videoItem,status:card.querySelector('[data-video-status]')?.textContent,state:card.querySelector('[data-video-status]')?.dataset.state,source:card.querySelector('video')?.getAttribute('src'),error:card.querySelector('video')?.error?.code})),trace:window.videoTrace})).catch(()=>({unavailable:true}))),JSON.stringify({contentReads:[...state.reads],pageErrors:errors}));throw error}finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve))}
 })().catch(error=>{console.error(error);process.exitCode=1});

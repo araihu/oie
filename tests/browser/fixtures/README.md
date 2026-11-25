@@ -37,3 +37,13 @@ third-party content.
 
 `tiny-hevc.mkv` is an original four-second test pattern and sine wave. Generate it with
 `ffmpeg -f lavfi -i testsrc2=size=160x90:rate=12 -f lavfi -i sine=frequency=440:sample_rate=16000 -t 4 -c:v libx265 -x265-params keyint=12 -crf 32 -c:a flac tiny-hevc.mkv`.
+
+`indexed-vp9.mp4` is a synthetic 28-second fragmented VP9 test pattern for
+the byte-range playback and seek regression. Its fragment sizes are read from
+the MP4 and each fragment is two seconds. Generate it with:
+
+```sh
+ffmpeg -f lavfi -i 'testsrc2=size=80x64:rate=8' -t 28 -an -c:v libvpx-vp9 \
+  -crf 38 -b:v 0 -g 16 -movflags +empty_moov+default_base_moof+frag_keyframe+skip_trailer \
+  indexed-vp9.mp4
+```

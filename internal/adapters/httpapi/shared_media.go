@@ -18,7 +18,10 @@ import (
 )
 
 func parseMediaRequest(params engineapi.GetSharedContentMediaParams) (application.MediaReadRequest, error) {
-	out := application.MediaReadRequest{}
+	out := application.MediaReadRequest{Index: params.Index != nil && *params.Index}
+	if out.Index && (params.Range != nil || params.IfRange != nil) {
+		return out, application.ErrInvalid
+	}
 	if params.Range == nil {
 		return out, nil
 	}

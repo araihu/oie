@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
 	"slices"
@@ -16,7 +17,22 @@ import (
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
-const videoSampleLimit = 5 << 20
+const (
+	videoSampleLimit    = 5 << 20
+	videoSeekIndexLimit = 2 << 20
+	videoSeekIndexType  = "application/vnd.oie.video-index+json"
+)
+
+// The engine validates the exact rendition and decides whether an index is
+// available. This check limits which cards ask for one during playback.
+func videoIndexCandidate(address string) bool {
+	source, err := url.Parse(address)
+	if err != nil || source.Scheme != "https" || source.RawQuery != "" || !strings.HasSuffix(source.Path, "-fragmented.mp4") {
+		return false
+	}
+	return strings.HasPrefix(source.Path, "/download/streaming-playlists/hls/videos/") ||
+		strings.HasPrefix(source.Path, "/static/streaming-playlists/hls/")
+}
 
 // A media source is a retained catalog identity, never a client-supplied URL.
 func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
@@ -34,14 +50,16 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	for key, values := range query {
-		if key != "engineId" && key != "download" && key != "preview" || len(values) != 1 {
+		if key != "engineId" && key != "download" && key != "preview" && key != "index" || len(values) != 1 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
-	preview := query.Has("preview")
+	preview, index := query.Has("preview"), query.Has("index")
 	if query.Has("download") && query.Get("download") != "1" ||
-		preview && (query.Get("preview") != "1" || !query.Has("engineId") || query.Has("download")) {
+		preview && (query.Get("preview") != "1" || !query.Has("engineId") || query.Has("download")) ||
+		index && (query.Get("index") != "1" || !query.Has("engineId") || preview || query.Has("download") ||
+			r.Header.Get("Range") != "" || r.Header.Get("If-Range") != "") {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -61,6 +79,9 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	params := &engineapi.GetSharedContentMediaParams{}
+	if index {
+		params.Index = new(true)
+	}
 	download := query.Get("download") == "1"
 	if download {
 		params.Download = new(true)
@@ -87,7 +108,7 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var client engineapi.ClientInterface = s.streamClient
-	if !preview && params.Range == nil {
+	if !index && !preview && params.Range == nil {
 		// A complete verified response can begin only after the provider transfer.
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 16*time.Minute)
@@ -128,6 +149,13 @@ func (s *Server) sharedMediaContent(w http.ResponseWriter, r *http.Request) {
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	maximum := sharedMediaMaximum(mediaType)
+	if index {
+		if response.StatusCode != http.StatusOK || mediaType != videoSeekIndexType {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		maximum = videoSeekIndexLimit
+	}
 	if err != nil || maximum == 0 || response.Header.Get("Content-Encoding") != "" && response.Header.Get("Content-Encoding") != "identity" {
 		w.WriteHeader(http.StatusBadGateway)
 		return

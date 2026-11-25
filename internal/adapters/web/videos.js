@@ -24,6 +24,7 @@ window.OieRuntime.register('videos', life => {
   if(!session) return;
   sessions.delete(video);
   if(fallbackVideo===video) fallbackVideo=null;
+  session.indexed?.abort();
   session.abort.abort();
   releaseAudio(session);
  }
@@ -48,6 +49,7 @@ window.OieRuntime.register('videos', life => {
   loaded.add(video);failed.delete(video);
   card.querySelector('[data-video-cover]').hidden=true;card.querySelector('[data-video-retry]').hidden=true;video.hidden=false;status(card,'videoLoading','loading');
   const hasFocus = !!document.activeElement?.closest('[data-video-play],[data-video-retry]');
+  if(hasFocus)video.focus({preventScroll:true});
   let rendered = false;
   function confirmFrame(){
    if(signal.aborted || session.fallback) return;
@@ -61,6 +63,8 @@ window.OieRuntime.register('videos', life => {
   const extensions = {'video/x-matroska':'mkv','video/matroska':'mkv','video/x-msvideo':'avi','video/mp4':'mp4','video/webm':'webm','video/quicktime':'mov','video/ogg':'ogg'};
   session.startFallback = async () => {
    if (signal.aborted || session.fallback) return;
+   session.indexed?.abort();
+   session.indexed=null;
    if(fallbackVideo && fallbackVideo!==video) release(fallbackVideo);
    fallbackVideo=video;
    session.fallback = true;
@@ -82,24 +86,52 @@ window.OieRuntime.register('videos', life => {
    } catch {if(!signal.aborted) failure(card,true);}
   };
   function checkFrame(){
-   if (rendered || session.fallback || document.hidden || video.seeking) return;
+   if (rendered || session.fallback || session.indexed || document.hidden || video.seeking) return;
    if (!video.requestVideoFrameCallback && video.videoWidth && video.readyState >= 2) {confirmFrame();return;}
    if ((video.currentTime > 0.8 && !video.paused || video.ended) && (!video.videoWidth || video.getVideoPlaybackQuality?.().totalVideoFrames === 0)) void session.startFallback();
   }
   for (const event of ['timeupdate','ended']) video.addEventListener(event,checkFrame,{signal});
-  video.src=source.pathname+source.search;
-  const play=video.play();if(hasFocus)video.focus({preventScroll:true});
-  play?.catch(error=>{
-   if(signal.aborted||session.fallback||!video.isConnected||error.name==='AbortError')return;
-   if(error.name==='NotAllowedError'){status(card,'videoReady','ready');return}
-   if(error.name==='NotSupportedError')void session.startFallback();else failure(card);
-  });
+  const indexed = card.hasAttribute('data-video-indexed');
+  function startNative(){
+   if(signal.aborted) return;
+   video.src=source.pathname+source.search;
+   video.play()?.catch(error=>{
+    if(signal.aborted||session.fallback||!video.isConnected||error.name==='AbortError')return;
+    if(error.name==='NotAllowedError'){status(card,'videoReady','ready');return}
+    if(error.name==='NotSupportedError')void session.startFallback();else failure(card);
+   });
+   if(indexed){
+    const timeout=setTimeout(()=>{
+     if(!rendered && !video.paused && !document.hidden && video.readyState < 2) void session.startFallback();
+    },8000);
+    signal.addEventListener('abort',()=>clearTimeout(timeout),{once:true});
+   }
+  }
+  if(indexed && (window.MediaSource || window.ManagedMediaSource)){
+   const controller=new AbortController();
+   session.indexed=controller;
+   const onFailure=()=>{
+    if(controller.signal.aborted || signal.aborted) return;
+    controller.abort();
+    session.indexed=null;
+    if(rendered){
+     video.pause();video.removeAttribute('src');video.load();
+     failure(card);
+    }else startNative();
+   };
+   void import('/ui/video-indexed.js').then(({playIndexed})=>{
+    controller.signal.throwIfAborted();
+    return playIndexed({video,url:source.href,signal:controller.signal,onFailure,
+     onPlayBlocked:()=>status(card,'videoReady','ready')});
+   }).catch(onFailure);
+  }else startNative();
  }
  life.on(document,'click',event=>{const button=event.target.closest('[data-video-play],[data-video-retry]');if(!button)return;const card=button.closest(selector);if(!card)return;event.preventDefault();start(card)});
  for(const [event,key,state]of [['loadstart','videoLoading','loading'],['waiting','videoLoading','loading'],['playing','videoPlaying','playing'],['pause','videoPaused','paused'],['ended','videoReady','ready']])life.on(document,event,e=>{const video=e.target;if(!video.matches?.(playerSelector)||!loaded.has(video)||sessions.get(video)?.fallback||releasing.has(video)||failed.has(video))return;status(video.closest(selector),key,state)},true);
  life.on(document,'error',event=>{
   const video=event.target, session=sessions.get(video);
   if(!session||session.fallback||releasing.has(video)||!video.error)return;
+  if(session.indexed) return;
   if([3,4].includes(video.error.code)) void session.startFallback();
   else failure(video.closest(selector));
  },true);
