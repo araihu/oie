@@ -128,7 +128,6 @@ func NewResettable(engine *application.Engine, reset func(domain.ID) error) (htt
 		// The strict multipart handler streams the validated single file and
 		// validates the destination and attachment IDs before opening storage.
 		if routeErr == nil && strings.EqualFold(route.Operation.OperationID, "stageMessageAttachment") {
-			r.Body = http.MaxBytesReader(w, r.Body, application.MaxStagedAttachmentSize+64<<10)
 			handler.ServeHTTP(w, r)
 			return
 		}
@@ -347,7 +346,7 @@ func (s *Server) engineIdentity(ctx context.Context) (engineapi.Engine, error) {
 	return engineapi.Engine{
 		Id: string(state.ID), Role: engineapi.EngineRole(state.Role),
 		ApiVersion: s.apiVersion, EventCursor: cursor(state.ID, state.Sequence),
-		CanResetData: &supported,
+		CanResetData: &supported, OmemoEnabled: new(s.engine.OMEMOEnabled()),
 	}, nil
 }
 

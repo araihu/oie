@@ -13,7 +13,7 @@ staging proceed independently. A fixed thumbnail slot holds the play control
 even if a still frame is unavailable. Native playback opens in a dialog.
 After a reload, or after selection through the Flatpak file chooser, the
 browser can regenerate the thumbnail from the conversation's staged file
-within the existing 20 MiB per-file limit. Removing the attachment, changing
+within a 20 MiB preview-read budget. Removing the attachment, changing
 drafts or leaving the view releases the preview resources.
 
 ## Received video

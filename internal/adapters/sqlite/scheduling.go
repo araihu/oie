@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/adapters/sqlite/dbgen"
@@ -208,7 +209,22 @@ func (s *Store) RecordOriginalWireAttempt(ctx context.Context, id, revision doma
 	if !frozen.MatchesOriginalContent(current) {
 		return application.StateConflict{Current: current}
 	}
-	if attachmentBody != "" || len(mentions) != 0 {
+	if len(frozen.OMEMOWireDigests) != 0 {
+		parts := len(m.Attachments)
+		if strings.TrimSpace(frozen.OriginalText) != "" {
+			parts++
+		}
+		if m.DirectEncryption != "omemo" || len(frozen.OMEMOWireDigests) != parts {
+			return application.ErrInvalid
+		}
+		for _, digest := range frozen.OMEMOWireDigests {
+			if !application.ValidOMEMOEnvelopeID(digest) {
+				return application.ErrInvalid
+			}
+		}
+		m.OMEMOWireDigests = frozen.OMEMOWireDigests
+	}
+	if attachmentBody != "" || len(mentions) != 0 || len(frozen.OMEMOWireDigests) != 0 {
 		if attachmentBody != "" {
 			m.AttachmentWireText = attachmentBody
 		}
@@ -250,12 +266,9 @@ func (s *Store) StageAttachment(ctx context.Context, conversationID domain.ID, i
 	}
 	defer func() { _ = os.Remove(tmp.Name()); _ = tmp.Close() }()
 	hash := sha256.New()
-	in.Size, err = io.Copy(io.MultiWriter(tmp, hash), io.LimitReader(body, application.MaxStagedAttachmentSize+1))
+	in.Size, err = io.Copy(io.MultiWriter(tmp, hash), body)
 	if err != nil {
 		return in, false, err
-	}
-	if in.Size > application.MaxStagedAttachmentSize {
-		return in, false, application.ErrAttachmentTooLarge
 	}
 	in.SHA256 = hex.EncodeToString(hash.Sum(nil))
 	if err = tmp.Sync(); err != nil {

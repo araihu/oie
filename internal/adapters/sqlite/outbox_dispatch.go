@@ -135,7 +135,8 @@ func projectDispatchReplyReference(ctx context.Context, q *dbgen.Queries, m *dom
 }
 
 // RecoverInterruptedMessage requeues only claims with durable evidence that
-// the adapter never reached the wire. The original mutation cutoff stays closed.
+// the adapter never reached the wire. Protected pre-wire claims without
+// attachments can reopen their mutation cutoff after an interruption.
 func (s *Store) RecoverInterruptedMessage(ctx context.Context, id, expected, revision domain.ID, at time.Time) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
@@ -164,7 +165,8 @@ func (s *Store) RecoverInterruptedMessage(ctx context.Context, id, expected, rev
 	if outbox.State == "dispatching" && outbox.WireStage == "awaiting" {
 		state = "queued"
 	}
-	if _, err = updateMessage(ctx, q, m, state, revision, at, at, false); err != nil {
+	release := m.DirectEncryption == "omemo" && len(m.Attachments) == 0
+	if _, err = updateMessageWithClaimRelease(ctx, q, m, state, revision, at, at, false, release); err != nil {
 		return err
 	}
 	return tx.Commit()

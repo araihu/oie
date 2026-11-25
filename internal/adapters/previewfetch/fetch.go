@@ -509,7 +509,6 @@ func (f *Fetcher) siteIcon(ctx context.Context, address string) []byte {
 }
 
 // OpenForwardAttachment downloads a retained file after explicit selection.
-// StageAttachment limits streamed bytes even when the server omits length.
 func (f *Fetcher) OpenForwardAttachment(ctx context.Context, address string) (string, io.ReadCloser, error) {
 	response, err := f.getPublic(ctx, address, "*/*")
 	if err != nil {
@@ -520,8 +519,6 @@ func (f *Fetcher) OpenForwardAttachment(ctx context.Context, address string) (st
 	switch {
 	case response.StatusCode != http.StatusOK || response.Header.Get("Content-Range") != "":
 		failure = application.MediaFailure{Code: "media_fetch_failed"}
-	case response.ContentLength > application.MaxStagedAttachmentSize:
-		failure = application.ErrAttachmentTooLarge
 	case mediaType == "text/html" || mediaType == "application/xhtml+xml":
 		failure = application.MediaFailure{Code: "media_unsupported"}
 	}

@@ -155,3 +155,12 @@ LGPL license texts accompany the decoder assets. VP8 and VP9 use libvpx
 `a40848c80`, with its BSD license and patent grant in `LICENSE.libvpx`
 and `PATENTS.libvpx`. The stretch/pitch module includes SoundTouch. Its
 source and notices are in libmedia's audiostretchpitch package.
+
+## Browser media preparation
+
+The client uses the MIT-licensed FFmpeg.wasm wrapper 0.12.15 and the
+single-threaded GPL-2.0-or-later core 0.12.10, including FFmpeg 5.1.4 and
+x264. Their notices are embedded at `/ui/media-encoder/NOTICES.txt`.
+The Linux corresponding-source archive includes the upstream build scripts and
+codec sources pinned in `packaging/browser-source.json`.
+[Upstream build](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/71aa99d37c02a7b4c435275ca9ef50e612f6efa1).

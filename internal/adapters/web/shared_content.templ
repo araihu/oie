@@ -115,6 +115,8 @@ templ sharedItem(v view,item engineapi.SharedContentItem){
 @sharedItemActions(v,item)
 if item.Kind=="video" {
 @videoCard(v,item)
+}else if item.Kind=="audio" {
+@retainedAudioPlayer(v,item)
 }else if item.Kind=="document" {
 @documentCard(v,item)
 }else if item.Preview!=nil {
@@ -133,8 +135,6 @@ if item.Message.Retraction != nil || item.Message.Moderation != nil {
 }
 templ sharedKindIcon(kind string){
 switch kind {
-case "audio":
-@glyph(heroicons.Icon16SolidPlay)
 case "video":
 @glyph(heroicons.Icon16SolidPlay)
 case "document":

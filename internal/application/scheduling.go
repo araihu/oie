@@ -15,7 +15,6 @@ import (
 	"github.com/araihu/oie/internal/domain"
 )
 
-const MaxStagedAttachmentSize = 20 << 20
 const MaxMessageAttachments = 16
 
 var ErrAttachmentTooLarge = errors.New("attachment too large")
@@ -81,6 +80,10 @@ type SchedulingRepository interface {
 
 type AttachmentProtocol interface {
 	AttachmentAvailability(context.Context, domain.Account, []domain.StagedAttachment) error
+}
+
+type omemoAttachmentAvailability interface {
+	OMEMOAttachmentAvailability(context.Context, domain.Account, []domain.StagedAttachment) error
 }
 
 type OutgoingAttachment struct {
@@ -155,7 +158,10 @@ func (e *Engine) prepareComposition(ctx context.Context, a domain.Account, c dom
 	previous := m.Composition
 	m.Composition, m.OriginalText = &in, in.OriginalText
 	m.Reply, m.ReplyReference, m.References = nil, nil, nil
-	if previous == nil || !slices.Equal(previous.Mentions, in.Mentions) || !sameMentionText(previous.OriginalText, in.OriginalText, in.Mentions) {
+	protected := m.DirectEncryption == "omemo"
+	if protected && c.Kind == "room" {
+		m.Mentions = nil
+	} else if previous == nil || !slices.Equal(previous.Mentions, in.Mentions) || !sameMentionText(previous.OriginalText, in.OriginalText, in.Mentions) {
 		frozen, err := e.freezeMentions(ctx, a, c, in.OriginalText, in.Mentions)
 		if err != nil {
 			return m, err
@@ -168,6 +174,9 @@ func (e *Engine) prepareComposition(ctx context.Context, a domain.Account, c dom
 	case review.RevisionID == "" && previous != nil && previous.ReplyTo == in.ReplyTo && m.OutboundReply != nil:
 		plan := *m.OutboundReply
 		plan.BodyText = in.OriginalText
+		if protected {
+			plan.Reference = nil
+		}
 		m.OutboundReply = &plan
 	default:
 		target, err := e.Message(ctx, in.ReplyTo)
@@ -183,7 +192,11 @@ func (e *Engine) prepareComposition(ctx context.Context, a domain.Account, c dom
 		if review.RevisionID != "" && (target.ID != in.ReplyTo || target.RevisionID != review.RevisionID) {
 			return m, ErrReplySourceChanged
 		}
-		m.OutboundReply = outboundReply(a, c, target, in.OriginalText, e.protocols)
+		protocols := e.protocols
+		if protected {
+			protocols = nil
+		}
+		m.OutboundReply = outboundReply(a, c, target, in.OriginalText, protocols)
 		if review.ExcerptSHA256 != "" && domain.ReplyExcerptSHA256(m.OutboundReply.Excerpt) != review.ExcerptSHA256 {
 			return m, ErrReplySourceChanged
 		}
@@ -221,6 +234,11 @@ func (e *Engine) prepareComposition(ctx context.Context, a domain.Account, c dom
 	uploader, ok := e.protocols.(AttachmentProtocol)
 	if !ok {
 		return m, ErrProtocolUnavailable
+	}
+	if protected {
+		if encryptedUploader, ok := uploader.(omemoAttachmentAvailability); ok {
+			return m, encryptedUploader.OMEMOAttachmentAvailability(ctx, a, m.Attachments)
+		}
 	}
 	return m, uploader.AttachmentAvailability(ctx, a, m.Attachments)
 }
@@ -356,6 +374,16 @@ func (e *Engine) attachOutgoingFiles(out *Outgoing, message domain.Message) erro
 		frozen := Outgoing{OriginalText: out.OriginalText, Reply: out.Reply}
 		out.RecordWireAttempt = func(ctx context.Context, body string, mentions ...domain.WireMentionProof) error {
 			return repo.RecordOriginalWireAttempt(ctx, message.ID, message.RevisionID, frozen, body, mentions...)
+		}
+		if out.Kind == "room" && out.DirectEncryption == "omemo" {
+			out.RecordOMEMOWireAttempt = func(ctx context.Context, digests []string) error {
+				if len(digests) == 0 {
+					return ErrInvalid
+				}
+				protected := frozen
+				protected.OMEMOWireDigests = digests
+				return repo.RecordOriginalWireAttempt(ctx, message.ID, message.RevisionID, protected, "")
+			}
 		}
 	}
 	if len(message.Attachments) == 0 {

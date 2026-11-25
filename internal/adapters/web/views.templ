@@ -782,6 +782,9 @@ templ accountDetail(v view,a engineapi.Account) {
      @glyph(heroicons.Icon16SolidChevronRight)
     }
    </div>
+   if v.OmemoEnabled{
+<a target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(a.Id,""))}>{v.Text.OmemoTitle}</a>
+}
    if v.AccountCommunication != nil {
     @accountCommunication(v,a.Id,*v.AccountCommunication)
    }
@@ -962,7 +965,7 @@ for _,a:=range v.Accounts {
 }
 
 templ liveRegions(v view){
-<div id="oie-live-regions" data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
+<div id="oie-live-regions" data-upload-limit={strconv.FormatInt(v.uploadLimit(), 10)} data-reply-allowed={strconv.FormatBool(v.replyAllowed())} data-edit-allowed={strconv.FormatBool(v.messagingImplemented("send_corrections"))} data-conversation-removed={strconv.FormatBool(v.conversationRemoved())} data-conversation-request={v.requestKind()} data-edit-message={v.latestEditMessage()} data-attachment-allowed={strconv.FormatBool(v.attachmentAllowed())} data-engine-id={v.EngineID} data-event-cursor={v.EventCursor} data-conversation-id={v.ChatID} data-account-id={selectedAccountID(v)} data-focus-message={v.FocusMessage} data-context-newer={strconv.FormatBool(v.ContextHasNewer)} data-context-missing={strconv.FormatBool(v.ContextMissing)} data-unavailable={strconv.FormatBool(v.Unavailable)} data-accounts-version={v.accountVersion()}>
 @avatarData(v)
 if v.Section=="scheduled"&&v.SchedulePage!=nil {
 @scheduledResults(v)
@@ -1156,6 +1159,13 @@ if m.Moderation!=nil || m.Retraction!=nil {
 }
 </div>
 <div class="oie-message-stamp">
+if m.Omemo!=nil && *m.Omemo {
+if m.IsOwn && m.SendState=="queued" && !v.Preview {
+<a class="oie-message-omemo" target="_blank" rel="noopener" href={templ.SafeURL(v.omemoHref(m.AccountId,m.ConversationId))} title={v.Text.OmemoTitle}>OMEMO</a>
+}else{
+<span class="oie-message-omemo">OMEMO</span>
+}
+}
 @messageLeadingIndicators(v,m)
 @messageSendIndicator(v,m)
 @messageStarIndicator(v,m.Id)
@@ -1282,7 +1292,7 @@ for _,item:=range v.messageVideos(m.Id) {
 }
 </div>
 for _,item:=range v.MessageAudio[m.Id] {
-@audioPlayer(v,item.Id,v.sharedTitle(item),documentSource(v,item),documentSource(v,item)+"&download=1",audioURLMediaType(item.Url))
+@retainedAudioPlayer(v,item)
 }
 
 }

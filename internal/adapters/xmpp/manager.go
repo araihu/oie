@@ -3,6 +3,7 @@
 package xmpp
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -12,13 +13,16 @@ import (
 	"io"
 	"math/rand/v2"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/diagnostics"
 	"github.com/araihu/oie/internal/domain"
@@ -38,6 +42,9 @@ type configuration struct {
 	Enabled            bool
 }
 type entry struct {
+	omemoDevice         *omemo.Device
+	omemoRefresh        chan struct{}
+	omemoPeers          chan string
 	account             domain.Account
 	config              configuration
 	workerStopped       bool
@@ -89,6 +96,8 @@ type entry struct {
 	presenceWake         chan struct{}
 	typingPeers          map[string]typingPeer
 	pendingTyping        *uint32
+	pendingProtectedSend *uint32
+	plainArchiveSearches int // guarded by sendMu
 	readReceiptAudience  map[string]bool
 	rosterPushGeneration uint64
 	displayedTransport   string
@@ -98,22 +107,29 @@ type entry struct {
 	initialPeerPresence  map[string]map[string]peerResource
 }
 type Manager struct {
-	diagnostics     *diagnostics.Logger
-	dir             string
-	roots           *x509.CertPool
-	mu              sync.RWMutex
-	entries         map[domain.ID]*entry
-	ctx             context.Context
-	cancel          context.CancelFunc
-	host            application.ProtocolHost
-	workers         sync.WaitGroup
-	archiveQueuesMu sync.Mutex
-	archiveQueues   map[string]*archiveQueue
-	avatarGate      chan struct{}
+	privateUploadHost                       string
+	publicUploadClient, privateUploadClient *http.Client
+	encryptedDownloads                      chan struct{}
+	omemoDir                                string
+	diagnostics                             *diagnostics.Logger
+	dir                                     string
+	roots                                   *x509.CertPool
+	mu                                      sync.RWMutex
+	entries                                 map[domain.ID]*entry
+	ctx                                     context.Context
+	cancel                                  context.CancelFunc
+	host                                    application.ProtocolHost
+	workers                                 sync.WaitGroup
+	archiveQueuesMu                         sync.Mutex
+	archiveQueues                           map[string]*archiveQueue
+	plainRoomOperationsMu                   sync.Mutex
+	plainRoomOperations                     map[roomOperationScope]int
+	avatarGate                              chan struct{}
 }
 
 func New(dir string, roots *x509.CertPool) *Manager {
-	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), avatarGate: make(chan struct{}, 1)}
+	return &Manager{dir: dir, roots: roots, entries: make(map[domain.ID]*entry), avatarGate: make(chan struct{}, 1),
+		publicUploadClient: publicOMEMOUploadClient(), encryptedDownloads: make(chan struct{}, 4)}
 }
 func (m *Manager) SetDiagnostics(logger *diagnostics.Logger) { m.diagnostics = logger }
 
@@ -175,6 +191,12 @@ func (m *Manager) Close() {
 	}
 	m.mu.Unlock()
 	m.workers.Wait()
+	if m.publicUploadClient != nil {
+		m.publicUploadClient.CloseIdleConnections()
+	}
+	if m.privateUploadClient != nil {
+		m.privateUploadClient.CloseIdleConnections()
+	}
 }
 func (e *entry) stop() {
 	e.mu.Lock()
@@ -255,6 +277,12 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	e := &entry{detailsWake: make(chan struct{}, 1), avatarWake: make(chan struct{}, 1), accountAvatarGate: avatarGate, avatarTargets: map[string]string{}, avatarDirty: map[string]string{}, account: a, config: cfg, cancel: cancel, state: domain.Connection{AccountID: a.ID, State: state, UpdatedAt: time.Now().UTC()}}
+	var deviceErr error
+	if cfg.Enabled && m.omemoDir != "" {
+		e.omemoDevice, deviceErr = omemo.Open(filepath.Join(m.omemoDir, string(a.ID), "device.json"))
+		e.omemoRefresh = make(chan struct{}, 1)
+		e.omemoPeers = make(chan string, 8)
+	}
 	m.entries[a.ID] = e
 	m.workers.Add(1)
 	go func() {
@@ -266,6 +294,10 @@ func (m *Manager) replace(a domain.Account, cfg configuration) *entry {
 		}()
 		if !cfg.Enabled {
 			_ = m.publish(ctx, e, "not_connected", "", false)
+			return
+		}
+		if deviceErr != nil {
+			_ = m.publish(ctx, e, "error", "connection_failed", true)
 			return
 		}
 		m.run(ctx, e)
@@ -329,6 +361,11 @@ func (m *Manager) ForgetConnection(ctx context.Context, a domain.Account) error 
 	if old := m.entries[a.ID]; old != nil {
 		old.stop()
 		delete(m.entries, a.ID)
+	}
+	if m.omemoDir != "" {
+		if err := os.RemoveAll(filepath.Join(m.omemoDir, string(a.ID))); err != nil {
+			return err
+		}
 	}
 	dir, err := os.Open(m.dir)
 	if err != nil {
@@ -418,7 +455,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			var show string
 			show, err = m.configuredPresence(announceCtx, e.account.ID)
 			if err == nil {
-				err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show)))
+				err = session.Send(announceCtx, stanza.Presence{Type: stanza.AvailablePresence}.Wrap(presencePayload(show, m.omemoDir != "")))
 			}
 			if err == nil {
 				e.presenceMu.Lock()
@@ -507,6 +544,10 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 				if serving == nil {
 					serving = startServing()
 				}
+				if m.omemoDir != "" {
+					m.workers.Add(1)
+					go func() { defer m.workers.Done(); m.omemoPublishLoop(historyCtx, e, session) }()
+				}
 				m.workers.Add(5)
 				go func() { defer m.workers.Done(); m.presenceLoop(historyCtx, e, session, presenceWake) }()
 				go func() { defer m.workers.Done(); m.historyLoop(historyCtx, e, session) }()
@@ -547,14 +588,16 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			e.raw = nil
 			e.presenceWake = nil
 			status := session.StreamManagement()
-			hasPendingTyping := typingAwaitingAck(e.pendingTyping, status.Acknowledged)
+			hasPendingTyping := stanzaAwaitingAck(e.pendingTyping, status.Acknowledged)
+			hasPendingProtectedSend := e.plainArchiveSearches != 0 || stanzaAwaitingAck(e.pendingProtectedSend, status.Acknowledged)
 			e.pendingTyping = nil
+			e.pendingProtectedSend = nil
 			for address, peer := range e.typingPeers {
 				peer.until = time.Time{}
 				peer.sent = false
 				e.typingPeers[address] = peer
 			}
-			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingTyping
+			resumable := served && ctx.Err() == nil && status.Resumable && !hasPendingTyping && !hasPendingProtectedSend
 			if resumable {
 				e.suspended = session
 			} else {
@@ -568,7 +611,7 @@ func (m *Manager) run(ctx context.Context, e *entry) {
 			if !resumable {
 				m.resetRoomSessions(ctx, e, session)
 			}
-			if !served || hasPendingTyping {
+			if !served || hasPendingTyping || hasPendingProtectedSend {
 				management = new(mx.StreamManagement)
 			}
 		}
@@ -758,7 +801,36 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if session == nil || raw == nil || state != "connected" {
 		return application.NotSent
 	}
+	protected := out.DirectEncryption == "omemo" || m.omemoDir != "" && out.Kind != "room" && out.DirectEncryption != "plain"
+	if protected && e.omemoDevice == nil {
+		return application.NotSent
+	}
+	if out.Kind == "room" && !protected && e.omemoDevice != nil {
+		scope := roomOperationScope{a.ID, out.Address}
+		admitted, err := m.beginPlainRoomOperation(e.omemoDevice, scope)
+		if err != nil {
+			return application.NotSent
+		}
+		if !admitted {
+			return heldPlainRoomSend(out)
+		}
+		defer m.endPlainRoomOperation(scope)
+	}
+	if protected && (out.Correction != nil || out.Reaction != nil || out.Reply != nil || len(out.Mentions) > 0) {
+		return application.Failed
+	}
+	var roomAuthority roomOMEMOAuthority
+	var recipients []string
+	var targets []omemo.Target
+	if protected {
+		var err error
+		roomAuthority, recipients, targets, err = m.prepareOMEMORecipients(ctx, e, session, out)
+		if err != nil {
+			return application.ProtectionPending
+		}
+	}
 	var attachmentBody string
+	var encryptedFileURLs []string
 	if len(out.Attachments) != 0 {
 		if out.RecordWireAttempt == nil {
 			return application.NotSent
@@ -769,20 +841,58 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			}
 		}()
 		var uploadOutcome string
-		attachmentBody, uploadOutcome = m.uploadMessageAttachments(ctx, e, session, out)
+		if protected {
+			encryptedFileURLs, uploadOutcome = m.uploadAttachmentLinks(ctx, e, session, out, true)
+		} else {
+			attachmentBody, uploadOutcome = m.uploadMessageAttachments(ctx, e, session, out)
+			out.OriginalText = attachmentBody
+		}
 		if uploadOutcome != "" {
 			return uploadOutcome
 		}
-		out.OriginalText = attachmentBody
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
 	}
 	payload, err := buildOutgoing(a, out)
 	if err != nil {
 		return application.Failed
 	}
-	payload.ChatState = m.outgoingChatState(ctx, e, a, out)
+	payloads := []outboundMessage{payload}
+	if protected {
+		bodies := encryptedFileURLs
+		if strings.TrimSpace(out.OriginalText) != "" {
+			bodies = append([]string{out.OriginalText}, bodies...)
+		}
+		prepareCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if out.Kind == "room" {
+			rechecked, err := m.discoverRoomOMEMO(prepareCtx, e, session, out.Address)
+			if err != nil || rechecked != roomAuthority {
+				return application.NotSent
+			}
+			current, err := m.roomOMEMOMembers(prepareCtx, e, session, out.Address)
+			if err != nil || !slices.Equal(recipients, current) {
+				return application.NotSent
+			}
+		}
+		envelopes, err := encryptOMEMOBodies(prepareCtx, e.omemoDevice, targets, bodies)
+		if err != nil || len(envelopes) == 0 {
+			return application.NotSent
+		}
+		payload.Body = ""
+		payload.Store = &storeHint{}
+		payload.Encryption = &encryptionMarker{Namespace: omemo.Namespace, Name: "OMEMO"}
+		payloads = make([]outboundMessage, len(envelopes))
+		for i := range envelopes {
+			unit := payload
+			unit.Encrypted = &envelopes[i]
+			if i != 0 {
+				unit.ID = payload.ID + "-" + strconv.Itoa(i)
+				unit.Origin.ID = unit.ID
+			}
+			payloads[i] = unit
+		}
+	} else {
+		payload.ChatState = m.outgoingChatState(ctx, e, a, out)
+	}
 	if len(payload.Mentions) > 0 && !m.roomAllowsMentionReferences(ctx, e, session, out) {
 		payload.Mentions = nil
 	}
@@ -809,6 +919,13 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 			}
 			return application.NotSent
 		}
+		if protected {
+			authority, ok := roomOMEMOAuthorityLocked(e, session, out.Address)
+			if !ok || authority != roomAuthority {
+				e.mu.Unlock()
+				return application.NotSent
+			}
+		}
 		payload.Mentions = roomMentionReferences(slot, payload.Mentions)
 		mentions = outgoingMentionProof(payload.Mentions)
 		if e.ownRoomMessages == nil {
@@ -830,16 +947,53 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	if out.Reaction != nil {
 		return sendFrozenReaction(ctx, e, session, raw, a, out, payload)
 	}
-	if out.RecordWireAttempt != nil && out.RecordWireAttempt(ctx, attachmentBody, mentions) != nil {
-		return application.NotSent
-	}
-	if _, ok := ctx.Deadline(); !ok {
+	if _, ok := ctx.Deadline(); !ok || len(out.Attachments) != 0 || protected {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 	}
+	if protected {
+		outcome = application.NotSent
+		err := e.omemoDevice.WithVerifiedTargets(ctx, e.account.Address, recipients, targets, func() {
+			outcome = e.writeOutgoing(ctx, session, raw, a, out, payloads, attachmentBody, mentions, roomAuthority)
+		})
+		if err != nil {
+			return application.NotSent
+		}
+		return outcome
+	}
+	payloads[0] = payload
+	return e.writeOutgoing(ctx, session, raw, a, out, payloads, attachmentBody, mentions, roomAuthority)
+}
+
+func heldPlainRoomSend(out application.Outgoing) string {
+	if out.Correction != nil || out.Reaction != nil {
+		return application.Failed
+	}
+	return application.ProtectionPending
+}
+
+func (e *entry) writeOutgoing(ctx context.Context, session *mx.Session, raw net.Conn, a domain.Account, out application.Outgoing,
+	payloads []outboundMessage, attachmentBody string, mentions domain.WireMentionProof, roomAuthority roomOMEMOAuthority) string {
+	payload := payloads[0]
+	if roomAuthority.slot != nil {
+		if out.RecordOMEMOWireAttempt == nil {
+			return application.NotSent
+		}
+		digests := make([]string, len(payloads))
+		for i, unit := range payloads {
+			digests[i] = unit.Encrypted.ProviderID()
+		}
+		if err := out.RecordOMEMOWireAttempt(ctx, digests); err != nil {
+			return application.NotSent
+		}
+	} else if out.RecordWireAttempt != nil && out.RecordWireAttempt(ctx, attachmentBody, mentions) != nil {
+		return application.NotSent
+	}
 	e.mu.Lock()
-	trackCorrectionSource(e, a, out)
+	if payload.Encrypted == nil {
+		trackCorrectionSource(e, a, out)
+	}
 	if payload.ChatState != nil {
 		peer, _ := e.typingPeer(out.Address)
 		peer.offered = true
@@ -848,13 +1002,27 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 	}
 	e.mu.Unlock()
 
-	if err = session.Encode(ctx, payload); err != nil {
-		if definitivelyUnsent(session.StreamManagement().Enabled, err) {
-			return application.NotSent
+	for i, unit := range payloads {
+		err := e.encodeOutgoingStanza(ctx, session, out.Address, unit, roomAuthority)
+		if errors.Is(err, application.ErrStateConflict) {
+			if i == 0 {
+				return application.NotSent
+			}
+			return application.Unknown
 		}
-		_ = raw.Close()
-		return application.Unknown
+		status := session.StreamManagement()
+		if unit.Encrypted != nil || out.Kind == "room" && e.omemoDevice != nil {
+			e.recordProtectedSequence(status, err)
+		}
+		if err != nil {
+			if i == 0 && definitivelyUnsent(status.Enabled, err) {
+				return application.NotSent
+			}
+			_ = raw.Close()
+			return application.Unknown
+		}
 	}
+
 	if out.Kind == "direct" {
 		e.mu.Lock()
 		if peer, ok := e.typingPeers[out.Address]; ok && e.session == session {
@@ -864,6 +1032,45 @@ func (m *Manager) Send(ctx context.Context, a domain.Account, out application.Ou
 		e.mu.Unlock()
 	}
 	return application.Submitted
+}
+
+func (e *entry) encodeOutgoingStanza(ctx context.Context, session *mx.Session, room string, unit outboundMessage, authority roomOMEMOAuthority) error {
+	if authority.slot == nil {
+		return session.Encode(ctx, unit)
+	}
+	wire, err := xml.Marshal(unit)
+	if err != nil {
+		return err
+	}
+	decoder := xml.NewDecoder(bytes.NewReader(wire))
+	locked := false
+	defer func() {
+		if locked {
+			e.mu.RUnlock()
+		}
+	}()
+	// Send asks for the first token after it owns the output writer. Hold
+	// the authority through the final flush, including when the writer waited.
+	return session.Send(ctx, xmlstream.ReaderFunc(func() (xml.Token, error) {
+		if !locked {
+			e.mu.RLock()
+			locked = true
+			current, ok := roomOMEMOAuthorityLocked(e, session, room)
+			if !ok || current != authority {
+				return nil, application.ErrStateConflict
+			}
+		}
+		return decoder.RawToken()
+	}))
+}
+
+// Caller holds sendMu. An unacknowledged send with privacy-sensitive
+// authorization cannot be replayed by stream management on a new connection.
+func (e *entry) recordProtectedSequence(status mx.StreamManagementStatus, err error) {
+	if status.Enabled && status.Unacknowledged != 0 && !definitivelyUnsent(true, err) {
+		last := status.Acknowledged + uint32(status.Unacknowledged)
+		e.pendingProtectedSend = &last
+	}
 }
 
 func definitivelyUnsent(managed bool, err error) bool {
@@ -927,9 +1134,10 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			roomModerationMetadata
 			typingMetadata
 			displayedMarkerMetadata
-			Subject     *string        `xml:"jabber:client subject"`
-			Body        string         `xml:"jabber:client body"`
-			Archive     *archiveResult `xml:"urn:xmpp:mam:2 result"`
+			Encrypted   *omemo.Envelope `xml:"eu.siacs.conversations.axolotl encrypted"`
+			Subject     *string         `xml:"jabber:client subject"`
+			Body        string          `xml:"jabber:client body"`
+			Archive     *archiveResult  `xml:"urn:xmpp:mam:2 result"`
 			AvatarEvent *struct {
 				Items struct {
 					Node string `xml:"node,attr"`
@@ -954,11 +1162,35 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			}
 			m.queueAvatar(e, publisher, "", false)
 		}
+		if e.omemoDevice != nil && msg.AvatarEvent != nil && msg.AvatarEvent.Items.Node == deviceNode && (msg.From.String() == "" || msg.From.String() == e.account.Address) {
+			select {
+			case e.omemoRefresh <- struct{}{}:
+			default:
+			}
+		}
 		if msg.Archive != nil {
 			return m.captureArchive(e, msg.Message, msg.Archive)
 		}
+		if msg.Type == stanza.GroupChatMessage && msg.Encrypted != nil {
+			return m.receiveRoomOMEMO(ctx, e, msg.Message, msg.replyMetadata, *msg.Encrypted, msg.Delay.Stamp, msg.Delay.From)
+		}
+		if m.omemoDir != "" && msg.Encrypted != nil {
+			if msg.MUC != nil || msg.Type != "" && msg.Type != stanza.ChatMessage && msg.Type != stanza.NormalMessage || msg.From.Localpart() == "" || msg.To.String() != "" && msg.To.Bare().String() != e.account.Address {
+				return nil
+			}
+			return m.receiveEncrypted(ctx, e, msg.Message, *msg.Encrypted)
+		}
 		if handled, err := m.receiveRoomInvitation(ctx, e, msg.Message, msg.MUC, msg.DirectInvitations); handled {
 			return err
+		}
+		if m.omemoDir != "" && (msg.Type == "" || msg.Type == stanza.ChatMessage || msg.Type == stanza.NormalMessage) {
+			required, err := e.omemoDevice.RequiresEncryption(msg.From.Bare().String())
+			if err != nil {
+				return err
+			}
+			if required {
+				return nil
+			}
 		}
 		if msg.MUC != nil && msg.Delay.Stamp == "" && msg.Delay.From == "" {
 			if err := m.invalidateRoomConfiguration(ctx, e, msg.Message, msg.MUC); err != nil {
@@ -1010,6 +1242,12 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 		}
 		if msg.Delay.Stamp == "" && msg.Delay.From == "" {
 			e.captureTyping(msg.Message, msg.Body, msg.typingMetadata)
+		}
+		if msg.Type == stanza.GroupChatMessage && e.omemoDevice != nil {
+			enabled, err := e.omemoDevice.RoomEncryption(msg.From.Bare().String())
+			if err != nil || enabled {
+				return err
+			}
 		}
 		if len(msg.Reactions) != 0 {
 			return m.receiveReaction(ctx, e, msg.Message, msg.reactionMetadata, msg.replyMetadata, msg.Occupants, msg.Delay.Stamp, msg.Delay.From)
@@ -1112,8 +1350,9 @@ func (m *Manager) handle(ctx context.Context, e *entry, t xmlstream.TokenReadEnc
 			reply = iq.Result(nil)
 		}
 		if query.Disco != nil && iq.Type == stanza.GetIQ {
-			info := clientInfo()
-			if query.Disco.Node == "" || query.Disco.Node == avatarCaps().Node+"#"+avatarCaps().Ver {
+			info := localClientInfo(m.omemoDir != "")
+			caps := clientCaps(info)
+			if query.Disco.Node == "" || query.Disco.Node == caps.Node+"#"+caps.Ver {
 				info.Node = query.Disco.Node
 				reply = iq.Result(info.TokenReader())
 			} else {

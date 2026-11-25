@@ -421,6 +421,8 @@ func (m *Manager) readRoomAffiliations(ctx context.Context, e *entry, session *m
 	for _, item := range response.Query.Items {
 		if target, err := jid.Parse(item.Address); err == nil && target.Localpart() != "" && target.Resourcepart() == "" && item.Affiliation == affiliation {
 			out = append(out, target.String())
+		} else {
+			return nil, errArchive
 		}
 	}
 	slices.Sort(out)

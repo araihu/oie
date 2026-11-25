@@ -48,9 +48,19 @@ func (m Message) IsWithdrawn() bool {
 	return m.Moderation != nil || m.Retraction != nil
 }
 
+// EncryptedAttachment is private to the engine. Only its name is projected
+// through the API. The URL never contains the key or nonce.
+type EncryptedAttachment struct {
+	URL, FileName string
+	Key, Nonce    []byte
+}
+
 type Message struct {
-	Retraction                                *MessageRetraction `json:",omitempty"`
-	Moderation                                *MessageModeration `json:",omitempty"`
+	OMEMOWireDigests                          []string              `json:",omitempty"`
+	EncryptedAttachments                      []EncryptedAttachment `json:",omitempty"`
+	DirectEncryption                          string                `json:",omitempty"`
+	Retraction                                *MessageRetraction    `json:",omitempty"`
+	Moderation                                *MessageModeration    `json:",omitempty"`
 	ID, RevisionID, AccountID, ConversationID ID
 	Sender                                    Sender
 	OriginalText                              string

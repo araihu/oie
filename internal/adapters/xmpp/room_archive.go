@@ -18,6 +18,19 @@ type roomArchiveCapability struct {
 	mam, textSearch bool
 }
 
+type roomArchiveProtectionKey struct{}
+
+func roomArchiveProtected(e *entry, room string) (bool, error) {
+	if e.omemoDevice == nil {
+		return false, nil
+	}
+	return e.omemoDevice.RoomEncryption(room)
+}
+
+func roomArchiveCaughtUp(a domain.RoomArchive, cutoff time.Time) bool {
+	return a.InitialComplete && (a.OlderComplete || a.Mode == "on_demand") && !a.CaughtUpThrough.Before(cutoff)
+}
+
 func (m *Manager) WakeRoomArchive(account domain.ID) {
 	m.mu.RLock()
 	e := m.entries[account]
@@ -117,6 +130,19 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	if err != nil {
 		return domain.RoomArchiveResult{}, err
 	}
+	protected, err := roomArchiveProtected(e, c.Address)
+	if err != nil {
+		return domain.RoomArchiveResult{}, err
+	}
+	sessionCtx = context.WithValue(sessionCtx, roomArchiveProtectionKey{}, protected)
+	changed := a.Protected != protected
+	if changed {
+		// Cursors that skipped ciphertext while encryption was off cannot certify
+		// coverage after enabling it, or vice versa.
+		a.RoomArchiveProgress = domain.RoomArchiveProgress{
+			Protected: protected, Availability: a.Availability, DeferredReactions: a.DeferredReactions,
+		}
+	}
 	if retention, ok := m.host.(application.RetentionHost); ok {
 		days, err := retention.RetentionDays(sessionCtx, c.AccountID, c.Address, "room")
 		if err != nil {
@@ -124,10 +150,11 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		}
 		now := time.Now().UTC()
 		sessionCtx = context.WithValue(sessionCtx, archiveRetentionKey{}, archiveRetention{account: c.AccountID, days: days, now: now})
-		if a.ApplyRetention(days, now) {
-			if err := host.StoreRoomArchiveProgress(sessionCtx, c.ID, a.RoomArchiveProgress); err != nil {
-				return domain.RoomArchiveResult{}, err
-			}
+		changed = a.ApplyRetention(days, now) || changed
+	}
+	if changed {
+		if err := host.StoreRoomArchiveProgress(sessionCtx, c.ID, a.RoomArchiveProgress); err != nil {
+			return domain.RoomArchiveResult{}, err
 		}
 	}
 	result := domain.RoomArchiveResult{Archive: a, Outcome: "complete"}
@@ -135,7 +162,7 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	if (a.InitialComplete || !a.DeferredReactions.Start.IsZero()) && (priority == archiveAutomatic || request.Action == "focus") {
 		reactionReplay = pendingRoomReactionReplay(e, s, c.Address, !a.DeferredReactions.Start.IsZero())
 	}
-	if priority == archiveAutomatic && a.InitialComplete && (a.OlderComplete || a.Mode == "on_demand") && !a.CaughtUpThrough.Before(cutoff) && reactionReplay == nil && !currentRoomConfiguration(e, c.Address).pending {
+	if priority == archiveAutomatic && roomArchiveCaughtUp(a, cutoff) && a.DeferredOMEMO == nil && reactionReplay == nil && !currentRoomConfiguration(e, c.Address).pending {
 		return result, nil
 	}
 	capability, err := m.roomArchiveSupport(sessionCtx, e, s, c.Address)
@@ -148,7 +175,7 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 		return result, err
 	case !capability.mam:
 		availability = "unsupported"
-	case capability.textSearch:
+	case capability.textSearch && !protected:
 		search = "supported"
 	}
 	if p.Availability != availability || p.TextSearch != search {
@@ -191,6 +218,13 @@ func (m *Manager) roomArchiveTurn(waitCtx, sessionCtx context.Context, host appl
 	switch {
 	case priority == archiveAutomatic && p.InitialComplete && p.CaughtUpThrough.Before(cutoff):
 		err = m.catchUpRoomArchive(sessionCtx, host, e, s, c, p, cutoff)
+	case priority == archiveAutomatic && p.DeferredOMEMO != nil && roomArchiveCaughtUp(result.Archive, cutoff):
+		var stored bool
+		stored, err = m.retryRoomOMEMOArchive(sessionCtx, host, e, s, c, p)
+		if stored {
+			result.Outcome = "stored"
+		}
+		return result, err
 	case request.Action == "focus" && p.InitialComplete:
 		return result, nil
 	case p.OlderComplete || priority == archiveAutomatic && p.InitialComplete && a.Mode == "on_demand":
@@ -340,6 +374,7 @@ func (m *Manager) extendRoomArchive(ctx context.Context, host application.RoomAr
 	if err := m.ingestArchivePage(ctx, page); err != nil {
 		return err
 	}
+	rememberRoomOMEMOGaps(p, page.Query.OMEMOGaps)
 	rememberDeferredRoomReactions(p, page.Query.Deferred)
 	if !page.Query.FirstAt.IsZero() {
 		p.Boundary, p.Cursor, p.OlderReactionAnchor = page.Query.FirstAt, page.First, page.nextReactionAnchor(true)
@@ -386,6 +421,7 @@ func (m *Manager) catchUpRoomArchive(ctx context.Context, host application.RoomA
 	if err := m.ingestArchivePage(ctx, page); err != nil {
 		return err
 	}
+	rememberRoomOMEMOGaps(p, page.Query.OMEMOGaps)
 	rememberDeferredRoomReactions(p, page.Query.Deferred)
 	if page.Complete {
 		p.CaughtUpThrough = p.CatchupEnd

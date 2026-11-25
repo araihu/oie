@@ -21,6 +21,49 @@ tags:
 - name: Messages
   description: Browser submission receipt recovery
 paths:
+  /ui/omemo-attachments/{messageId}/{index}:
+    parameters:
+    - {name: messageId, in: path, required: true, schema: {type: string, format: uuid}, description: Retained encrypted message., example: '019a5df0-0000-7000-8000-000000000001'}
+    - {name: index, in: path, required: true, schema: {type: integer, minimum: 0, maximum: 15}, description: File position., example: 0}
+    get:
+      operationId: downloadBrowserOmemoAttachment
+      tags: [Messages]
+      summary: Save a verified encrypted attachment
+      description: Streams the file from the owning engine after authentication and decryption.
+      responses:
+        '200': {description: Verified file., content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+        '401': {description: Sign in required.}
+        '422': {description: The file host is blocked.}
+        '404': {description: The message or attachment is unavailable.}
+        '502': {description: The file could not be retrieved or verified.}
+        '503': {description: The engine is unavailable.}
+  /ui/omemo:
+    parameters:
+    - {name: account, in: query, required: true, schema: {type: string, format: uuid}, description: Account being reviewed.}
+    - {name: chat, in: query, schema: {type: string, format: uuid}, description: Direct conversation or room being reviewed.}
+    - {name: peer, in: query, schema: {type: string}, description: Account whose devices are being reviewed from the room member list., example: alice@example.org}
+    get:
+      operationId: viewBrowserOmemo
+      tags: [Accounts]
+      summary: Review device fingerprints
+      description: Renders the verification page for the engine account or selected direct chat.
+      responses:
+        '200': {description: Device verification page, content: {text/html: {schema: {type: string}}}}
+        '404': {description: The account or conversation is unavailable.}
+        '503': {description: The engine is unavailable.}
+    post:
+      operationId: decideBrowserOmemo
+      tags: [Accounts]
+      summary: Review or confirm OMEMO settings
+      description: Requires the current engine and CSRF token. Uploaded QR images and pasted fingerprints are previewed before confirmation.
+      responses:
+        '200': {description: Fingerprint preview, content: {text/html: {schema: {type: string}}}}
+        '303': {description: Updated settings.}
+        '400': {description: Invalid or mismatching fingerprint.}
+        '403': {description: Invalid CSRF token.}
+        '404': {description: The destination is unavailable.}
+        '409': {description: The reviewed device or engine changed.}
+        '503': {description: The engine is unavailable.}
   /ui/diagnostics/log:
     get:
       tags: [Settings]

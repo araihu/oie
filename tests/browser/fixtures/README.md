@@ -10,6 +10,23 @@ white rectangle. Its duration is about 1.385 seconds and its size is 1,502 bytes
 Browser tests use the committed clip to verify actual decoding and playback.
 They do not need FFmpeg, network media, or any external fixture service.
 
+`covered-tone.mp3` is an original one-second 660 Hz tone with a solid-color
+16×16 PNG cover, title, artist and custom ID3 text tag. It exercises sending
+compatible MP3 originals and preparing M4A with embedded artwork and metadata.
+
+`transparent.webm` is a synthetic 16×16 VP8 clip with a half-transparent red
+frame. `covered-video.mp4` combines an H.264 test pattern with the PNG from
+`covered-tone.mp3`. The tests cut the MP4 in memory to simulate an incomplete
+download. `labeled-covers.mp3` uses the same synthetic tone with two PNGs
+tagged as front and back covers. `named-cover.mp3` contains only the back
+cover, with a custom description.
+
+`unindexed-opus.weba` contains a two-second synthetic 660 Hz tone encoded
+with FFmpeg's libopus at 12 kbps. Its WebM clusters have unknown sizes, omit
+cues, and contain audio blocks with the keyframe flag cleared. This exercises
+playback of recordings where the browser can read sequentially but cannot
+seek back to the beginning after loading metadata.
+
 `tiny-document.txt` and `tiny-document.pdf` are original fixtures covered by
 the [repository's license](../../../LICENSE). The UTF-8 text includes literal HTML and
 Unicode to check escaping. The PDF is a handcrafted, two-page PDF 1.4 file

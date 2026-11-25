@@ -20,10 +20,37 @@ type DeferredRoomReactions struct {
 	Anchor               ArchiveReactionAnchor
 }
 
+// ArchiveTimeRange is inclusive, including when both endpoints are equal.
+type ArchiveTimeRange struct {
+	Start, End time.Time
+}
+
+func (r *ArchiveTimeRange) Include(other ArchiveTimeRange) {
+	if other.Start.IsZero() {
+		return
+	}
+	if r.Start.IsZero() || other.Start.Before(r.Start) {
+		r.Start = other.Start
+	}
+	if other.End.After(r.End) {
+		r.End = other.End
+	}
+}
+
+// DeferredRoomOMEMO tracks an independent forward pass over protected messages
+// that could not be opened during normal archive traversal.
+type DeferredRoomOMEMO struct {
+	Pending, Remaining ArchiveTimeRange
+	Boundary           time.Time
+	Cursor             string
+}
+
 // RoomArchiveProgress describes one contiguous backward recovery. Search
 // hits and isolated timeline context do not change these checkpoints.
 type RoomArchiveProgress struct {
-	RetentionDays                                  *int `json:",omitempty"`
+	Protected                                      bool               `json:",omitempty"`
+	DeferredOMEMO                                  *DeferredRoomOMEMO `json:",omitempty"`
+	RetentionDays                                  *int               `json:",omitempty"`
 	OlderCoveredThrough                            time.Time
 	DeferredReactions                              DeferredRoomReactions
 	WindowStart, WindowEnd                         time.Time

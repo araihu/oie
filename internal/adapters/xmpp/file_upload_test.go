@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,10 +14,43 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	"mellium.im/xmpp/stanza"
 )
+
+func TestLargeAttachmentUploadTimeout(t *testing.T) {
+	for size, want := range map[int64]time.Duration{
+		32 << 10:      30500 * time.Millisecond,
+		12 << 30:      30*time.Second + 196608*time.Second,
+		math.MaxInt64: time.Duration(math.MaxInt64),
+	} {
+		if got := attachmentUploadTimeout(size); got != want {
+			t.Errorf("timeout for %d bytes = %v, want %v", size, got, want)
+		}
+	}
+}
+
+func TestAdvertisedUploadLimit(t *testing.T) {
+	first := domain.DiscoveredService{Address: "upload-a.example", Scope: "service", State: "known", Features: []string{uploadNamespace}}
+	second := first
+	second.Address = "upload-b.example"
+	e := &entry{discovery: domain.CapabilityDiscovery{State: "complete", Services: []domain.DiscoveredService{first, second}},
+		uploadLimits: map[string]int64{first.Address: 10, second.Address: 20}}
+	if limit := advertisedUploadLimit(e); limit != 20 {
+		t.Fatalf("largest provider limit = %d", limit)
+	}
+	e.discovery.State = "partial"
+	if limit := advertisedUploadLimit(e); limit != 0 {
+		t.Fatalf("partial discovery limit = %d", limit)
+	}
+	e.discovery.State = "complete"
+	delete(e.uploadLimits, second.Address)
+	if limit := advertisedUploadLimit(e); limit != 0 {
+		t.Fatalf("missing provider limit = %d", limit)
+	}
+}
 
 func TestUploadServiceUsesAccountServerDiscovery(t *testing.T) {
 	const room = "federated@rooms.other.example"
@@ -35,6 +69,38 @@ func TestUploadServiceUsesAccountServerDiscovery(t *testing.T) {
 	}
 	if got, err := uploadService(e, 10); got != service || err != nil {
 		t.Fatalf("account service was not selected: %q %v", got, err)
+	}
+}
+
+func TestOMEMOAttachmentAvailabilityIncludesAuthenticationTag(t *testing.T) {
+	const service = "upload.example.test"
+	account := domain.Account{ID: "alice"}
+	e := &entry{discovery: domain.CapabilityDiscovery{State: "complete", Services: []domain.DiscoveredService{
+		{Address: service, Scope: "service", State: "known", Features: []string{uploadNamespace}},
+	}}, uploadLimits: map[string]int64{service: 100}}
+	m := &Manager{entries: map[domain.ID]*entry{account.ID: e}}
+	attachments := []domain.StagedAttachment{{Size: 100}}
+	if err := m.AttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); !errors.Is(err, application.ErrAttachmentTooLarge) {
+		t.Fatalf("provider cap accepted the plaintext size of a protected file: %v", err)
+	}
+	attachments[0].Size = 84
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatalf("protected upload at the ciphertext limit was rejected: %v", err)
+	}
+	delete(e.uploadLimits, service)
+	attachments[0].Size = omemo.MaxMediaSize
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatalf("protected upload at the local limit was rejected: %v", err)
+	}
+	attachments[0].Size++
+	if err := m.AttachmentAvailability(t.Context(), account, attachments); err != nil {
+		t.Fatalf("the OMEMO limit affected ordinary uploads: %v", err)
+	}
+	if err := m.OMEMOAttachmentAvailability(t.Context(), account, attachments); !errors.Is(err, application.ErrAttachmentTooLarge) {
+		t.Fatalf("oversized protected attachment was accepted: %v", err)
 	}
 }
 

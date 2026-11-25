@@ -29,6 +29,8 @@ func run() error {
 	if len(os.Args) > 1 {
 		var err error
 		switch os.Args[1] {
+		case "omemo":
+			err = runOMEMO(ctx, os.Args[2:], os.Stdout)
 		case "auth":
 			err = runAuth(ctx, os.Args[2:], os.Stdout)
 		case "backup":
@@ -65,6 +67,7 @@ func runServer(ctx context.Context) error {
 	engineURL := flags.String("engine-url", "", "engine base URL (required for bff role)")
 	devReload := flags.Bool("dev-reload", false, "reload the development browser after BFF restarts (bff role only)")
 	xmppCA := flags.String("xmpp-ca-file", "", "additional trusted CA certificate PEM for XMPP TLS (development/private servers)")
+	omemoUploadOrigin := flags.String("omemo-upload-origin", os.Getenv("OIE_OMEMO_UPLOAD_ORIGIN"), "allow encrypted attachment downloads from one private HTTPS upload origin")
 	logDir := flags.String("diagnostics-dir", "", "private diagnostics directory (defaults to diagnostics under the data directory)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -94,7 +97,7 @@ func runServer(ctx context.Context) error {
 	diagnostics.UseStandardLogger(logger)
 	server, err := apphost.Start(ctx, apphost.Config{
 		Role: *role, DataOnly: *dataOnly, Listen: *listen, DataDir: *dataDir,
-		EngineURL: *engineURL, DevReload: *devReload, XMPPCAFile: *xmppCA,
+		EngineURL: *engineURL, DevReload: *devReload, XMPPCAFile: *xmppCA, PrivateOMEMOUploadOrigin: *omemoUploadOrigin,
 		Hosted: hosted, ProbeListen: *probeListen, Diagnostics: logger, DiagnosticsKey: os.Getenv("OIE_DIAGNOSTICS_KEY"),
 	})
 	if err != nil {

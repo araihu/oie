@@ -468,6 +468,15 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 	if err = q.AcquireWriteLock(ctx); err != nil {
 		return err
 	}
+	if expected, guarded := application.ArchiveRetentionRevisionFrom(ctx); guarded && m.Historical {
+		actual, err := q.GetArchiveRetentionRevision(ctx, string(c.AccountID))
+		if err != nil {
+			return err
+		}
+		if actual != expected {
+			return application.ErrStateConflict
+		}
+	}
 	// Existing chats can retain own transmission evidence independently of
 	// the message, including when the retention cutoff discards its body.
 	if err := rememberOwnOrigin(ctx, q, c, m); err != nil {
@@ -934,6 +943,11 @@ func ownMessageBeforeWire(ctx context.Context, q *dbgen.Queries, incoming domain
 }
 
 func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time, guardWire bool) (domain.Message, error) {
+	return updateMessageWithClaimRelease(ctx, q, m, state, revision, at, next, guardWire, false)
+}
+
+func updateMessageWithClaimRelease(ctx context.Context, q *dbgen.Queries, m domain.Message, state string, revision domain.ID, at, next time.Time, guardWire, releaseClaim bool) (domain.Message, error) {
+	increment := int64(0)
 	if m.SendState == "dispatching" && state == "queued" {
 		observed, err := hasOwnTransmissionEvidence(ctx, q, m)
 		if err != nil {
@@ -943,6 +957,17 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 		// may already have transmitted a copy of the original send.
 		if observed {
 			state = "unknown"
+		} else if releaseClaim {
+			outbox, err := q.GetOutbox(ctx, string(m.ID))
+			if err != nil {
+				return m, err
+			}
+			// The current claim has a durable pre-wire marker. An earlier
+			// claim with different evidence must keep its mutation cutoff.
+			if outbox.State == "dispatching" && outbox.WireStage == "awaiting" && outbox.AttemptCount == 1 {
+				m.DispatchStarted = false
+				increment = -1
+			}
 		}
 	}
 	if state == "dispatching" {
@@ -975,7 +1000,6 @@ func updateMessage(ctx context.Context, q *dbgen.Queries, m domain.Message, stat
 	if err := q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(revision), EntityID: string(m.ID), Parents: parents, Payload: jsonText(m), CreatedAt: stamp(at)}); err != nil {
 		return m, err
 	}
-	increment := int64(0)
 	wireStage := "untracked"
 	if state == "dispatching" {
 		increment = 1
@@ -1081,6 +1105,14 @@ func (s *Store) InterruptedMessages(ctx context.Context) ([]domain.Message, erro
 	return decodeMessages(rows)
 }
 func (s *Store) TransitionMessage(ctx context.Context, id domain.ID, expected, state string, revision domain.ID, at, next time.Time) (domain.Message, error) {
+	return s.transitionMessage(ctx, id, expected, state, "", revision, at, next, false)
+}
+
+func (s *Store) RequeueUnstartedProtectedMessage(ctx context.Context, id, expected, revision domain.ID, at, next time.Time) (domain.Message, error) {
+	return s.transitionMessage(ctx, id, "dispatching", "queued", expected, revision, at, next, true)
+}
+
+func (s *Store) transitionMessage(ctx context.Context, id domain.ID, expected, state string, expectedRevision, revision domain.ID, at, next time.Time, releaseClaim bool) (domain.Message, error) {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return domain.Message{}, err
@@ -1097,10 +1129,10 @@ func (s *Store) TransitionMessage(ctx context.Context, id domain.ID, expected, s
 	if err != nil {
 		return m, err
 	}
-	if !m.IsOwn || m.SendState != expected {
+	if !m.IsOwn || m.SendState != expected || expectedRevision != "" && m.RevisionID != expectedRevision {
 		return m, application.StateConflict{Current: m}
 	}
-	m, err = updateMessage(ctx, q, m, state, revision, at, next, false)
+	m, err = updateMessageWithClaimRelease(ctx, q, m, state, revision, at, next, false, releaseClaim)
 	if err != nil {
 		return m, err
 	}

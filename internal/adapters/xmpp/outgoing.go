@@ -2,6 +2,7 @@ package xmpp
 
 import (
 	"encoding/xml"
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"strings"
 	"unicode/utf8"
 
@@ -33,7 +34,14 @@ type outboundMentionElement struct {
 	End           int      `xml:"end,attr"`
 	ParticipantID string   `xml:"-"`
 }
+type encryptionMarker struct {
+	XMLName   xml.Name `xml:"urn:xmpp:eme:0 encryption"`
+	Namespace string   `xml:"namespace,attr"`
+	Name      string   `xml:"name,attr"`
+}
 type outboundMessage struct {
+	Encrypted  *omemo.Envelope
+	Encryption *encryptionMarker
 	stanza.Message
 	Body   string `xml:"body,omitempty"`
 	Origin struct {

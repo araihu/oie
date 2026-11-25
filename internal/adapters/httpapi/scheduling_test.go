@@ -96,6 +96,11 @@ func TestSchedulingAcrossRoomsAndAttachmentDispatchAfterRestart(t *testing.T) {
 		}
 		return res
 	}
+	// Older engines capped the staged file independently of XMPP discovery.
+	large := stage(room, strings.Repeat("x", (20<<20)+1), false, string(id()))
+	if large.JSON201 == nil || large.JSON201.Size != (20<<20)+1 {
+		t.Fatalf("large staged attachment: HTTP %d", large.StatusCode())
+	}
 	// Exceed the default request limit to exercise the multipart exception.
 	content := strings.Repeat("persistent file bytes", 1<<16)
 	staged := stage(room, content, false, fileID)

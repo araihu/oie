@@ -79,6 +79,13 @@ func (e *Engine) prepareMessageEdit(ctx context.Context, id domain.ID, conversat
 	if err != nil {
 		return candidate, domain.OutgoingCorrection{}, err
 	}
+	policy, err := e.conversationEncryption(a, c)
+	if err != nil {
+		return candidate, domain.OutgoingCorrection{}, err
+	}
+	if policy == "omemo" || candidate.Source.DirectEncryption == "omemo" {
+		return unsupported("protocol_unavailable")
+	}
 	var roomIntent domain.ID
 	if c.Kind == "room" {
 		session, err := e.RoomSession(ctx, c.ID)

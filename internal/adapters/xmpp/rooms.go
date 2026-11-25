@@ -21,6 +21,7 @@ const maxRoomSessions = 256
 const maxOwnRoomMessages = 512
 
 type roomSlot struct {
+	omemoMembershipRevision  uint64
 	management               roomManagement
 	conversation             domain.Conversation
 	snapshot                 domain.RoomSession
@@ -470,7 +471,11 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		}
 	}
 	if !self && p.From.Resourcepart() != slot.snapshot.Nickname {
+		before := slot.management.occupants[p.From.Resourcepart()]
 		observeRoomManagement(slot, p, false)
+		if before != slot.management.occupants[p.From.Resourcepart()] {
+			slot.omemoMembershipRevision++
+		}
 	}
 	if p.From.Resourcepart() != slot.snapshot.Nickname {
 		if self && renamed && slot.snapshot.State == "joining" && p.From.Resourcepart() != "" {
@@ -594,8 +599,14 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 	session := slot.session
 	e.mu.Unlock()
 	m.notifyRoom(ctx, e, slot, snapshot)
-	if snapshot.State == "joined" && pendingRoomReactionReplay(e, session, address, true) != nil {
-		m.WakeRoomArchive(e.account.ID)
+	if snapshot.State == "joined" {
+		encrypted := false
+		if e.omemoDevice != nil {
+			encrypted, _ = e.omemoDevice.RoomEncryption(address)
+		}
+		if encrypted || pendingRoomReactionReplay(e, session, address, true) != nil {
+			m.WakeRoomArchive(e.account.ID)
+		}
 	}
 	return true, nil
 }
