@@ -65,7 +65,7 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 			body = ""
 		}
 	}
-	count := len(files) + len(references)
+	count := len(files) + len(source.EncryptedAttachments) + len(references)
 	if count > MaxMessageAttachments {
 		return MessageResult{}, ErrInvalid
 	}
@@ -77,12 +77,29 @@ func (e *Engine) ForwardMessage(ctx context.Context, key, sourceID, revisionID, 
 		return MessageResult{}, err
 	}
 	for index, file := range files {
-		if err = e.stageForwardedFile(ctx, destinationID, composition.AttachmentIDs[index], source.ConversationID, file, domain.SharedReference{}); err != nil {
+		if err = e.stageForwardedFile(ctx, destinationID, composition.AttachmentIDs[index], func() (domain.StagedAttachment, io.ReadCloser, error) {
+			return e.OpenStagedAttachment(ctx, source.ConversationID, file.ID)
+		}); err != nil {
+			return MessageResult{}, err
+		}
+	}
+	for index := range source.EncryptedAttachments {
+		if err = e.stageForwardedFile(ctx, destinationID, composition.AttachmentIDs[len(files)+index], func() (domain.StagedAttachment, io.ReadCloser, error) {
+			read, err := e.downloadOMEMOAttachment(ctx, source.ID, index, source.RevisionID)
+			return domain.StagedAttachment{FileName: forwardedFileName(read.FileName), MediaType: read.MediaType}, read.Body, err
+		}); err != nil {
 			return MessageResult{}, err
 		}
 	}
 	for index, reference := range references {
-		if err = e.stageForwardedFile(ctx, destinationID, composition.AttachmentIDs[index], "", domain.StagedAttachment{}, reference); err != nil {
+		if err = e.stageForwardedFile(ctx, destinationID, composition.AttachmentIDs[len(files)+len(source.EncryptedAttachments)+index], func() (domain.StagedAttachment, io.ReadCloser, error) {
+			reader, ok := e.mediaReader.(ForwardAttachmentReader)
+			if !ok {
+				return domain.StagedAttachment{}, nil, ErrProtocolUnavailable
+			}
+			mediaType, body, err := reader.OpenForwardAttachment(ctx, reference.URL)
+			return domain.StagedAttachment{FileName: forwardedFileName(reference.FileName), MediaType: mediaType}, body, err
+		}); err != nil {
 			return MessageResult{}, err
 		}
 	}
@@ -99,7 +116,7 @@ func forwardAttachmentID(key domain.ID, requestFingerprint string, index int) do
 	return domain.ID(fmt.Sprintf("%s-7%03x-%02x%02x-%x", key[:13], uint16(sum[0]&0x0f)<<8|uint16(sum[1]), variant, sum[3], sum[4:10]))
 }
 
-func (e *Engine) stageForwardedFile(ctx context.Context, destination, id, sourceConversation domain.ID, file domain.StagedAttachment, reference domain.SharedReference) error {
+func (e *Engine) stageForwardedFile(ctx context.Context, destination, id domain.ID, open func() (domain.StagedAttachment, io.ReadCloser, error)) error {
 	repo, err := e.scheduling()
 	if err != nil {
 		return err
@@ -107,17 +124,7 @@ func (e *Engine) stageForwardedFile(ctx context.Context, destination, id, source
 	if _, err = repo.StagedAttachment(ctx, destination, id); !errors.Is(err, ErrNotFound) {
 		return err
 	}
-	var body io.ReadCloser
-	if sourceConversation != "" {
-		file, body, err = e.OpenStagedAttachment(ctx, sourceConversation, file.ID)
-	} else {
-		reader, ok := e.mediaReader.(ForwardAttachmentReader)
-		if !ok {
-			return ErrProtocolUnavailable
-		}
-		file.FileName = forwardedFileName(reference.FileName)
-		file.MediaType, body, err = reader.OpenForwardAttachment(ctx, reference.URL)
-	}
+	file, body, err := open()
 	if err != nil {
 		return err
 	}

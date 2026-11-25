@@ -43,6 +43,7 @@ templ videoMetadata(v view,item engineapi.SharedContentItem){
 if v.Section!="media" && !v.SharedInDetails {
 @videoThumbnailControls(v,item)
 }
+<a data-video-download hidden href={templ.SafeURL(documentSource(v,item)+"&download=1")} download>{v.Text.VideoDownloadOriginal}</a>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithSize(button.SizeSmall),button.WithAttrs(templ.Attributes{"data-video-retry":"","hidden":true})){ {v.Text.VideoRetry} }
 </div>
 }
@@ -57,4 +58,19 @@ if v.Section!="media" && !v.SharedInDetails {
 }
 }
 </div>
+}
+
+templ videoFallbackControls(v view){
+<template data-video-fallback-template>
+<div class="oie-fallback-player">
+<div class="oie-fallback-picture"></div>
+<div class="oie-fallback-controls">
+<button type="button" data-fallback-toggle data-play={v.Text.VideoPlay} data-pause={v.Text.VideoPause} aria-label={v.Text.VideoPause}><span data-fallback-pause-icon>@glyph(heroicons.Icon16SolidPause)</span><span data-fallback-play-icon hidden>@glyph(heroicons.Icon16SolidPlay)</span></button>
+<input data-fallback-seek type="range" min="0" max="0" value="0" step="0.1" aria-label={v.Text.VideoSeek}/>
+<button type="button" data-fallback-sound hidden aria-label={v.Text.VideoEnableSound}>{v.Text.VideoEnableSound}</button>
+<input data-fallback-volume type="range" min="0" max="1" value="1" step="0.05" aria-label={v.Text.VideoVolume}/>
+<a data-fallback-download download aria-label={v.Text.VideoDownloadOriginal} title={v.Text.VideoDownloadOriginal}>@glyph(heroicons.Icon16SolidArrowDownTray)</a>
+</div>
+</div>
+</template>
 }

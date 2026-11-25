@@ -45,7 +45,8 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
    assert.equal(licenseResponse.status(),200);
    assert.equal(await licenseResponse.text(),licenseText);
    const credits=about.getByRole('region',{name:lang==='en'?'Attributions':'Créditos'});
-   assert.equal(await credits.getByRole('link').count(),7);
+   assert.equal(await credits.getByRole('link').count(),8);
+   assert.equal(await credits.getByRole('link',{name:'libmedia',exact:true}).getAttribute('href'),'/ui/libmedia/5978d2ba/COPYING.LGPLv3');
    const waveSurferURL=await credits.getByRole('link',{name:'WaveSurfer.js',exact:true}).getAttribute('href');
    assert.equal(waveSurferURL,'/ui/wavesurfer/LICENSE');
    for(const href of await credits.getByRole('link').evaluateAll(links=>links.map(link=>link.getAttribute('href')).filter(href=>href.startsWith('/')))){

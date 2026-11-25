@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
 	mx "mellium.im/xmpp"
@@ -39,6 +41,103 @@ func TestDirectRetractionWithoutStreamManagementRequiresAccountArchiveSupport(t 
 	e.discovery.Services[0].Address = e.account.Address
 	if plan, ok := m.PrepareRetraction(e.account, c, target); !ok || plan.RemoteID != target.ProviderID {
 		t.Fatalf("verified account archive did not enable direct retraction: %+v %t", plan, ok)
+	}
+}
+
+func TestOMEMORetractionRequiresASingleAddressableStanza(t *testing.T) {
+	for _, kind := range []string{"direct", "room"} {
+		t.Run(kind, func(t *testing.T) {
+			m, e, slot, _ := reactionRoomFixture(t)
+			c := slot.conversation
+			id := domain.ID("019a5df0-0000-7000-8000-000000000001")
+			target := domain.Message{
+				ID: id, AccountID: e.account.ID, ConversationID: c.ID, OriginalText: "caption",
+				IsOwn: true, Sender: domain.Sender{ID: e.account.ID}, ProviderID: string(id), DirectEncryption: "omemo",
+				Attachments: []domain.StagedAttachment{{FileName: "file.png"}},
+			}
+			if kind == "room" {
+				slot.ownOccupantID = "own-occupant"
+				e.roomConfigurations = map[string]roomConfiguration{
+					c.Address: {retraction: retractionSupport{advertised: true}},
+				}
+				// Only the first echo arrived so far.
+				target.References = []domain.MessageReference{{Scope: "room:" + c.Address, ID: "first-part", Author: c.Address + "/" + slot.snapshot.Nickname}}
+				target.OMEMOWireDigests = []string{"part-one", "part-two"}
+			} else {
+				c.Kind, c.Address = kind, "bob@example.test"
+				e.discovery.Services = []domain.DiscoveredService{{Address: e.account.Address, Scope: "account", State: "known", Features: []string{mamNS}}}
+			}
+			if _, ok := m.PrepareRetraction(e.account, c, target); ok {
+				t.Fatal("partial retraction was offered for a multipart message")
+			}
+			target.OriginalText = ""
+			if kind == "room" {
+				target.OMEMOWireDigests = target.OMEMOWireDigests[:1]
+			}
+			if plan, ok := m.PrepareRetraction(e.account, c, target); !ok || plan.RemoteID == "" {
+				t.Fatalf("single protected attachment lost its eligible retraction: %+v", plan)
+			}
+			if kind == "direct" {
+				target.ProviderID = "omemo:" + strings.Repeat("a", 64)
+				if _, ok := m.PrepareRetraction(e.account, c, target); ok {
+					t.Fatal("an envelope digest was accepted as a direct wire ID")
+				}
+			}
+		})
+	}
+}
+
+func TestDirectOMEMOMAMConfirmsOnlyTheScopedRetraction(t *testing.T) {
+	const account, peer, command = "alice@example.test", "bob@example.test", "withdrawal-command"
+	const control = `<retract xmlns="urn:xmpp:message-retract:1" id="original"/> `
+	at := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)
+	m, e, host := archiveFixture(t, func(iq testArchiveIQ, _ int) string {
+		if iq.To.String() != account || iq.field("with") != peer {
+			t.Errorf("unexpected archive confirmation scope: %s %s", iq.To, iq.field("with"))
+		}
+		var wire strings.Builder
+		write := func(uid, from, to, id, payload string) {
+			fmt.Fprintf(&wire, `<message xmlns="jabber:client" from="%s"><result xmlns="urn:xmpp:mam:2" id="%s" queryid="%s"><forwarded xmlns="urn:xmpp:forward:0"><delay xmlns="urn:xmpp:delay" stamp="%s"/><message xmlns="jabber:client" from="%s" to="%s" id="%s" type="chat">%s</message></forwarded></result></message>`,
+				account, uid, iq.Query.ID, at, from, to, id, payload)
+		}
+		write("ordinary", account, peer, "other-id", "<body>Plain text excluded by OMEMO policy</body>")
+		write("wrong-peer", account, "eve@example.test", command, control)
+		write("wrong-sender", peer, account, command, control)
+		write("confirmation", account, peer, command, "<body>Fallback text stays hidden</body>"+control)
+		fmt.Fprintf(&wire, `<iq xmlns="jabber:client" from="%s" type="result" id="%s"><fin xmlns="urn:xmpp:mam:2" complete="true"><set xmlns="http://jabber.org/protocol/rsm"><first>ordinary</first><last>confirmation</last></set></fin></iq>`, account, iq.ID)
+		return wire.String()
+	})
+	device, err := omemo.Open(filepath.Join(t.TempDir(), "device.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.omemoDevice = device
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	for _, id := range []string{"", command} {
+		release, err := m.acquireArchive(ctx, account, archiveInteractive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := m.readArchivePage(ctx, e, e.session, account, archivePageRequest{
+			With: peer, Backward: true, Limit: 20, ConfirmRetractionID: id,
+		})
+		release()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id == "" && len(page.Query.Messages) != 0 {
+			t.Fatal("ordinary protected-account MAM capture included plaintext")
+		}
+		if id == command && (len(page.Query.Messages) != 1 || page.Query.Messages[0].ArchiveID != "confirmation" ||
+			page.Query.Messages[0].OriginalText != "" || page.Query.Messages[0].Retraction == nil) {
+			t.Fatalf("confirmation capture included unrelated or plaintext content: %+v", page.Query.Messages)
+		}
+	}
+	attempt := &retractionAttempt{kind: "direct", target: jid.MustParse(peer), result: make(chan struct{}),
+		plan: application.IncomingRetraction{Scope: "xmpp:correct:sender:" + account, RemoteID: "original"}}
+	if err := m.awaitArchivedRetraction(ctx, e, e.session, attempt, command); err != nil || len(host.messages) != 0 {
+		t.Fatalf("MAM confirmation did not complete without importing data: %v", err)
 	}
 }
 

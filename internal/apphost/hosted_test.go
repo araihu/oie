@@ -16,6 +16,8 @@ import (
 
 	"github.com/araihu/oie/api"
 	"github.com/araihu/oie/internal/adapters/hostauth"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+	"github.com/araihu/oie/internal/adapters/xmpp/omemo"
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
@@ -225,5 +227,69 @@ func TestHostedRequiresConfiguration(t *testing.T) {
 	cfg.DataDir = t.TempDir()
 	if _, err := Start(t.Context(), cfg); !errors.Is(err, hostauth.ErrUnconfigured) {
 		t.Fatalf("started without a configured owner: %v", err)
+	}
+}
+
+func TestHostedOMEMOSharedEndpointRequiresOwner(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "private", "omemo"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := testServer(t, hostedConfig(t, dir, true))
+	for _, route := range []string{"/api/v1/engine", "/api/v1/accounts/019a5df0-0000-7000-8000-000000000001/omemo"} {
+		w := hostedResponse(s, hostedRequest(http.MethodGet, route, "", nil))
+		if w.Code != 401 {
+			t.Fatal(route, w.Code)
+		}
+	}
+	var account engineapi.Account
+	var deviceID uint32
+	var fingerprint string
+	for _, label := range []string{"phone", "computer"} {
+		_, token, err := hostauth.NewStore(dir).CreateKey(t.Context(), label, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := hostedResponse(s, hostedRequest(http.MethodGet, "/api/v1/engine", token, nil))
+		if w.Code != 200 {
+			t.Fatal(w.Code)
+		}
+		var v struct {
+			Role         string
+			OmemoEnabled bool
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil || v.Role != "hosted" || !v.OmemoEnabled {
+			t.Fatal(v, err)
+		}
+		if label == "phone" {
+			req := hostedRequest(http.MethodPost, "/api/v1/accounts", token, strings.NewReader(`{"protocol":"xmpp","address":"alice@localhost","label":"Alice"}`))
+			req.Header.Set("Idempotency-Key", "019a5df0-0000-7000-8000-000000000001")
+			response := hostedResponse(s, req)
+			if response.Code != http.StatusCreated {
+				t.Fatalf("create account: %d %s", response.Code, response.Body)
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &account); err != nil {
+				t.Fatal(err)
+			}
+			device, err := omemo.Open(filepath.Join(omemo.ProfileDir(dir), string(account.Id), "device.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			deviceID, fingerprint, err = device.LocalIdentity()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		w = hostedResponse(s, hostedRequest(http.MethodGet, "/api/v1/accounts/"+string(account.Id)+"/omemo", token, nil))
+		var keys engineapi.OmemoDevices
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", label, w.Code, w.Body)
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &keys); err != nil {
+			t.Fatal(err)
+		}
+		if len(keys.Devices) != 1 || !keys.Devices[0].Own || keys.Devices[0].Id != int(deviceID) || keys.Devices[0].Fingerprint != fingerprint {
+			t.Fatalf("%s saw different device data: %+v", label, keys)
+		}
 	}
 }

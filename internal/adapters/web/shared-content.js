@@ -12,8 +12,32 @@ window.OieRuntime.register('shared-content', life => {
   const copy=node.cloneNode(true);
   copy.style.removeProperty('grid-row-end');
   if (!copy.style.length) copy.removeAttribute('style');
-  for(const media of copy.querySelectorAll('video,audio')){media.removeAttribute('src');media.hidden=true;media.removeAttribute('autoplay')}
+  for(const media of copy.querySelectorAll('video')){media.removeAttribute('src');media.hidden=true;media.removeAttribute('autoplay')}
   for(const source of copy.querySelectorAll('source'))source.removeAttribute('src');
+  const controls=copy.querySelector('[data-message-audio]');
+  if(controls){
+   const audio=controls.querySelector('[data-audio-player]');
+   const source='/ui/shared-content/'+copy.dataset.sharedItem+'/content?engineId='+engine;
+   audio.removeAttribute('src');
+   audio.removeAttribute('autoplay');
+   audio.removeAttribute('loop');
+   audio.preload='none';
+   audio.controls=true;
+   audio.hidden=false;
+   if(controls.dataset.audioSource===source)audio.setAttribute('src',source);
+   controls.removeAttribute('aria-busy');
+   controls.removeAttribute('data-waveform-player');
+   for(const child of controls.querySelectorAll('[data-message-audio-play],[data-message-audio-wave],.oie-message-audio-time,[data-audio-retry]'))child.hidden=true;
+   const wave=controls.querySelector('[data-message-audio-wave]');
+   wave.replaceChildren();
+   for(const name of wave.getAttributeNames())if(name!=='class'&&name!=='data-message-audio-wave'&&name!=='hidden')wave.removeAttribute(name);
+   const button=controls.querySelector('[data-message-audio-play]');
+   button.setAttribute('aria-label',controls.dataset.audioPlayLabel+' · '+copy.querySelector('[data-audio-id]').dataset.audioFilename);
+   button.querySelector('[data-record-play-icon]').hidden=false;
+   button.querySelector('[data-record-pause-icon]').hidden=true;
+   controls.querySelector('[data-message-audio-time]').textContent='–:––';
+   controls.querySelector('[data-message-audio-status]').textContent='';
+  }
   for(const card of copy.querySelectorAll('[data-video-item]')){const cover=card.querySelector('[data-video-cover]'),retry=card.querySelector('[data-video-retry]'),status=card.querySelector('[data-video-status]'),metadata=card.querySelector('[data-video-metadata]'),compact=card.hasAttribute('data-video-compact');if(cover)cover.hidden=false;if(retry)retry.hidden=true;if(metadata&&compact)metadata.hidden=true;if(status){status.textContent=compact?'':card.dataset.videoReady||'';status.dataset.state='ready';status.setAttribute('role','status')}}
   return copy.outerHTML;
  }
@@ -42,6 +66,39 @@ window.OieRuntime.register('shared-content', life => {
   window.OieMasonry?.layout(results);
  }
  function replace(target,html){if(window.OieVideos?.swap(target,html))return;const apply=()=>{for(const child of target.children)window.Alpine?.destroyTree(child);target.innerHTML=html;for(const child of target.children)window.Alpine?.initTree(child)};if(window.Alpine?.mutateDom)window.Alpine.mutateDom(apply);else apply()}
+ function replaceItem(node,fresh){
+  const currentAudio=node.querySelector(':scope > [data-audio-id]');
+  const nextAudio=fresh.querySelector(':scope > [data-audio-id]');
+  const current=currentAudio?.querySelector('[data-message-audio]'),next=nextAudio?.querySelector('[data-message-audio]');
+  const currentScope=node.querySelector('[data-shared-actions]')?.dataset,nextScope=fresh.querySelector('[data-shared-actions]')?.dataset;
+  if(!current||!next||!currentScope||!nextScope||currentAudio.dataset.audioId!==nextAudio.dataset.audioId||
+   current.dataset.audioSource!==next.dataset.audioSource||current.dataset.audioType!==next.dataset.audioType||
+   ['sharedAccount','sharedConversation','sharedMessage','sharedUrl'].some(key=>currentScope[key]!==nextScope[key])){
+   replace(node,fresh.innerHTML);
+   return;
+  }
+  const filename=nextAudio.dataset.audioFilename;
+  currentAudio.dataset.audioFilename=filename;
+  const title=currentAudio.querySelector('strong');
+  title.textContent=title.title=filename;
+  const play=current.querySelector('[data-message-audio-play]');
+  const label=play.querySelector('[data-record-pause-icon]').hidden?current.dataset.audioPlayLabel:current.dataset.audioPauseLabel;
+  play.setAttribute('aria-label',label+' · '+filename);
+  for(const selector of ['[data-audio-player]','[data-audio-retry]']){
+   current.querySelector(selector).setAttribute('aria-label',next.querySelector(selector).getAttribute('aria-label'));
+  }
+  // Keep the media and focused controls connected while applying the new footer and menu.
+  for(const child of [...node.childNodes])if(child!==currentAudio){
+   if(child.nodeType===Node.ELEMENT_NODE)window.Alpine?.destroyTree(child);
+   child.remove();
+  }
+  let before=currentAudio;
+  for(const child of [...fresh.childNodes]){
+   if(child===nextAudio){before=null;continue;}
+   node.insertBefore(child,before);
+   if(child.nodeType===Node.ELEMENT_NODE)window.Alpine?.initTree(child);
+  }
+ }
  function pageData(root,info,live=false){
   const prefix=info?'info-shared':'shared-content',resultSelector=live?(info?'#live-info-content #info-shared-results':'#live-shared-results'):'#'+prefix+'-results',pagerSelector=live?(info?'#live-info-content #info-shared-pagination':'#live-shared-pagination'):'#'+prefix+'-pagination';
   const results=root.querySelector(resultSelector),pagination=root.querySelector(pagerSelector),page=pagination?.querySelector('[data-shared-page]');if(!results||!page||!['engine','scope','cursor','next','state'].every(key=>page.hasAttribute('data-shared-page-'+key)))return null;
@@ -106,7 +163,7 @@ window.OieRuntime.register('shared-content', life => {
      if(freshNode){const template=document.createElement('template');template.innerHTML=item.html;node=template.content.firstElementChild;existing.set(item.id,node)}
      if(node.parentElement!==grid){const before=month.items.slice(n+1).map(item=>existing.get(item.id)).find(node=>node?.parentElement===grid)||null;grid.insertBefore(node,before)}
      if(freshNode)window.Alpine?.initTree(node);
-     else if(c.rendered.get(item.id)!==(item.version||item.html)){const actions=node.querySelector('[data-shared-actions]');if(actions&&(actions.contains(document.activeElement)||actions.querySelector('[aria-expanded="true"]')))continue;const template=document.createElement('template');template.innerHTML=item.html;const fresh=template.content.firstElementChild;replace(node,fresh.innerHTML);for(const attr of fresh.attributes)node.setAttribute(attr.name,attr.value)}
+     else if(c.rendered.get(item.id)!==(item.version||item.html)){const actions=node.querySelector('[data-shared-actions]');if(actions&&(actions.contains(document.activeElement)||actions.querySelector('[aria-expanded="true"]')))continue;const template=document.createElement('template');template.innerHTML=item.html;const fresh=template.content.firstElementChild;replaceItem(node,fresh);for(const attr of fresh.attributes)node.setAttribute(attr.name,attr.value)}
      c.rendered.set(item.id,item.version||item.html);
     }
    }

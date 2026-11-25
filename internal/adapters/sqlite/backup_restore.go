@@ -6,6 +6,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/araihu/oie/internal/adapters/securearchive"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -34,6 +36,35 @@ type RestoreSummary struct {
 }
 
 func RestoreProfileBackup(ctx context.Context, dir, filename string, newID domain.ID) (_ RestoreSummary, err error) {
+	return restoreProfileBackup(ctx, dir, filename, newID, false)
+}
+func RestoreEncryptedHistory(ctx context.Context, dir, filename, password string, newID domain.ID) (RestoreSummary, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return RestoreSummary{}, err
+	}
+	defer func() { _ = f.Close() }()
+	reader, err := securearchive.Open(f, securearchive.History, password)
+	if err != nil {
+		return RestoreSummary{}, err
+	}
+	scratch, err := os.MkdirTemp("", "oie-encrypted-history-")
+	if err != nil {
+		return RestoreSummary{}, err
+	}
+	defer func() { _ = os.RemoveAll(scratch) }()
+	name := filepath.Join(scratch, "history.zip")
+	out, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return RestoreSummary{}, err
+	}
+	_, copyErr := io.Copy(out, reader)
+	if err = errors.Join(copyErr, out.Close()); err != nil {
+		return RestoreSummary{}, err
+	}
+	return restoreProfileBackup(ctx, dir, name, newID, true)
+}
+func restoreProfileBackup(ctx context.Context, dir, filename string, newID domain.ID, protected bool) (_ RestoreSummary, err error) {
 	dir, err = filepath.Abs(dir)
 	if err != nil {
 		return RestoreSummary{}, err
@@ -64,6 +95,12 @@ func RestoreProfileBackup(ctx context.Context, dir, filename string, newID domai
 		return RestoreSummary{}, fmt.Errorf("open destination profile: %w", err)
 	}
 	defer func() { err = errors.Join(err, store.Close()) }()
+	if protected {
+		info, err := os.Lstat(filepath.Join(dir, "private", "omemo"))
+		if err != nil || !info.IsDir() {
+			return RestoreSummary{}, errors.New("initialize an OMEMO destination profile before restoring encrypted history")
+		}
+	}
 	return store.mergeBackup(ctx, archivePath, scratch, manifest, time.Now().UTC())
 }
 

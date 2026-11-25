@@ -176,7 +176,7 @@ func (peer typingPeer) needsTyping(active bool, now time.Time) bool {
 	return elapsed >= 500*time.Millisecond && (!peer.sent || elapsed >= typingLifetime)
 }
 
-func typingAwaitingAck(last *uint32, ack uint32) bool {
+func stanzaAwaitingAck(last *uint32, ack uint32) bool {
 	// The replay queue is bounded well below half the counter's range.
 	return last != nil && int32(ack-*last) < 0
 }

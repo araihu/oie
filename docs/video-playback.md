@@ -1,8 +1,11 @@
 # Video playback increment
 
-The browser uses its native HTML5 video controls. This increment introduces no
-bundled third-party player or codec dependency. Actual codec support belongs to
-the browser; a supported container does not guarantee that every codec plays.
+Oiê starts received videos with native HTML video controls. After Play, a decode
+error or an advancing clock without a picture can switch the card to a local
+libmedia player. It reads the same scoped original in byte ranges. The player
+and the required WebAssembly decoders load on demand from this Oiê instance.
+Versioned decoder assets can be reused from the browser cache. The application
+does not store a converted file. Slow devices can download the original.
 
 `GET /api/v1/shared-content/{itemId}/content` opens a current retained video
 reference through the owning engine. It accepts one byte range and a strong
@@ -37,7 +40,7 @@ retry and restored gallery history, while errors remain visible and listing
 cards still starts no video transfer.
 
 The reader accepts `video/mp4`, `video/webm`, `video/ogg` and
-`video/quicktime`. It requires a known complete size no greater than 2 GiB,
+`video/quicktime`, plus Matroska and AVI. It requires a known complete size no greater than 2 GiB,
 identity encoding and consistent range metadata. Unknown-size responses,
 HTML, multipart ranges, playlists, HLS/DASH manifests, transcoding and codec
 conversion are not supported. DNS results and redirect destinations follow the

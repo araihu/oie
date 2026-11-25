@@ -1,9 +1,15 @@
 package web
 
 import (
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 )
+
+templ retainedAudioPlayer(v view, item engineapi.SharedContentItem) {
+	{{ source := documentSource(v, item) }}
+	@audioPlayer(v, item.Id, v.sharedTitle(item), source, source+"&download=1", audioURLMediaType(item.Url))
+}
 
 templ audioPlayer(v view, id, filename, source, download, mediaType string) {
 	<section class="oie-audio-card" data-audio-id={id} data-audio-filename={filename}

@@ -168,7 +168,12 @@ type MediaFailure struct {
 func (e MediaFailure) Error() string                { return e.Code }
 func (e *Engine) SetMediaReader(reader MediaReader) { e.mediaReader = reader }
 func VideoMediaType(value string) bool {
-	return value == "video/mp4" || value == "video/webm" || value == "video/ogg" || value == "video/quicktime"
+	switch value {
+	case "video/mp4", "video/webm", "video/ogg", "video/quicktime",
+		"video/x-matroska", "video/matroska", "video/x-msvideo":
+		return true
+	}
+	return false
 }
 
 // SharedContentMedia opens only a current retained reference after explicit

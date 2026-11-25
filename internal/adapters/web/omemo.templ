@@ -1,0 +1,157 @@
+package web
+
+import "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+import "github.com/araihu/goshtoso/components/button"
+import "github.com/araihu/goshtoso/components/head"
+
+templ omemoFields(v view, action string) {
+	<input type="hidden" name="engineId" value={ v.EngineID }/>
+	<input type="hidden" name="csrf" value={ v.CSRF }/>
+	<input type="hidden" name="action" value={ action }/>
+}
+
+templ omemoSettingsPage(v view, state engineapi.OmemoDevices, account, chat string, preview *engineapi.OmemoDevice) {
+	<!DOCTYPE html>
+	<html lang={ v.Locale } data-mode={ v.Theme } class={ templ.KV("dark", v.Theme == "dark") }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ v.Text.OmemoTitle }</title>
+			@head.Dependencies(head.WithLocalRuntime())
+			<link rel="stylesheet" href={ templ.URL(versionedStylesheetURL("/ui/app.css", stylesheet)) }/><script src="/ui/theme.js"></script>
+		</head>
+		<body>
+			<main class="oie-omemo-settings">
+				<h1>{ v.Text.OmemoTitle }</h1>
+				<p>{ state.Address }</p>
+				if v.Role=="hosted" {
+					<p>{ v.Text.OmemoHosted }</p>
+				}
+				if preview!=nil {
+					<form method="post" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
+						@omemoFields(v, "verify")
+						<h2>{ v.Text.OmemoCompare }</h2>
+						<p>{ state.Address } · { deviceNumber(preview.Id) }</p><code>{ fingerprintGroups(preview.Fingerprint) }</code>
+						<input type="hidden" name="device" value={ deviceNumber(preview.Id) }/>
+						<input type="hidden" name="fingerprint" value={ preview.Fingerprint }/>
+						@button.Button(button.WithType("submit")) {
+							{ v.Text.OmemoConfirm }
+						}
+						<a href={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>{ v.Text.DeleteDataCancel }</a>
+					</form>
+				} else {
+					if chat!="" {
+						<form method="post" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
+							if state.Encrypted {
+								@omemoFields(v, "plaintext")
+								<p>{ v.Text.OmemoRequired }</p>
+								@button.Button(button.WithType("submit")) {
+									{ v.Text.OmemoDisable }
+								}
+							} else {
+								@omemoFields(v, "encrypt")
+								<p>{ v.Text.OmemoPlain }</p>
+								@button.Button(button.WithType("submit")) {
+									{ v.Text.OmemoEnable }
+								}
+							}
+						</form>
+					}
+					for _,d:=range state.Devices {
+						<section>
+							<h2>{ v.Text.OmemoDevice } { deviceNumber(d.Id) }</h2>
+							if d.Own {
+								<p>{ v.Text.OmemoThis }</p>
+							} else if d.Verified {
+								<p>{ v.Text.OmemoVerified }</p>
+							} else {
+								<p>{ v.Text.OmemoUnverified }</p>
+							}
+							if !d.Active {
+								<p>{ v.Text.OmemoInactive }</p>
+							}
+							<code>{ fingerprintGroups(d.Fingerprint) }</code>
+							if d.Own {
+								<details>
+									<summary>{ v.Text.OmemoShare }</summary>
+									<img src={ fingerprintQR(trustURI(state.Address, d, true)) } alt={ v.Text.OmemoShare } width="220" height="220"/>
+									<label>Gajim / Conversations<input readonly value={ trustURI(state.Address, d, true) }/></label>
+									<label>XEP-0434<input readonly value={ trustURI(state.Address, d, false) }/></label>
+									<img src={ fingerprintQR(trustURI(state.Address, d, false)) } alt="XEP-0434" width="220" height="220"/>
+								</details>
+							} else if d.Verified {
+								<form method="post" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
+									@omemoFields(v, "distrust")
+									<input type="hidden" name="device" value={ deviceNumber(d.Id) }/><input type="hidden" name="fingerprint" value={ d.Fingerprint }/>
+									@button.Button(button.WithType("submit")) {
+										{ v.Text.OmemoDistrust }
+									}
+								</form>
+							}
+						</section>
+					}
+					if len(state.Devices)==0 {
+						<p>{ v.Text.OmemoNoDevices }</p>
+					}
+					<form method="post" enctype="multipart/form-data" action={ templ.SafeURL(v.omemoDeviceFormHref(account, chat, state.Address)) }>
+						@omemoFields(v, "review")
+						<h2>{ v.Text.OmemoCompare }</h2>
+						<label>{ v.Text.OmemoInput }<input name="candidate" autocomplete="off" spellcheck="false"/></label>
+						<label>{ v.Text.OmemoImage }<input type="file" name="qr" accept="image/png,image/jpeg"/></label>
+						@button.Button(button.WithType("submit")) {
+							{ v.Text.OmemoReview }
+						}
+					</form>
+				}
+			</main>
+		</body>
+	</html>
+}
+
+templ roomOmemoSettings(v view, room engineapi.RoomOmemo, account, chat string, retry bool) {
+	<!DOCTYPE html>
+	<html lang={ v.Locale } data-mode={ v.Theme } class={ templ.KV("dark", v.Theme == "dark") }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ v.Text.OmemoRoomTitle }</title>
+			@head.Dependencies(head.WithLocalRuntime())
+			<link rel="stylesheet" href={ templ.URL(versionedStylesheetURL("/ui/app.css", stylesheet)) }/>
+			<script src="/ui/theme.js"></script>
+		</head>
+		<body>
+			<main class="oie-omemo-settings">
+				<h1>{ v.Text.OmemoRoomTitle }</h1>
+				<p>{ room.Address }</p>
+				if retry {
+					<p role="alert">{ v.Text.SharedActionFailed }</p>
+				}
+				if room.Enabled {
+					<p>{ v.Text.OmemoRoomActive }</p>
+				}
+				if !room.Eligible || len(room.Members) == 0 {
+					<p>{ v.Text.OmemoRoomUnavailable }</p>
+				}
+				if room.Enabled || room.Eligible && len(room.Members) != 0 {
+					<form method="post" action={ templ.SafeURL(v.omemoHref(account, chat)) }>
+						if room.Enabled {
+							@omemoFields(v, "plaintext")
+							@button.Button(button.WithType("submit")){ { v.Text.OmemoRoomDisable } }
+						} else {
+							@omemoFields(v, "encrypt")
+							@button.Button(button.WithType("submit")){ { v.Text.OmemoRoomEnable } }
+						}
+					</form>
+				}
+				if len(room.Members) != 0 {
+					<h2>{ v.Text.OmemoRoomMembers }</h2>
+					<ul>
+						for _, participant := range room.Members {
+							<li><a href={ templ.SafeURL(v.omemoMemberHref(account, participant)) }>{ participant }</a></li>
+						}
+					</ul>
+				}
+			</main>
+		</body>
+	</html>
+}
