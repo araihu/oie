@@ -2618,6 +2618,9 @@ window.OieRuntime.register('live', (life, route) => {
             : '#settings-body input[name="theme"]:checked';
           life.timeout(() => {
             const field = document.querySelector(selector);
+            const header = field?.closest('.oie-drawer')?.querySelector(':scope > header');
+            const active = document.activeElement;
+            if (active !== document.body && !header?.contains(active)) return;
             if (field?.getClientRects().length) field.focus({preventScroll:true});
           }, 230);
         }
