@@ -53,7 +53,7 @@ func sharedActions(v view, item engineapi.SharedContentItem) []dropdown.Section 
 		items = append(items, forwardAction(v, "shared-"+sharedActionScope(v)+"-"+item.Id+"-", item.Message.Id))
 	}
 	if item.Kind == "image" && item.Preview != nil && item.Preview.Kind == "image" && sharedActionPreview(item) != "" {
-		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "load-image"), Label: v.Text.LoadImage, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
+		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "load-image"), Label: v.Text.LoadImage, OnClick: "closeAndFocus()", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
 	}
 	if item.Kind == "image" && (sharedActionPreview(item) != "" || sharedActionFile(item) != "") || sharedActionDownload(v, item) != "" {
 		items = append(items, dropdown.Item{ID: sharedActionID(v, item, "download"), Label: v.Text.SharedDownload, OnClick: "void 0", Icon: glyph(heroicons.Icon16SolidArrowDownTray)})
