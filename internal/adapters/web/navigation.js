@@ -197,9 +197,6 @@
   document.body.dataset.starGeneration='0';document.documentElement.lang=root.dataset.routeLocale;document.documentElement.dataset.mode=root.dataset.routeTheme;document.documentElement.classList.toggle('dark',root.dataset.routeTheme==='dark'||root.dataset.routeTheme==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.querySelector('meta[name="oie-csrf"]')?.setAttribute('content',root.dataset.csrf||'');
  }
  function updateSidebar(sidebar, incoming, accountChanged){
-  const logo=sidebar.querySelector('.oie-brand')?.closest('a');
-  const nextLogo=incoming.querySelector('.oie-brand')?.closest('a');
-  if(logo&&nextLogo)logo.setAttribute('href',nextLogo.getAttribute('href'));
   const links='a[data-oie-navigation-item]';
   const destinations=new Map([...incoming.querySelectorAll(links)].map(link=>[new URL(link.href,location.href).searchParams.get('section'),link]));
   for(const link of sidebar.querySelectorAll(links)){
@@ -231,7 +228,14 @@
   if(!mobile||!incoming)return;
   ctx.oieMobileNavigation=mobile;
   ctx.oieIncomingMobile=incoming;
-  ctx.oieMobileFocus=mobile.contains(document.activeElement);
+  const focused=document.activeElement;
+  const account=mobile.querySelector('[data-account-switcher]');
+  ctx.oieMobileFocus=mobile.contains(focused) ? focused : null;
+  if(account?.getAttribute('aria-expanded')==='true'){
+   // Browser history can move focus to the document before HTMX swaps the route.
+   if(focused===document.body||ctx.oieMobileFocus?.closest('[data-popover-panel]'))ctx.oieMobileFocus=account;
+   account.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+  }
   if(window.Alpine)window.Alpine.mutateDom(()=>mobile.remove());else mobile.remove();
  }
  const sourceRetainedRegions=['data-route-shared-copy','data-route-settings','data-route-viewers'];
@@ -496,6 +500,25 @@
   (row||document.getElementById('conversation-search'))?.focus({preventScroll:true});
   return true;
  }
+ // Let the account popover release its keyboard trap before the drawer takes
+ // focus. Its visible trigger is the return point when the drawer closes.
+ function openFromMobileAccounts(action){
+  const menu=action.closest('[data-popover-panel]');
+  const trigger=action.closest('.oie-mobile-nav').querySelector('[data-account-switcher]');
+  const origin=location.href;
+  trigger.click();
+  function afterClose(){
+   if(!trigger.isConnected||!menu.isConnected||location.href!==origin||trigger.getAttribute('aria-expanded')==='true')return;
+   if(menu.getClientRects().length){requestAnimationFrame(afterClose);return;}
+   trigger.focus({preventScroll:true});
+   if(action.hasAttribute('data-navigation-settings')){
+    window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}}));
+   }else{
+    go(action.href,{workspace:'account-workspace'});
+   }
+  }
+  requestAnimationFrame(afterClose);
+ }
  // The dependency loader can expose HTMX before Alpine finishes loading.
  // Process the clicked navigation link before the event reaches its target,
  // without starting application scopes before the remaining dependencies.
@@ -514,6 +537,11 @@
    event.preventDefault();event.stopImmediatePropagation();return;
   }
   const accountLink=event.target.closest?.('[data-open-accounts], [data-add-account]');
+  const drawerAction=accountLink||event.target.closest?.('[data-navigation-settings]');
+  if(drawerAction?.closest('#mobile-accounts-panel')&&window.Alpine&&(!accountLink||booted)){
+   event.preventDefault();event.stopImmediatePropagation();
+   openFromMobileAccounts(drawerAction);return;
+  }
   if(booted&&accountLink?.getAttribute('hx-target')==='#account-workspace'){
    accountLink.closest('[data-popover-panel]')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
   }
@@ -763,11 +791,10 @@
     updateSidebar(mobile,ctx.oieIncomingMobile,accountChanged);
     const placeholder=root.querySelector('.oie-mobile-nav');
     if(window.Alpine)window.Alpine.mutateDom(()=>placeholder.replaceWith(mobile));else placeholder.replaceWith(mobile);
-    const trigger=mobile.querySelector('button[aria-controls="mobile-navigation-panel"]');
-    if(trigger?.getAttribute('aria-expanded')==='true'){
-     mobile.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    if(ctx.oieMobileFocus){
+     const focus=ctx.oieMobileFocus.getClientRects().length ? ctx.oieMobileFocus : mobile.querySelector('[data-account-switcher]');
+     if(focus?.getClientRects().length)focus.focus({preventScroll:true});
     }
-    if(ctx.oieMobileFocus&&trigger?.getClientRects().length)trigger.focus({preventScroll:true});
    }
    for(const name of [...routeFields,'routeLocale','routeTheme','routeError','sharedAccount','csrf'])app().dataset[name]=fresh.dataset[name]||'';
    app().querySelector('.oie-shell').dataset.openChat=root.dataset.openChat;
@@ -808,7 +835,7 @@
    if(ctx.oieHistory)syncSharedAccount(url.searchParams);
    if(account!==(app().dataset.sharedAccount||'')){
     app().dataset.sharedAccount=account;
-    for(const link of app().querySelectorAll('a[data-oie-navigation-item],.oie-mobile-nav a:has(.oie-brand)')){
+    for(const link of app().querySelectorAll('a[data-oie-navigation-item]')){
      const destination=new URL(link.href,location.href);
      if(destination.searchParams.get('section')==='scheduled')continue;
      if(account)destination.searchParams.set('account',account);

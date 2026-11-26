@@ -8,7 +8,7 @@ const enginePath = '/api/v1/engine/read-receipts';
 const fixtureKey = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
 const policyRoute = '**/ui/settings/read-receipts?*';
 
-async function verify(browser, server, {width, lang, engine, navigation, on, off, retry}) {
+async function verify(browser, server, {width, lang, engine, on, off, retry}) {
   const context = await browser.newContext({viewport: {width, height: 900}, hasTouch: width === 390, reducedMotion: 'reduce'});
   try {
     const page = await context.newPage();
@@ -46,7 +46,7 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
       await page.getByRole('option', {name: option, exact: true}).click();
     };
     const reopenSettings = async () => {
-      if (width === 390) await page.getByRole('button', {name: navigation, exact: true}).click();
+      if (width === 390) await page.locator('.oie-mobile-nav [data-account-switcher]').click();
       await page.locator('[data-navigation-settings]:visible').click();
       await page.locator('[data-settings-target=engine]').click();
       await settings.scrollIntoViewIfNeeded();
@@ -147,9 +147,9 @@ async function verify(browser, server, {width, lang, engine, navigation, on, off
   let browser;
   try {
     browser = await chromium.launch();
-    await verify(browser, server, {width: 1440, lang: 'pt-BR', engine: 'Motor', navigation: 'Abrir navegação',
+    await verify(browser, server, {width: 1440, lang: 'pt-BR', engine: 'Motor',
       on: 'Enviar', off: 'Não enviar', retry: 'Tentar novamente'});
-    await verify(browser, server, {width: 390, lang: 'en', engine: 'Engine', navigation: 'Open navigation',
+    await verify(browser, server, {width: 390, lang: 'en', engine: 'Engine',
       on: 'Send', off: 'Do not send', retry: 'Try again'});
     console.log('PASS: read receipt failures and retry, fresh policy after reopen, queued saves and conversation details');
   } finally {

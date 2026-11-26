@@ -595,7 +595,44 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   for(const mode of ['unavailable','foreign']){state.mode=mode;await page.goto(base+'/?'+query);assert(await page.locator('[data-shared-retry]').isVisible());assert.equal(await page.locator('[data-shared-item]').count(),0);state.mode='normal';await page.locator('[data-shared-retry]').click();await until(async()=>await page.locator('[data-shared-item]').count()===50,'retried gallery ready');assert.equal(await page.locator('[data-shared-item]').count(),50)}await page.goto(base+'/?'+query+'&contentCursor=invalid');assert((await page.locator('#shared-content-status').textContent()).includes('no longer available'));await Promise.all([page.waitForURL(url=>!url.searchParams.has('contentCursor')),page.getByRole('link',{name:'Show newest items'}).click()]);await until(async()=>await page.locator('[data-shared-item]').count()===50,'newest gallery ready');assert.equal(new URL(page.url()).searchParams.get('contentCursor'),null);await context.close();
   findings.push('Index/SSE refresh preserves search focus and scroll; Go to message clears gallery mode and focuses retained source with draft and exact CRLF/Unicode copy; error/foreign/stale-cursor recovery stays in shell');
   const automatic=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});await watch(automatic);const auto=await automatic.newPage();await auto.goto(base+'/?'+query);await until(()=>state.downloads.size>2,'visible default auto image download');await auto.waitForTimeout(600);assert.equal(state.downloads.has(items[49].id),false);assert(state.downloads.size<50);await automatic.close();
-  const denied=await browser.newContext({viewport:{width:390,height:844},locale:'en'});await watch(denied);await denied.addInitScript(()=>{for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});const deniedPage=await denied.newPage();await deniedPage.goto(base+'/?'+query);assert.equal(await deniedPage.locator('[data-shared-item]').count(),50);await deniedPage.getByRole('button',{name:'Open navigation',exact:true}).click();await deniedPage.locator('[data-navigation-settings]:visible').click();await deniedPage.locator('[data-device-preference-warning]').waitFor({state:'visible'});assert(await deniedPage.locator('[data-device-preference-warning]').isVisible());await denied.close();
+  const denied=await browser.newContext({viewport:{width:390,height:844},locale:'en'});await watch(denied);await denied.addInitScript(()=>{for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});const deniedPage=await denied.newPage();await deniedPage.goto(base+'/?'+query);assert.equal(await deniedPage.locator('[data-shared-item]').count(),50);await deniedPage.locator('.oie-mobile-nav [data-account-switcher]').click();await deniedPage.locator('[data-navigation-settings]:visible').click();await deniedPage.locator('[data-device-preference-warning]').waitFor({state:'visible'});assert(await deniedPage.locator('[data-device-preference-warning]').isVisible());await denied.close();
+  {
+   const compact=await browser.newContext({
+    viewport:{width:568,height:240},hasTouch:true,locale:'en',
+    storageState:{cookies:[],origins:[{origin:base,localStorage:[{name:preference,value:'false'}]}]}
+   });
+   await watch(compact);
+   const phone=await compact.newPage();
+   await phone.goto(base+'/?section=media&lang=en');
+   const navigation=phone.locator('.oie-mobile-nav');
+   async function tapCategory(type){
+    await phone.locator('[data-shared-tab='+type+']').tap({timeout:5000});
+    await phone.locator('[data-shared-tab='+type+'][aria-current=page]').waitFor();
+   }
+   await tapCategory('documents');
+   for(const section of ['favorites','scheduled','chats','media']){
+    const tab=navigation.locator('.oie-mobile-tab[href*="section='+section+'"]');
+    await tab.tap();
+    await navigation.locator('.oie-mobile-tab[href*="section='+section+'"][aria-current=page]').waitFor();
+   }
+   await navigation.getByRole('button',{name:'Accounts'}).tap();
+   await phone.locator('#mobile-accounts-panel').waitFor();
+   await phone.keyboard.press('Escape');
+   await phone.setViewportSize({width:390,height:844});
+   await phone.locator('#shared-search').focus();
+   await phone.evaluate(()=>{
+    Object.defineProperty(visualViewport,'height',{configurable:true,value:245});
+    visualViewport.dispatchEvent(new Event('resize'));
+   });
+   await navigation.waitFor({state:'hidden'});
+   await tapCategory('links');
+   await phone.evaluate(()=>{
+    delete visualViewport.height;
+    visualViewport.dispatchEvent(new Event('resize'));
+   });
+   await navigation.waitFor();
+   await compact.close();
+  }
   const artifacts=path.join(__dirname,'artifacts');await fs.mkdir(artifacts,{recursive:true});
   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
    const ctx=await browser.newContext({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});await watch(ctx);await ctx.addInitScript(key=>{if(location.origin!=='null')localStorage.setItem(key,'false')},preference);const p=await ctx.newPage();const q=new URLSearchParams(query);q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.equal(await p.locator('#conversation-list').count(),0);

@@ -23,8 +23,10 @@ const {spawn}=require('node:child_process'),{once}=require('node:events'),{chrom
    await page.waitForFunction(()=>window.OieRuntime?.generation>0);await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert.equal(await page.title(),'Oiê');
    assert.equal(await page.locator('#desktop-navigation .oie-brand').count(),0);
    if(width===390){
-    await page.getByRole('button',{name:lang==='en'?'Open navigation':'Abrir navegação',exact:true}).click();
-    await page.locator('#mobile-navigation-panel').getByRole('link',{name:'Oiê',exact:true}).waitFor();
+    const mark=page.locator('.oie-mobile-nav .oie-mobile-account-mark');
+    await mark.evaluate(img=>img.decode());
+    assert(await mark.isVisible());
+    await page.locator('.oie-mobile-nav [data-account-switcher]').click();
    }
    await page.locator('[data-navigation-settings]:visible').press('Enter');
    const settings=page.getByRole('dialog',{name:lang==='en'?'Settings':'Configurações',exact:true});

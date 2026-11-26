@@ -58,13 +58,13 @@ const casa='019a5df0-0000-7000-8000-000000000102';
    await page.goto(base+'/?lang=en&theme=dark');
    await page.locator('[data-filter="unread"]').click();await page.waitForURL(/filter=unread/);assert.equal(await page.locator('.oie-conversations>li').count(),3);
    await page.locator('[data-filter="groups"]').click();await page.waitForURL(/filter=groups/);assert.equal(await page.locator('.oie-conversations>li').count(),5);
-   if(width===390)await page.getByRole('button',{name:'Open navigation',exact:true}).click();
+   if(width===390)await page.locator('.oie-mobile-nav [data-account-switcher]').click();
    await page.locator('[data-navigation-settings]:visible').click();
    await page.getByRole('dialog',{name:'Settings',exact:true}).waitFor({state:'visible'});
    await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Settings',exact:true}).waitFor({state:'hidden'});
    if(width===390){
-    const trigger=page.getByRole('button',{name:'Open navigation',exact:true});await trigger.click();
-    const panel=page.locator('#mobile-navigation-panel');await panel.waitFor({state:'visible'});const box=await panel.boundingBox();assert(box.width>0&&box.height>0&&box.y<900);
+    const trigger=page.locator('.oie-mobile-nav [data-account-switcher]');await trigger.click();
+    const panel=page.locator('#mobile-accounts-panel');await panel.waitFor({state:'visible'});const box=await panel.boundingBox();assert(box.width>0&&box.height>0&&box.y<900);
     await page.keyboard.press('Escape');await panel.waitFor({state:'hidden'});
    }
    await page.close();

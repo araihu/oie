@@ -303,7 +303,7 @@ async function run() {
     await until(() => streams.size === 2, 'both live streams');
     const settings = async page => {
       if (page.viewportSize().width === 390) {
-        await page.getByRole('button', {name: 'Abrir navegação', exact: true}).click();
+        await page.locator('.oie-mobile-nav [data-account-switcher]').click();
       }
       await page.locator('[data-navigation-settings]:visible').click();
       await page.locator('[data-settings-target=device]:visible').click();

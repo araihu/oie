@@ -280,7 +280,8 @@ function thumbnail(color,width=8,height=8){
   const secondAction=row.locator('#load-preview-'+second.id);
   assert.match(await secondAction.textContent(),/Carregar imagem.*second\.png/);
   await secondAction.click();
-  await until(()=>second.downloadState==='ready','selected image loads from the message menu');
+  await row.locator('[data-preview-id="'+second.id+'"][data-preview-download="ready"]').waitFor({state:'attached'});
+  assert.equal(second.downloadState,'ready');
   assert.equal(previews[3].downloadState,'not_downloaded');
   await trigger.click();
   await row.locator('#load-preview-'+first.id).waitFor();

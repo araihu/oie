@@ -195,7 +195,7 @@ async function test(base) {
 
       if (width < 500) {
         await page.locator('.oie-chat-pane').getByRole('link', {name: 'Voltar'}).first().click();
-        await page.getByRole('button', {name:'Abrir navegação', exact:true}).click();
+        await page.locator('.oie-mobile-nav [data-account-switcher]').click();
       }
       await page.locator('[data-navigation-settings]:visible').click();
       await page.locator('[data-settings-target=device]:visible').click(); await page.locator('[data-settings-target=storage]:visible').click();
