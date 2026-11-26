@@ -69,6 +69,7 @@ func TestContactDirectoryKeepsIdentityRevisionsHistoryAndUnavailableCache(t *tes
 
 func TestContactReopensRemovedDirectConversation(t *testing.T) {
 	_, engine, chat := outboxFixture(t)
+	engine.SetProtocols(&outboundProtocol{})
 	ctx := t.Context()
 	if err := engine.ContactsReceived(ctx, chat.AccountID, []application.ContactInput{{Address: chat.Address, Subscription: "both"}}); err != nil {
 		t.Fatal(err)

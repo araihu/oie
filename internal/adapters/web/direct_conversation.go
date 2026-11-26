@@ -25,12 +25,15 @@ func (s *Server) findDirectConversation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	address = peer.Bare().String()
+	// The engine limits its substring filter to 200 characters. Match the full JID below.
+	runes := []rune(address)
+	term := string(runes[:min(len(runes), 200)])
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 	kind := engineapi.ListConversationsParamsKindDirect
 	limit := 100
 	for _, archived := range []bool{false, true} {
-		filter := engineapi.ListConversationsParams{AccountId: &account, Kind: &kind, Q: &address, Limit: &limit, Archived: &archived}
+		filter := engineapi.ListConversationsParams{AccountId: &account, Kind: &kind, Q: &term, Limit: &limit, Archived: &archived}
 		for {
 			page, err := s.client.ListConversationsWithResponse(ctx, &filter)
 			if err != nil || page.JSON200 == nil {

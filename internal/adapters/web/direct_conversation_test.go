@@ -5,18 +5,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 )
 
 func TestPickerFindsExactArchivedDirectConversation(t *testing.T) {
-	const address = "person@example.org"
+	address := strings.Repeat("a", 201) + "@example.org"
 	calls := 0
 	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		q := r.URL.Query()
-		if r.Method != http.MethodGet || q.Get("accountId") != testAccount || q.Get("q") != address || q.Get("kind") != "direct" {
+		if r.Method != http.MethodGet || q.Get("accountId") != testAccount || q.Get("q") != strings.Repeat("a", 200) || q.Get("kind") != "direct" {
 			t.Errorf("unexpected lookup %s %s", r.Method, r.URL)
 		}
 		page := engineapi.ConversationPage{}
@@ -36,7 +37,7 @@ func TestPickerFindsExactArchivedDirectConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/ui/new-conversation/direct?account="+testAccount+"&address=Person%40Example.org%2Fmobile&lang=en&theme=dark", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ui/new-conversation/direct?account="+testAccount+"&address="+url.QueryEscape(strings.ToUpper(address)+"/mobile")+"&lang=en&theme=dark", nil)
 	res := httptest.NewRecorder()
 	s.ServeHTTP(res, req)
 	u, err := url.Parse(res.Body.String())
