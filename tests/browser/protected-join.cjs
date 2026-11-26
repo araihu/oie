@@ -49,7 +49,7 @@ module.exports = async function protectedJoin({page, room, state, open, roomCont
 
   const missingKey = await loseJoinReply(false);
   await retry.click();
-  const passwordBox = form.getByLabel('Original room password');
+  const passwordBox = form.getByLabel('Original group password');
   await passwordBox.waitFor({state: 'visible'});
   assert(await passwordBox.evaluate(input => input.required && !input.disabled && !input.readOnly));
   await retry.click();
