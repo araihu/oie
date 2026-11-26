@@ -75,6 +75,13 @@ func (m *Manager) recordDiscoInfo(ctx context.Context, e *entry, s *mx.Session, 
 		e.roomConfigurations[address] = configuration
 	}
 	recordReactionRestrictionsLocked(e, address, info)
+	if host, ok := m.host.(application.RoomTitleHost); ok && room {
+		if title := discoveredRoomTitle(info); title != "" {
+			// Cache the display name opportunistically. A storage failure must
+			// not invalidate the capability evidence from this response.
+			_ = host.ObserveRoomTitle(ctx, e.account.ID, address, title)
+		}
+	}
 	return nil
 }
 

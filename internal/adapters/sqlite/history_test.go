@@ -118,6 +118,51 @@ func TestRestoredRoomIsIdempotentAndRejectsSend(t *testing.T) {
 	}
 }
 
+func TestSavedRoomTitleFollowsDiscoveryWithoutChangingActivity(t *testing.T) {
+	store, engine, direct := outboxFixture(t)
+	engine.SetProtocols(&outboundProtocol{})
+	ctx := t.Context()
+	address := "room@conference.localhost"
+	restore := func(title string) {
+		t.Helper()
+		if err := engine.RestoreConversation(ctx, direct.AccountID, address, "room", title); err != nil {
+			t.Fatal(err)
+		}
+	}
+	room := func(want string) domain.Conversation {
+		t.Helper()
+		c, err := store.RestoredRoom(ctx, direct.AccountID, address)
+		if err != nil || c.Title != want {
+			t.Fatalf("want title %q, got %q: %v", want, c.Title, err)
+		}
+		return c
+	}
+	observe := func(title string) {
+		t.Helper()
+		if err := engine.ObserveRoomTitle(ctx, direct.AccountID, address, title); err != nil {
+			t.Fatal(err)
+		}
+	}
+	restore("")
+	initial := room(address)
+	restore("Bookmark name")
+	room("Bookmark name")
+	observe("  Garden & Books  ")
+	named := room("Garden & Books")
+	if named.ID != initial.ID || named.RevisionID == initial.RevisionID || named.ActivitySequence != initial.ActivitySequence || !named.UpdatedAt.Equal(initial.UpdatedAt) {
+		t.Fatalf("room identity, revision or activity after discovery: %+v", named)
+	}
+	observe("")
+	observe(address)
+	observe("Garden & Books")
+	restore("Old bookmark")
+	if room("Garden & Books").RevisionID != named.RevisionID {
+		t.Fatal("repeated discovery or bookmark restore churned the room revision")
+	}
+	observe("Reading club")
+	room("Reading club")
+}
+
 func TestHistoryMigrationDownUpPreservesExistingMessagesAndOutbox(t *testing.T) {
 	store, e, c := outboxFixture(t)
 	accepted, err := e.SendMessage(t.Context(), migrationID(), c.ID, "retained through migration")

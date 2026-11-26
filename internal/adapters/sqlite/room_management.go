@@ -68,9 +68,7 @@ func (s *Store) FinishRoomManagement(ctx context.Context, op application.Operati
 			return err
 		}
 		if current.Title != name {
-			next := current
-			next.Title = name
-			if err := writeConversationDecision(ctx, q, current, next, revision, op.CreatedAt); err != nil {
+			if err := writeRoomTitle(ctx, q, current, name, revision, op.CreatedAt); err != nil {
 				return err
 			}
 		}
