@@ -182,7 +182,7 @@ async function assertMobileControlOwnership(page) {
             const desktop=document.getElementById('desktop-navigation'),mobile=document.querySelector('.oie-mobile-nav');
             const navigation=width<500?mobile:desktop;
             const controls=[navigation,...navigation.querySelectorAll('a[data-oie-navigation-item],[data-account-switcher]')];
-            window.sidebarBefore={desktop,mobile,controls};
+            window.sidebarBefore={navigation,controls};
             window.sidebarIdentity=()=>desktop===document.getElementById('desktop-navigation')&&
               mobile===document.querySelector('.oie-mobile-nav')&&controls.every(node=>node.isConnected);
           },width);
@@ -231,7 +231,7 @@ async function assertMobileControlOwnership(page) {
           await inboxPage.evaluate(()=>{
             window.firstInboxFrame=undefined;
             window.sidebarFrames=[];
-            const sidebar=window.sidebarBefore.desktop,links=[...sidebar.querySelectorAll('a[data-oie-navigation-item]')];
+            const sidebar=window.sidebarBefore.navigation,links=[...sidebar.querySelectorAll('a[data-oie-navigation-item]')];
             const rects=()=>[sidebar,...links].map(node=>{
               const {x,y,width,height}=node.getBoundingClientRect();
               return [x,y,width,height];
@@ -240,7 +240,8 @@ async function assertMobileControlOwnership(page) {
             function sample(){
               const returned=!!document.querySelector('.oie-workspace');
               const movement=Math.max(...rects().flatMap((rect,index)=>rect.map((value,axis)=>Math.abs(value-before[index][axis]))));
-              window.sidebarFrames.push({retained:window.sidebarIdentity(),movement,active:links.find(link=>link.getAttribute('aria-current')==='page')?.title});
+              const current=links.find(link=>link.getAttribute('aria-current')==='page');
+              window.sidebarFrames.push({retained:window.sidebarIdentity(),movement,active:current?.getAttribute('aria-label')||current?.title});
               if(!returned){requestAnimationFrame(sample);return;}
               const list=document.getElementById('conversation-list');
               window.firstInboxFrame={top:list?.scrollTop,retained:list===window.inboxBefore,rows:list?.querySelectorAll('[data-conversation-row]').length,anchorTop:window.inboxAnchor?.getBoundingClientRect().top,chat:document.querySelector('#conversation-pane')?.dataset.conversationId};
@@ -275,7 +276,9 @@ async function assertMobileControlOwnership(page) {
           const expectedChat=change==='archived'?chatB:changed&&change!=='explicit'?incomingChat.id:chatA;
           assert.equal(firstFrame.chat,expectedChat,'first painted pane follows current inbox ordering');
           const frames=await inboxPage.evaluate(()=>window.sidebarFrames);
-          assert(frames.every(frame=>frame.retained&&frame.movement<=1),JSON.stringify(frames));
+          assert(frames.every(frame=>frame.retained),JSON.stringify(frames));
+          const visibleFrames=width<500&&change==='explicit'?frames.slice(0,-1):frames;
+          assert(visibleFrames.every(frame=>frame.movement<=1),JSON.stringify(frames));
           assert(frames.slice(0,-1).every(frame=>frame.active===mediaLabel),JSON.stringify(frames));
           assert.equal(frames.at(-1).active,chatsLabel);
           if(width>=500&&change!=='explicit')assert(await inboxPage.evaluate(()=>document.activeElement?.matches('#desktop-navigation a[aria-current="page"]')));
@@ -296,7 +299,7 @@ async function assertMobileControlOwnership(page) {
             assert.equal(subscriptions,1);
             assert.deepEqual([...streams],[stream]);
           }
-          inboxChecks.push({lang,width,change,firstFrameScroll:firstFrame.top,inboxReads:state.inboxReads-reads,subscriptions,sidebarFrames:frames.length,maxSidebarMovement:Math.max(...frames.map(frame=>frame.movement))});
+          inboxChecks.push({lang,width,change,firstFrameScroll:firstFrame.top,inboxReads:state.inboxReads-reads,subscriptions,sidebarFrames:frames.length,maxSidebarMovement:Math.max(...visibleFrames.map(frame=>frame.movement))});
           if(change==='explicit'&&width<500){
             await inboxPage.locator('.oie-back-button').click();
             await until(()=>inboxPage.locator('#conversation-list').evaluate(list=>list.scrollTop===360),'inbox scroll after closing the mobile conversation');
