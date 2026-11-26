@@ -23,6 +23,7 @@ const accounts = [
 const previews = [], commands = [], managementCommands = [], streams = new Set();
 let managementRevision = 'first-room-revision', managementBlocked = false, roomImage = avatarHash;
 let unavailableBanReads = 0;
+let unavailableContactQuery;
 const readerAddress = 'leitora@fixture';
 const bannedAddresses = new Set(['banido@fixture','sem-foto@fixture',
   ...Array.from({length:30}, (_, index) => 'banido-' + index + '@fixture')]);
@@ -117,6 +118,7 @@ async function apiHandler(req, res) {
   if (u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
   if (u.pathname === '/api/v1/contacts') {
     const term = u.searchParams.get('q') || '';
+    if (term === unavailableContactQuery) return send(503, {code:'unavailable', status:503});
     const contact = {id:id(70), revisionId:revision, accountId:alice, accountLabel:'Alice', address:'nina@fixture', displayName:'Nina', groups:[], subscription:'both'};
     if (u.searchParams.get('cursor') === 'second') {
       return send(200,{items:[{...contact,id:id(71),displayName:'Rui',address:'rui@fixture'}],sources:[]});
@@ -859,9 +861,12 @@ async function waitFor(predicate) {
     unblock();
     assert.equal(await searchPeople.inputValue(),'nina');
     assert.equal(await roster.getByText('stale-contact-result').count(),0);
-    await page.route(url => url.pathname === '/ui/new-conversation/results' && url.searchParams.get('group') === 'contacts' && url.searchParams.get('term') === 'nina@', route => route.fulfill({status:503}), {times:1});
-    await searchPeople.fill('nina@');
-    await roster.getByRole('button',{name:'Try again'}).click();
+    unavailableContactQuery = 'nina@';
+    await searchPeople.fill(unavailableContactQuery);
+    const retryContacts = roster.getByRole('button',{name:'Try again'});
+    await retryContacts.waitFor();
+    unavailableContactQuery = undefined;
+    await retryContacts.click();
     await nina.waitFor();
     await searchPeople.fill('missing@fixture');
     await roster.getByText('No matches').waitFor();
