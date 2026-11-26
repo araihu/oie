@@ -597,9 +597,11 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const automatic=await browser.newContext({viewport:{width:1440,height:1000},locale:'en'});await watch(automatic);const auto=await automatic.newPage();await auto.goto(base+'/?'+query);await until(()=>state.downloads.size>2,'visible default auto image download');await auto.waitForTimeout(600);assert.equal(state.downloads.has(items[49].id),false);assert(state.downloads.size<50);await automatic.close();
   const denied=await browser.newContext({viewport:{width:390,height:844},locale:'en'});await watch(denied);await denied.addInitScript(()=>{for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError')}})});const deniedPage=await denied.newPage();await deniedPage.goto(base+'/?'+query);assert.equal(await deniedPage.locator('[data-shared-item]').count(),50);await deniedPage.locator('.oie-mobile-nav [data-account-switcher]').click();await deniedPage.locator('[data-navigation-settings]:visible').click();await deniedPage.locator('[data-device-preference-warning]').waitFor({state:'visible'});assert(await deniedPage.locator('[data-device-preference-warning]').isVisible());await denied.close();
   {
-   const compact=await browser.newContext({viewport:{width:568,height:240},hasTouch:true,locale:'en'});
+   const compact=await browser.newContext({
+    viewport:{width:568,height:240},hasTouch:true,locale:'en',
+    storageState:{cookies:[],origins:[{origin:base,localStorage:[{name:preference,value:'false'}]}]}
+   });
    await watch(compact);
-   await compact.addInitScript(key=>localStorage.setItem(key,'false'),preference);
    const phone=await compact.newPage();
    await phone.goto(base+'/?section=media&lang=en');
    const navigation=phone.locator('.oie-mobile-nav');
