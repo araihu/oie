@@ -620,6 +620,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 				if err = s.reconcileArchivedAuthor(ctx, q, existingID, c, m, revision); err != nil {
 					return err
 				}
+				if err = recoverArchivedSticker(ctx, q, existingID, m); err != nil {
+					return err
+				}
 				if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
 					return err
 				}
@@ -750,6 +753,9 @@ func (s *Store) ReceiveMessage(ctx context.Context, c domain.Conversation, m dom
 			}
 		}
 		if err = recordCorrectionMetadata(ctx, q, existingID, m); err != nil {
+			return err
+		}
+		if err = recoverArchivedSticker(ctx, q, existingID, m); err != nil {
 			return err
 		}
 		if err = recordReplyMetadata(ctx, q, existingID, m, true); err != nil {
@@ -1155,6 +1161,42 @@ func (s *Store) RecordConnection(ctx context.Context, c domain.Connection) error
 		return err
 	}
 	return tx.Commit()
+}
+
+// Older releases retained the shared image but discarded its sticker marker.
+func recoverArchivedSticker(ctx context.Context, q *dbgen.Queries, id string, incoming domain.Message) error {
+	if incoming.ArchiveID == "" || len(incoming.FileReferences) != 1 || !incoming.FileReferences[0].Sticker {
+		return nil
+	}
+	row, err := q.GetMessage(ctx, id)
+	if err != nil {
+		return err
+	}
+	old, err := decodeMessage(row)
+	if err != nil {
+		return err
+	}
+	if old.AccountID != incoming.AccountID || old.Sender.DisplayName != incoming.Sender.DisplayName ||
+		old.SourceBodyHash() != incoming.SourceBodyHash() || len(old.FileReferences) != 1 {
+		return nil
+	}
+	file := &old.FileReferences[0]
+	if file.Sticker || file.Kind != "image" || file.URL != incoming.FileReferences[0].URL {
+		return nil
+	}
+	file.Sticker = true
+	parents := jsonText([]domain.ID{old.RevisionID})
+	old.RevisionID = incoming.RevisionID
+	payload := jsonText(old)
+	if err = q.UpdateMessage(ctx, dbgen.UpdateMessageParams{ID: id, RevisionID: string(old.RevisionID), State: old.SendState, Payload: payload}); err != nil {
+		return err
+	}
+	at := incoming.ReceivedAt
+	if err = q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(old.RevisionID), EntityID: id, Parents: parents, Payload: payload, CreatedAt: stamp(at)}); err != nil {
+		return err
+	}
+	_, err = emitCanonicalMessageEvent(ctx, q, "message.updated", old, at)
+	return err
 }
 
 // Replaying verified room identity metadata updates the retained projection and

@@ -145,16 +145,43 @@ func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T
 	}
 }
 
-func TestRetainedStickerWithEmojiFallback(t *testing.T) {
+func TestArchiveRecoversStickerOnMatchingRetainedImage(t *testing.T) {
 	e, _, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
 	c := openTestConversation(t, e, "alice@localhost")
 	const source = "https://files.example.org/animation"
-	err := e.Receive(t.Context(), application.Incoming{
+	incoming := application.Incoming{
 		AccountID: c.AccountID, Address: "bob@localhost", ProviderID: "sticker-source", OriginalText: "🎉",
-		FileReferences: []domain.SharedReference{{Kind: "image", URL: source, Sticker: true}},
-	})
-	if err != nil {
+		FileReferences: []domain.SharedReference{{Kind: "image", URL: source, Sticker: false}},
+	}
+	if err := e.Receive(t.Context(), incoming); err != nil {
 		t.Fatal(err)
+	}
+	incoming.ArchiveID, incoming.ArchiveScope, incoming.Historical = "archived-sticker", "alice@localhost", true
+	read := func() domain.Message {
+		t.Helper()
+		messages, err := e.Messages(t.Context(), c.ID, "", 10)
+		if err != nil || len(messages) != 1 {
+			t.Fatalf("retained messages: %v, %v", messages, err)
+		}
+		return messages[0]
+	}
+	replay := func(address string) {
+		t.Helper()
+		incoming.FileReferences = []domain.SharedReference{{Kind: "image", URL: address, Sticker: true}}
+		if err := e.Receive(t.Context(), incoming); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := read()
+	replay("https://files.example.org/different")
+	if read().RevisionID != before.RevisionID {
+		t.Fatal("different image changed the retained message")
+	}
+	replay(source)
+	marked := read()
+	replay(source)
+	if marked.RevisionID == before.RevisionID || read().RevisionID != marked.RevisionID {
+		t.Fatal("expected one new revision for the recovered marker")
 	}
 	res, err := http.Get(server.URL + "/api/v1/conversations/" + string(c.ID) + "/messages")
 	if err != nil {
