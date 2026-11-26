@@ -67,6 +67,46 @@ func TestContactDirectoryKeepsIdentityRevisionsHistoryAndUnavailableCache(t *tes
 	}
 }
 
+func TestContactReopensRemovedDirectConversation(t *testing.T) {
+	_, engine, chat := outboxFixture(t)
+	ctx := t.Context()
+	if err := engine.ContactsReceived(ctx, chat.AccountID, []application.ContactInput{{Address: chat.Address, Subscription: "both"}}); err != nil {
+		t.Fatal(err)
+	}
+	assertContactTarget := func(want domain.ID) {
+		t.Helper()
+		page, err := engine.Contacts(ctx, domain.ContactQuery{AccountID: chat.AccountID, Search: chat.Address, Limit: 1})
+		if err != nil || len(page.Items) != 1 || page.Items[0].ConversationID != want {
+			t.Fatalf("contact target: want %q, got %+v, err %v", want, page.Items, err)
+		}
+	}
+	assertContactTarget(chat.ID)
+	message, err := engine.SendMessage(ctx, migrationID(), chat.ID, "before removal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := engine.Conversation(ctx, chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.RemoveDirectFromChats(ctx, migrationID(), chat.ID, chat.AccountID, current.RevisionID); err != nil {
+		t.Fatal(err)
+	}
+	assertContactTarget("")
+	reopened, err := engine.OpenConversation(ctx, migrationID(), chat.AccountID, chat.Address)
+	if err != nil || reopened.Conversation.ID != chat.ID || reopened.Conversation.RemovedFromChats {
+		t.Fatalf("reopening removed chat: %+v, err %v", reopened, err)
+	}
+	assertContactTarget(chat.ID)
+	history, err := engine.Messages(ctx, chat.ID, "", 10)
+	if err != nil || len(history) != 1 || history[0].ID != message.Message.ID {
+		t.Fatalf("retained history: %+v, err %v", history, err)
+	}
+	if _, err := engine.SendMessage(ctx, migrationID(), chat.ID, "after reopening"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestContactDirectoryFiltersBeforePagingAndBindsScope(t *testing.T) {
 	_, e, c := outboxFixture(t)
 	items := []application.ContactInput{}

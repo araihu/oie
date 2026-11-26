@@ -815,10 +815,18 @@ async function waitFor(predicate) {
     await pickerShell.waitFor({state:'hidden'});
     assert.equal(posts.length,0);
     await page.locator('[data-new-conversation]').click();
+    let finishSearch;
+    const delayed = new Promise(resolve => { finishSearch = resolve; });
+    const holdResults = async route => {
+      await delayed;
+      await route.continue().catch(()=>{});
+    };
+    await page.route('**/ui/new-conversation/results?*',holdResults);
     await searchPeople.fill(source.address);
-    await roster.getByRole('link',{name:/Friend/}).waitFor();
     await newMenu.getByRole('button',{name:'Direct conversation'}).click();
     await pickerShell.waitFor({state:'hidden'});
+    finishSearch();
+    await page.unroute('**/ui/new-conversation/results?*',holdResults);
     assert.equal(posts.length,0);
     await page.locator('[data-new-conversation]').click();
     await newMenu.getByRole('button',{name:'Add contact'}).click();
@@ -858,8 +866,8 @@ async function waitFor(predicate) {
     await searchPeople.fill('missing@fixture');
     await roster.getByText('No matches').waitFor();
     await newMenu.getByRole('button', {name:'Direct conversation'}).click();
-    assert.equal(await page.locator('#peer-address').inputValue(),'missing@fixture');
     await page.locator('#new-conversation-form').waitFor();
+    assert.equal(await page.locator('#peer-address').inputValue(),'missing@fixture');
     await newMenu.waitFor({state:'hidden'});
     await page.keyboard.press('Escape');
     await page.locator('#newchat-body').waitFor({state:'hidden'});

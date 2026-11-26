@@ -17,29 +17,42 @@ window.OieRuntime.register('new-conversation-picker', life => {
 
   let controller, timer;
 
+  let lookup;
+  function cancelLookup() {
+    lookup?.abort();
+    lookup = null;
+    dialog.querySelector('#new-conversation-direct')?.removeAttribute('aria-busy');
+  }
   function cancel() {
+    cancelLookup();
     clearTimeout(timer);
     controller?.abort();
   }
 
   function clearSection(section) {
     section.hidden = false;
+    section.removeAttribute('aria-busy');
     section.querySelector('[data-picker-list]').replaceChildren();
     section.querySelector('[role=status]').textContent = dialog.dataset.loading;
   }
 
   async function load(section, cursor = '') {
+    if (section.hasAttribute('aria-busy')) return;
+    section.setAttribute('aria-busy', 'true');
     const group = section.dataset.pickerSection;
     const term = search.value.trim();
     const signal = controller.signal;
     const list = section.querySelector('[data-picker-list]');
     const status = section.querySelector('[role=status]');
     const params = new URLSearchParams({
-      group, term, cursor, account: dialog.dataset.account, lang: dialog.dataset.locale, theme: dialog.dataset.theme
+      group, term, cursor, account: dialog.dataset.account, lang: dialog.dataset.locale, theme: document.documentElement.dataset.mode
     });
-    status.textContent = dialog.dataset.loading;
     const previous = list.querySelector('[data-picker-more]');
-    if (previous) previous.disabled = true;
+    const retry = status.querySelector('button');
+    // Keep the active pagination control focusable until the response arrives.
+    previous?.setAttribute('aria-disabled', 'true');
+    retry?.setAttribute('aria-disabled', 'true');
+    if (!retry) status.textContent = dialog.dataset.loading;
     try {
       const response = await life.fetch('/ui/new-conversation/results?' + params, {signal});
       if (!response.ok) throw Error();
@@ -55,23 +68,34 @@ window.OieRuntime.register('new-conversation-picker', life => {
           if (account) subtitle.textContent = [subtitle.textContent.trim(), account].filter(Boolean).join(' · ');
         }
       }
+      const coverage = fragment.content.querySelector('[data-picker-coverage]');
+      coverage?.remove();
+      const advanceFocus = document.activeElement === previous || document.activeElement === retry;
       previous?.remove();
       list.append(fragment.content);
       document.dispatchEvent(new CustomEvent('oie:picker-content', {detail:{root:list}}));
-      status.textContent = '';
-      if (!list.childElementCount) {
+      status.textContent = coverage?.content.textContent || '';
+      if (!list.childElementCount && !coverage) {
         section.hidden = group === 'chats' && sections.length > 1;
         if (!section.hidden) status.textContent = term || group === 'chats' ? dialog.dataset.noMatch : dialog.dataset.empty;
       }
-      if (cursor) first?.focus();
+      if (advanceFocus) (first || search).focus({preventScroll: !first});
     } catch {
       if (signal.aborted || life.signal.aborted) return;
-      status.textContent = dialog.dataset.unavailable + ' ';
-      const retry = document.createElement('button');
-      retry.type = 'button';
-      retry.textContent = dialog.dataset.retry;
-      retry.onclick = () => load(section, cursor);
-      status.append(retry);
+      if (!retry) {
+        status.textContent = dialog.dataset.unavailable + ' ';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = dialog.dataset.retry;
+        button.onclick = () => load(section, cursor);
+        status.append(button);
+      }
+    } finally {
+      if (!signal.aborted) {
+        section.removeAttribute('aria-busy');
+        previous?.removeAttribute('aria-disabled');
+        retry?.removeAttribute('aria-disabled');
+      }
     }
   }
 
@@ -87,6 +111,7 @@ window.OieRuntime.register('new-conversation-picker', life => {
   }
 
   function show(step) {
+    cancelLookup();
     if (steps.some(pane => !pane.hidden && pane !== step && pane.dataset.pickerStep === 'join-room'))
       document.dispatchEvent(new CustomEvent('oie:picker-leave-join'));
     for (const pane of steps) pane.hidden = pane !== step;
@@ -116,6 +141,42 @@ window.OieRuntime.register('new-conversation-picker', life => {
     if (!step) return;
     previousAction = action;
     show(step);
+  }
+
+  async function openDirect(action) {
+    const form = dialog.querySelector('#new-conversation-form');
+    const address = search.value.trim();
+    const account = dialog.dataset.account || (accounts.size === 1 ? accounts.keys().next().value : '');
+    if (form && form.dataset.busy !== 'true') {
+      form.elements.address.value = address.includes('@') ? address : '';
+      if (account && form.elements.address.value) {
+        if (lookup) return;
+        lookup = new AbortController();
+        const {signal} = lookup;
+        action.setAttribute('aria-busy','true');
+        const params = new URLSearchParams({account, address, lang:dialog.dataset.locale, theme:document.documentElement.dataset.mode});
+        try {
+          const response = await life.fetch('/ui/new-conversation/direct?' + params, {signal});
+          if (response.status === 200) {
+            const url = new URL(await response.text(), location.href);
+            if (signal.aborted || !dialog.open) return;
+            if (url.origin === location.origin && url.pathname === '/' && url.searchParams.has('chat')) {
+              const current = document.querySelector('#conversation-pane[data-open-chat="true"]');
+              closePicker();
+              if (current?.dataset.conversationId !== url.searchParams.get('chat')) {
+                if (window.OieNavigation) window.OieNavigation.go(url.href);
+                else location.assign(url.href);
+              }
+              return;
+            }
+          }
+        } catch {
+          // The form can still open or create the conversation when the lookup fails.
+        }
+        if (signal.aborted || !dialog.open) return;
+      }
+    }
+    openStep('newchat', action);
   }
 
   function closePicker() {
@@ -182,23 +243,8 @@ window.OieRuntime.register('new-conversation-picker', life => {
     const action = target.closest('[data-picker-target]');
     if (action) {
       const id = action.dataset.pickerTarget;
-      if (id === 'newchat') {
-        const address = search.value.trim();
-        const form = dialog.querySelector('#new-conversation-form');
-        if (form && form.dataset.busy !== 'true') {
-          if (dialog.dataset.account || accounts.size === 1) {
-            const existing = [...list.querySelectorAll('a[data-picker-address]')]
-              .find(row => row.dataset.pickerAddress === address && new URL(row.href).searchParams.has('chat')
-                && row.dataset.pickerKind === 'direct');
-            if (existing) {
-              existing.click();
-              return;
-            }
-          }
-          form.elements.address.value = address.includes('@') ? address : '';
-        }
-      }
-      openStep(id, action);
+      if (id === 'newchat') void openDirect(action);
+      else openStep(id, action);
       return;
     }
     const more = target.closest('[data-picker-more]');

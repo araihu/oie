@@ -20,6 +20,7 @@ ON CONFLICT(account_id) DO UPDATE SET state=excluded.state,checked_at=excluded.c
 SELECT co.payload,a.label AS account_label,CAST(COALESCE(c.id,'') AS TEXT) AS conversation_id
 FROM contacts co JOIN accounts a ON a.id=co.account_id
 LEFT JOIN conversations c ON c.account_id=co.account_id AND c.address=co.address
+    AND (COALESCE(json_extract(c.payload,'$.RemovedFromChats'),0)=0 OR json_extract(c.payload,'$.Kind')='room')
 WHERE co.active=1
 AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR co.account_id=CAST(sqlc.arg(account_id) AS TEXT))
 AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR co.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))

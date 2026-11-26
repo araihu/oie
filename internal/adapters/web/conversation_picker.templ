@@ -107,9 +107,12 @@ templ pickerIdentity(v view,account,address,name string) {
   </small></span>
 }
 
-templ pickerChats(v view, chats []engineapi.Conversation) {
- for _,c:=range chats {
+templ pickerChats(v view, page engineapi.ConversationPage, searching bool) {
+ for _,c:=range page.Items {
   @pickerPerson(v,v.href("chat",c.Id,"lang",v.Locale,"theme",v.Theme),c.AccountId,c.Address,c.Title,string(c.Kind),false)
+ }
+ if searching && page.NextCursor!=nil {
+  @pickerMore(*page.NextCursor,v.Text.OlderConversations)
  }
 }
 
@@ -118,6 +121,13 @@ templ pickerContacts(v view,page engineapi.ContactPage) {
   @pickerPerson(v,v.messageSearchContactHref(c),c.AccountId,c.Address,c.DisplayName,"direct",c.ConversationId==nil)
  }
  if page.NextCursor!=nil {
-  <button type="button" class="oie-picker-more" data-picker-more={*page.NextCursor}>{v.Text.ContactNext}</button>
+  @pickerMore(*page.NextCursor,v.Text.ContactNext)
  }
+ if coverage:=pickerContactCoverage(v.Text,page);coverage!="" {
+  <template data-picker-coverage>{coverage}</template>
+ }
+}
+
+templ pickerMore(cursor,label string) {
+ <button type="button" class="oie-picker-more" data-picker-more={cursor}>{label}</button>
 }

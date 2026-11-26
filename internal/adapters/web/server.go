@@ -913,6 +913,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.prepareForward(w, r)
 		return
 	}
+	if r.URL.Path == "/ui/new-conversation/direct" {
+		s.findDirectConversation(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/new-conversation/results" {
 		s.conversationPickerResults(w, r)
 		return
