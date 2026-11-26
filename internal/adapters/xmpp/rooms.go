@@ -30,6 +30,7 @@ type roomSlot struct {
 	joinDeadline             time.Time
 	leaving                  bool
 	creationName             *string
+	discoverAfterJoin        bool
 	configuring              bool
 	cleaningUp               bool
 	mentionOccupants         map[string]observedMention
@@ -209,7 +210,8 @@ func (m *Manager) joinRoom(ctx context.Context, a domain.Account, c domain.Conve
 	code := m.roomEntryAvailability(ctx, e, session, room, creationName != nil)
 	// Private rooms may deny discovery before directed presence. Let the MUC
 	// service check the invitation or retained password on entry.
-	if code == "forbidden" && (c.Request == domain.RoomInvitation || password != "") {
+	discoverAfterJoin := code == "forbidden" && (c.Request == domain.RoomInvitation || password != "")
+	if discoverAfterJoin {
 		code = ""
 	}
 	if code != "" {
@@ -292,7 +294,7 @@ func (m *Manager) joinRoom(ctx context.Context, a domain.Account, c domain.Conve
 			return domain.RoomSession{}, err
 		}
 	}
-	slot := &roomSlot{conversation: c, snapshot: roomSnapshot(c, "joining", nickname, "", intentRevision), session: s, requestID: randomQueryID(), joinDeadline: time.Now().Add(10 * time.Second), creationName: creationName}
+	slot := &roomSlot{conversation: c, snapshot: roomSnapshot(c, "joining", nickname, "", intentRevision), session: s, requestID: randomQueryID(), joinDeadline: time.Now().Add(10 * time.Second), creationName: creationName, discoverAfterJoin: discoverAfterJoin}
 	e.rooms[c.Address] = slot
 	e.mu.Unlock()
 	deadline, ok := ctx.Deadline()
@@ -581,7 +583,15 @@ func (m *Manager) captureRoomPresence(ctx context.Context, e *entry, p incomingP
 		captureOwnRoomOccupant(e, address, slot, p.Occupants)
 		slot.snapshot = roomSnapshot(slot.conversation, "joined", slot.snapshot.Nickname, "", slot.snapshot.IntentRevisionID)
 		m.refreshJoinedRoomAvatar(e, slot.conversation)
-		if configuration.mode == application.RoomReactionsNonanonymous {
+		if slot.discoverAfterJoin {
+			// The room can disclose its name and capabilities to the confirmed occupant.
+			session := slot.session
+			m.workers.Go(func() {
+				lookup, cancel := context.WithTimeout(ctx, 20*time.Second)
+				defer cancel()
+				_, _ = m.queryInfoAtRevision(lookup, e, session, address, configuration.revision)
+			})
+		} else if configuration.mode == application.RoomReactionsNonanonymous {
 			queueRoomDetailsLocked(e, slot.conversation)
 		}
 	} else if self && p.Type == "" && slot.snapshot.State == "joined" && !slot.leaving {

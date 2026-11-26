@@ -2,9 +2,12 @@ package xmpp
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"mellium.im/xmpp/stanza"
 	"testing"
+	"time"
 
 	"github.com/araihu/oie/internal/application"
 	"github.com/araihu/oie/internal/domain"
@@ -162,5 +165,61 @@ func TestConfirmedJoinRechecksAddressOnlyRoomProfile(t *testing.T) {
 		if slot.snapshot.State != "joined" || len(e.avatarWake) != 1 || refresh != tc.wantRefresh || hint != tc.hint {
 			t.Fatalf("saved title %q, state %q, refresh %v hint %q", tc.title, slot.snapshot.State, refresh, hint)
 		}
+	}
+}
+
+func TestMemberOnlyDiscoTitleAfterCredentialedJoin(t *testing.T) {
+	m, e, slot, _ := roomFixture(t)
+	session, conn, peer := reactionWireSession(t)
+	e.session, e.raw = session, conn
+	// Room discovery after entry also works when no drawer cache slot is free.
+	e.details = make(map[domain.ID]*detailSlot)
+	for i := range maxDetailConversations {
+		e.details[domain.ID(fmt.Sprint(i))] = &detailSlot{}
+	}
+	m.host = &roomTitleHostStub{}
+	done := make(chan struct{})
+	go func() { _ = session.Serve(nil); close(done) }()
+	t.Cleanup(func() { _ = peer.Close(); <-done })
+	if err := peer.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	join := make(chan error, 1)
+	go func() {
+		_, err := m.JoinInvitedRoom(t.Context(), e.account, slot.conversation, "Reader", "fixture password", slot.snapshot.IntentRevisionID)
+		join <- err
+	}()
+	decoder := xml.NewDecoder(peer)
+	var iq stanza.IQ
+	if err := decoder.Decode(&iq); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fmt.Fprintf(peer, `<iq xmlns="jabber:client" type="error" from="%s" id="%s"><error><forbidden xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/></error></iq>`, iq.To, iq.ID); err != nil {
+		t.Fatal(err)
+	}
+	var presence stanza.Presence
+	if err := decoder.Decode(&presence); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-join; err != nil {
+		t.Fatal(err)
+	}
+	feedRoomPresence(t, m, e, fmt.Sprintf(`<presence xmlns="jabber:client" from="%s" id="%s"><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/></x></presence>`, presence.To, presence.ID))
+	var query struct {
+		stanza.IQ
+		Info *struct{} `xml:"http://jabber.org/protocol/disco#info query"`
+	}
+	if err := decoder.Decode(&query); err != nil {
+		t.Fatal(err)
+	}
+	if query.Info == nil || query.Type != stanza.GetIQ || query.To.String() != slot.conversation.Address {
+		t.Fatalf("unexpected postjoin discovery IQ: %+v", query)
+	}
+	if _, err := fmt.Fprintf(peer, `<iq xmlns="jabber:client" type="result" from="%s" id="%s"><query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text" name="Members’ reading room"/></query></iq>`, query.To, query.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.workers.Wait()
+	if title := m.host.(*roomTitleHostStub).title; title != "Members’ reading room" {
+		t.Fatalf("joined room title %q", title)
 	}
 }
