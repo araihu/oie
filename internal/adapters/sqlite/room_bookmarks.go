@@ -10,14 +10,14 @@ import (
 
 // RestoredRoom reuses the generated, account-scoped address lookup.
 func (s *Store) RestoredRoom(ctx context.Context, account domain.ID, address string) (domain.Conversation, error) {
-	row, err := s.queries.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(account), Address: address})
+	row, err := s.read.FindConversation(ctx, dbgen.FindConversationParams{AccountID: string(account), Address: address})
 	if err != nil {
 		return domain.Conversation{}, notFound(err)
 	}
 	return decodeConversation(row)
 }
 
-func (s *Store) UpdateRoomTitle(ctx context.Context, id domain.ID, title string, revision domain.ID, at time.Time) error {
+func (s *Store) UpdateRoomTitle(ctx context.Context, id domain.ID, title string, fallback bool, revision domain.ID, at time.Time) error {
 	tx, q, err := begin(ctx, s)
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func (s *Store) UpdateRoomTitle(ctx context.Context, id domain.ID, title string,
 		return err
 	}
 	current, err := readConversation(ctx, q, id)
-	if err != nil || current.Kind != "room" || current.Title == title {
+	if err != nil || !current.AcceptsRoomTitle(title, fallback) {
 		return err
 	}
 	if err = writeRoomTitle(ctx, q, current, title, revision, at); err != nil {

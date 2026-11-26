@@ -27,6 +27,18 @@ type Conversation struct {
 	Request                           string              `json:",omitempty"`
 	DirectHistoryCheck                *DirectHistoryCheck `json:",omitempty"`
 }
+
+func (c Conversation) NeedsRoomTitle() bool {
+	return c.Kind == "room" && (c.Title == "" || c.Title == c.Address)
+}
+
+// AcceptsRoomTitle gives a room's advertised name precedence over fallback
+// labels from bookmarks or its profile.
+func (c Conversation) AcceptsRoomTitle(title string, fallback bool) bool {
+	return c.Kind == "room" && title != "" && title != c.Address && title != c.Title &&
+		(!fallback || c.NeedsRoomTitle())
+}
+
 type Sender struct {
 	PersonalAddress string `json:"-"`
 	ID              ID

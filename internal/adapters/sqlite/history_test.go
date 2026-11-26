@@ -155,12 +155,28 @@ func TestSavedRoomTitleFollowsDiscoveryWithoutChangingActivity(t *testing.T) {
 	observe("")
 	observe(address)
 	observe("Garden & Books")
+	if err := engine.ObserveRoomTitleFallback(ctx, direct.AccountID, address, "Old profile"); err != nil {
+		t.Fatal(err)
+	}
+	// The writer rechecks precedence even if discovery won after the initial read.
+	if err := store.UpdateRoomTitle(ctx, named.ID, "Old profile", true, migrationID(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	restore("Old bookmark")
 	if room("Garden & Books").RevisionID != named.RevisionID {
 		t.Fatal("repeated discovery or bookmark restore churned the room revision")
 	}
 	observe("Reading club")
 	room("Reading club")
+
+	address = "profile-only@conference.localhost"
+	restore("")
+	if err := engine.ObserveRoomTitleFallback(ctx, direct.AccountID, address, "Room profile"); err != nil {
+		t.Fatal(err)
+	}
+	room("Room profile")
+	observe("Advertised name")
+	room("Advertised name")
 }
 
 func TestHistoryMigrationDownUpPreservesExistingMessagesAndOutbox(t *testing.T) {
