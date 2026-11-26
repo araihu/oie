@@ -198,7 +198,7 @@ async function waitFor(predicate) {
     await link.waitFor();
     assert.equal(await link.textContent(), invitation);
     const card = page.locator('[data-room-bubble]');
-    await card.getByText('Convite para sala', {exact: true}).waitFor();
+    await card.getByText('Convite para grupo', {exact: true}).waitFor();
     await waitFor(() => previews.length === 1);
     assert.equal(previews[0].account, alice);
     assert.equal(previews[0].address, address);
@@ -239,7 +239,7 @@ async function waitFor(predicate) {
     await page.keyboard.press('Enter');
     const form = page.locator('#join-room-form');
     const preview = form.locator('[data-room-preview]');
-    await preview.getByText('Carregando prévia da sala…').waitFor();
+    await preview.getByText('Carregando prévia do grupo…').waitFor();
     await page.evaluate(() => window.measureRoomGeometry());
     assert.equal(new URL(page.url()).searchParams.get('chat'), chat);
     assert.equal(new URL(page.url()).searchParams.has('open'), false);
@@ -261,7 +261,7 @@ async function waitFor(predicate) {
     assert.equal(await draft.inputValue(), 'Meu rascunho');
     assert.equal(commands.length, 0);
 
-    await card.getByRole('link', {name: 'Ver sala'}).click();
+    await card.getByRole('link', {name: 'Ver grupo'}).click();
     await preview.getByText('Bem-vindos!').waitFor();
     await form.getByRole('combobox').click();
     await form.getByRole('option', {name: 'Bob · bob@fixture'}).click();
@@ -270,7 +270,7 @@ async function waitFor(predicate) {
       await route.fetch();
       await route.abort();
     }, {times: 1});
-    await form.getByRole('button', {name: 'Entrar na sala', exact: true}).click();
+    await form.getByRole('button', {name: 'Entrar no grupo', exact: true}).click();
     await waitFor(() => commands.length === 1);
     await page.reload();
     await page.locator('body[data-oie-live-ready=true]').waitFor();
@@ -310,7 +310,7 @@ async function waitFor(predicate) {
         await page.locator('#chat-manage-room').click();
       }
       const management = page.locator('[data-room-management]');
-      const openingSkeleton = management.getByRole('status',{name:'Carregando ações da sala…',exact:true});
+      const openingSkeleton = management.getByRole('status',{name:'Carregando ações do grupo…',exact:true});
       if (width === 1440) {
         await openingSkeleton.waitFor();
         assert.equal(await openingSkeleton.locator('[data-skeleton-item]').count(),5);
@@ -344,7 +344,7 @@ async function waitFor(predicate) {
       const originalTopicField = await topic.elementHandle();
       assert.equal(await topic.evaluate(input => input.tagName), 'TEXTAREA');
       const originalTopic = await topic.inputValue();
-      const name = management.getByRole('textbox',{name:'Nome da sala',exact:true});
+      const name = management.getByRole('textbox',{name:'Nome do grupo',exact:true});
       const originalName = await name.inputValue();
       const saveButton = await saveDetails.elementHandle();
       const rightEdgeOffset = await topic.evaluate((input, button) => {
@@ -407,7 +407,7 @@ async function waitFor(predicate) {
       await profile.getByRole('heading',{name:'Leitora',exact:true}).waitFor();
       assert.equal(await management.locator('[data-room-participant-detail]').count(),1);
       assert.equal(await profile.getByRole('button',{name:'Tornar moderador',exact:true}).isVisible(),true);
-      assert.equal(await profile.getByRole('button',{name:'Banir da sala',exact:true}).isVisible(),true);
+      assert.equal(await profile.getByRole('button',{name:'Banir do grupo',exact:true}).isVisible(),true);
       assert.equal(await participant.isVisible(),false);
       assert.equal(await search.isVisible(),false);
       await page.keyboard.press('Escape');
@@ -415,7 +415,7 @@ async function waitFor(predicate) {
       assert.equal(await participant.evaluate(el => document.activeElement === el),true);
       assert.equal(await search.inputValue(),'leit');
       await participant.click();
-      const kickTrigger = profile.getByRole('button', {name:'Remover da sala',exact:true});
+      const kickTrigger = profile.getByRole('button', {name:'Remover do grupo',exact:true});
       const promote = profile.getByRole('button', {name:'Tornar moderador',exact:true});
       await promote.waitFor();
       assert.equal(await promote.locator('.oie-room-action-icon svg').count(), 1);
@@ -443,7 +443,7 @@ async function waitFor(predicate) {
       const bansTab = management.getByRole('tab',{name:'Banimentos',exact:true});
       let finishBans;
       const bansLoading = new Promise(resolve => {finishBans = resolve;});
-      const bansSkeleton = bans.getByRole('status',{name:'Carregando ações da sala…',exact:true});
+      const bansSkeleton = bans.getByRole('status',{name:'Carregando ações do grupo…',exact:true});
       const tabsBeforeBans = await management.getByRole('tablist').boundingBox();
       const originalParticipant = await participant.elementHandle();
       if (width === 1440) {
@@ -455,7 +455,7 @@ async function waitFor(predicate) {
         await bansSkeleton.waitFor();
         assert.deepEqual(await management.getByRole('tablist').boundingBox(),tabsBeforeBans);
         finishBans();
-        const errorToast = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações da sala estão indisponíveis.'});
+        const errorToast = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações do grupo estão indisponíveis.'});
         await errorToast.waitFor();
         await bansSkeleton.waitFor({state:'hidden'});
         await errorToast.getByRole('button',{name:'Fechar',exact:true}).click();
@@ -489,7 +489,7 @@ async function waitFor(predicate) {
           await held;
           await route.continue();
         }, {times:1});
-        await management.getByRole('textbox',{name:'Nome da sala',exact:true}).fill('Leituras de sábado');
+        await management.getByRole('textbox',{name:'Nome do grupo',exact:true}).fill('Leituras de sábado');
         await topic.fill('Próxima leitura\nTraga um conto');
         const geometry = () => page.locator('#send-message-form').evaluate(element => {
           const {x,y,width,height} = element.getBoundingClientRect();
@@ -528,7 +528,7 @@ async function waitFor(predicate) {
         await saveDetails.click();
         const submit = management.locator('[data-details-stage=review] button[type=submit]');
         await submit.click();
-        await management.getByText('A sala mudou. Revise as alterações antes de tentar novamente.', {exact:true}).waitFor();
+        await management.getByText('O grupo mudou. Revise as alterações antes de tentar novamente.', {exact:true}).waitFor();
         await waitFor(() => managementCommands.length === 2);
         assert.equal(managementCommands[1].topic, 'Rascunho do tópico');
         assert.equal(managementCommands[1].name, undefined);
@@ -627,7 +627,7 @@ async function waitFor(predicate) {
       } else {
         assert.equal(await destroyForm.isVisible(),false,'a changed revision requires a new confirmation');
         assert(await destroyToggle.evaluate(button => document.activeElement === button));
-        const conflict = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'A sala mudou.'});
+        const conflict = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'O grupo mudou.'});
         await conflict.waitFor();
         await conflict.locator('button[aria-label="Fechar"]').evaluate(button => button.click());
         await conflict.waitFor({state:'hidden'});
@@ -637,13 +637,13 @@ async function waitFor(predicate) {
       await destructiveDrawer.getByRole('button',{name:'Voltar aos detalhes',exact:true}).click();
       await roomPanel.waitFor({state:'visible'});
     }
-    await roomPanel.getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
-    await roomPanel.locator('#room-avatar-removal').getByRole('button',{name:'Remover imagem da sala',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'Remover imagem do grupo',exact:true}).click();
+    await roomPanel.locator('#room-avatar-removal').getByRole('button',{name:'Remover imagem do grupo',exact:true}).click();
     await image.waitFor({state:'hidden'});
     assert.equal(managementCommands.at(-1).action,'remove_avatar');
-    await roomPanel.getByRole('button',{name:'Trocar imagem da sala',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'Trocar imagem do grupo',exact:true}).click();
     await roomPanel.locator('input[name=image]').setInputFiles({name:'room.png',mimeType:'image/png',buffer:avatar});
-    await roomPanel.locator('#room-avatar-upload').getByRole('button',{name:'Trocar imagem da sala',exact:true}).click();
+    await roomPanel.locator('#room-avatar-upload').getByRole('button',{name:'Trocar imagem do grupo',exact:true}).click();
     await image.waitFor();
     assert.equal(managementCommands.at(-1).action,'set_avatar');
     assert.equal(managementCommands.at(-1).image,avatar.toString('base64'));
@@ -704,7 +704,7 @@ async function waitFor(predicate) {
     const banToggle = roomPanel.getByRole('button',{name:'Banir por endereço',exact:true});
     await banToggle.hover();
     const banHelp = page.getByRole('tooltip').filter({hasText:'Banir por endereço'});
-    await banHelp.getByText('Impeça alguém de entrar na sala pelo endereço, mesmo que nunca tenha participado.').waitFor();
+    await banHelp.getByText('Impeça alguém de entrar no grupo pelo endereço, mesmo que nunca tenha participado.').waitFor();
     await banSearch.hover();
     await banHelp.waitFor({state:'hidden'});
     assert.equal(await banToggle.getAttribute('aria-controls'),'room-ban-by-address-form');
@@ -738,7 +738,7 @@ async function waitFor(predicate) {
     await banAddress.fill('ainda-fora@fixture');
     const topicBeforeBan = await roomPanel.locator('textarea[name=topic]').elementHandle();
     const rowsBeforeBan = await roomPanel.locator('#room-participant-results').elementHandle();
-    await roomPanel.getByRole('button',{name:'Banir da sala',exact:true}).click();
+    await roomPanel.getByRole('button',{name:'Banir do grupo',exact:true}).click();
     await roomPanel.getByRole('button',{name:'ainda-fora@fixture',exact:true}).waitFor();
     await banToggle.waitFor({state:'visible'});
     assert(await topicBeforeBan.evaluate(node => node.isConnected));
@@ -754,10 +754,10 @@ async function waitFor(predicate) {
     await roomPanel.getByRole('tab',{name:'Participantes',exact:true}).click();
     await roomPanel.getByRole('button',{name:'Leitora',exact:true}).click();
     const reader = roomPanel.getByRole('region',{name:'Leitora',exact:true});
-    await reader.getByRole('button',{name:'Banir da sala',exact:true}).click();
+    await reader.getByRole('button',{name:'Banir do grupo',exact:true}).click();
     unavailableBanReads = 2;
     await reader.getByRole('button',{name:'Confirmar',exact:true}).click();
-    const reloadError = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações da sala estão indisponíveis.'});
+    const reloadError = page.locator('[data-toast-container]').getByRole('alert').filter({hasText:'As ações do grupo estão indisponíveis.'});
     await reloadError.waitFor();
     assert.equal(unavailableBanReads,0);
     await reloadError.getByRole('button',{name:'Fechar',exact:true}).click();
@@ -792,7 +792,7 @@ async function waitFor(predicate) {
     await page.locator('[data-new-conversation]').click();
     const newMenu = page.getByRole('dialog', {name:'New conversation'});
     await newMenu.waitFor({state:'visible'});
-    assert.deepEqual((await newMenu.locator('[data-picker-actions] > a, [data-picker-actions] > button').allTextContents()).map(label=>label.trim()), ['Direct conversation','Add contact','Create room','Join room']);
+    assert.deepEqual((await newMenu.locator('[data-picker-actions] > a, [data-picker-actions] > button').allTextContents()).map(label=>label.trim()), ['Direct conversation','Add contact','Create group','Join group']);
     const roster = newMenu.locator('[data-picker-section=contacts]');
     const searchPeople = newMenu.getByRole('searchbox');
     const nina = roster.getByRole('link', {name:/Nina/});
@@ -834,22 +834,22 @@ async function waitFor(predicate) {
     await page.locator('#newchat-body').waitFor({state:'hidden'});
     await page.waitForFunction(()=>document.activeElement?.hasAttribute('data-new-conversation'));
     await page.keyboard.press('Enter');
-    await newMenu.getByRole('button', {name:'Join room'}).click();
+    await newMenu.getByRole('button', {name:'Join group'}).click();
     await page.locator('#join-room-form').waitFor();
     await page.locator('#newchat-body').waitFor({state:'hidden'});
     await page.keyboard.press('Escape');
     await page.locator('#join-room-body').waitFor({state:'hidden'});
     await page.locator('[data-new-conversation]').click();
-    await newMenu.getByRole('button', {name:'Create room'}).click();
+    await newMenu.getByRole('button', {name:'Create group'}).click();
 
     const create = page.locator('#create-room-form');
     await create.locator('[name=address]').fill('new@rooms.fixture');
     await create.locator('[name=name]').fill('A new room');
-    await create.getByRole('button', {name: 'Create room'}).click();
-    await create.getByText('Room state changed. Refresh before trying again.').waitFor();
+    await create.getByRole('button', {name: 'Create group'}).click();
+    await create.getByText('Group state changed. Refresh before trying again.').waitFor();
     assert.equal(await create.locator('[name=name]').inputValue(), 'A new room');
     conflict = false;
-    await create.getByRole('button', {name: 'Create room'}).click();
+    await create.getByRole('button', {name: 'Create group'}).click();
     await page.waitForURL(url => url.searchParams.get('chat') === room);
     assert.equal(commands[2].key, commands[3].key);
     assert.equal(commands[3].action, 'create');
@@ -857,17 +857,17 @@ async function waitFor(predicate) {
 
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', lang: 'en'}));
     await form.waitFor();
-    const previewButton = form.getByRole('button', {name: 'Preview room'});
+    const previewButton = form.getByRole('button', {name: 'Preview group'});
     const directory = form.locator('[data-room-directory]');
     await directory.locator('summary').click();
-    await directory.getByRole('button', {name:'Browse public rooms'}).click();
+    await directory.getByRole('button', {name:'Browse public groups'}).click();
     await directory.getByRole('button', {name:'Trilha de livros'}).click();
     assert.equal(await form.locator('[name=address]').inputValue(), address);
     assert.equal(commands.length, 4);
     await directory.locator('summary').click();
     await form.locator('[name=address]').fill('missing@fixture');
     await previewButton.click();
-    await preview.getByText('Room not found.', {exact: true}).waitFor();
+    await preview.getByText('Group not found.', {exact: true}).waitFor();
     const csrf = await page.locator('meta[name=oie-csrf]').getAttribute('content');
     const beforeStale = previews.length;
     const stale = await page.request.post(base + '/ui/rooms/preview', {form: {accountId: alice, address, csrf, engineId: id(15)}});
@@ -876,7 +876,7 @@ async function waitFor(predicate) {
     await form.locator('[name=address]').fill(invitation);
     await page.route('**/ui/rooms/preview', route => route.abort(), {times: 1});
     await previewButton.click();
-    await preview.getByText('Room preview unavailable.', {exact: true}).waitFor();
+    await preview.getByText('Group preview unavailable.', {exact: true}).waitFor();
     assert.equal(await form.locator('[name=address]').inputValue(), invitation);
     await previewButton.click();
     await preview.getByText('Bem-vindos!').waitFor();
@@ -889,8 +889,8 @@ async function waitFor(predicate) {
     const beforeFallback = previews.length;
     await fallback.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
     const fallbackCard = fallback.locator('[data-room-bubble]');
-    await fallbackCard.getByText('Room invitation', {exact: true}).waitFor();
-    const fallbackLink = fallbackCard.getByRole('link', {name: /View room/});
+    await fallbackCard.getByText('Group invitation', {exact: true}).waitFor();
+    const fallbackLink = fallbackCard.getByRole('link', {name: /View group/});
     const href = await fallbackLink.getAttribute('href');
     const params = new URL(href, base).searchParams;
     assert.equal(params.get('chat'), chat);
@@ -903,7 +903,7 @@ async function waitFor(predicate) {
     assert.equal(await newTabForm.locator('[name=accountId]').inputValue(), alice);
     assert.equal(await newTabForm.locator('[name=address]').inputValue(), address);
     assert.equal(previews.length, beforeFallback);
-    await newTabForm.getByRole('button', {name: 'Preview room'}).click();
+    await newTabForm.getByRole('button', {name: 'Preview group'}).click();
     await newTabForm.getByText('Bem-vindos!').waitFor();
     await fallbackCard.getByText('Saberes <script>', {exact: true}).waitFor();
     assert.equal(previews.length, beforeFallback + 1);
@@ -921,7 +921,7 @@ async function waitFor(predicate) {
           view.on('pageerror', error => errors.push(error.message));
           await view.goto(base + '/?' + new URLSearchParams({chat, account: alice, open: 'join-room', room: address, theme: mode, lang: 'en'}));
           await view.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-          await view.locator('#join-room-form').getByRole('button', {name: 'Preview room'}).click();
+          await view.locator('#join-room-form').getByRole('button', {name: 'Preview group'}).click();
           await view.locator('#join-room-form').getByText('Bem-vindos!').waitFor();
           await view.locator('[data-room-bubble]').getByText('Saberes <script>', {exact: true}).waitFor();
           assert(await view.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -951,7 +951,7 @@ async function waitFor(predicate) {
           }
           const pickerIssues = await scan('#new-conversation-picker');
           assert.deepEqual(pickerIssues.violations.map(value=>value.id), [], ['picker', width, theme, mode].join(' '));
-          await picker.getByRole('button', {name:'Create room'}).click();
+          await picker.getByRole('button', {name:'Create group'}).click();
           await view.locator('#create-room-form').waitFor();
           const createdIssues = await scan('#create-room-body');
           assert.deepEqual(createdIssues.violations.map(value => value.id), [], ['create', width, theme, mode].join(' '));

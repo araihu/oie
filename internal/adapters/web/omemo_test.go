@@ -81,7 +81,7 @@ func TestRoomOmemoConflictKeepsTheSettingsFormAvailable(t *testing.T) {
 	s.roomOmemoPage(response, req, v, account, room)
 	body := response.Body.String()
 	if response.Code != http.StatusConflict || !strings.Contains(body, v.Text.SharedActionFailed) ||
-		!strings.Contains(body, "Ativar OMEMO na sala") || strings.Contains(body, v.Text.OmemoRoomUnavailable) {
+		!strings.Contains(body, "Ativar OMEMO no grupo") || strings.Contains(body, v.Text.OmemoRoomUnavailable) {
 		t.Fatalf("conflict did not keep the room action available (%d): %s", response.Code, body)
 	}
 }
