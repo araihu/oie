@@ -85,7 +85,7 @@ const id='019a5df0-0000-7000-8000-000000000001';
    },locale);
    assert.equal(staleRefresh,200);
    assert.equal((await context.cookies()).find(c=>c.name==='oie_theme')?.value,'light');
-   await page.goto(`${base}/?lang=${locale}`);await page.waitForFunction(()=>window.OieRuntime?.generation>0);if(width===390)await page.getByRole('button',{name:locale==='en'?'Open navigation':'Abrir navegação',exact:true}).click();await page.locator('[data-navigation-settings]:visible').click();await dialog.waitFor({state:'visible'});
+   await page.goto(`${base}/?lang=${locale}`);await page.waitForFunction(()=>window.OieRuntime?.generation>0);if(width===390)await page.locator('.oie-mobile-nav [data-account-switcher]').click();await page.locator('[data-navigation-settings]:visible').click();await dialog.waitFor({state:'visible'});
    assert.equal(await page.evaluate(()=>document.documentElement.dataset.mode),'light');assert(await group.getByRole('radio',{name:names[1],exact:true}).isChecked());
    await group.getByRole('radio',{name:names[0],exact:true}).click({noWaitAfter:true});await page.waitForFunction(()=>document.documentElement.dataset.mode==='system');
    await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.classList.contains('dark'));

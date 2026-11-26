@@ -37,7 +37,7 @@ templ sharedWorkspace(v view){
 templ sharedFragment(v view){
 <div data-shared-fragment data-engine-id={v.EngineID} data-account-filter={v.AccountFilter}>
 @avatarData(v)
-@accountTrigger(v)
+@accountTrigger(v,v.Text.SwitchAccount)
 @accountMenu(v)
 @sharedAccountFilter(v)
 @sharedSearchResults(v)

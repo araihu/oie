@@ -197,9 +197,6 @@
   document.body.dataset.starGeneration='0';document.documentElement.lang=root.dataset.routeLocale;document.documentElement.dataset.mode=root.dataset.routeTheme;document.documentElement.classList.toggle('dark',root.dataset.routeTheme==='dark'||root.dataset.routeTheme==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.querySelector('meta[name="oie-csrf"]')?.setAttribute('content',root.dataset.csrf||'');
  }
  function updateSidebar(sidebar, incoming, accountChanged){
-  const logo=sidebar.querySelector('.oie-brand')?.closest('a');
-  const nextLogo=incoming.querySelector('.oie-brand')?.closest('a');
-  if(logo&&nextLogo)logo.setAttribute('href',nextLogo.getAttribute('href'));
   const links='a[data-oie-navigation-item]';
   const destinations=new Map([...incoming.querySelectorAll(links)].map(link=>[new URL(link.href,location.href).searchParams.get('section'),link]));
   for(const link of sidebar.querySelectorAll(links)){
@@ -231,7 +228,7 @@
   if(!mobile||!incoming)return;
   ctx.oieMobileNavigation=mobile;
   ctx.oieIncomingMobile=incoming;
-  ctx.oieMobileFocus=mobile.contains(document.activeElement);
+  ctx.oieMobileFocus=mobile.contains(document.activeElement) ? document.activeElement : null;
   if(window.Alpine)window.Alpine.mutateDom(()=>mobile.remove());else mobile.remove();
  }
  const sourceRetainedRegions=['data-route-shared-copy','data-route-settings','data-route-viewers'];
@@ -763,11 +760,10 @@
     updateSidebar(mobile,ctx.oieIncomingMobile,accountChanged);
     const placeholder=root.querySelector('.oie-mobile-nav');
     if(window.Alpine)window.Alpine.mutateDom(()=>placeholder.replaceWith(mobile));else placeholder.replaceWith(mobile);
-    const trigger=mobile.querySelector('button[aria-controls="mobile-navigation-panel"]');
-    if(trigger?.getAttribute('aria-expanded')==='true'){
-     mobile.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    if(ctx.oieMobileFocus){
+     const focus=ctx.oieMobileFocus.getClientRects().length ? ctx.oieMobileFocus : mobile.querySelector('[data-account-switcher]');
+     if(focus?.getClientRects().length)focus.focus({preventScroll:true});
     }
-    if(ctx.oieMobileFocus&&trigger?.getClientRects().length)trigger.focus({preventScroll:true});
    }
    for(const name of [...routeFields,'routeLocale','routeTheme','routeError','sharedAccount','csrf'])app().dataset[name]=fresh.dataset[name]||'';
    app().querySelector('.oie-shell').dataset.openChat=root.dataset.openChat;
@@ -808,7 +804,7 @@
    if(ctx.oieHistory)syncSharedAccount(url.searchParams);
    if(account!==(app().dataset.sharedAccount||'')){
     app().dataset.sharedAccount=account;
-    for(const link of app().querySelectorAll('a[data-oie-navigation-item],.oie-mobile-nav a:has(.oie-brand)')){
+    for(const link of app().querySelectorAll('a[data-oie-navigation-item]')){
      const destination=new URL(link.href,location.href);
      if(destination.searchParams.get('section')==='scheduled')continue;
      if(account)destination.searchParams.set('account',account);

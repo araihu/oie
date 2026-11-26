@@ -29,7 +29,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    const parameters={section:width===390?'chats':'media',account:id(2),filter:'unread',q:'Preserve café 😀',theme:'dark'};
    await page.goto(base+'/?'+new URLSearchParams(parameters));await page.waitForFunction(()=>window.OieRuntime?.generation>0);
    assert.equal(await page.locator('html').getAttribute('lang'),initial,'browser negotiation');assert.equal((await context.cookies()).find(cookie=>cookie.name==='oie_lang'),undefined,'initial negotiation must not become explicit override');
-   const openSettings=async()=>{if(width===390)await page.getByRole('button',{name:(await page.locator('html').getAttribute('lang'))==='en'?'Open navigation':'Abrir navegação',exact:true}).click();await page.locator('[data-navigation-settings]:visible').click();await page.getByRole('dialog',{name:(await page.locator('html').getAttribute('lang'))==='en'?'Settings':'Configurações',exact:true}).waitFor({state:'visible'});};
+   const openSettings=async()=>{if(width===390)await page.locator('.oie-mobile-nav [data-account-switcher]').click();await page.locator('[data-navigation-settings]:visible').click();await page.getByRole('dialog',{name:(await page.locator('html').getAttribute('lang'))==='en'?'Settings':'Configurações',exact:true}).waitFor({state:'visible'});};
    await openSettings();const trigger=page.locator('[data-language-trigger]'),value=page.locator('#settings-language input[name="lang"]');
    await trigger.waitFor({state:'visible'});assert.equal(await value.inputValue(),initial);
    const verifyLeading=async(node,locale)=>{

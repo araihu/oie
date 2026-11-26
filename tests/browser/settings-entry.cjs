@@ -35,15 +35,17 @@ const id='019a5df0-0000-7000-8000-000000000001';
    }
    await page.waitForFunction(()=>window.OieRuntime?.generation>0);
    assert.equal(await page.locator('[data-shared-settings],[data-footer-settings]').count(),0,'no duplicate settings shortcuts');
-   if(width===390){assert.equal(await page.locator('[data-navigation-settings]:visible').count(),0);await page.getByRole('button',{name:locale==='en'?'Open navigation':'Abrir navegação',exact:true}).click();}
+   if(width===390){assert.equal(await page.locator('[data-navigation-settings]:visible').count(),0);await page.locator('.oie-mobile-nav [data-account-switcher]').click();}
    const entry=page.locator('[data-navigation-settings]:visible');await entry.waitFor({state:'visible'});assert.equal(await entry.count(),1);
+   if(width!==390){
    const position=await entry.evaluate(node=>{const footer=node.closest('[data-navigation-footer]'),a=node.getBoundingClientRect(),b=footer.getBoundingClientRect();return{hasAccount:!!footer.querySelector('[data-account-switcher]'),inside:a.left>=b.left&&a.right<=b.right+1&&a.top>=b.top&&a.bottom<=b.bottom+1};});
    assert.deepEqual(position,{hasAccount:true,inside:true});
+   }else assert(await page.locator("#mobile-accounts-panel").isVisible());
    await page.evaluate(()=>window.settingsDocumentToken={});const token=await page.evaluateHandle(()=>window.settingsDocumentToken);
    await entry.focus();await entry.press(width===390?'Space':'Enter');
    const dialog=page.locator('[role=dialog]').filter({has:page.locator('#settings-body')});await dialog.waitFor({state:'visible'});
    assert(await page.evaluate(token=>token===window.settingsDocumentToken,token),'opening settings preserves document');
-   if(width===390)await page.locator('#mobile-navigation-panel').waitFor({state:'hidden'});
+   if(width===390)await page.locator('#mobile-accounts-panel').waitFor({state:'hidden'});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await page.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});
    const audit=()=>dialog.evaluate(async node=>(await axe.run(node,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})));

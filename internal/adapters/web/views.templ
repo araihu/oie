@@ -32,33 +32,55 @@ selectfield "github.com/araihu/goshtoso/components/select"
 	"strings"
 )
 
-func navigation(v view, id string) sidebar.Config {
-	cfg := sidebar.Config{
-		DisableSkipLink: true, RootClass: "oie-navigation", FooterSlot: navigationFooter(v,id),
-		Items: []sidebar.Item{
-			{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: appicons.Icon(appicons.Config{Symbol: appicons.IconHeroicons16SolidChatBubbleLeft, Decorative: true, RootClass: "oie-icon"}), Active: v.Section == "chats" || v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
-
-            {ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: sidebarNavigationAttrs()},
-			{ID: "favorites", Label: v.Text.Favorites, Href: v.favoritesHref(""), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
-		},
+func navigationItems(v view) []sidebar.Item {
+	items := []sidebar.Item{
+		{ID: "chats", Label: v.Text.Chats, Href: v.href("section", "chats", "chat", "", "q", "", "filter", "all"), Icon: appicons.Icon(appicons.Config{Symbol: appicons.IconHeroicons16SolidChatBubbleLeft, Decorative: true, RootClass: "oie-icon"}), Active: v.Section == "chats" || v.Section == "archived", LinkAttrs: sidebarNavigationAttrs()},
+		{ID: "media", Label: v.Text.SharedMedia, Href: v.href("section", "media", "chat", "", "q", "", "filter", "all"), Icon: glyph(heroicons.Icon16SolidRectangleGroup), Active: v.Section == "media", LinkAttrs: sidebarNavigationAttrs()},
+		{ID: "favorites", Label: v.Text.Favorites, Href: v.favoritesHref(""), Icon: glyph(heroicons.Icon16SolidStar), Active: v.Section == "favorites", LinkAttrs: sidebarNavigationAttrs()},
 	}
 	if !v.Preview {
-		cfg.Items = append(cfg.Items, sidebar.Item{ID:"scheduled", Label:v.Text.Scheduled, Href:v.scheduleHref(""), Icon:glyph(heroicons.Icon16SolidClock), Active:v.Section=="scheduled", LinkAttrs:sidebarNavigationAttrs()})
+		items = append(items, sidebar.Item{ID:"scheduled", Label:v.Text.Scheduled, Href:v.scheduleHref(""), Icon:glyph(heroicons.Icon16SolidClock), Active:v.Section=="scheduled", LinkAttrs:sidebarNavigationAttrs()})
 	}
-	if id == "mobile-navigation" {
-		cfg.Logo = brand(v)
-		cfg.LogoHref = v.href("section", "chats", "chat", "", "q", "", "filter", "all")
+	return items
+}
+
+func desktopSidebar(v view) sidebar.Config {
+	return sidebar.Config{DisableSkipLink:true, RootClass:"oie-navigation", FooterSlot:navigationFooter(v,"desktop"), Items:navigationItems(v)}
+}
+
+templ mobileNavigation(v view) {
+	<nav class="oie-mobile-nav" aria-label={v.Text.Navigation}>
+		for _, item := range navigationItems(v) {
+			<a class="oie-mobile-tab" href={templ.URL(item.Href)} aria-label={item.Label} if item.Active { aria-current="page" } {item.LinkAttrs...}>
+				@item.Icon
+				if item.ID == "media" {
+					<span>{v.Text.SharedMediaTab}</span>
+				} else {
+					<span>{item.Label}</span>
+				}
+			</a>
+		}
+		<div class="oie-profile">
+			@popover.Popover(popover.Config{ID:"mobile-accounts", Trigger:accountTrigger(v,v.Text.Accounts), Content:mobileAccountMenu(v), Placement:popover.PlacementTopEnd, Role:"dialog", Label:v.Text.SwitchAccount, RootClass:"oie-account-switcher", PanelClass:"oie-account-popover", TrapFocus:true})
+		</div>
+	</nav>
+}
+
+templ mobileAccountMenu(v view) {
+	@accountMenu(v)
+	@button.Button(button.WithType("button"),button.WithRootClass("oie-account-action"),button.WithAttrs(templ.Attributes{"data-navigation-settings":"", "aria-haspopup":"dialog", "x-on:click":"close(); $nextTick(() => $dispatch('drawer:open', {id: 'settings'}))"})){
+		@glyph(heroicons.Icon16SolidCog6Tooth)
+		{v.Text.Settings}
 	}
-	return cfg
 }
 
 templ desktopNavigation(v view) {
-	@sidebar.Sidebar(navigation(v,"desktop"))
+	@sidebar.Sidebar(desktopSidebar(v))
 	<div class="oie-sidebar-splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="desktop-navigation" aria-label={v.Text.Navigation} data-sidebar-splitter></div>
 }
 
 templ sourceDesktopNavigation(v view) {
-	<div id="desktop-navigation">@sidebar.Sidebar(navigation(v,"desktop"))</div>
+	<div id="desktop-navigation">@sidebar.Sidebar(desktopSidebar(v))</div>
 }
 
 templ navigationControl(v view) {
@@ -69,9 +91,6 @@ templ navigationControl(v view) {
 	})) {
 		@glyph(heroicons.Icon16SolidBars3)
 	}
-	<div class="oie-mobile-nav">
-		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-navigation", Sidebar: navigation(v,"mobile-navigation"), TriggerLabel: v.Text.OpenNavigation, TriggerClass: "oie-mobile-nav-trigger", PanelClass: "oie-mobile-nav-panel", Trigger: glyph(heroicons.Icon16SolidBars3)})
-	</div>
 }
 
 templ glyph(symbol icon.Symbol) {
@@ -207,6 +226,7 @@ if v.FormTarget=="send" && (v.Unavailable||v.NotFound) {
 </div>
 }
 			@workspaceWithLoading(v)
+@mobileNavigation(v)
 if !v.CompactSource {
 <div data-route-settings>
 @settings(v)
@@ -250,16 +270,20 @@ if v.Section=="media" {
 
 templ profile(v view,id string) {
 <div class="oie-profile">
-@popover.Popover(popover.Config{ID:"account-switcher-"+id,Trigger:accountTrigger(v),Content:accountMenu(v),Placement:popover.PlacementTopStart,Role:"dialog",Label:v.Text.SwitchAccount,RootClass:"oie-account-switcher",PanelClass:"oie-account-popover",TrapFocus:true})
+@popover.Popover(popover.Config{ID:"account-switcher-"+id,Trigger:accountTrigger(v,v.Text.SwitchAccount),Content:accountMenu(v),Placement:popover.PlacementTopStart,Role:"dialog",Label:v.Text.SwitchAccount,RootClass:"oie-account-switcher",PanelClass:"oie-account-popover",TrapFocus:true})
 </div>
 }
 
-templ accountTrigger(v view){
+templ accountTrigger(v view,label string){
 {{ border := v.AccountAvatarBorders[v.AccountFilter] }}
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.SwitchAccount,"data-account-switcher":"","data-active-account-name":v.activeAccountName(),"data-account-avatar-border":border})){
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-profile-trigger"),button.WithAttrs(templ.Attributes{"aria-label":label,"data-account-switcher":"","data-active-account-name":v.activeAccountName(),"data-account-avatar-border":border})){
 @profileAvatar(v,v.AccountFilter,v.account(v.AccountFilter).Address,avatar.Config{Name:v.activeAccountName(),Size:avatar.SizeXS,Border:border!="",BorderColor:border})
 <span class="oie-profile-identity"><strong>{v.activeAccountName()}</strong><small>{v.activeAccountAddress()}</small></span>
 @glyph(heroicons.Icon16SolidEllipsisHorizontal)
+if v.AccountFilter == "" {
+	<img class="oie-mobile-account-mark" src={templ.URL(brandURL("favicon.svg"))} alt="" width="22" height="22"/>
+}
+<span class="oie-mobile-account-label">{v.Text.Accounts}</span>
 }
 }
 
@@ -1026,7 +1050,7 @@ if v.accountScreen()=="capabilities" {
 <div id="live-account-capabilities">@capabilityContent(v)</div>
 }
 <div id="live-account-menu">@accountMenu(v)</div>
-<div id="live-account-trigger">@accountTrigger(v)</div>
+<div id="live-account-trigger">@accountTrigger(v,v.Text.SwitchAccount)</div>
 <div id="live-newchat-account">@selectfield.Select(selectfield.Config{ID:"sending-account",Name:"accountId",Label:v.Text.ChooseAccount,Options:accountOptions(v,false),Required:true})</div>
 </div>
 }

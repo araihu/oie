@@ -45,7 +45,7 @@ async function run(browser, mode) {
       await page.goto(base + '/?lang=pt-BR');
     }
     assert.equal(requests, 0, 'initial workspace must not read the diagnostics file');
-    if (pt) await page.getByRole('button', { name: 'Abrir navegação', exact: true }).click();
+    if (pt) await page.locator('.oie-mobile-nav [data-account-switcher]').click();
     await page.locator('[data-navigation-settings]:visible').click();
     const settings = page.getByRole('dialog', { name: pt ? 'Configurações' : 'Settings', exact: true });
     await settings.waitFor();
