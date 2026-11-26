@@ -95,7 +95,9 @@ const id='019a5df0-0000-7000-8000-000000000001';
     if(section==='chats'){
      await trigger.press('Enter');
      await page.waitForFunction(()=>document.querySelector('#mobile-accounts-panel')?.contains(document.activeElement));
+     const opened=page.waitForResponse(response=>response.request().headers()['x-oie-fragment']==='accounts');
      await page.locator('#mobile-accounts-panel [data-open-accounts]').press('Enter');
+     assert.equal((await opened).status(),200);
      const accounts=page.locator('.oie-account-drawer:visible');
      await accounts.getByRole('button',{name:locale==='en'?'Close':'Fechar',exact:true}).click();
      await until(()=>trigger.evaluate(button=>document.activeElement===button),'Manage accounts returns focus to Accounts');

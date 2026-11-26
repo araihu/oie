@@ -514,7 +514,7 @@
    if(action.hasAttribute('data-navigation-settings')){
     window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}}));
    }else{
-    go(action.href);
+    go(action.href,{workspace:'account-workspace'});
    }
   }
   requestAnimationFrame(afterClose);
