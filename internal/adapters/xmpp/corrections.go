@@ -63,12 +63,16 @@ func verifiedOccupantID(occupants []wireID) string {
 	return occupant.ID
 }
 
+func isRoomAddress(e *entry, address string) bool {
+	room, err := jid.Parse(address)
+	return err == nil && room.Localpart() != "" && room.Resourcepart() == "" && address != e.account.Address
+}
+
 // A matching tag is not proof: rooms must advertise XEP-0421, otherwise a
 // participant could inject a pseudonym and correct another occupant's text.
 // The caller holds e.mu and e.historyMu.
 func recordRoomIdentity(e *entry, address string, info disco.Info) (roomDiscovered bool, mode string) {
-	room, err := jid.Parse(address)
-	if err != nil || room.Localpart() == "" || room.Resourcepart() != "" || address == e.account.Address {
+	if !isRoomAddress(e, address) {
 		return false, ""
 	}
 	conference, advertised, semianonymous, nonanonymous, anonymous := false, false, false, false, false

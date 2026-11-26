@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/araihu/oie/internal/domain"
@@ -163,14 +164,20 @@ func (m *Manager) fetchRoomDetails(ctx context.Context, e *entry, s *mx.Session,
 	info.Participants.CheckedAt = info.CheckedAt
 	return info
 }
-func parseRoomInfo(raw disco.Info) domain.ConversationInfo {
-	info := domain.EmptyConversationInfo("room", "known")
+func discoveredRoomTitle(raw disco.Info) string {
 	for _, identity := range raw.Identity {
-		if identity.Category == "conference" && identity.Name != "" {
-			info.Name = cleanEvidence(identity.Name, 300)
-			break
+		if identity.Category == "conference" && identity.Type == "text" {
+			if name := cleanEvidence(strings.TrimSpace(identity.Name), 300); name != "" {
+				return name
+			}
 		}
 	}
+	return ""
+}
+
+func parseRoomInfo(raw disco.Info) domain.ConversationInfo {
+	info := domain.EmptyConversationInfo("room", "known")
+	info.Name = discoveredRoomTitle(raw)
 	flags := map[string]string{"muc_public": "public", "muc_hidden": "hidden", "muc_membersonly": "members_only", "muc_open": "open", "muc_persistent": "persistent", "muc_temporary": "temporary", "muc_moderated": "moderated", "muc_unmoderated": "unmoderated", "muc_passwordprotected": "password_protected", "muc_unsecured": "unsecured", "muc_semianonymous": "anonymous", "muc_nonanonymous": "non_anonymous"}
 	for _, feature := range raw.Features {
 		if flag := flags[feature.Var]; flag != "" {

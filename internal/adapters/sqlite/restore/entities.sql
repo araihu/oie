@@ -23,7 +23,9 @@ WHERE TRUE ON CONFLICT(id) DO NOTHING;
 -- Keep the destination's preferences and removal decisions when adopting
 -- the verified room identity under the existing conversation ID.
 UPDATE conversations AS d SET revision_id=b.revision_id,
-  payload=json_set(d.payload,'$.Kind','room','$.Title',json_extract(b.payload,'$.Title'),'$.RevisionID',b.revision_id)
+  payload=json_set(d.payload,'$.Kind','room','$.Title',json_extract(b.payload,'$.Title'),
+                   '$.TitleFromRoomProfile',json(COALESCE(b.payload->'$.TitleFromRoomProfile','false')),
+                   '$.RevisionID',b.revision_id)
 FROM backup.conversations b JOIN restore_chats x ON x.id=b.id AND x.promote_room=1
 WHERE d.id=b.id;
 

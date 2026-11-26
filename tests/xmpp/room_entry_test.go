@@ -219,6 +219,12 @@ func TestRoomEntryCreationPreviewAndReplay(t *testing.T) {
 		t.Fatalf("entry did not reuse room: %+v %v", joinedBob, err)
 	}
 	waitRoom(joinedBob.Conversation.ID, "joined")
+	rooms, err := engine.Conversations(ctx, "", application.ConversationQuery{AccountID: bob, Kind: "room", Query: "Garden & Books", Limit: 100})
+	if err != nil || !slices.ContainsFunc(rooms, func(c domain.Conversation) bool {
+		return c.ID == joinedBob.Conversation.ID && c.Title == "Garden & Books"
+	}) {
+		t.Fatalf("joined room missing its advertised name in Chats: %+v %v", rooms, err)
+	}
 	if err := engine.StoreAvatar(ctx, bob, "bob@localhost", "room-roster-fixture", avatar.Bytes()); err != nil {
 		t.Fatal(err)
 	}

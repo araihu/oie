@@ -115,12 +115,15 @@ func recordDiscovery(e *entry, s *mx.Session, service domain.DiscoveredService) 
 	}
 }
 func (m *Manager) queryInfo(ctx context.Context, e *entry, s *mx.Session, address string) (disco.Info, error) {
-	configuration := currentRoomConfiguration(e, address)
+	return m.queryInfoAtRevision(ctx, e, s, address, currentRoomConfiguration(e, address).revision)
+}
+
+func (m *Manager) queryInfoAtRevision(ctx context.Context, e *entry, s *mx.Session, address string, revision uint64) (disco.Info, error) {
 	body, err := m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, discoInfoQuery)
 	if err != nil {
 		return disco.Info{}, err
 	}
-	return m.decodeDiscoInfo(ctx, e, s, address, body, configuration.revision)
+	return m.decodeDiscoInfo(ctx, e, s, address, body, revision)
 }
 
 const discoInfoQuery = `<query xmlns="http://jabber.org/protocol/disco#info"/>`

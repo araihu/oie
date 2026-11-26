@@ -33,6 +33,9 @@ func TestBackupRestorePromotesAnEmptyDestinationPlaceholder(t *testing.T) {
 	}
 	older := replySeed(t, source, room, "outside destination's room history window", now.AddDate(0, 0, -200), nil, nil)
 	incoming := replySeed(t, source, room, "room history from backup", now, nil, nil)
+	if err := roomEngine.ObserveRoomTitleFallback(ctx, room.AccountID, room.Address, "Book club"); err != nil {
+		t.Fatal(err)
+	}
 	room = newerConversation(t, source, room.ID)
 	manifest, archive, scratch := backupRestoreFixture(t, source, false)
 	if result, err := dest.mergeBackup(ctx, archive, scratch, manifest, now); err != nil || result != (RestoreSummary{Messages: 1}) {
@@ -51,6 +54,12 @@ func TestBackupRestorePromotesAnEmptyDestinationPlaceholder(t *testing.T) {
 	}
 	if result, err := dest.mergeBackup(ctx, archive, scratch, manifest, now); err != nil || result != (RestoreSummary{}) {
 		t.Fatalf("reapplying the same archive changed the room: %+v, %v", result, err)
+	}
+	if err := testRestoreEngine(t, dest).ObserveRoomTitleFallback(ctx, room.AccountID, room.Address, "Renamed book club"); err != nil {
+		t.Fatal(err)
+	}
+	if got := newerConversation(t, dest, room.ID); got.Title != "Renamed book club" || !got.TitleFromRoomProfile {
+		t.Fatalf("restored room lost its profile title source: %+v", got)
 	}
 }
 

@@ -19,6 +19,7 @@ type Conversation struct {
 	UnreadCount                       int
 	LatestMessagePageCount            *int         `json:"-"`
 	RoomSession                       *RoomSession `json:"-"`
+	TitleFromRoomProfile              bool         `json:",omitempty"`
 	UnreadReminder                    bool         `json:",omitempty"`
 	UnreadMention                     bool         `json:",omitempty"`
 	RemovedFromChats                  bool         `json:",omitempty"`
@@ -27,6 +28,23 @@ type Conversation struct {
 	Request                           string              `json:",omitempty"`
 	DirectHistoryCheck                *DirectHistoryCheck `json:",omitempty"`
 }
+
+func (c Conversation) UsesRoomProfileTitle() bool {
+	return c.Kind == "room" && (c.TitleFromRoomProfile || c.Title == "" || c.Title == c.Address)
+}
+
+// Discovery can supersede a profile name, including when both sources
+// currently agree. A later profile refresh only updates a profile-sourced name.
+func (c Conversation) AcceptsRoomTitle(title string, fromProfile bool) bool {
+	if c.Kind != "room" || title == "" || title == c.Address {
+		return false
+	}
+	if fromProfile {
+		return c.UsesRoomProfileTitle() && c.Title != title
+	}
+	return c.TitleFromRoomProfile || c.Title != title
+}
+
 type Sender struct {
 	PersonalAddress string `json:"-"`
 	ID              ID
