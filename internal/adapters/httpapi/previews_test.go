@@ -144,3 +144,28 @@ func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T
 		t.Fatal("preview changed message", err)
 	}
 }
+
+func TestRetainedStickerWithEmojiFallback(t *testing.T) {
+	e, _, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	c := openTestConversation(t, e, "alice@localhost")
+	const source = "https://files.example.org/animation"
+	err := e.Receive(t.Context(), application.Incoming{
+		AccountID: c.AccountID, Address: "bob@localhost", ProviderID: "sticker-source", OriginalText: "🎉",
+		FileReferences: []domain.SharedReference{{Kind: "image", URL: source, Sticker: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.Get(server.URL + "/api/v1/conversations/" + string(c.ID) + "/messages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	var page engineapi.MessagePage
+	if err = json.NewDecoder(res.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].StickerUrl == nil || *page.Items[0].StickerUrl != source || page.Items[0].OriginalText != "🎉" {
+		t.Fatalf("unexpected retained sticker: %+v", page.Items)
+	}
+}

@@ -28,6 +28,15 @@ function thumbnail(color,width=8,height=8){
  messages[10].originalText='Read this '+previews[8].url+' in this example';
  const emit=type=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: {}\n\n`)};
  const finish=(p,fail=false)=>{p.revisionId=id(500+state.seq);p.downloadState=fail?'failed':'ready';if(fail)p.lastErrorCode='fetch_failed';else{p.imageHash=thumbHash;p.fileHash=originalHash;p.fileMimeType='image/png';p.fileSize=original.length;p.integrity='computed_only';delete p.lastErrorCode}emit('message.preview_changed')};
+ // Two-frame 2×1 GIF. Keep its original separate from the still PNG thumbnail.
+ const animated=Buffer.from('R0lGODlhAgABAIEAAABkyAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAEAAAACwAAAAAAgABAAAIBQABAAgIACH5BAEQAAIALAAAAAABAAEAgQBkyPUyQQAAAAAAAAgEAAMEBAA7','base64');
+ const animatedHash=createHash('sha256').update(animated).digest('hex');
+ function addAnimation(n,sticker) {
+  const p=preview(n,'image',{url:'https://images.example.test/animation'+n+'.gif',downloadState:'ready',fileMimeType:'image/gif',fileSize:animated.length,fileHash:animatedHash,imageHash:thumbHash});
+  Object.assign(messages[n],{originalText:sticker?'🎉':p.url,stickerUrl:sticker?p.url:undefined});
+  previews.push(p);
+  return p;
+ }
  const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.5.0',eventCursor:engine+':'+state.seq});
@@ -63,7 +72,7 @@ function thumbnail(color,width=8,height=8){
     state.downloads++;p.downloadState='queued';p.revisionId=id(400+state.seq);emit('message.preview_changed');send(202,p);setTimeout(()=>finish(p,state.failNext),p===previews[2]?600:250);return;
    }
   }
-  if(u.pathname.startsWith('/api/v1/media/')){const hash=u.pathname.split('/').at(-1);if(hash===originalHash)state.originalReads++;res.setHeader('Content-Type','image/png');res.end(hash===originalHash?original:thumb);return}
+  if(u.pathname.startsWith('/api/v1/media/')){const hash=u.pathname.split('/').at(-1);if(hash===animatedHash){res.setHeader('Content-Type','image/gif');res.end(animated);return}if(hash===originalHash)state.originalReads++;res.setHeader('Content-Type','image/png');res.end(hash===originalHash?original:thumb);return}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{status:404});
  });
@@ -274,6 +283,27 @@ function thumbnail(color,width=8,height=8){
   await trigger.click();
   await row.locator('#load-preview-'+first.id).waitFor();
   assert.equal(await secondAction.isVisible(),false);
+  const sticker=addAnimation(19,true), gif=addAnimation(21,false);
+  await page.reload();
+  for(const width of [390,1052]) {
+   await page.setViewportSize({width,height:900});
+   for(const motion of ['no-preference','reduce']) {
+    await page.emulateMedia({reducedMotion:motion});
+    for(const p of [sticker,gif]) {
+     const image=scope(page,p).locator('img.oie-preview-thumbnail');
+     const hash=motion==='reduce'?thumbHash:animatedHash;
+     await until(()=>image.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),hash),'inline image source for '+motion);
+    }
+    const frame=messageRow(19).locator('.oie-sticker .oie-image-frame');
+    const box=await frame.boundingBox();
+    assert(box.width>0 && box.width<=160 && box.height<=160);
+    assert.equal(await frame.locator('img').evaluate(img=>getComputedStyle(img).objectFit),'contain');
+    assert.equal(await messageRow(19).locator('.oie-bubble').count(),0);
+    assert.equal(await messageRow(21).locator('.oie-bubble').count(),1);
+   }
+  }
+  await scope(page,sticker).locator('[data-preview-expand]').first().click();
+  await until(()=>page.locator('.oie-expanded-image').evaluate(img=>img.complete && img.naturalWidth===2),'open animated original with reduced motion');
   console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

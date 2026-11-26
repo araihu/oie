@@ -68,3 +68,31 @@ func TestAdvertisedOriginalDigestsUseOnlyFileMetadataHashes(t *testing.T) {
 		t.Fatal("an explicit wire caption was changed")
 	}
 }
+
+func TestStickerRequiresDirectNamespacedMarkerAndSharedImage(t *testing.T) {
+	const marker = "<sticker xmlns='urn:xmpp:stickers:0'/>"
+	const source = "https://files.example/sticker.gif"
+	for _, tc := range []struct {
+		name, marker, mediaType string
+		want                    bool
+	}{
+		{"standalone", marker, "image/gif", true},
+		{"pack", "<sticker xmlns='urn:xmpp:stickers:0' pack='abc'/>", "image/png", true},
+		{"ordinary", "", "image/gif", false},
+		{"wrong namespace", "<sticker xmlns='urn:other'/>", "image/gif", false},
+		{"nested", "<other>" + marker + "</other>", "image/gif", false},
+		{"audio", marker, "audio/mpeg", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := "<message xmlns='jabber:client'>" + tc.marker + "<file-sharing xmlns='urn:xmpp:sfs:0'><file xmlns='urn:xmpp:file:metadata:0'><media-type>" + tc.mediaType + "</media-type></file><sources><url-data xmlns='http://jabber.org/protocol/url-data' target='" + source + "'/></sources></file-sharing></message>"
+			var msg archiveMessage
+			if err := xml.Unmarshal([]byte(raw), &msg); err != nil {
+				t.Fatal(err)
+			}
+			refs := decodeFileReferences(msg.fileSharingMetadata)
+			if len(refs) != 1 || refs[0].Sticker != tc.want || refs[0].URL != source {
+				t.Fatalf("references: %+v", refs)
+			}
+		})
+	}
+}

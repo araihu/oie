@@ -7059,6 +7059,12 @@ components:
       - isOwn
       - sendState
       properties:
+        stickerUrl:
+          type: string
+          format: uri
+          maxLength: 4096
+          description: Image file-sharing source explicitly marked as a sticker by the sender.
+          example: https://files.example.org/sticker.gif
         omemoAttachments:
           type: array
           description: File names in download order. The engine keeps the key and remote URL.

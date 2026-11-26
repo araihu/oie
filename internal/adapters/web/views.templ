@@ -530,7 +530,7 @@ if m.Attachment!=nil {
 if !m.IsOwn {
 @senderAvatar(v,m)
 }
-@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
+@retainedBubble(m,grouped,messageBubbleBody(v,m,grouped))
 </div>
 }
 
@@ -1148,6 +1148,14 @@ for identity,hash:=range v.Avatars {
 
 // The public rich-content slot owns the header and corner control together, so
 // positioning never depends on ChatBubble's private row or bubble selectors.
+templ retainedBubble(m messageView, grouped bool, body templ.Component) {
+	if m.StickerUrl != nil && m.Moderation == nil && m.Retraction == nil {
+		<div class="oie-sticker">@body</div>
+	} else {
+		@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:body,RootClass:"oie-bubble",Grouped:grouped})
+	}
+}
+
 templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
 if m.Moderation==nil && m.Retraction==nil {
@@ -1292,7 +1300,9 @@ if len(v.imagePreviews(m.Id)) > 0 {
 @viewerSource(v,m)
 }
 for _,p:=range v.MessagePreviews[m.Id] {
+if m.StickerUrl==nil || p.Url==*m.StickerUrl {
 @messagePreview(v,p)
+}
 }
 </div>
 <div data-message-videos={m.Id}>

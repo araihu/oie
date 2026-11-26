@@ -16,7 +16,8 @@ import (
 // HTTP sources, advertised original digests and thumbnail hints from XEP-0447.
 // The application binds metadata to exact message URLs before any fetch.
 type fileSharingMetadata struct {
-	Files []struct {
+	Sticker *struct{} `xml:"urn:xmpp:stickers:0 sticker"`
+	Files   []struct {
 		File struct {
 			Name      string `xml:"urn:xmpp:file:metadata:0 name"`
 			MediaType string `xml:"urn:xmpp:file:metadata:0 media-type"`
@@ -156,7 +157,11 @@ func decodeFileReferences(meta fileSharingMetadata) []domain.SharedReference {
 				}
 			}
 			if sourceKind != "" && sourceKind != "link" {
-				refs = append(refs, domain.SharedReference{URL: source.Target, Kind: sourceKind, FileName: name})
+				sticker := meta.Sticker != nil && len(meta.Files) == 1 && sourceKind == "image"
+				refs = append(refs, domain.SharedReference{URL: source.Target, Kind: sourceKind, FileName: name, Sticker: sticker})
+				if sticker {
+					break // Additional sources are alternate locations for the same sticker.
+				}
 			}
 		}
 	}

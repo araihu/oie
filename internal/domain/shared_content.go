@@ -3,6 +3,7 @@ package domain
 type SharedReference struct {
 	ID, RevisionID      ID
 	URL, Kind, FileName string
+	Sticker             bool `json:",omitempty"`
 }
 type SharedContentItem struct {
 	SharedReference

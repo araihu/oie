@@ -62,6 +62,9 @@ func message(m domain.Message) engineapi.Message {
 	}
 	var videoURLs []string
 	for _, file := range m.FileReferences {
+		if file.Sticker && file.Kind == "image" && !m.IsWithdrawn() {
+			out.StickerUrl = new(file.URL)
+		}
 		if file.Kind == "video" {
 			videoURLs = append(videoURLs, file.URL)
 		}
