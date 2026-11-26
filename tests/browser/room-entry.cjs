@@ -115,6 +115,14 @@ async function apiHandler(req, res) {
          {accountId, address:'banido@fixture', imageHash:avatarHash, updatedAt:at}] : []});
   }
   if (u.pathname.endsWith('/previews') || u.pathname.endsWith('/message-stars')) return send(200, {items: []});
+  if (u.pathname === '/api/v1/contacts') {
+    const term = u.searchParams.get('q') || '';
+    const contact = {id:id(70), revisionId:revision, accountId:alice, accountLabel:'Alice', address:'nina@fixture', displayName:'Nina', groups:[], subscription:'both'};
+    if (u.searchParams.get('cursor') === 'second') {
+      return send(200,{items:[{...contact,id:id(71),displayName:'Rui',address:'rui@fixture'}],sources:[]});
+    }
+    return send(200, {items:contact.address.includes(term.toLowerCase()) ? [contact] : [], sources:[], nextCursor:term ? undefined : 'second'});
+  }
   if (u.pathname === '/api/v1/conversations') return send(200, {items: [source, destination].filter(c => c && (!u.searchParams.has('accountId') || c.accountId === u.searchParams.get('accountId')))});
   if (u.pathname === '/api/v1/conversations/' + chat) return send(200, source);
   if (u.pathname === '/api/v1/conversations/' + room && destination) return send(200, destination);
@@ -782,23 +790,57 @@ async function waitFor(predicate) {
     await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
     await page.locator('body[data-oie-live-ready=true]').waitFor();
     await page.locator('[data-new-conversation]').click();
-    const newMenu = page.locator('#new-conversation-menu').getByRole('menu');
+    const newMenu = page.getByRole('dialog', {name:'New conversation'});
     await newMenu.waitFor({state:'visible'});
-    assert.deepEqual((await newMenu.getByRole('menuitem').allTextContents()).map(label=>label.trim()), ['Direct conversation','Join room','Create room']);
-    await newMenu.getByRole('menuitem', {name:'Direct conversation'}).click();
+    assert.deepEqual((await newMenu.locator('[data-picker-actions] > a, [data-picker-actions] > button').allTextContents()).map(label=>label.trim()), ['Direct conversation','Add contact','Create room','Join room']);
+    const roster = newMenu.locator('[data-picker-section=contacts]');
+    const searchPeople = newMenu.getByRole('searchbox');
+    const nina = roster.getByRole('link', {name:/Nina/});
+    await nina.waitFor();
+    const contactURL = new URL(await nina.getAttribute('href'),base);
+    assert.equal(contactURL.searchParams.get('account'),alice);
+    assert.equal(contactURL.searchParams.get('newChatAddress'),'nina@fixture');
+    assert.equal(contactURL.searchParams.get('open'),'newchat');
+    assert(await searchPeople.evaluate(input => input === document.activeElement));
+    await roster.getByRole('button',{name:'More contacts'}).click();
+    await roster.getByRole('link',{name:/Rui/}).waitFor();
+    assert.equal(await nina.count(),1);
+    let unblock, started;
+    const pending = new Promise(resolve => { started = resolve; });
+    const gate = new Promise(resolve => { unblock = resolve; });
+    await page.route('**/ui/new-conversation/results?group=contacts&term=slow*', async route => {
+      started();
+      await gate;
+      await route.fulfill({body:'stale-contact-result'}).catch(()=>{});
+    }, {times:1});
+    await searchPeople.fill('slow');
+    await pending;
+    await searchPeople.fill('nina');
+    await nina.waitFor();
+    unblock();
+    assert.equal(await searchPeople.inputValue(),'nina');
+    assert.equal(await roster.getByText('stale-contact-result').count(),0);
+    await page.route('**/ui/new-conversation/results?group=contacts*', route => route.fulfill({status:503}), {times:1});
+    await searchPeople.fill('nina@');
+    await roster.getByRole('button',{name:'Try again'}).click();
+    await nina.waitFor();
+    await searchPeople.fill('missing@fixture');
+    await roster.getByText('No matches').waitFor();
+    await newMenu.getByRole('button', {name:'Direct conversation'}).click();
+    assert.equal(await page.locator('#peer-address').inputValue(),'missing@fixture');
     await page.locator('#new-conversation-form').waitFor();
     await newMenu.waitFor({state:'hidden'});
     await page.keyboard.press('Escape');
     await page.locator('#newchat-body').waitFor({state:'hidden'});
     await page.waitForFunction(()=>document.activeElement?.hasAttribute('data-new-conversation'));
     await page.keyboard.press('Enter');
-    await newMenu.getByRole('menuitem', {name:'Join room'}).click();
+    await newMenu.getByRole('button', {name:'Join room'}).click();
     await page.locator('#join-room-form').waitFor();
     await page.locator('#newchat-body').waitFor({state:'hidden'});
     await page.keyboard.press('Escape');
     await page.locator('#join-room-body').waitFor({state:'hidden'});
     await page.locator('[data-new-conversation]').click();
-    await newMenu.getByRole('menuitem', {name:'Create room'}).click();
+    await newMenu.getByRole('button', {name:'Create room'}).click();
 
     const create = page.locator('#create-room-form');
     await create.locator('[name=address]').fill('new@rooms.fixture');
@@ -898,7 +940,18 @@ async function waitFor(predicate) {
             await view.waitForURL(url => !url.searchParams.has('chat'));
           }
           await view.locator('[data-new-conversation]').click();
-          await view.locator('#new-conversation-menu').getByRole('menuitem', {name:'Create room'}).click();
+          const picker = view.getByRole('dialog', {name:'New conversation'});
+          await picker.getByRole('link',{name:/Nina/}).waitFor();
+          const box = await picker.boundingBox();
+          if (width === 390) {
+            assert(Math.abs(box.x) < 1 && Math.abs(box.width - width) < 1 && Math.abs(box.y + box.height - 900) < 1, 'sheet meets bottom and side edges');
+            assert(await picker.locator('h2').evaluate(el => el === document.activeElement));
+          } else {
+            assert(Math.abs(box.x * 2 + box.width - width) < 1 && Math.abs(box.y * 2 + box.height - 900) < 1, 'dialog is centered');
+          }
+          const pickerIssues = await scan('#new-conversation-picker');
+          assert.deepEqual(pickerIssues.violations.map(value=>value.id), [], ['picker', width, theme, mode].join(' '));
+          await picker.getByRole('button', {name:'Create room'}).click();
           await view.locator('#create-room-form').waitFor();
           const createdIssues = await scan('#create-room-body');
           assert.deepEqual(createdIssues.violations.map(value => value.id), [], ['create', width, theme, mode].join(' '));

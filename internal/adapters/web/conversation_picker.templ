@@ -1,0 +1,96 @@
+package web
+
+import (
+ "github.com/araihu/goshtoso/components/avatar"
+ "github.com/araihu/goshtoso/components/button"
+ "github.com/araihu/goshtoso/components/icon/heroicons"
+ "github.com/araihu/goshtoso/components/link"
+ "github.com/araihu/goshtoso/components/textinput"
+ "github.com/araihu/oie/internal/adapters/httpapi/engineapi"
+ "github.com/araihu/oie/internal/adapters/web/appicons"
+)
+
+templ newConversationPicker(v view) {
+ <dialog id="new-conversation-picker" class="oie-picker" aria-labelledby="picker-title" data-account={v.AccountFilter} data-locale={v.Locale} data-theme={v.Theme} data-empty={v.Text.PickerEmpty} data-no-match={v.Text.PickerNoMatch} data-loading={v.Text.SearchResultsLoading} data-unavailable={v.Text.Unavailable} data-retry={v.Text.Retry} data-chats={v.Text.Chats} data-recent={v.Text.PickerRecent}>
+  <header class="oie-picker-header">
+   <h2 id="picker-title" tabindex="-1">{v.Text.NewChat}</h2>
+   @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button oie-picker-close"),button.WithAttrs(templ.Attributes{"aria-label":v.Text.Close,"data-picker-close":""})) { @glyph(heroicons.Icon16SolidXMark) }
+  </header>
+  <div class="oie-picker-search">
+   @textinput.TextInput(textinput.Config{ID:"picker-search",Type:textinput.TypeSearch,Placeholder:v.Text.PickerSearch,InputAttrs:templ.Attributes{"aria-label":v.Text.PickerSearch,"maxlength":"200","autocomplete":"off","autocapitalize":"none","spellcheck":"false"}})
+  </div>
+  <div class="oie-picker-scroll">
+   <div class="oie-picker-group" data-picker-actions>
+    @pickerAction("new-conversation-direct","newchat",v.Text.DirectConversation,glyph(heroicons.Icon16SolidPencilSquare))
+    if !v.Preview {
+     {{ accounts := []engineapi.Account{} }}
+     for _,a := range v.Accounts {
+      if v.AccountFilter=="" || v.AccountFilter==a.Id {
+       {{ accounts=append(accounts,a) }}
+      }
+     }
+     if len(accounts)==1 {
+      @link.Link(v.contactsHref(accounts[0].Id,""),link.WithRootClass("oie-picker-action")) {
+       @pickerActionLabel(v.Text.ContactAdd,glyph(heroicons.Icon16SolidUser))
+      }
+     } else if len(accounts)>1 {
+      <details class="oie-picker-accounts">
+       <summary class="oie-picker-action">@pickerActionLabel(v.Text.ContactAdd,glyph(heroicons.Icon16SolidUser))</summary>
+       <p>{v.Text.ChooseAccount}</p>
+       for _,a:=range accounts {
+        @link.Link(v.contactsHref(a.Id,""),link.WithRootClass("oie-picker-account")) { {v.accountLabel(a.Id)} }
+       }
+      </details>
+     }
+     @pickerAction("new-conversation-create","create-room",v.Text.CreateRoom,glyph(heroicons.Icon16SolidPlus))
+     @pickerAction("new-conversation-join","join-room",v.Text.JoinRoom,appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsGroup16SolidUserGroup,Decorative:true,RootClass:"oie-icon"}))
+    }
+   </div>
+   <section data-picker-section="chats"><h3>{v.Text.PickerRecent}</h3><div class="oie-picker-group" data-picker-list></div><div class="oie-picker-status" role="status"></div></section>
+   if !v.Preview {
+    <section data-picker-section="contacts"><h3>{v.Text.ContactsTitle}</h3><div class="oie-picker-group" data-picker-list></div><div class="oie-picker-status" role="status"></div></section>
+   }
+   <template data-picker-accounts>
+    for _,a:=range v.Accounts {
+     <span data-account={a.Id}>{v.accountLabel(a.Id)}</span>
+    }
+   </template>
+  </div>
+ </dialog>
+}
+
+templ pickerAction(id,drawer,label string,symbol templ.Component) {
+ @button.Button(button.WithID(id),button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-picker-action"),button.WithAttrs(templ.Attributes{"data-picker-drawer":drawer})) {
+  @pickerActionLabel(label,symbol)
+ }
+}
+
+templ pickerActionLabel(label string,symbol templ.Component) {
+ <span class="oie-picker-symbol">@symbol</span><span>{label}</span>
+}
+
+templ pickerPerson(v view, href,account,address,name string) {
+ @link.Link(href,link.WithRootClass("oie-picker-person"),link.WithAttrs(templ.Attributes{"data-picker-account":account})) {
+  @avatarScope(v,account,address,avatar.Config{Name:name,Initials:initials(name),Size:avatar.SizeSM,Border:true,BorderColor:avatarBorderColors[avatarBorderIndex(address)]},true)
+  <span class="oie-picker-identity"><strong>{name}</strong><small>
+   if name!=address {
+    {address}
+   }
+  </small></span>
+ }
+}
+
+templ pickerChats(v view, chats []engineapi.Conversation) {
+ for _,c:=range chats {
+  @pickerPerson(v,v.href("chat",c.Id,"lang",v.Locale,"theme",v.Theme),c.AccountId,c.Address,c.Title)
+ }
+}
+
+templ pickerContacts(v view,page engineapi.ContactPage) {
+ for _,c:=range page.Items {
+  @pickerPerson(v,v.messageSearchContactHref(c),c.AccountId,c.Address,c.DisplayName)
+ }
+ if page.NextCursor!=nil {
+  <button type="button" class="oie-picker-more" data-picker-more={*page.NextCursor}>{v.Text.ContactNext}</button>
+ }
+}

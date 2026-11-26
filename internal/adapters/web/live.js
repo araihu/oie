@@ -2028,6 +2028,7 @@ window.OieRuntime.register('live', (life, route) => {
   });
   life.on(document,'oie:timeline-focus',event=>focusMessage(event.detail.id,event.detail.focus!==false));
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
+  life.on(document,'oie:picker-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:room-management-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:accounts-content',()=>{applyAvatars();localizeTimes();});

@@ -41,7 +41,7 @@ async function until(test, label) {
     page.on('pageerror', err => pageErrors.push(err.message));
     await page.goto(base + '/?lang=pt-BR&account=' + alice);
     await page.locator('[data-new-conversation]:visible').first().click();
-    await page.getByRole('menuitem', {name: 'Criar sala', exact: true}).click();
+    await page.getByRole('dialog', {name:'Nova conversa'}).getByRole('button', {name: 'Criar sala', exact: true}).click();
     const create = page.locator('#create-room-form');
     await create.locator('[name=address]').fill(wrong);
     await create.locator('[name=name]').fill('Clube de leitura');
