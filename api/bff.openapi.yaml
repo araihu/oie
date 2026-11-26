@@ -1210,6 +1210,41 @@ paths:
           description: Engine identity changed
         '503':
           description: Saved information unavailable
+  /ui/new-conversation/results:
+    get:
+      operationId: listBrowserConversationPickerResults
+      tags: [Conversations]
+      summary: Search conversations or contacts in the conversation picker
+      parameters:
+        - {name: group, in: query, description: Picker section to load., required: true, schema: {type: string, enum: [chats, contacts]}}
+        - {name: account, in: query, description: Owning account for this picker request., schema: {type: string}}
+        - {name: term, in: query, description: Text entered in the picker search field., schema: {type: string, maxLength: 200}}
+        - {name: cursor, in: query, description: Continuation returned by the preceding picker page., schema: {type: string, maxLength: 4096}}
+        - {name: lang, in: query, description: Language for conversation picker controls., schema: {type: string}}
+        - {name: theme, in: query, description: Appearance mode to preserve when opening a conversation., schema: {type: string}}
+      responses:
+        '200':
+          description: HTML rows with pagination and contact coverage when applicable.
+          content: {text/html: {schema: {type: string}}}
+        '400': {description: Invalid search scope.}
+        '503': {description: Engine unavailable.}
+  /ui/new-conversation/direct:
+    get:
+      operationId: findBrowserDirectConversation
+      tags: [Conversations]
+      summary: Find an existing direct conversation by account and exact XMPP address
+      parameters:
+        - {name: account, in: query, description: Owning account for this picker request., required: true, schema: {type: string}}
+        - {name: address, in: query, description: Peer address to resolve within the selected account., required: true, schema: {type: string, maxLength: 1023}}
+        - {name: lang, in: query, description: Language for conversation picker controls., schema: {type: string}}
+        - {name: theme, in: query, description: Appearance mode to preserve when opening a conversation., schema: {type: string}}
+      responses:
+        '200':
+          description: Relative URL of the existing direct conversation.
+          content: {text/plain: {schema: {type: string}}}
+        '204': {description: No matching visible conversation.}
+        '400': {description: Invalid account or address.}
+        '503': {description: Engine unavailable.}
   /ui/message-search:
     get:
       operationId: searchBrowserMessages

@@ -1,11 +1,11 @@
 # Room actions menu
 
-**More → Leave room** sends the existing leave command directly and has a leading
+**More → Leave group** sends the existing leave command directly and has a leading
 exit icon. It is disabled while the command is pending or the room is inactive.
 An uncertain result opens the existing recovery dialog; retry preserves the
 operation key and command body.
 
-For a saved room with inactive entry, **More → Enter room** opens the nickname
+For a saved room with inactive entry, **More → Join group** opens the nickname
 and password form. The dialog also shows room status and supports retrying
 uncertain commands. The timeline has no persistent room-session banner.
 Opening the dialog does not change the room session.
