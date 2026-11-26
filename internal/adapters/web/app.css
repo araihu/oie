@@ -376,7 +376,10 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 :is(.oie-timeline,.oie-starred-bubble) .oie-sticker .oie-image-frame{display:block;width:100%;aspect-ratio:1;background:transparent}
 :is(.oie-timeline,.oie-starred-bubble) .oie-sticker .oie-preview-thumbnail{object-fit:contain}
 .oie-sticker .oie-image-frame .oie-preview-image-button{border-radius:0}
-.oie-sticker .oie-message-previews{margin-top:0}
+.oie-sticker-artwork{position:relative;aspect-ratio:1}
+.oie-sticker-artwork>[data-message-presentation]{max-height:100%;overflow:auto;overflow-wrap:anywhere}
+.oie-sticker-artwork>.oie-message-previews{position:absolute;inset:auto 0 0;margin:0}
+.oie-sticker-artwork:has([data-image-visible=true])>.oie-message-previews{inset:0}
 /* Preview content lives in public Card slots; all image URLs are local. */
 .oie-message-previews{max-width:340px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:6px}
 .oie-message-previews:empty{display:none}

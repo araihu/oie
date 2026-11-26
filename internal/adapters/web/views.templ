@@ -1279,6 +1279,24 @@ templ messageStarIndicator(v view,id string){
 // A device preference switches visibility without replacing message rows.
 templ messageBody(v view,m messageView){
 @replyCard(v,m)
+if m.StickerUrl!=nil {
+<div class="oie-sticker-artwork">@messageTextAndPreviews(v,m)</div>
+}else{
+@messageTextAndPreviews(v,m)
+}
+<div data-message-videos={m.Id}>
+for _,item:=range v.messageVideos(m.Id) {
+@videoCard(v,item)
+}
+</div>
+for _,item:=range v.MessageAudio[m.Id] {
+@retainedAudioPlayer(v,item)
+}
+
+}
+
+
+templ messageTextAndPreviews(v view,m messageView){
 {{ scope := invitationScope{m.AccountId,m.ConversationId,v.Locale} }}
 <div data-message-presentation data-presentation-known={strconv.FormatBool(m.PresentationKnown)} data-presentation-version={originalMessageJSON(m.presentationText())} data-search-source-digest={searchSourceDigest(m.OriginalText)}>
 <div class="oie-rendered-message" data-rendered-message>
@@ -1305,17 +1323,7 @@ if m.StickerUrl==nil || p.Url==*m.StickerUrl {
 }
 }
 </div>
-<div data-message-videos={m.Id}>
-for _,item:=range v.messageVideos(m.Id) {
-@videoCard(v,item)
 }
-</div>
-for _,item:=range v.MessageAudio[m.Id] {
-@retainedAudioPlayer(v,item)
-}
-
-}
-
 
 templ messageMenuContent(v view, message messageView, menu templ.Component) {
 {{ id := message.Id }}

@@ -284,7 +284,26 @@ function thumbnail(color,width=8,height=8){
   await row.locator('#load-preview-'+first.id).waitFor();
   assert.equal(await secondAction.isVisible(),false);
   const sticker=addAnimation(19,true), gif=addAnimation(21,false);
+  const downloadedSticker={...sticker};
+  resetImage(sticker);
   await page.reload();
+  const stickerRow=messageRow(19);
+  await stickerRow.locator('.oie-sticker-artwork').waitFor();
+  await stickerRow.scrollIntoViewIfNeeded();
+  await page.evaluate(id=>{
+   const sample=()=>{
+    const row=document.querySelector('[data-message-id="'+id+'"]');
+    window.stickerHeights.push(row.getBoundingClientRect().height);
+    window.stickerFrame=requestAnimationFrame(sample);
+   };
+   window.stickerHeights=[];sample();
+  },messages[19].id);
+  await page.waitForTimeout(150);
+  Object.assign(sticker,downloadedSticker,{revisionId:id(993)});
+  emit('message.preview_changed');
+  await until(()=>scope(page,sticker).locator('img').evaluate(img=>img.complete && img.naturalWidth===2),'delayed sticker download');
+  const heights=await page.evaluate(()=>{cancelAnimationFrame(window.stickerFrame);return window.stickerHeights});
+  assert(Math.max(...heights)-Math.min(...heights)<=1,'sticker row changed height during download');
   for(const width of [390,1052]) {
    await page.setViewportSize({width,height:900});
    for(const motion of ['no-preference','reduce']) {
