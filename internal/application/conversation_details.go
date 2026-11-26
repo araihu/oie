@@ -33,7 +33,7 @@ func (e *Engine) NeedsRoomTitleFallback(ctx context.Context, account domain.ID, 
 		return false
 	}
 	room, err := repo.RestoredRoom(ctx, account, address)
-	return err == nil && room.NeedsRoomTitle()
+	return err == nil && room.UsesRoomProfileTitle()
 }
 
 func (e *Engine) ObserveRoomTitle(ctx context.Context, account domain.ID, address, title string) error {

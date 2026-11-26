@@ -175,6 +175,21 @@ func TestSavedRoomTitleFollowsDiscoveryWithoutChangingActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	room("Room profile")
+	if !engine.NeedsRoomTitleFallback(ctx, direct.AccountID, address) {
+		t.Fatal("a profile-sourced title must remain eligible for refresh")
+	}
+	if err := engine.ObserveRoomTitleFallback(ctx, direct.AccountID, address, "Renamed profile"); err != nil {
+		t.Fatal(err)
+	}
+	room("Renamed profile")
+	observe("Renamed profile")
+	if engine.NeedsRoomTitleFallback(ctx, direct.AccountID, address) {
+		t.Fatal("discovery did not take ownership of a matching profile title")
+	}
+	if err := engine.ObserveRoomTitleFallback(ctx, direct.AccountID, address, "Older profile"); err != nil {
+		t.Fatal(err)
+	}
+	room("Renamed profile")
 	observe("Advertised name")
 	room("Advertised name")
 }

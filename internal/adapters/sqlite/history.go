@@ -85,8 +85,8 @@ func (s *Store) RestoreConversation(ctx context.Context, c domain.Conversation) 
 			return application.ErrStateConflict
 		}
 		// A bookmark can supply a missing name when history or entry saved the address first.
-		if old.AcceptsRoomTitle(c.Title, true) {
-			if err := writeRoomTitle(ctx, q, old, c.Title, c.RevisionID, c.UpdatedAt); err != nil {
+		if (old.Title == old.Address || old.Title == "") && old.AcceptsRoomTitle(c.Title, false) {
+			if err := writeRoomTitle(ctx, q, old, c.Title, false, c.RevisionID, c.UpdatedAt); err != nil {
 				return err
 			}
 			return tx.Commit()

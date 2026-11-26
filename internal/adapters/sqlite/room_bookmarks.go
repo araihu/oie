@@ -30,14 +30,15 @@ func (s *Store) UpdateRoomTitle(ctx context.Context, id domain.ID, title string,
 	if err != nil || !current.AcceptsRoomTitle(title, fallback) {
 		return err
 	}
-	if err = writeRoomTitle(ctx, q, current, title, revision, at); err != nil {
+	if err = writeRoomTitle(ctx, q, current, title, fallback, revision, at); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func writeRoomTitle(ctx context.Context, q *dbgen.Queries, current domain.Conversation, title string, revision domain.ID, at time.Time) error {
+func writeRoomTitle(ctx context.Context, q *dbgen.Queries, current domain.Conversation, title string, fromProfile bool, revision domain.ID, at time.Time) error {
 	next := current
 	next.Title = title
+	next.TitleFromRoomProfile = fromProfile
 	return writeConversationDecision(ctx, q, current, next, revision, at)
 }
