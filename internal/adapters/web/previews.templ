@@ -37,7 +37,9 @@ src={source}
 }else{
 @button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-preview-image-button"),button.WithAttrs(templ.Attributes{"type":"button","data-preview-expand":"","x-cloak":"","aria-label":v.Text.OpenImage,"x-bind:aria-description":"$el.closest('.oie-sticker-artwork')?.dataset.stickerDescription || null","x-show":"previewImage && !previewImageFailed","x-bind:disabled":"previewBusy"})){
 <picture>
-<source media="(prefers-reduced-motion: no-preference)" x-bind:srcset="previewFile && previewFile !== failedOriginal && ($el.closest('.oie-sticker') || (previewMime === 'image/gif' && $el.closest('.oie-bubble'))) ? previewFile + '?original=1' : null"/>
+if !v.SharedCard {
+<source media="(prefers-reduced-motion: no-preference)" x-bind:srcset="previewFile && previewFile !== failedOriginal && (previewMime === 'image/gif' || (previewMime === 'image/png' && $el.closest('.oie-sticker'))) ? previewFile + '?original=1' : null"/>
+}
 <img class="oie-preview-thumbnail" loading="lazy" if source:=mediaSource(p.ImageHash);source!="" {
 src={source}
 } alt={v.Text.OpenImage} x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="if (previewFile && $el.currentSrc.endsWith(previewFile + '?original=1') && failedOriginal !== previewFile) { failedOriginal=previewFile } else { previewImageFailed=true; $dispatch('oie:image-preview-error') }"/>

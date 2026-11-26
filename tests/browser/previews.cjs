@@ -30,6 +30,8 @@ function thumbnail(color,width=8,height=8){
  const finish=(p,fail=false)=>{p.revisionId=id(500+state.seq);p.downloadState=fail?'failed':'ready';if(fail)p.lastErrorCode='fetch_failed';else{p.imageHash=thumbHash;p.fileHash=originalHash;p.fileMimeType='image/png';p.fileSize=original.length;p.integrity='computed_only';delete p.lastErrorCode}emit('message.preview_changed')};
  // Two-frame 2×1 GIF. Keep its original separate from the still PNG thumbnail.
  const animated=Buffer.from('R0lGODlhAgABAIEAAABkyAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAEAAAACwAAAAAAgABAAAIBQABAAgIACH5BAEQAAIALAAAAAABAAEAgQBkyPUyQQAAAAAAAAgEAAMEBAA7','base64');
+ const jpeg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKwBkY//2Q==','base64');
+ const jpegHash=createHash('sha256').update(jpeg).digest('hex');
  const animatedHash=createHash('sha256').update(animated).digest('hex');
  function addAnimation(n,sticker) {
   const p=preview(n,'image',{url:'https://images.example.test/animation'+n+'.gif',downloadState:'ready',fileMimeType:'image/gif',fileSize:animated.length,fileHash:animatedHash,imageHash:thumbHash});
@@ -72,7 +74,7 @@ function thumbnail(color,width=8,height=8){
     state.downloads++;p.downloadState='queued';p.revisionId=id(400+state.seq);emit('message.preview_changed');send(202,p);setTimeout(()=>finish(p,state.failNext),p===previews[2]?600:250);return;
    }
   }
-  if(u.pathname.startsWith('/api/v1/media/')){const hash=u.pathname.split('/').at(-1);if(hash===animatedHash){res.setHeader('Content-Type','image/gif');res.end(animated);return}if(hash===originalHash)state.originalReads++;res.setHeader('Content-Type','image/png');res.end(hash===originalHash?original:thumb);return}
+  if(u.pathname.startsWith('/api/v1/media/')){const hash=u.pathname.split('/').at(-1);if(hash===jpegHash){res.setHeader('Content-Type','image/jpeg');res.end(jpeg);return}if(hash===animatedHash){res.setHeader('Content-Type','image/gif');res.end(animated);return}if(hash===originalHash)state.originalReads++;res.setHeader('Content-Type','image/png');res.end(hash===originalHash?original:thumb);return}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{status:404});
  });
@@ -285,6 +287,9 @@ function thumbnail(color,width=8,height=8){
   assert.equal(await secondAction.isVisible(),false);
   const sticker=addAnimation(19,true), gif=addAnimation(21,false);
   messages[19].originalText='🎉 https://example.test/celebrate';
+  const still=preview(17,'image',{imageHash:thumbHash,fileHash:jpegHash,fileSize:jpeg.length,fileMimeType:'image/jpeg',downloadState:'ready'});
+  messages[17].stickerUrl=still.url;
+  previews.push(still);
   const downloadedSticker={...sticker};
   resetImage(sticker);
   await page.reload();
@@ -314,6 +319,9 @@ function thumbnail(color,width=8,height=8){
      const hash=motion==='reduce'?thumbHash:animatedHash+'?original=1';
      await until(()=>image.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),hash),'inline image source for '+motion);
     }
+    const stillImage=scope(page,still).locator('img.oie-preview-thumbnail');
+    await stillImage.scrollIntoViewIfNeeded();
+    await until(()=>stillImage.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),thumbHash),'static JPEG sticker keeps the thumbnail');
     const frame=messageRow(19).locator('.oie-sticker .oie-image-frame');
     const box=await frame.boundingBox();
     assert(box.width>0 && box.width<=160 && box.height<=160);
