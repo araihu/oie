@@ -1,32 +1,47 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const {readFileSync} = require('node:fs');
 const {devices} = require('playwright');
 
-async function checkIOSFileViewer(browser, url) {
+function iosAttachmentFixture(messageID) {
+  const filenames = ['image.png', 'film.webm', 'archive.zip'];
+  const files = ['video-poster.png', 'tiny-video.webm', 'tiny-document.txt'];
+  const prefix = '/api/v1/messages/' + messageID + '/omemo-attachments/';
+  let resume;
+  const pending = new Promise(resolve => { resume = resolve; });
+  const fixture = {
+    filenames, resume, fail:false,
+    serve(pathname, response) {
+      if (!pathname.startsWith(prefix)) return false;
+      const index = Number(pathname.slice(prefix.length));
+      if (fixture.fail || !files[index]) {
+        response.writeHead(404);
+        response.end();
+        return true;
+      }
+      const bytes = readFileSync(path.join(__dirname, files[index]));
+      response.writeHead(200, {
+        'Content-Type':'application/octet-stream', 'Content-Length':bytes.length,
+        'Content-Disposition':'attachment; filename="' + filenames[index] + '"',
+      });
+      response.flushHeaders();
+      pending.then(() => { if (!response.destroyed) response.end(bytes); });
+      return true;
+    },
+  };
+  return fixture;
+}
+
+async function checkIOSFileViewer(browser, url, fixture) {
   const context = await browser.newContext({...devices['iPhone 13']});
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
+  const page = await context.newPage();
   try {
-    const page = await context.newPage();
     await page.goto(url);
     const links = page.locator('a[download][href^="/ui/omemo-attachments/"]');
     const dialog = page.locator('#oie-file-viewer');
     const close = dialog.getByRole('button', {name:'Fechar'});
     const timeline = page.locator('#message-timeline');
     const composer = page.locator('#message-composer');
-    const filenames = ['image.png', 'film.mp4', 'archive.zip'];
-    const sources = ['video-poster.png', 'covered-video.mp4', 'tiny-document.txt'];
-    let fail = false;
-    let hold = true;
-    await page.route('**/ui/omemo-attachments/**', async route => {
-      const index = Number(new URL(route.request().url()).pathname.split('/').pop());
-      if (hold) await pending;
-      await route.fulfill(fail ? {status:404} : {
-        path:path.join(__dirname, sources[index]), contentType:'application/octet-stream',
-        headers:{'Content-Disposition':'attachment; filename="' + filenames[index] + '"'},
-      });
-    });
-
     const first = links.first();
     await composer.fill('Rascunho');
     await first.scrollIntoViewIfNeeded();
@@ -36,23 +51,23 @@ async function checkIOSFileViewer(browser, url) {
     await close.waitFor();
     assert.deepEqual(await composer.boundingBox(), bounds);
     await close.click();
-    hold = false;
-    release();
-    for (const [index, selector] of ['img', 'video', '[role="status"]'].entries()) {
+    fixture.resume();
+    for (const [index, filename] of fixture.filenames.entries()) {
       await links.nth(index).click();
-      const content = dialog.locator(selector);
       if (index === 0) {
         await page.waitForFunction(() => {
           const img = document.querySelector('#oie-file-viewer img');
           return img?.naturalWidth && img.getBoundingClientRect().width > 0;
         });
       } else if (index === 1) {
-        await content.waitFor();
-        assert(await content.evaluate(video => video.controls && video.playsInline));
+        await page.waitForFunction(() => {
+          const video = document.querySelector('#oie-file-viewer video');
+          return video?.readyState >= 1 && video.controls && video.playsInline;
+        });
       } else {
         await page.waitForFunction(() => document.querySelector('#oie-file-viewer [role="status"]').textContent === 'Prévia indisponível.');
       }
-      assert.equal(await dialog.locator('h2').textContent(), filenames[index]);
+      assert.equal(await dialog.locator('h2').textContent(), filename);
       await close.click();
       await dialog.waitFor({state:'hidden'});
       assert.equal(await links.nth(index).evaluate(node => node === document.activeElement), true);
@@ -60,7 +75,7 @@ async function checkIOSFileViewer(browser, url) {
       assert.equal(await composer.inputValue(), 'Rascunho');
       assert.equal(await timeline.evaluate(node => node.scrollTop), scroll);
     }
-    fail = true;
+    fixture.fail = true;
     await first.click();
     await page.waitForFunction(() => {
       const viewer = document.querySelector('#oie-file-viewer');
@@ -70,9 +85,9 @@ async function checkIOSFileViewer(browser, url) {
     assert.equal(await composer.inputValue(), 'Rascunho');
     assert.equal(await context.pages().length, 1);
   } finally {
-    release();
+    fixture.resume();
     await context.close();
   }
 }
 
-module.exports = {checkIOSFileViewer};
+module.exports = {checkIOSFileViewer, iosAttachmentFixture};
