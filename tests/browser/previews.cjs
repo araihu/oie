@@ -28,6 +28,17 @@ function thumbnail(color,width=8,height=8){
  messages[10].originalText='Read this '+previews[8].url+' in this example';
  const emit=type=>{state.seq++;for(const stream of streams)stream.write(`id: ${engine}:${state.seq}\nevent: ${type}\ndata: {}\n\n`)};
  const finish=(p,fail=false)=>{p.revisionId=id(500+state.seq);p.downloadState=fail?'failed':'ready';if(fail)p.lastErrorCode='fetch_failed';else{p.imageHash=thumbHash;p.fileHash=originalHash;p.fileMimeType='image/png';p.fileSize=original.length;p.integrity='computed_only';delete p.lastErrorCode}emit('message.preview_changed')};
+ // Two-frame 2×1 GIF. Keep its original separate from the still PNG thumbnail.
+ const animated=Buffer.from('R0lGODlhAgABAIEAAABkyAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAEAAAACwAAAAAAgABAAAIBQABAAgIACH5BAEQAAIALAAAAAABAAEAgQBkyPUyQQAAAAAAAAgEAAMEBAA7','base64');
+ const jpeg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKwBkY//2Q==','base64');
+ const jpegHash=createHash('sha256').update(jpeg).digest('hex');
+ const animatedHash=createHash('sha256').update(animated).digest('hex');
+ function addAnimation(n,sticker) {
+  const p=preview(n,'image',{url:'https://images.example.test/animation'+n+'.gif',downloadState:'ready',fileMimeType:'image/gif',fileSize:animated.length,fileHash:animatedHash,imageHash:thumbHash});
+  Object.assign(messages[n],{originalText:sticker?'🎉':p.url,stickerUrl:sticker?p.url:undefined});
+  previews.push(p);
+  return p;
+ }
  const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   if(u.pathname==='/api/v1/engine')return send(200,{id:engine,role:'hosted',apiVersion:'0.5.0',eventCursor:engine+':'+state.seq});
@@ -63,7 +74,7 @@ function thumbnail(color,width=8,height=8){
     state.downloads++;p.downloadState='queued';p.revisionId=id(400+state.seq);emit('message.preview_changed');send(202,p);setTimeout(()=>finish(p,state.failNext),p===previews[2]?600:250);return;
    }
   }
-  if(u.pathname.startsWith('/api/v1/media/')){const hash=u.pathname.split('/').at(-1);if(hash===originalHash)state.originalReads++;res.setHeader('Content-Type','image/png');res.end(hash===originalHash?original:thumb);return}
+  if(u.pathname.startsWith('/api/v1/media/')){const hash=u.pathname.split('/').at(-1);if(hash===jpegHash){res.setHeader('Content-Type','image/jpeg');res.end(jpeg);return}if(hash===animatedHash){res.setHeader('Content-Type','image/gif');res.end(animated);return}if(hash===originalHash)state.originalReads++;res.setHeader('Content-Type','image/png');res.end(hash===originalHash?original:thumb);return}
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{status:404});
  });
@@ -274,6 +285,81 @@ function thumbnail(color,width=8,height=8){
   await trigger.click();
   await row.locator('#load-preview-'+first.id).waitFor();
   assert.equal(await secondAction.isVisible(),false);
+  const sticker=addAnimation(19,true), gif=addAnimation(21,false);
+  messages[19].originalText='🎉 https://example.test/celebrate';
+  const still=preview(17,'image',{imageHash:thumbHash,fileHash:jpegHash,fileSize:jpeg.length,fileMimeType:'image/jpeg',downloadState:'ready'});
+  messages[17].stickerUrl=still.url;
+  previews.push(still);
+  const downloadedSticker={...sticker};
+  resetImage(sticker);
+  await page.reload();
+  const stickerRow=messageRow(19);
+  await stickerRow.locator('.oie-sticker-artwork').waitFor();
+  await stickerRow.scrollIntoViewIfNeeded();
+  await page.evaluate(id=>{
+   const sample=()=>{
+    const row=document.querySelector('[data-message-id="'+id+'"]');
+    window.stickerHeights.push(row.getBoundingClientRect().height);
+    window.stickerFrame=requestAnimationFrame(sample);
+   };
+   window.stickerHeights=[];sample();
+  },messages[19].id);
+  await page.waitForTimeout(150);
+  Object.assign(sticker,downloadedSticker,{revisionId:id(993)});
+  emit('message.preview_changed');
+  await until(()=>scope(page,sticker).locator('img').evaluate(img=>img.complete && img.naturalWidth===2),'delayed sticker download');
+  const heights=await page.evaluate(()=>{cancelAnimationFrame(window.stickerFrame);return window.stickerHeights});
+  assert(Math.max(...heights)-Math.min(...heights)<=1,'sticker row changed height during download');
+  for(const width of [390,1052]) {
+   await page.setViewportSize({width,height:900});
+   for(const motion of ['no-preference','reduce']) {
+    await page.emulateMedia({reducedMotion:motion});
+    for(const p of [sticker,gif]) {
+     const image=scope(page,p).locator('img.oie-preview-thumbnail');
+     const hash=motion==='reduce'?thumbHash:animatedHash+'?original=1';
+     await until(()=>image.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),hash),'inline image source for '+motion);
+    }
+    const stillImage=scope(page,still).locator('img.oie-preview-thumbnail');
+    await stillImage.scrollIntoViewIfNeeded();
+    await until(()=>stillImage.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),thumbHash),'static JPEG sticker keeps the thumbnail');
+    const frame=messageRow(19).locator('.oie-sticker .oie-image-frame');
+    const box=await frame.boundingBox();
+    assert(box.width>0 && box.width<=160 && box.height<=160);
+    assert.equal(await frame.locator('img').evaluate(img=>getComputedStyle(img).objectFit),'contain');
+    assert.equal(await messageRow(19).locator('.oie-bubble').count(),0);
+    assert.equal(await messageRow(21).locator('.oie-bubble').count(),1);
+   }
+  }
+  assert.equal(await stickerRow.locator('[data-message-presentation] a:visible').count(),0);
+  assert.match(await scope(page,sticker).locator('[data-preview-expand]').first().getAttribute('aria-description'),/🎉/);
+  const originalResponse=await page.request.get(base+'/ui/media/'+animatedHash+'?original=1');
+  assert.equal(originalResponse.headers()['cache-control'],'private, no-cache');
+  for(const p of [sticker,gif]) {
+   await scope(page,p).locator('[data-preview-expand]').first().click();
+   await until(()=>page.locator('.oie-expanded-image').evaluate(img=>img.complete && img.naturalWidth===2),'open animated original with reduced motion');
+   await page.keyboard.press('Escape');
+   await page.locator('#oie-image-viewer').waitFor({state:'hidden'});
+  }
+  // A fresh document avoids reusing a decoded GIF from the viewer above.
+  const retryContext=await browser.newContext({reducedMotion:'no-preference'});
+  await retryContext.addInitScript(key=>localStorage.setItem(key,'false'),preferenceKey);
+  const retryPage=await retryContext.newPage();
+  const originalRoute='**/ui/media/'+animatedHash+'?original=1';
+  let originalFailures=0;
+  await retryPage.route(originalRoute,async route=>{originalFailures++;await route.abort()});
+  await retryPage.goto(page.url());
+  const gifImage=scope(retryPage,gif).locator('img.oie-preview-thumbnail');
+  await gifImage.scrollIntoViewIfNeeded();
+  await until(()=>gifImage.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),thumbHash).then(still=>originalFailures>0 && still),'fallback after failed animation');
+  await retryPage.unroute(originalRoute);
+  const previousFile={...gif};
+  resetImage(gif);
+  emit('message.preview_changed');
+  await until(async()=>await scope(retryPage,gif).getAttribute('data-preview-file')==='','removed original');
+  Object.assign(gif,previousFile,{revisionId:id(994)});
+  emit('message.preview_changed');
+  await until(()=>gifImage.evaluate((img,hash)=>img.complete && img.currentSrc.endsWith(hash+'?original=1'),animatedHash),'restored original can animate after failure');
+  await retryContext.close();
   console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

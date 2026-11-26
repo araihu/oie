@@ -259,7 +259,7 @@ func normalizeFileReferences(candidates []domain.SharedReference) []domain.Share
 		if name == "." || name == "/" || len(name) > 300 || strings.ContainsAny(name, "\r\n\t") {
 			name = sharedFileName(u)
 		}
-		refs = append(refs, domain.SharedReference{URL: ref.URL, Kind: ref.Kind, FileName: name})
+		refs = append(refs, domain.SharedReference{URL: ref.URL, Kind: ref.Kind, FileName: name, Sticker: ref.Sticker && ref.Kind == "image"})
 		seen[ref.URL] = true
 		if len(refs) == 32 {
 			break
@@ -269,6 +269,9 @@ func normalizeFileReferences(candidates []domain.SharedReference) []domain.Share
 }
 
 func MessageSharedReferences(message domain.Message) []domain.SharedReference {
+	if sticker, ok := domain.StickerFile(message.FileReferences); ok {
+		return []domain.SharedReference{sticker}
+	}
 	refs := SharedReferences(domain.DisplayBody(message))
 	for _, file := range message.FileReferences {
 		index := slices.IndexFunc(refs, func(ref domain.SharedReference) bool { return ref.URL == file.URL })

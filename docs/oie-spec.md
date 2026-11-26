@@ -718,6 +718,8 @@ failed-preview retry explicit. Global and conversation media catalogs keep
 their responsive 4:3 preview frames. Preview cache retention and quotas remain
 open under O09.
 
+**AGREED:** display received XEP-0449 image stickers directly on the chat background, within 160 CSS pixels and with their original proportions. Animate a downloaded GIF inline, including GIFs sent as ordinary images. With reduced motion enabled, show the still preview and let the user open the original to play it. Image downloads follow the existing device preference.
+
 Downloaded-file retention is configurable per device and defaults to **retain until explicit deletion**. With a local engine, change the period or remove downloaded files in **Settings → This device**. Changing the period saves the new preference immediately. The PWA's evictable message cache is a separate policy; it does not silently authorize downloaded-original eviction.
 
 SQLite stores attachment references, metadata, and media integrity hashes; binary previews and full files are stored outside SQLite in native deployments. The phrase “only media hash” excludes media blobs from SQLite, not the retrieval/verification metadata the application needs.

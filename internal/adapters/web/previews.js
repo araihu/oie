@@ -105,6 +105,7 @@ window.OieRuntime.register('previews', life => {
   function apply(scope,values) {
     const previousRevision=scope.dataset.previewRevision;
     const data=state(scope);
+    if(data && Object.hasOwn(values,'previewFile') && values.previewFile!==scope.dataset.previewFile) data.failedOriginal='';
     for(const field of fields) if(Object.hasOwn(values,field)) {
       scope.dataset[field]=values[field];if(data)data[field]=values[field];
     }
@@ -285,7 +286,7 @@ window.OieRuntime.register('previews', life => {
         const response=await life.fetch('/ui/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
         const preview=await response.json();if(!active())return;
         if(!response.ok||!matches(preview))throw Error('invalid_preview');
-        for(const matching of findAll(id))apply(matching,{previewFile:preview.downloadState==='ready'?source(preview.fileHash):'',previewImage:source(preview.imageHash),previewDownload:preview.downloadState,previewRevision:preview.revisionId});
+        for(const matching of findAll(id))apply(matching,{previewMime:preview.fileMimeType||'',previewFile:preview.downloadState==='ready'?source(preview.fileHash):'',previewImage:source(preview.imageHash),previewDownload:preview.downloadState,previewRevision:preview.revisionId});
         if(preview.downloadState==='failed')throw Error('download_failed');
         if(preview.downloadState==='ready'&&source(preview.fileHash))continue;
         await pause(delay);delay=Math.min(2000,Math.round(delay*1.5));

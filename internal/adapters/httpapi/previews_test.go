@@ -144,3 +144,64 @@ func TestPreviewLifecycleDoesNotDownloadOriginalUntilExplicitDemand(t *testing.T
 		t.Fatal("preview changed message", err)
 	}
 }
+
+func TestArchiveRecoversStickerOnMatchingRetainedImage(t *testing.T) {
+	e, _, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	c := openTestConversation(t, e, "alice@localhost")
+	const source = "https://files.example.org/animation"
+	const mirror = "https://mirror.example.org/animation"
+	incoming := application.Incoming{
+		AccountID: c.AccountID, Address: "bob@localhost", ProviderID: "sticker-source", OriginalText: "🎉",
+		FileReferences: []domain.SharedReference{{Kind: "image", URL: source}, {Kind: "image", URL: mirror}},
+	}
+	if err := e.Receive(t.Context(), incoming); err != nil {
+		t.Fatal(err)
+	}
+	incoming.ArchiveID, incoming.ArchiveScope, incoming.Historical = "archived-sticker", "alice@localhost", true
+	read := func() domain.Message {
+		t.Helper()
+		messages, err := e.Messages(t.Context(), c.ID, "", 10)
+		if err != nil || len(messages) != 1 {
+			t.Fatalf("retained messages: %v, %v", messages, err)
+		}
+		return messages[0]
+	}
+	replay := func(address string) {
+		t.Helper()
+		incoming.FileReferences = []domain.SharedReference{{Kind: "image", URL: address, Sticker: true}, {Kind: "image", URL: mirror, Sticker: true}}
+		if err := e.Receive(t.Context(), incoming); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := read()
+	replay("https://files.example.org/different")
+	if read().RevisionID != before.RevisionID {
+		t.Fatal("different image changed the retained message")
+	}
+	replay(source)
+	marked := read()
+	previews, err := e.ConversationPreviews(t.Context(), c.ID, []domain.ID{marked.ID})
+	if err != nil || len(previews) != 1 || previews[0].URL != source {
+		t.Fatalf("sticker previews: %v, %v", previews, err)
+	}
+	files := application.MessageSharedReferences(marked)
+	if len(files) != 1 || files[0].URL != source {
+		t.Fatal("duplicate shared sticker", files)
+	}
+	replay(source)
+	if marked.RevisionID == before.RevisionID || read().RevisionID != marked.RevisionID {
+		t.Fatal("expected one new revision for the recovered marker")
+	}
+	res, err := http.Get(server.URL + "/api/v1/conversations/" + string(c.ID) + "/messages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	var page engineapi.MessagePage
+	if err = json.NewDecoder(res.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].StickerUrl == nil || *page.Items[0].StickerUrl != source || page.Items[0].OriginalText != "🎉" {
+		t.Fatalf("unexpected retained sticker: %+v", page.Items)
+	}
+}

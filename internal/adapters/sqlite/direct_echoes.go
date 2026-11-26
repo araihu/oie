@@ -135,8 +135,17 @@ func sameObservedWire(a, b domain.Message) bool {
 func sameObservedSource(a, b domain.Message) bool {
 	return a.IsOwn && b.IsOwn && a.SendState == "submitted" && b.SendState == "submitted" &&
 		a.SourceBodyHash() == b.SourceBodyHash() &&
-		slices.Equal(a.FileReferences, b.FileReferences) && slices.Equal(a.AudioURLs, b.AudioURLs) &&
+		sameReferencedFiles(a.FileReferences, b.FileReferences) && slices.Equal(a.AudioURLs, b.AudioURLs) &&
 		slices.Equal(a.FileDigests, b.FileDigests) && slices.Equal(a.MediaThumbnails, b.MediaThumbnails)
+}
+
+// Legacy observations lack the presentation marker. Compare the actual wire
+// file references so replay can find the original before enriching it.
+func sameReferencedFiles(a, b []domain.SharedReference) bool {
+	return slices.EqualFunc(a, b, func(left, right domain.SharedReference) bool {
+		left.Sticker, right.Sticker = false, false
+		return left == right
+	})
 }
 
 func sameObservedReply(a domain.Message, ar *domain.ReplyReference, b domain.Message, br *domain.ReplyReference) bool {

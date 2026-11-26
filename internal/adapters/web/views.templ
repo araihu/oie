@@ -530,7 +530,7 @@ if m.Attachment!=nil {
 if !m.IsOwn {
 @senderAvatar(v,m)
 }
-@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:messageBubbleBody(v,m,grouped),RootClass:"oie-bubble",Grouped:grouped})
+@retainedBubble(m,grouped,messageBubbleBody(v,m,grouped))
 </div>
 }
 
@@ -1148,6 +1148,14 @@ for identity,hash:=range v.Avatars {
 
 // The public rich-content slot owns the header and corner control together, so
 // positioning never depends on ChatBubble's private row or bubble selectors.
+templ retainedBubble(m messageView, grouped bool, body templ.Component) {
+	if m.StickerUrl != nil && m.Moderation == nil && m.Retraction == nil {
+		<div class="oie-sticker">@body</div>
+	} else {
+		@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),Message:m.OriginalText,MessageContent:body,RootClass:"oie-bubble",Grouped:grouped})
+	}
+}
+
 templ messageBubbleBody(v view,m messageView,grouped bool){
 <div class={"oie-message-body",templ.KV("oie-message-body-compact",m.IsOwn||grouped)} data-message-bubble={m.Id}>
 if m.Moderation==nil && m.Retraction==nil {
@@ -1271,6 +1279,24 @@ templ messageStarIndicator(v view,id string){
 // A device preference switches visibility without replacing message rows.
 templ messageBody(v view,m messageView){
 @replyCard(v,m)
+if m.StickerUrl!=nil {
+<div class="oie-sticker-artwork" data-sticker-description={m.presentationText()}>@messageTextAndPreviews(v,m)</div>
+}else{
+@messageTextAndPreviews(v,m)
+}
+<div data-message-videos={m.Id}>
+for _,item:=range v.messageVideos(m.Id) {
+@videoCard(v,item)
+}
+</div>
+for _,item:=range v.MessageAudio[m.Id] {
+@retainedAudioPlayer(v,item)
+}
+
+}
+
+
+templ messageTextAndPreviews(v view,m messageView){
 {{ scope := invitationScope{m.AccountId,m.ConversationId,v.Locale} }}
 <div data-message-presentation data-presentation-known={strconv.FormatBool(m.PresentationKnown)} data-presentation-version={originalMessageJSON(m.presentationText())} data-search-source-digest={searchSourceDigest(m.OriginalText)}>
 <div class="oie-rendered-message" data-rendered-message>
@@ -1292,20 +1318,12 @@ if len(v.imagePreviews(m.Id)) > 0 {
 @viewerSource(v,m)
 }
 for _,p:=range v.MessagePreviews[m.Id] {
+if m.StickerUrl==nil || p.Url==*m.StickerUrl {
 @messagePreview(v,p)
 }
-</div>
-<div data-message-videos={m.Id}>
-for _,item:=range v.messageVideos(m.Id) {
-@videoCard(v,item)
 }
 </div>
-for _,item:=range v.MessageAudio[m.Id] {
-@retainedAudioPlayer(v,item)
 }
-
-}
-
 
 templ messageMenuContent(v view, message messageView, menu templ.Component) {
 {{ id := message.Id }}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/goshtoso/components/button"
-	"github.com/araihu/goshtoso/components/chatbubble"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/emptystate"
@@ -108,7 +107,7 @@ templ starredMessageRow(v view, item engineapi.StarredMessage, showSource bool) 
 			</p>
 		}
 		<div class={"oie-starred-bubble",templ.KV("oie-message-own",m.IsOwn)}>
-			@chatbubble.ChatBubble(chatbubble.Config{Side:messageSide(m.IsOwn),RootClass:"oie-bubble",MessageContent:starredBubbleBody(v,m,position)})
+			@retainedBubble(m,false,starredBubbleBody(v,m,position))
 		</div>
 	</article>
 }

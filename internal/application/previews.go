@@ -181,6 +181,9 @@ func (e *Engine) ConversationPreviews(ctx context.Context, conversation domain.I
 				addresses = append(addresses, file.URL)
 			}
 		}
+		if sticker, ok := domain.StickerFile(source.FileReferences); ok {
+			addresses = []string{sticker.URL}
+		}
 		for _, address := range addresses {
 			file := files[address]
 			if (file.Kind != "" && file.Kind != "image") || slices.Contains(source.AudioURLs, address) ||

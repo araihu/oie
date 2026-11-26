@@ -13,11 +13,11 @@ import (
 // Provider text is plain HTML data. The Alpine expression is fixed application
 // code, and image sources are exclusively BFF paths built from validated hashes.
 templ messagePreview(v view,p engineapi.MessagePreview){
-<section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-message={p.MessageId} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-favicon={mediaSource(p.FaviconHash)} data-preview-host={previewHost(p)} data-preview-path={linkPreviewPath(p.Url)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFavicon:$el.dataset.previewFavicon,previewHost:$el.dataset.previewHost,previewPath:$el.dataset.previewPath,previewFaviconFailed:false,get previewLinkTitle(){const title=this.previewTitle.trim();return title && title.toLowerCase()!==this.previewHost.toLowerCase()?title:this.previewPath||this.previewHost},previewFile:$el.dataset.previewFile,previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
+<section class="oie-message-preview" data-preview-id={p.Id} data-preview-revision={p.RevisionId} data-preview-kind={string(p.Kind)} data-preview-title={previewValue(p.Title)} data-preview-message={p.MessageId} data-preview-url={safePreviewURL(p.Url)} data-preview-name={previewFilename(p)} data-preview-mime={previewMime(p)} data-preview-size={previewSize(p)} data-preview-description={previewValue(p.Description)} data-preview-site={previewValue(p.SiteName)} data-preview-image={mediaSource(p.ImageHash)} data-preview-favicon={mediaSource(p.FaviconHash)} data-preview-host={previewHost(p)} data-preview-path={linkPreviewPath(p.Url)} data-preview-file={mediaSource(p.FileHash)} data-preview-state={string(p.State)} data-preview-download={string(p.DownloadState)} data-preview-status={v.previewStatus(p)} x-data="{previewTitle:$el.dataset.previewTitle,previewDescription:$el.dataset.previewDescription,previewSite:$el.dataset.previewSite,previewImage:$el.dataset.previewImage,previewFavicon:$el.dataset.previewFavicon,previewHost:$el.dataset.previewHost,previewPath:$el.dataset.previewPath,previewFaviconFailed:false,get previewLinkTitle(){const title=this.previewTitle.trim();return title && title.toLowerCase()!==this.previewHost.toLowerCase()?title:this.previewPath||this.previewHost},previewFile:$el.dataset.previewFile,previewMime:$el.dataset.previewMime,failedOriginal:'',previewState:$el.dataset.previewState,previewDownload:$el.dataset.previewDownload,previewStatus:$el.dataset.previewStatus,previewBusy:false,previewImageFailed:false}">
 if p.Kind=="link" {
 @linkFallbackCard(v,p)
 }else{
-<div class="oie-image-preview">
+<div class="oie-image-preview" x-bind:data-image-visible="Boolean(previewImage && !previewImageFailed)">
 if !v.SharedCard && len(v.imagePreviews(p.MessageId))>1 {
 @dropdown.Dropdown(dropdown.Config{ID:v.previewControlID("image-menu",p.Id),Label:v.Text.ImageActions,Trigger:imageMenuTrigger(v,p.Id),RootClass:"oie-image-menu",MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:imageActionItems(v,p)}}})
 }
@@ -35,10 +35,15 @@ if p.Kind=="link" {
 src={source}
 } alt="" x-cloak x-show="previewImage && !previewImageFailed" x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="previewImageFailed=true"/>
 }else{
-@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-preview-image-button"),button.WithAttrs(templ.Attributes{"type":"button","data-preview-expand":"","x-cloak":"","aria-label":v.Text.OpenImage,"x-show":"previewImage && !previewImageFailed","x-bind:disabled":"previewBusy"})){
-<img class="oie-preview-thumbnail" if source:=mediaSource(p.ImageHash);source!="" {
+@button.Button(button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-preview-image-button"),button.WithAttrs(templ.Attributes{"type":"button","data-preview-expand":"","x-cloak":"","aria-label":v.Text.OpenImage,"x-bind:aria-description":"$el.closest('.oie-sticker-artwork')?.dataset.stickerDescription || null","x-show":"previewImage && !previewImageFailed","x-bind:disabled":"previewBusy"})){
+<picture>
+if !v.SharedCard {
+<source media="(prefers-reduced-motion: no-preference)" x-bind:srcset="previewFile && previewFile !== failedOriginal && (previewMime === 'image/gif' || (previewMime === 'image/png' && $el.closest('.oie-sticker'))) ? previewFile + '?original=1' : null"/>
+}
+<img class="oie-preview-thumbnail" loading="lazy" if source:=mediaSource(p.ImageHash);source!="" {
 src={source}
-} alt={v.Text.OpenImage} x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="previewImageFailed=true; $dispatch('oie:image-preview-error')"/>
+} alt={v.Text.OpenImage} x-bind:src="previewImage || null" x-effect="previewImage; previewImageFailed=false" x-on:error="if (previewFile && $el.currentSrc.endsWith(previewFile + '?original=1') && failedOriginal !== previewFile) { failedOriginal=previewFile } else { previewImageFailed=true; $dispatch('oie:image-preview-error') }"/>
+</picture>
 }
 }
 }

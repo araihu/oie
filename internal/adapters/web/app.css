@@ -368,6 +368,18 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-avatar-scope{display:inline-flex;flex-shrink:0}
 .oie-message-content{display:flex;align-items:flex-end;gap:8px}
 .oie-message-content>.oie-bubble{min-width:0;flex:1}
+.oie-sticker{width:160px;max-width:100%;min-width:0;color:var(--oie-text)}
+.oie-message-own .oie-sticker{margin-inline-start:auto}
+.oie-sticker .oie-message-body-compact{padding-inline-end:0}
+.oie-sticker .oie-message-stamp{margin-inline-end:0}
+.oie-sticker-artwork:has([data-image-visible=true])>[data-message-presentation]{display:none}
+:is(.oie-timeline,.oie-starred-bubble) .oie-sticker .oie-image-frame{display:block;width:100%;aspect-ratio:1;background:transparent}
+:is(.oie-timeline,.oie-starred-bubble) .oie-sticker .oie-preview-thumbnail{object-fit:contain}
+.oie-sticker .oie-image-frame .oie-preview-image-button{border-radius:0}
+.oie-sticker-artwork{position:relative;aspect-ratio:1}
+.oie-sticker-artwork>[data-message-presentation]{max-height:100%;overflow:auto;overflow-wrap:anywhere}
+.oie-sticker-artwork>.oie-message-previews{position:absolute;inset:auto 0 0;margin:0}
+.oie-sticker-artwork:has([data-image-visible=true])>.oie-message-previews{inset:0}
 /* Preview content lives in public Card slots; all image URLs are local. */
 .oie-message-previews{max-width:340px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:6px}
 .oie-message-previews:empty{display:none}
