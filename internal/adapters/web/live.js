@@ -2028,6 +2028,7 @@ window.OieRuntime.register('live', (life, route) => {
   });
   life.on(document,'oie:timeline-focus',event=>focusMessage(event.detail.id,event.detail.focus!==false));
   life.on(document,'oie:timeline-alias',event=>{if(highlightedMessage===event.detail.requested)highlightedMessage=event.detail.canonical;});
+  life.on(document,'oie:picker-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:room-management-content',event=>applyAvatars(event.detail.root));
   life.on(document,'oie:info-content',()=>{applyAvatars();localizeTimes();});
   life.on(document,'oie:accounts-content',()=>{applyAvatars();localizeTimes();});
@@ -2436,6 +2437,11 @@ window.OieRuntime.register('live', (life, route) => {
         } else {
           feedback(form,sending ? '' : result.message || '');
         }
+        if (form.dataset.oieAction === 'picker-contact') {
+          feedback(form, '');
+          if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+          form.dispatchEvent(new CustomEvent('oie:contact-added', {bubbles:true, detail:{address:fields.get('address')}}));
+        }
         if (sending && result.accepted) {
           if(!completeSubmission(result))feedback(form,text('pending'),true);
           renderReply();
@@ -2607,7 +2613,7 @@ window.OieRuntime.register('live', (life, route) => {
   life.timeout(resumeOfflineSends, 0);
   if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
-  if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
+  if (open === 'sender' || open === 'accounts' || open === 'details' || open === 'settings') {
     const show = () => {
       dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
       if (open === 'settings') {

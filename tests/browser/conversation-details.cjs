@@ -153,7 +153,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const retry=roomRead.getByRole('link',{name:'Try again',exact:true});
   await retry.waitFor();
   state.roster='not_joined';await retry.click();
-  await roomRead.getByText('Join the room to see its participants.').waitFor();
+  await roomRead.getByText('Join the group to see its participants.').waitFor();
   assert.equal(await rows.count(),0);
   await back.click();
   state.roster='available';
@@ -179,7 +179,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   for(const width of [390,1440])for(const theme of ['goshtoso','minimal'])for(const mode of ['light','dark'])for(const locale of ['en','pt-BR']){
    state.mode='known';const p=await browser.newPage({viewport:{width,height:1000},locale,timezoneId:'America/Sao_Paulo',hasTouch:width===390});p.on('pageerror',e=>errors.push(e.message));const q=new URLSearchParams(roomParams);q.set('lang',locale);q.set('theme',mode);await p.goto(base+'/?'+q);const {drawer}=await openFromMenu(p,locale==='en'?'Conversation details':'Detalhes da conversa');await p.waitForTimeout(230);await p.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const box=await drawer.boundingBox();assert(box.x>=-1&&box.x+box.width<=width+1);assert.equal(await p.locator('[data-info-room-participants]').count(),0);
    assert.equal(await drawer.locator('[data-info-entry="stars"]').textContent(),locale==='en'?'Starred messages':'Mensagens favoritadas');
-   const labels=locale==='en'?['Conversation content','Room','Messages']:['Conteúdo da conversa','Sala','Mensagens'];
+   const labels=locale==='en'?['Conversation content','Group','Messages']:['Conteúdo da conversa','Grupo','Mensagens'];
    const groups=drawer.getByRole('navigation');
    assert.deepEqual(await groups.getByRole('heading',{level:3}).allTextContents(),labels);
    assert.deepEqual(await groups.evaluateAll(nodes=>nodes.map(node=>[getComputedStyle(node).borderBlockStartWidth,getComputedStyle(node).borderBlockEndWidth])),labels.map(()=>['1px','0px']));

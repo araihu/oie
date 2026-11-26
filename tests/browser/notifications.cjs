@@ -464,7 +464,7 @@ async function run() {
     await quietWindow();
 
     const pick = async (label, value) => {
-      await second.getByRole('combobox', {name: 'Som nas salas'}).click();
+      await second.getByRole('combobox', {name: 'Som nos grupos'}).click();
       await second.getByRole('option', {name: label, exact: true}).click();
       await until(() => second.evaluate(value => localStorage.getItem('oie.notifications.room-sound') === value, value),
         'room sound preference saved: ' + value);

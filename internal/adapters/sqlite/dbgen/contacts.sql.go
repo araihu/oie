@@ -186,6 +186,7 @@ const searchContacts = `-- name: SearchContacts :many
 SELECT co.payload,a.label AS account_label,CAST(COALESCE(c.id,'') AS TEXT) AS conversation_id
 FROM contacts co JOIN accounts a ON a.id=co.account_id
 LEFT JOIN conversations c ON c.account_id=co.account_id AND c.address=co.address
+    AND (COALESCE(json_extract(c.payload,'$.RemovedFromChats'),0)=0 OR json_extract(c.payload,'$.Kind')='room')
 WHERE co.active=1
 AND (CAST(?1 AS TEXT)='' OR co.account_id=CAST(?1 AS TEXT))
 AND (CAST(?2 AS TEXT)='[]' OR co.account_id IN (SELECT value FROM json_each(CAST(?2 AS TEXT))))

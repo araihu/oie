@@ -1,12 +1,12 @@
 # XMPP room management
 
-Select the room avatar and open **Manage room** below its name, or choose **More → Manage room**. The available actions depend on
+Select the room avatar and open **Manage group** below its name, or choose **More → Manage group**. The available actions depend on
 the account's room permissions. **Details** shows the room image and offers
 **Edit name and topic** when both fields can be edited. Review the old and proposed values, then choose **Publish changes** or return to editing. The room description is displayed when supplied by the service.
 Owners can change the name and can replace or remove the room image when
 the service supports room vCards. Moderators can change the topic and adjust current occupants' roles.
 To delete a room you own, open **Destructive actions** in **Details**, select
-**Delete room for everyone**, and confirm.
+**Delete group for everyone**, and confirm.
 **More → Invite people** opens the invitation form when the room permits it.
 The room may let other occupants edit the topic or invite people. **Participants** groups occupants by room permissions. Select a name to see
 the participant's role, affiliation, and the actions available to your account.
@@ -20,7 +20,7 @@ A room can omit personal addresses even when it publishes nicknames.
 
 Room creation keeps the service's defaults with persistence enabled. Enter an
 existing room by address, a credential-free invitation link, a received
-invitation, or a result from **Browse public rooms**. Directory reads never
+invitation, or a result from **Browse public groups**. Directory reads never
 enter rooms. An optional password is retained in the owning engine for
 reconnect. The browser keeps it in memory during an interrupted submission.
 Archiving an invitation retains the request and keeps it out of the inbox.
@@ -78,7 +78,7 @@ moderated text and references. The engine retains the original source rows.
 Removing a room from chats stops automatic rejoin and hides it from both Chats
 and Archived. The server room and saved history stay available. Open the room by
 its address to add it back. A joined owner can instead delete the server room
-for everyone from **Manage room**. After the server confirms deletion, Oiê
+for everyone from **Manage group**. After the server confirms deletion, Oiê
 removes the room from that account’s chat lists and retains saved history.
 Other participants can remove their saved conversations independently.
 Links to retained messages open the conversation in read-only mode while it

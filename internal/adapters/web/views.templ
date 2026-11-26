@@ -125,6 +125,7 @@ templ page(v view) {
 <script src="/ui/forwarding.js" defer></script>
 <script src="/ui/message-retractions.js" defer></script>
 <script src="/ui/room-entry.js"></script>
+<script src="/ui/new-conversation.js"></script>
 <script src="/ui/room-management.js"></script>
 			@head.Dependencies(head.WithLocalRuntime())
 			<link rel="stylesheet" href={templ.URL(versionedStylesheetURL("/ui/app.css",stylesheet))}/>
@@ -237,11 +238,7 @@ if v.CanResetData {
 </div>
 }
 			@accounts(v)
-@newConversation(v)
-if !v.Preview {
-@roomEntryDrawer(v,false)
-@roomEntryDrawer(v,true)
-}
+@newConversationPicker(v)
 if !v.CompactSource {
 <div data-route-viewers>
 @quickMessageSearch(v)
@@ -356,7 +353,7 @@ if v.NativeMessageSearch {
 							{ v.Text.Chats }
 					}
 				</h2>
-				@dropdown.Dropdown(dropdown.Config{ID:"new-conversation-menu",Label:v.Text.NewChat,Trigger:newConversationTrigger(v),MenuAlign:dropdown.AlignEnd,Sections:[]dropdown.Section{{Items:newConversationActions(v)}}})
+				@newConversationTrigger(v)
 
 			</div>
 			if v.Preview {
@@ -939,7 +936,6 @@ func accountOptions(v view,all bool)[]selectfield.Option{
  for _,a:=range v.Accounts{out=append(out,selectfield.Option{Value:a.Id,Label:a.Label+" · "+a.Address,Selected:selected==a.Id})};return out
 }
 templ newConversation(v view){
-@workspaceDrawer(drawer.Config{ID:"newchat",Title:v.Text.DirectConversation}){
 <div class="oie-settings">
 if len(v.Accounts)==0 {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.NoChatsBody})
@@ -955,26 +951,13 @@ if len(v.Accounts)==0 {
 }
 </div>
 }
-}
 
 templ newConversationTrigger(v view) {
-	@button.Button(button.WithType("button"), button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label":v.Text.NewChat,"title":v.Text.NewChat,"data-new-conversation":""})) {
+	@button.Button(button.WithType("button"), button.WithRootClass("oie-icon-button oie-new-chat"), button.WithAttrs(templ.Attributes{"aria-label":v.Text.NewChat,"title":v.Text.NewChat,"data-new-conversation":"","aria-haspopup":"dialog","aria-controls":"new-conversation-picker"})) {
 		@glyph(heroicons.Icon16SolidPlus)
 	}
 }
 
-func newConversationActions(v view) []dropdown.Item {
-	items := []dropdown.Item{
-		{ID:"new-conversation-direct",Label:v.Text.DirectConversation,Icon:glyph(heroicons.Icon16SolidUser),OnClick:"close(); $dispatch('oie:new-conversation', {id: 'newchat'})"},
-	}
-	if !v.Preview {
-		items = append(items,
-			dropdown.Item{ID:"new-conversation-join",Label:v.Text.JoinRoom,Icon:appicons.Icon(appicons.Config{Symbol:appicons.IconHeroiconsGroup16SolidUserGroup,Decorative:true,RootClass:"oie-icon"}),OnClick:"close(); $dispatch('oie:new-conversation', {id: 'join-room'})"},
-			dropdown.Item{ID:"new-conversation-create",Label:v.Text.CreateRoom,Icon:glyph(heroicons.Icon16SolidPlus),OnClick:"close(); $dispatch('oie:new-conversation', {id: 'create-room'})"},
-		)
-	}
-	return items
-}
 templ liveCopy(v view){
 <div id="oie-star-copy" hidden data-star={v.Text.StarMessage} data-unstar={v.Text.UnstarMessage} data-retry={v.Text.RetryStar} data-uncertain={v.Text.StarUncertain} data-storage={v.Text.StarStorageUnavailable}></div>
 <div id="oie-star-status" class="sr-only" role="status" aria-live="polite"></div>

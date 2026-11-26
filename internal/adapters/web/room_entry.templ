@@ -6,7 +6,6 @@ import (
 	"github.com/araihu/goshtoso/components/avatar"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/card"
-	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/form"
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
@@ -44,7 +43,7 @@ func roomEntryChecking(text copy, create bool) string {
 	return ""
 }
 
-templ roomEntryDrawer(v view, create bool) {
+templ roomEntryForm(v view, create bool) {
 	{{ target,title,action := "join-room",v.Text.JoinRoom,"join" }}
 	if create {
 		{{ target,title,action = "create-room",v.Text.CreateRoom,"create" }}
@@ -59,7 +58,6 @@ templ roomEntryDrawer(v view, create bool) {
 	} else if !create {
 		{{ address = v.field("inviteRoom") }}
 	}
-	@workspaceDrawer(drawer.Config{ID:target,Title:title}) {
 		<div class="oie-settings oie-room-entry">
 			if len(options)==0 {
 				@link.Link(v.addAccountHref()){ {v.Text.AddAccount} }
@@ -93,7 +91,6 @@ templ roomEntryDrawer(v view, create bool) {
 				}
 			}
 		</div>
-	}
 }
 
 func roomPreviewName(preview engineapi.RoomPreview) string {

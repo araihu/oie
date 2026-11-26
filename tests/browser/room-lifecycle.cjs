@@ -41,7 +41,7 @@ async function until(test, label) {
     page.on('pageerror', err => pageErrors.push(err.message));
     await page.goto(base + '/?lang=pt-BR&account=' + alice);
     await page.locator('[data-new-conversation]:visible').first().click();
-    await page.getByRole('menuitem', {name: 'Criar sala', exact: true}).click();
+    await page.getByRole('dialog', {name:'Nova conversa'}).getByRole('button', {name: 'Criar grupo', exact: true}).click();
     const create = page.locator('#create-room-form');
     await create.locator('[name=address]').fill(wrong);
     await create.locator('[name=name]').fill('Clube de leitura');
@@ -57,11 +57,11 @@ async function until(test, label) {
     await intercepted;
     try {
       assert(await confirmCreate.isDisabled());
-      await create.getByText('Conferindo endereço da sala…', {exact:true}).waitFor();
+      await create.getByText('Conferindo endereço do grupo…', {exact:true}).waitFor();
       const pendingBox = await confirmCreate.boundingBox();
       assert(Math.abs(pendingBox.y - buttonBefore.y) <= 1, 'pending creation moved the button');
     } finally { release(); }
-    await create.getByText('Esse domínio não hospeda salas XMPP.', {exact:false}).waitFor();
+    await create.getByText('Esse domínio não hospeda grupos XMPP.', {exact:false}).waitFor();
     assert.equal(await create.locator('[name=address]').inputValue(), wrong);
     assert.equal(await create.locator('[name=name]').inputValue(), 'Clube de leitura');
     assert.equal(await create.locator('[name=nickname]').inputValue(), 'Marina');
@@ -115,8 +115,8 @@ async function until(test, label) {
     const statusLabel = participant.locator('#chat-header [data-room-status-label]');
     const roomRow = participant.locator('[data-conversation-row="' + bobRoom.id + '"]');
     await participant.goto(participantURL);
-    await statusLabel.getByText('Na sala', {exact:true}).waitFor();
-    await roomRow.locator('[data-room-status-label]').getByText('Na sala', {exact:true}).waitFor({state:'attached'});
+    await statusLabel.getByText('No grupo', {exact:true}).waitFor();
+    await roomRow.locator('[data-room-status-label]').getByText('No grupo', {exact:true}).waitFor({state:'attached'});
     if (xmppEndpoint) {
       const connection = '/accounts/' + bob + '/connection';
       await api(connection, undefined, 'DELETE');
@@ -126,8 +126,8 @@ async function until(test, label) {
       } finally {
         await api(connection, {password:'bob-local-only', endpoint:xmppEndpoint}, 'PUT');
       }
-      await statusLabel.getByText('Na sala', {exact:true}).waitFor();
-      await roomRow.locator('[data-room-status-label]').getByText('Na sala', {exact:true}).waitFor({state:'attached'});
+      await statusLabel.getByText('No grupo', {exact:true}).waitFor();
+      await roomRow.locator('[data-room-status-label]').getByText('No grupo', {exact:true}).waitFor({state:'attached'});
     }
     const layoutSelectors = ['[data-conversation-row="' + bobRoom.id + '"]', '#chat-header', '#message-composer'];
     const sampleLayout = await participant.evaluateHandle(selectors => {
@@ -171,7 +171,7 @@ async function until(test, label) {
     assert.equal(changed.state, 'submitted');
     const [refused] = await Promise.all([
       page.waitForResponse(r => r.url() === base + '/ui/rooms/manage' && r.request().method() === 'POST'),
-      destroy.getByRole('button', {name:'Excluir sala para todos', exact:true}).click()
+      destroy.getByRole('button', {name:'Excluir grupo para todos', exact:true}).click()
     ]);
     assert.equal(refused.status(), 409, 'a stale confirmation was refused');
     assert((await session(room)).active);
@@ -179,7 +179,7 @@ async function until(test, label) {
     await until(() => page.locator('#room-destroy-open').evaluate(button => document.activeElement === button), 'restore delete action focus after refusal');
     await until(async () => await destroy.locator('[name=expectedRevision]').inputValue() !== oldRevision, 'new room controls');
     await page.locator('#room-destroy-open').click();
-    await destroy.getByRole('button', {name:'Excluir sala para todos', exact:true}).click();
+    await destroy.getByRole('button', {name:'Excluir grupo para todos', exact:true}).click();
     await until(async () => (await session(room)).destroyed, 'owner deletion confirmed');
     await until(async () => (await session(bobRoom.id)).destroyed, 'second participant received destruction notice');
     await page.waitForURL(url => !url.searchParams.has('chat'), {timeout: 15000});
@@ -188,8 +188,8 @@ async function until(test, label) {
       assert(!(await chats(alice, archived)).some(c => c.id === room), 'confirmed deletion removes the room from the owner’s lists');
     }
     assert((await chats(bob)).some(c => c.id === bobRoom.id && c.roomStatus === 'destroyed'), 'the other participant keeps the deleted room');
-    await statusLabel.getByText('Sala excluída', {exact:true}).waitFor();
-    await roomRow.locator('[data-room-status-label]').getByText('Sala excluída', {exact:true}).waitFor();
+    await statusLabel.getByText('Grupo excluído', {exact:true}).waitFor();
+    await roomRow.locator('[data-room-status-label]').getByText('Grupo excluído', {exact:true}).waitFor();
     assert.equal(await participant.locator('#chat-header .oie-chat-avatar .bg-danger').count(), 1);
     assert.equal(await roomRow.locator('.oie-avatar-initials .bg-danger').count(), 1);
     assert.equal(participant.url(), participantURL, 'the participant stays in their conversation');
@@ -207,7 +207,7 @@ async function until(test, label) {
       await participant.screenshot({path:artifacts + '/estado-sala-excluida-original.png'});
     }
     await participant.setViewportSize({width:390, height:844});
-    await statusLabel.getByText('Sala excluída', {exact:true}).waitFor();
+    await statusLabel.getByText('Grupo excluído', {exact:true}).waitFor();
     assert(await statusLabel.isVisible());
     assert.deepEqual(pageErrors, []);
     console.log('PASS: delayed invalid creation, form correction, local removal, owner deletion, and live room status with XMPP');

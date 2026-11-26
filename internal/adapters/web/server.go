@@ -707,6 +707,7 @@ type copy struct {
 	RoomStatusJoining, RoomStatusDisconnected, RoomStatusDestroyed, RoomStatusAccessDenied, RoomStatusUnavailable                                                        string
 	RoomCheckingAddress, RoomCreating, RoomDestroy, RoomDestroyWarning, RoomDestroyed                                                                                    string
 	RoomPreviewLoading, RoomPreviewUnavailable, RoomAddressInvalid, RoomNotFound, RoomExists, RoomCreationFailed                                                         string
+	PickerRecent, PickerSearch, PickerEmpty, PickerNoMatch                                                                                                               string
 	SearchChats, NoResults, NoResultsBody, NewChat, DirectConversation, More                                                                                             string
 	Preview, PreviewNote, Message, Send                                                                                                                                  string
 	SendingUnavailable, Back, Today, Navigation, Active                                                                                                                  string
@@ -912,6 +913,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.prepareForward(w, r)
 		return
 	}
+	if r.URL.Path == "/ui/new-conversation/direct" {
+		s.findDirectConversation(w, r)
+		return
+	}
+	if r.URL.Path == "/ui/new-conversation/results" {
+		s.conversationPickerResults(w, r)
+		return
+	}
 	if r.URL.Path == "/ui/rooms/directory" {
 		s.roomDirectory(w, r)
 		return
@@ -1033,11 +1042,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"/ui/notification-worker.js": {"text/javascript", notificationWorkerScript},
 		"/ui/notification.wav":       {"audio/wav", notificationSound},
 
-		"/ui/room-management.js": {"text/javascript", roomManagementScript},
-		"/ui/room-entry.js":      {"text/javascript", roomEntryScript},
-		appicons.SpriteURL:       {"image/svg+xml", appIconSprite},
-		"/ui/room-archive.js":    {"text/javascript", roomArchiveScript},
-		"/ui/timeline.js":        {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
+		"/ui/room-management.js":  {"text/javascript", roomManagementScript},
+		"/ui/new-conversation.js": {"text/javascript", conversationPickerScript},
+		"/ui/room-entry.js":       {"text/javascript", roomEntryScript},
+		appicons.SpriteURL:        {"image/svg+xml", appIconSprite},
+		"/ui/room-archive.js":     {"text/javascript", roomArchiveScript},
+		"/ui/timeline.js":         {"text/javascript", timelineScript}, "/ui/timeline.css": {"text/css", timelineStylesheet},
 		"/ui/cache.js": {"text/javascript", cacheScript}, "/ui/cache/LICENSE.md": {"text/plain; charset=utf-8", cacheLibraryLicense}, "/ui/cache/lru-cache.min.mjs": {"text/javascript", cacheLibrary}, "/ui/documents.js": {"text/javascript", documentsScript}, "/ui/document.css": {"text/css", documentStylesheet},
 		"/ui/video-thumbnails.js": {"text/javascript", videoThumbnailsScript}, "/ui/video-frames.js": {"text/javascript", videoFramesScript}, "/ui/video-fallback.js": {"text/javascript", videoFallbackScript}, "/ui/video-indexed.js": {"text/javascript", videoIndexedScript}, "/ui/videos.js": {"text/javascript", videosScript}, "/ui/video.css": {"text/css", videosStylesheet},
 		"/ui/typing.js":    {"text/javascript", typingScript},

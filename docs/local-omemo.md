@@ -110,7 +110,7 @@ pass selects encrypted direct messages. Rooms use their separate archive path.
 
 The room must restrict entry to members and let participants see one another's
 XMPP addresses. Join the room and open **OMEMO encryption** in its details.
-Select **Enable OMEMO in this room** and check the devices listed for each
+Select **Enable OMEMO in this group** and check the devices listed for each
 member. Verify every active device. The local and hosted engines encrypt for
 the complete membership, including members who are offline. The hosted engine
 uses the server identity, as in direct chats.

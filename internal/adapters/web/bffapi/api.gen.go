@@ -444,6 +444,24 @@ func (e SearchBrowserMessagesParamsPresentation) Valid() bool {
 	}
 }
 
+// Defines values for ListBrowserConversationPickerResultsParamsGroup.
+const (
+	Chats    ListBrowserConversationPickerResultsParamsGroup = "chats"
+	Contacts ListBrowserConversationPickerResultsParamsGroup = "contacts"
+)
+
+// Valid indicates whether the value is a known member of the ListBrowserConversationPickerResultsParamsGroup enum.
+func (e ListBrowserConversationPickerResultsParamsGroup) Valid() bool {
+	switch e {
+	case Chats:
+		return true
+	case Contacts:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PrepareBrowserReplyParamsLang.
 const (
 	PrepareBrowserReplyParamsLangEn   PrepareBrowserReplyParamsLang = "en"
@@ -1563,6 +1581,45 @@ type PrepareBrowserForwardParams struct {
 	// EngineId Engine owning the source message.
 	EngineId externalRef0.ID `form:"engineId" json:"engineId"`
 }
+
+// FindBrowserDirectConversationParams defines parameters for FindBrowserDirectConversation.
+type FindBrowserDirectConversationParams struct {
+	// Account Owning account for this picker request.
+	Account string `form:"account" json:"account"`
+
+	// Address Peer address to resolve within the selected account.
+	Address string `form:"address" json:"address"`
+
+	// Lang Language for conversation picker controls.
+	Lang *string `form:"lang,omitempty" json:"lang,omitempty"`
+
+	// Theme Appearance mode to preserve when opening a conversation.
+	Theme *string `form:"theme,omitempty" json:"theme,omitempty"`
+}
+
+// ListBrowserConversationPickerResultsParams defines parameters for ListBrowserConversationPickerResults.
+type ListBrowserConversationPickerResultsParams struct {
+	// Group Picker section to load.
+	Group ListBrowserConversationPickerResultsParamsGroup `form:"group" json:"group"`
+
+	// Account Owning account for this picker request.
+	Account *string `form:"account,omitempty" json:"account,omitempty"`
+
+	// Term Text entered in the picker search field.
+	Term *string `form:"term,omitempty" json:"term,omitempty"`
+
+	// Cursor Continuation returned by the preceding picker page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Lang Language for conversation picker controls.
+	Lang *string `form:"lang,omitempty" json:"lang,omitempty"`
+
+	// Theme Appearance mode to preserve when opening a conversation.
+	Theme *string `form:"theme,omitempty" json:"theme,omitempty"`
+}
+
+// ListBrowserConversationPickerResultsParamsGroup defines parameters for ListBrowserConversationPickerResults.
+type ListBrowserConversationPickerResultsParamsGroup string
 
 // GetBrowserNotificationContextParams defines parameters for GetBrowserNotificationContext.
 type GetBrowserNotificationContextParams struct {
