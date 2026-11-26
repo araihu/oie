@@ -264,7 +264,7 @@ func mobileAccountMenu(v view) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = button.Button(button.WithType("button"), button.WithRootClass("oie-account-action"), button.WithAttrs(templ.Attributes{"data-navigation-settings": "", "aria-haspopup": "dialog", "x-on:click": "close(); $nextTick(() => $dispatch('drawer:open', {id: 'settings'}))"})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = button.Button(button.WithType("button"), button.WithRootClass("oie-account-action"), button.WithAttrs(templ.Attributes{"data-navigation-settings": "", "aria-haspopup": "dialog"})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

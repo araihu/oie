@@ -350,6 +350,14 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
  #workspace :is(.oie-conversation-scroll,.oie-shared-scroll,.oie-message-search-scroll),#workspace.oie-schedule-workspace {
   padding-block-end:76px;scroll-padding-block-end:76px;
  }
+ /* Let the header and controls scroll into reach on short displays. */
+ @media (max-height:320px) {
+  .oie-route:has(> #workspace:not(.oie-chat-open)) {height:calc(100% - 68px);overflow-y:auto}
+  #workspace:not(.oie-chat-open) {min-height:22rem}
+ }
+ :root[data-oie-keyboard] .oie-mobile-nav {display:none}
+ :root[data-oie-keyboard] .oie-route:has(> #workspace:not(.oie-chat-open)) {height:100%;overflow-y:auto}
+ :root[data-oie-keyboard] #workspace:not(.oie-chat-open) {min-height:22rem}
 }
 /* Account management is a list/detail flow: one connection form at a time. */
 .oie-account-drawer{width:min(440px,100vw);max-width:100vw;background:var(--oie-panel);color:var(--oie-text)}

@@ -88,7 +88,20 @@ const id='019a5df0-0000-7000-8000-000000000001';
 
    }
    assert.deepEqual(await audit(),[]);
-   await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await context.close();
+   await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+   if(width===390){
+    const trigger=page.locator('.oie-mobile-nav [data-account-switcher]');
+    await until(()=>trigger.evaluate(button=>document.activeElement===button),'Settings returns focus to Accounts');
+    if(section==='chats'){
+     await trigger.press('Enter');
+     await page.waitForFunction(()=>document.querySelector('#mobile-accounts-panel')?.contains(document.activeElement));
+     await page.locator('#mobile-accounts-panel [data-open-accounts]').press('Enter');
+     const accounts=page.locator('.oie-account-drawer:visible');
+     await accounts.getByRole('button',{name:locale==='en'?'Close':'Fechar',exact:true}).click();
+     await until(()=>trigger.evaluate(button=>document.activeElement===button),'Manage accounts returns focus to Accounts');
+    }
+   }
+   await context.close();
   }
   engineAvailable = false;
   const offline = await browser.newPage();

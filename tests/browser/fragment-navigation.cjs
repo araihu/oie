@@ -554,7 +554,20 @@ async function assertMobileControlOwnership(page) {
       await mobileRoute(section);
       assert.equal(await tab.getAttribute('aria-current'),'page');
     }
-    await mobile.goBack();await mobileRoute('scheduled');await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile tabs route directly to all destinations, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
+    const mobileAccounts=tabs.locator('[data-account-switcher]');
+    const accountPanel=tabs.locator('[data-popover-panel]');
+    await mobileAccounts.press('Enter');
+    await until(()=>accountPanel.evaluate(panel=>panel.contains(document.activeElement)),'account popover keyboard focus');
+    await mobile.goBack();
+    await mobileRoute('scheduled');
+    await accountPanel.waitFor({state:'hidden'});
+    assert.equal(await mobileAccounts.getAttribute('aria-expanded'),'false');
+    await until(()=>mobileAccounts.evaluate(node=>node===document.activeElement),'Back restores focus to the visible account control');
+    await mobileAccounts.press('Enter');
+    await accountPanel.waitFor({state:'visible'});
+    await mobile.keyboard.press('Escape');
+    await accountPanel.waitFor({state:'hidden'});
+    await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile tabs route directly to all destinations, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
     const native=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}}),fallback=await native.newPage();
     await fallback.goto(base+'/?chat='+chatA+'&lang=en');
     for(const [section,label]of sidebarDestinations){

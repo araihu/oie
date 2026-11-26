@@ -228,7 +228,14 @@
   if(!mobile||!incoming)return;
   ctx.oieMobileNavigation=mobile;
   ctx.oieIncomingMobile=incoming;
-  ctx.oieMobileFocus=mobile.contains(document.activeElement) ? document.activeElement : null;
+  const focused=document.activeElement;
+  const account=mobile.querySelector('[data-account-switcher]');
+  ctx.oieMobileFocus=mobile.contains(focused) ? focused : null;
+  if(account?.getAttribute('aria-expanded')==='true'){
+   // Browser history can move focus to the document before HTMX swaps the route.
+   if(focused===document.body||ctx.oieMobileFocus?.closest('[data-popover-panel]'))ctx.oieMobileFocus=account;
+   account.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+  }
   if(window.Alpine)window.Alpine.mutateDom(()=>mobile.remove());else mobile.remove();
  }
  const sourceRetainedRegions=['data-route-shared-copy','data-route-settings','data-route-viewers'];
@@ -493,6 +500,25 @@
   (row||document.getElementById('conversation-search'))?.focus({preventScroll:true});
   return true;
  }
+ // Let the account popover release its keyboard trap before the drawer takes
+ // focus. Its visible trigger is the return point when the drawer closes.
+ function openFromMobileAccounts(action){
+  const menu=action.closest('[data-popover-panel]');
+  const trigger=action.closest('.oie-mobile-nav').querySelector('[data-account-switcher]');
+  const origin=location.href;
+  trigger.click();
+  function afterClose(){
+   if(!trigger.isConnected||!menu.isConnected||location.href!==origin||trigger.getAttribute('aria-expanded')==='true')return;
+   if(menu.getClientRects().length){requestAnimationFrame(afterClose);return;}
+   trigger.focus({preventScroll:true});
+   if(action.hasAttribute('data-navigation-settings')){
+    window.dispatchEvent(new CustomEvent('drawer:open',{detail:{id:'settings'}}));
+   }else{
+    go(action.href);
+   }
+  }
+  requestAnimationFrame(afterClose);
+ }
  // The dependency loader can expose HTMX before Alpine finishes loading.
  // Process the clicked navigation link before the event reaches its target,
  // without starting application scopes before the remaining dependencies.
@@ -511,6 +537,11 @@
    event.preventDefault();event.stopImmediatePropagation();return;
   }
   const accountLink=event.target.closest?.('[data-open-accounts], [data-add-account]');
+  const drawerAction=accountLink||event.target.closest?.('[data-navigation-settings]');
+  if(drawerAction?.closest('#mobile-accounts-panel')&&window.Alpine&&(!accountLink||booted)){
+   event.preventDefault();event.stopImmediatePropagation();
+   openFromMobileAccounts(drawerAction);return;
+  }
   if(booted&&accountLink?.getAttribute('hx-target')==='#account-workspace'){
    accountLink.closest('[data-popover-panel]')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
   }
