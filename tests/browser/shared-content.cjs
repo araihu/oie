@@ -123,7 +123,9 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
      const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce',serviceWorkers:'block'});
      try{
       await watch(context);
-      await context.addInitScript(key=>localStorage.setItem(key,'false'),preference);
+      await context.addInitScript(({base,key})=>{
+       if(location.origin===base)localStorage.setItem(key,'false');
+      },{base,key:preference});
       const page=await context.newPage();
       await page.goto(base+'/?'+query);
       const sticker=tile(page,0),regular=tile(page,1);
