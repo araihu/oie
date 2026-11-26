@@ -7,6 +7,8 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const engine=id(1),alpha=id(2),beta=id(3),chatA=id(4),chatB=id(5),revision=id(6),streams=new Set(),state={seq:0,mode:'normal',pending:true,catalogReads:[],downloads:new Map(),stars:new Map(),starEffects:0,unexpectedWrites:0,videoReads:0,documentPreviewReads:0};
  const audio=await fs.readFile(path.join(__dirname,'fixtures/covered-tone.mp3'));
  const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8/x8AAwMCAO+aM3sAAAAASUVORK5CYII=','base64'),hash=createHash('sha256').update(image).digest('hex');
+ const animated=Buffer.from('R0lGODlhAgABAIEAAABkyAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAEAAAACwAAAAAAgABAAAIBQABAAgIACH5BAEQAAIALAAAAAABAAEAgQBkyPUyQQAAAAAAAAgEAAMEBAA7','base64');
+ const gifHash=createHash('sha256').update(animated).digest('hex');
  const accounts=[{id:alpha,revisionId:revision,label:'Personal',address:'alice@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'},{id:beta,revisionId:revision,label:'Work',address:'work@fixture',protocol:'xmpp',createdAt:'2026-11-08T12:00:00Z'}];
  const chats=[{id:chatA,accountId:alpha,title:'Family',address:'family@fixture',kind:'room'},{id:chatB,accountId:beta,title:'Team',address:'team@fixture',kind:'direct'}].map(c=>({...c,revisionId:revision,updatedAt:'2026-11-08T12:00:00Z',unreadCount:0,archived:false,favorite:false,lastMessage:'Shared reference'}));
  const items=Array.from({length:63},(_,n)=>{const kind=n<54?'image':n===54?'audio':n===55?'video':n<59?'link':'document',owner=n<2?chats[0]:chats[n%2],url=kind==='link'?'https://social.example.test/post/'+n:'https://files.example.test/'+(kind==='document'?'invoice-'+n+'.pdf':kind==='audio'?'recording.mp3':kind==='video'?'video.mp4':'photo-'+n+'.png'),message={id:id(100+(n<2?0:n)),revisionId:revision,accountId:owner.accountId,conversationId:owner.id,sender:{id:id(20+n%2),displayName:n<2?'Bob':'Sender '+n},originalText:n<2?'Exact original 😀\r\nhttps://files.example.test/photo-0.png\r\nhttps://files.example.test/photo-1.png':'Caption café '+n+'\n'+url,createdAt:n<2?'2026-11-08T12:00:00Z':n===2?'2026-11-01T01:00:00Z':new Date(Date.UTC(2026,9,33-n,12)).toISOString(),isOwn:false,sendState:'received'};return{id:id(500+n),revisionId:revision,kind,url,fileName:kind==='link'?'':decodeURIComponent(new URL(url).pathname.split('/').at(-1)),accountLabel:accounts.find(a=>a.id===owner.accountId).label,conversationTitle:owner.title,message,...(['image','link'].includes(kind)?{preview:{id:id(300+n),revisionId:revision,accountId:message.accountId,conversationId:message.conversationId,messageId:message.id,url,kind,state:'ready',downloadState:'not_downloaded',...(kind==='link'?{title:'Article <script>safe</script> café',description:'Useful metadata',imageHash:hash}:{}),updatedAt:'2026-11-08T12:00:00Z'}}:{})}});
@@ -24,6 +26,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const currentStar=messageId=>state.stars.get(messageId)||{messageId,accountId:items.find(i=>i.message.id===messageId)?.message.accountId||alpha,conversationId:items.find(i=>i.message.id===messageId)?.message.conversationId||chatA,starred:false,revisionId:null,updatedAt:null};
  const api=http.createServer(async(req,res)=>{const u=new URL(req.url,'http://fixture');res.setHeader('Content-Type','application/json');const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data))};
   const preview=items.find(i=>i.preview&&u.pathname===`/api/v1/previews/${i.preview.id}/download`);
+  if(preview?.preview.downloadState==='ready'&&req.method==='POST')return send(200,preview.preview);
   if(preview&&req.method==='POST'){state.downloads.set(preview.id,(state.downloads.get(preview.id)||0)+1);Object.assign(preview.preview,{downloadState:'ready',imageHash:hash,fileHash:hash,fileMimeType:'image/png',fileSize:image.length,revisionId:id(900+state.seq)});send(200,preview.preview);emit();return}
   const starPath=u.pathname.match(/^\/api\/v1\/messages\/([^/]+)\/star$/);
   if(starPath){if(req.method==='PUT'){let text='';for await(const chunk of req)text+=chunk;const body=JSON.parse(text),value={...currentStar(starPath[1]),starred:body.starred,revisionId:id(2000+state.starEffects),updatedAt:'2026-11-08T12:00:00Z'};state.stars.set(starPath[1],value);state.starEffects++;send(200,value);emit('message.star_changed',{star:value});return}return send(200,currentStar(starPath[1]))}
@@ -63,6 +66,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   }
   if(u.pathname==='/api/v1/conversations')return send(200,{items:chats});
   for(const chat of chats){if(u.pathname===`/api/v1/conversations/${chat.id}`)return send(200,chat);if(u.pathname===`/api/v1/conversations/${chat.id}/messages`)return send(200,{items:[...new Map(items.filter(i=>i.message.conversationId===chat.id).map(i=>[i.message.id,i.message])).values()].slice(0,50)});const context=u.pathname.match(new RegExp('^/api/v1/conversations/'+chat.id+'/messages/([^/]+)/context$'));if(context){const source=items.find(i=>i.message.id===context[1]&&i.message.conversationId===chat.id);return source?send(200,{targetId:source.message.id,items:[source.message],hasOlder:false,hasNewer:true}):send(404,{status:404})}}
+  if(u.pathname==='/api/v1/media/'+gifHash){res.setHeader('Content-Type','image/gif');res.end(animated);return}
   if(u.pathname.startsWith('/api/v1/media/')){res.setHeader('Content-Type','image/png');res.end(image);return}
   const content=u.pathname.match(/^\/api\/v1\/shared-content\/([^/]+)\/content$/);
   if(content){
@@ -107,6 +111,69 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
  const watch=async context=>{await context.addInitScript(()=>{try{localStorage.setItem('oie.device.auto-video-previews.v1','false')}catch{}});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==base){external.push(route.request().url());route.abort()}else route.continue()});context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)))};
  try{
   await until(async()=>{try{return(await fetch(base)).ok}catch{return false}},'BFF startup');
+  // Two references share a source message. Only the marked URL is sticker artwork.
+  {
+   const originals=items.slice(0,2);
+   for(const [i,item] of originals.entries()){
+    items[i]={...item,message:{...item.message,stickerUrl:originals[0].url},
+     preview:{...item.preview,imageHash:hash,fileHash:gifHash,fileMimeType:'image/gif',downloadState:'ready'}};
+   }
+   try{
+    for(const [width,query] of [[1440,'section=media'],[375,'section=media'],[390,'chat='+chatA+'&open=details&infoView=shared&infoType=media']]){
+     const caption=width===375?'': 'Festa!';
+     items[0].message={...items[0].message,originalText:'> Original\n'+caption+'\n'+items[0].url,
+      reply:{available:false,bodyText:[caption,items[0].url].filter(Boolean).join('\n')}};
+     const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce',serviceWorkers:'block'});
+     try{
+      await watch(context);
+      await context.addInitScript(({base,key})=>{
+       if(location.origin===base)localStorage.setItem(key,'false');
+      },{base,key:preference});
+      const page=await context.newPage();
+      await page.goto(base+'/?'+query);
+      const sticker=tile(page,0),regular=tile(page,1);
+      await sticker.scrollIntoViewIfNeeded();
+      const style=card=>card.evaluate(el=>{
+       const img=el.querySelector('.oie-preview-thumbnail'),rect=img.getBoundingClientRect();
+       return {background:getComputedStyle(el).backgroundColor,border:getComputedStyle(el).border,
+        fit:getComputedStyle(img).objectFit,width:rect.width,height:rect.height};
+      });
+      const assertArtworkFits=async()=>{
+       const button=sticker.locator('.oie-preview-image-button');
+       const frame=await button.boundingBox(),image=await button.locator('img').boundingBox();
+       assert(image.width<=frame.width+1 && image.height<=frame.height+1);
+       assert(Math.abs(image.x+image.width/2-frame.x-frame.width/2)<=1);
+       assert(Math.abs(image.y+image.height/2-frame.y-frame.height/2)<=1);
+       assert.equal(await button.getAttribute('aria-description'),caption||null);
+      };
+      const waitForSource=async suffix=>{
+       for(const card of [sticker,regular]){
+        await until(()=>card.locator('img.oie-preview-thumbnail').evaluate((img,end)=>
+         img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(end),suffix),'gallery image '+suffix);
+       }
+      };
+      await waitForSource(hash);
+      await assertArtworkFits();
+      const compact=await style(sticker),normal=await style(regular);
+      assert.equal(compact.background,normal.background);
+      assert.equal(compact.border,normal.border);
+      assert.equal(compact.fit,'contain');
+      assert(compact.width>0 && compact.width<=160 && compact.height>0 && compact.height<=160);
+      assert.equal(normal.fit,'cover');
+      const before=await sticker.boundingBox();
+      await page.emulateMedia({reducedMotion:'no-preference'});
+      await waitForSource(gifHash+'?original=1');
+      await assertArtworkFits();
+      assert.deepEqual(await sticker.boundingBox(),before);
+      await page.emulateMedia({reducedMotion:'reduce'});
+      await waitForSource(hash);
+      await sticker.locator('[data-preview-expand]').first().click();
+      await until(()=>page.locator('#oie-image-viewer .oie-expanded-image').evaluate((img,hash)=>
+       img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash+'?original=1'),gifHash),'explicit GIF playback');
+     } finally { await context.close(); }
+    }
+   } finally { items.splice(0,2,...originals); }
+  }
   // A paginated clip whose waveform read fails still exposes native playback.
   {
    const page=await browser.newPage({viewport:{width:1440,height:1000},serviceWorkers:'block'});

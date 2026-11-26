@@ -127,7 +127,8 @@ for _,item:=range v.SharedContent.Items {
 }
 templ sharedItem(v view,item engineapi.SharedContentItem){
 {{ position := messageTimelineTime(item.Message) }}
-<article class="oie-shared-item" data-shared-item={item.Id} data-shared-record-version={sharedItemVersion(item)} data-shared-created-at={position.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(position.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
+{{ sticker := item.Kind=="image" && item.Message.StickerUrl!=nil && item.Url==*item.Message.StickerUrl && item.Message.Moderation==nil && item.Message.Retraction==nil }}
+<article class="oie-shared-item" if sticker { data-sticker-description={sharedStickerDescription(item)} } data-shared-item={item.Id} data-shared-record-version={sharedItemVersion(item)} data-shared-created-at={position.Format("2006-01-02T15:04:05Z07:00")} data-shared-created-ms={strconv.FormatInt(position.UnixMilli(),10)} data-shared-conversation={item.Message.ConversationId}>
 @sharedViewerSource(v,item)
 @sharedItemActions(v,item)
 if item.Kind=="video" {
