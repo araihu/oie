@@ -172,20 +172,30 @@ func (m *Manager) PreviewRoom(ctx context.Context, a domain.Account, address str
 	return preview, photo, ctx.Err()
 }
 
-func applyRoomVCard(preview *domain.RoomPreview, payload string) []byte {
+type profileVCard struct {
+	Name        string `xml:"vcard-temp FN"`
+	Description string `xml:"vcard-temp DESC"`
+	Photo       struct {
+		Data     string `xml:"vcard-temp BINVAL"`
+		External string `xml:"vcard-temp EXTVAL"`
+	} `xml:"vcard-temp PHOTO"`
+}
+
+func readProfileVCard(payload string) (*profileVCard, error) {
 	var document struct {
-		Cards []struct {
-			Name        string `xml:"vcard-temp FN"`
-			Description string `xml:"vcard-temp DESC"`
-			Photo       struct {
-				Data string `xml:"vcard-temp BINVAL"`
-			} `xml:"vcard-temp PHOTO"`
-		} `xml:"vcard-temp vCard"`
+		Cards []profileVCard `xml:"vcard-temp vCard"`
 	}
 	if xml.Unmarshal([]byte("<root>"+payload+"</root>"), &document) != nil || len(document.Cards) != 1 {
+		return nil, errAvatar
+	}
+	return &document.Cards[0], nil
+}
+
+func applyRoomVCard(preview *domain.RoomPreview, payload string) []byte {
+	card, err := readProfileVCard(payload)
+	if err != nil {
 		return nil
 	}
-	card := document.Cards[0]
 	if name := cleanEvidence(strings.TrimSpace(card.Name), 300); name != "" {
 		preview.Name = name
 	}

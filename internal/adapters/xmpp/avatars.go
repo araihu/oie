@@ -91,7 +91,8 @@ func decodeAvatar(s, expected string) ([]byte, string, error) {
 	}
 	return data, hash, nil
 }
-func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, e *entry, s *mx.Session, address, expected string) error {
+func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, e *entry, s *mx.Session, target domain.AvatarTarget, expected string) error {
+	address := target.Address
 	if address == e.account.Address {
 		if err := e.lockAccountAvatar(ctx); err != nil {
 			return err
@@ -99,14 +100,63 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 		defer e.unlockAccountAvatar()
 	}
 	cached, _ := host.Avatar(ctx, e.account.ID, address)
-	save := func(data []byte, source string) error {
-		if cached.SourceToken == source && cached.ImageHash != "" {
-			if _, err := host.AvatarImage(ctx, cached.ImageHash); err == nil {
-				return nil
-			}
-		}
-		return host.StoreAvatar(ctx, e.account.ID, address, source, data)
+	pep, err := m.fetchPEPAvatar(ctx, host, e, s, address, cached)
+	if err != nil {
+		return err
 	}
+	names, ok := m.host.(application.RoomTitleHost)
+	room := ok && target.Kind == "room" && isRoomAddress(e, address)
+	if pep && (!room || !names.NeedsRoomTitleFallback(ctx, e.account.ID, address)) {
+		return nil
+	}
+
+	revision := currentRoomConfiguration(e, address).revision
+	payload, err := m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, roomVCardQuery)
+	var card *profileVCard
+	if err == nil {
+		card, err = readProfileVCard(payload)
+	}
+	if err != nil {
+		if pep {
+			// The optional name lookup does not change a successful PEP avatar refresh.
+			return nil
+		}
+		return err
+	}
+	if room {
+		title := cleanEvidence(strings.TrimSpace(card.Name), 300)
+		if title != "" && title != address {
+			e.mu.RLock()
+			if e.session == s && e.state.State == "connected" && currentRoomConfiguration(e, address).revision == revision {
+				_ = names.ObserveRoomTitleFallback(ctx, e.account.ID, address, title)
+			}
+			e.mu.RUnlock()
+		}
+	}
+	if pep {
+		return nil
+	}
+	if card.Photo.Data == "" {
+		if card.Photo.External != "" || expected != "" {
+			return errAvatar
+		}
+		return host.StoreAvatar(ctx, e.account.ID, address, "vcard:none", nil)
+	}
+	data, hash, err := decodeAvatar(card.Photo.Data, expected)
+	if err != nil {
+		return err
+	}
+	source := "vcard:" + hash
+	if cached.SourceToken == source && cached.ImageHash != "" {
+		if _, err := host.AvatarImage(ctx, cached.ImageHash); err == nil {
+			return nil
+		}
+	}
+	return host.StoreAvatar(ctx, e.account.ID, address, source, data)
+}
+
+// fetchPEPAvatar reports whether PEP supplied an image or an explicit removal.
+func (m *Manager) fetchPEPAvatar(ctx context.Context, host application.AvatarHost, e *entry, s *mx.Session, address string, cached domain.Avatar) (bool, error) {
 	payload, err := m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, avatarMetadataQuery)
 	if err == nil {
 		var pep avatarPEP
@@ -116,7 +166,7 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 					continue
 				}
 				if len(item.Metadata.Info) == 0 {
-					return host.StoreAvatar(ctx, e.account.ID, address, "pep:none", nil)
+					return true, host.StoreAvatar(ctx, e.account.ID, address, "pep:none", nil)
 				}
 				for _, info := range item.Metadata.Info {
 					if !validSHA1(info.ID) || info.URL != "" || info.Bytes < 0 || info.Bytes > 1<<20 || (info.Type != "image/png" && info.Type != "image/jpeg" && info.Type != "image/gif") {
@@ -125,48 +175,23 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 					source := "pep:" + info.ID
 					if cached.SourceToken == source && cached.ImageHash != "" {
 						if _, err := host.AvatarImage(ctx, cached.ImageHash); err == nil {
-							return nil
+							return true, nil
 						}
 					}
 					payload, err = m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, avatarDataQuery(info.ID))
 					if err != nil {
-						return err
+						return true, err
 					}
 					decoded, err := avatarItemData(payload, info.ID)
 					if err != nil {
-						return err
+						return true, err
 					}
-					return save(decoded, source)
+					return true, host.StoreAvatar(ctx, e.account.ID, address, source, decoded)
 				}
 			}
 		}
 	}
-	payload, err = m.readHistoryIQ(ctx, e, s, address, stanza.GetIQ, `<vCard xmlns="vcard-temp"/>`)
-	if err != nil {
-		return err
-	}
-	var card struct {
-		Card *struct {
-			Photo struct {
-				Data     string `xml:"BINVAL"`
-				External string `xml:"EXTVAL"`
-			} `xml:"PHOTO"`
-		} `xml:"vcard-temp vCard"`
-	}
-	if xml.Unmarshal([]byte("<root>"+payload+"</root>"), &card) != nil || card.Card == nil {
-		return errAvatar
-	}
-	if card.Card.Photo.Data == "" {
-		if card.Card.Photo.External != "" || expected != "" {
-			return errAvatar
-		}
-		return host.StoreAvatar(ctx, e.account.ID, address, "vcard:none", nil)
-	}
-	data, hash, err := decodeAvatar(card.Card.Photo.Data, expected)
-	if err != nil {
-		return err
-	}
-	return save(data, "vcard:"+hash)
+	return false, nil
 }
 func (m *Manager) wakeAvatars(e *entry) {
 	select {
@@ -252,7 +277,7 @@ func (m *Manager) avatarLoop(ctx context.Context, e *entry, s *mx.Session) {
 			case <-ctx.Done():
 				return
 			}
-			err = m.fetchAvatar(ctx, host, e, s, target.Address, hint)
+			err = m.fetchAvatar(ctx, host, e, s, target, hint)
 			<-m.avatarGate
 			attempted[target.Address] = time.Now()
 			ttl := 24 * time.Hour

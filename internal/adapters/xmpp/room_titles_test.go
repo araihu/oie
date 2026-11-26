@@ -1,0 +1,113 @@
+package xmpp
+
+import (
+	"context"
+	"fmt"
+	"testing"
+
+	"github.com/araihu/oie/internal/application"
+	"github.com/araihu/oie/internal/domain"
+	mx "mellium.im/xmpp"
+)
+
+type roomTitleHostStub struct {
+	hostStub
+	application.AvatarHost
+	needsFallback                 bool
+	title, fallback, avatarSource string
+}
+
+func (h *roomTitleHostStub) NeedsRoomTitleFallback(context.Context, domain.ID, string) bool {
+	return h.needsFallback
+}
+func (h *roomTitleHostStub) ObserveRoomTitle(_ context.Context, _ domain.ID, _ string, title string) error {
+	h.title = title
+	return nil
+}
+func (h *roomTitleHostStub) ObserveRoomTitleFallback(_ context.Context, _ domain.ID, _ string, title string) error {
+	h.fallback = title
+	return nil
+}
+func (h *roomTitleHostStub) Avatar(context.Context, domain.ID, string) (domain.Avatar, error) {
+	return domain.Avatar{}, application.ErrNotFound
+}
+func (h *roomTitleHostStub) StoreAvatar(_ context.Context, _ domain.ID, _ string, source string, _ []byte) error {
+	h.avatarSource = source
+	return nil
+}
+
+func TestRoomTitleIndependentOfOccupantEvidenceCapacity(t *testing.T) {
+	m, e, slot, _ := roomFixture(t)
+	host := &roomTitleHostStub{}
+	m.host = host
+	e.occupantScopes = make(map[string]bool)
+	for i := range maxRoomSessions {
+		e.occupantScopes[fmt.Sprintf("occupied%d@example.test", i)] = true
+	}
+	room := slot.conversation.Address
+	raw := `<query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text" name="Book club"/></query>`
+	for _, address := range []string{"conference.example.test", room + "/nick", e.account.Address} {
+		if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, address, raw, 0); err != nil {
+			t.Fatal(err)
+		}
+		if host.title != "" {
+			t.Fatalf("room title recorded for %s", address)
+		}
+	}
+	if _, err := m.decodeDiscoInfo(t.Context(), e, e.session, room, raw, 0); err != nil {
+		t.Fatal(err)
+	}
+	if host.title != "Book club" || len(e.occupantScopes) != maxRoomSessions {
+		t.Fatalf("name %q, %d occupant evidence slots", host.title, len(e.occupantScopes))
+	}
+}
+
+func TestRoomVCardTitleDuringAvatarRefresh(t *testing.T) {
+	const roomCard = `<vCard xmlns="vcard-temp"><FN> Book club </FN></vCard>`
+	const pepRemoval = `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items><item><metadata xmlns="urn:xmpp:avatar:metadata"/></item></items></pubsub>`
+	for _, tc := range []struct {
+		name, kind, pep, card, expectedTitle, expectedAvatar string
+		missing                                              bool
+		stale                                                string
+	}{
+		{"vCard avatar lookup", "room", "", roomCard, "Book club", "vcard:none", true, ""},
+		{"PEP avatar with missing title", "room", pepRemoval, roomCard, "Book club", "pep:none", true, ""},
+		{"PEP avatar with saved title", "room", pepRemoval, "", "", "pep:none", false, ""},
+		{"PEP avatar without vCard", "room", pepRemoval, `<unsupported/>`, "", "pep:none", true, ""},
+		{"PEP avatar with foreign FN", "room", pepRemoval, `<vCard xmlns="vcard-temp"><FN xmlns="other">Foreign</FN></vCard>`, "", "pep:none", true, ""},
+		{"direct avatar", "direct", "", roomCard, "", "vcard:none", false, ""},
+		{"stale configuration", "room", pepRemoval, roomCard, "", "pep:none", true, "configuration"},
+		{"stale connection", "room", pepRemoval, roomCard, "", "pep:none", true, "session"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var e *entry
+			m, entry, fixture := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+				payload := tc.pep
+				if index > 0 {
+					if tc.card == "" || index != 1 {
+						t.Errorf("unexpected vCard IQ at index %d", index)
+					}
+					e.mu.Lock()
+					switch tc.stale {
+					case "configuration":
+						advanceRoomPresenceLocked(e, iq.To.String())
+					case "session":
+						e.session = &mx.Session{}
+					}
+					e.mu.Unlock()
+					payload = tc.card
+				}
+				return fmt.Sprintf(`<iq xmlns="jabber:client" from="%s" type="result" id="%s">%s</iq>`, iq.To, iq.ID, payload)
+			})
+			e = entry
+			host := &roomTitleHostStub{needsFallback: tc.missing}
+			m.host = host
+			if err := m.fetchAvatar(t.Context(), host, e, e.session, domain.AvatarTarget{Address: fixture.room.Address, Kind: tc.kind}, ""); err != nil {
+				t.Fatal(err)
+			}
+			if host.fallback != tc.expectedTitle || host.avatarSource != tc.expectedAvatar {
+				t.Fatalf("fallback title %q, avatar source %q", host.fallback, host.avatarSource)
+			}
+		})
+	}
+}
