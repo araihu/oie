@@ -119,7 +119,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
      preview:{...item.preview,imageHash:hash,fileHash:gifHash,fileMimeType:'image/gif',downloadState:'ready'}};
    }
    try{
-    for(const [width,query] of [[1440,'section=media'],[390,'chat='+chatA+'&open=details&infoView=shared&infoType=media']]){
+    for(const [width,query] of [[1440,'section=media'],[375,'section=media'],[390,'chat='+chatA+'&open=details&infoView=shared&infoType=media']]){
+     const caption=width===375?'': 'Festa!';
+     items[0].message={...items[0].message,originalText:'> Original\n'+caption+'\n'+items[0].url,
+      reply:{available:false,bodyText:[caption,items[0].url].filter(Boolean).join('\n')}};
      const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce',serviceWorkers:'block'});
      try{
       await watch(context);
@@ -135,6 +138,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
        return {background:getComputedStyle(el).backgroundColor,border:getComputedStyle(el).border,
         fit:getComputedStyle(img).objectFit,width:rect.width,height:rect.height};
       });
+      const assertArtworkFits=async()=>{
+       const button=sticker.locator('.oie-preview-image-button');
+       const frame=await button.boundingBox(),image=await button.locator('img').boundingBox();
+       assert(image.width<=frame.width+1 && image.height<=frame.height+1);
+       assert(Math.abs(image.x+image.width/2-frame.x-frame.width/2)<=1);
+       assert(Math.abs(image.y+image.height/2-frame.y-frame.height/2)<=1);
+       assert.equal(await button.getAttribute('aria-description'),caption||null);
+      };
       const waitForSource=async suffix=>{
        for(const card of [sticker,regular]){
         await until(()=>card.locator('img.oie-preview-thumbnail').evaluate((img,end)=>
@@ -142,6 +153,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
        }
       };
       await waitForSource(hash);
+      await assertArtworkFits();
       const compact=await style(sticker),normal=await style(regular);
       assert.equal(compact.background,normal.background);
       assert.equal(compact.border,normal.border);
@@ -151,6 +163,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
       const before=await sticker.boundingBox();
       await page.emulateMedia({reducedMotion:'no-preference'});
       await waitForSource(gifHash+'?original=1');
+      await assertArtworkFits();
       assert.deepEqual(await sticker.boundingBox(),before);
       await page.emulateMedia({reducedMotion:'reduce'});
       await waitForSource(hash);

@@ -653,7 +653,7 @@ html[data-message-markdown=false] .oie-rendered-message{display:none}
 .oie-shared-item .oie-preview-image-button .oie-preview-thumbnail{width:100%;height:100%;max-height:none;aspect-ratio:auto;object-fit:cover}
 .oie-shared-item .oie-video-stage{aspect-ratio:var(--oie-catalog-media-ratio);border-radius:0}
 
-.oie-shared-item[data-sticker-description] .oie-preview-image-button picture{display:grid;place-items:center;width:100%;height:100%}
+.oie-shared-item[data-sticker-description] .oie-preview-image-button picture{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
 .oie-shared-item[data-sticker-description] .oie-preview-image-button .oie-preview-thumbnail{max-width:160px;max-height:160px;object-fit:contain}
 
 /* Keep sender controls in the existing avatar slot, including grouped rows. */

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"slices"
+	"strings"
 
 	"github.com/araihu/goshtoso/components/combobox"
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
@@ -114,6 +115,11 @@ func (v view) sharedSourceHref(item engineapi.SharedContentItem) string {
 		return v.infoSourceHref(item.Message)
 	}
 	return v.href("section", "chats", "chat", item.Message.ConversationId, "message", item.Message.Id, "account", item.Message.AccountId, "q", "", "filter", "all", "contentType", "", "contentCursor", "", "contentConversation", "", "lang", v.Locale, "theme", v.Theme)
+}
+
+func sharedStickerDescription(item engineapi.SharedContentItem) string {
+	body := messageView{Message: item.Message}.displayBody()
+	return strings.TrimSpace(referencePresentation(body, map[string]bool{item.Url: true}))
 }
 
 // Preview metadata and stars refresh independently from the canonical catalog item.

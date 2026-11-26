@@ -812,9 +812,9 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var38 string
-			templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.OriginalText).Resolve(ctx)
+			templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(sharedStickerDescription(item)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 			if templ_7745c5c3_Err != nil {
@@ -832,7 +832,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Id).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 		if templ_7745c5c3_Err != nil {
@@ -845,7 +845,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.NewAttributeExpression(sharedItemVersion(item)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 179}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -858,7 +858,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templruntime.NewAttributeExpression(position.Format("2006-01-02T15:04:05Z07:00")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 249}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 254}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
@@ -871,7 +871,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templruntime.NewAttributeExpression(strconv.FormatInt(position.UnixMilli(), 10)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 317}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 322}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
@@ -884,7 +884,7 @@ func sharedItem(v view, item engineapi.SharedContentItem) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templruntime.NewAttributeExpression(item.Message.ConversationId).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 372}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/shared_content.templ`, Line: 131, Col: 377}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 		if templ_7745c5c3_Err != nil {
