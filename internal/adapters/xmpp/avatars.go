@@ -100,14 +100,11 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 		defer e.unlockAccountAvatar()
 	}
 	cached, _ := host.Avatar(ctx, e.account.ID, address)
-	pep, err := m.fetchPEPAvatar(ctx, host, e, s, address, cached)
-	if err != nil {
-		return err
-	}
+	pep, pepErr := m.fetchPEPAvatar(ctx, host, e, s, address, cached)
 	names, ok := m.host.(application.RoomTitleHost)
 	room := ok && target.Kind == "room" && isRoomAddress(e, address)
 	if pep && (!room || !names.NeedsRoomTitleFallback(ctx, e.account.ID, address)) {
-		return nil
+		return pepErr
 	}
 
 	revision := currentRoomConfiguration(e, address).revision
@@ -118,8 +115,8 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 	}
 	if err != nil {
 		if pep {
-			// The optional name lookup does not change a successful PEP avatar refresh.
-			return nil
+			// The optional name lookup does not change the PEP avatar result.
+			return pepErr
 		}
 		return err
 	}
@@ -134,7 +131,7 @@ func (m *Manager) fetchAvatar(ctx context.Context, host application.AvatarHost, 
 		}
 	}
 	if pep {
-		return nil
+		return pepErr
 	}
 	if card.Photo.Data == "" {
 		if card.Photo.External != "" || expected != "" {
@@ -199,6 +196,19 @@ func (m *Manager) wakeAvatars(e *entry) {
 	default:
 	}
 }
+
+// Membership can expose a room name that was absent from its public vCard.
+func (m *Manager) refreshJoinedRoomAvatar(e *entry, c domain.Conversation) {
+	if c.UsesRoomProfileTitle() {
+		e.avatarMu.Lock()
+		if _, pending := e.avatarDirty[c.Address]; !pending && e.avatarTargets[c.Address] == "room" {
+			e.avatarDirty[c.Address] = ""
+		}
+		e.avatarMu.Unlock()
+	}
+	m.wakeAvatars(e)
+}
+
 func (m *Manager) queueAvatar(e *entry, from jid.JID, expected string, presence bool) {
 	address := from.Bare().String()
 	e.avatarMu.Lock()

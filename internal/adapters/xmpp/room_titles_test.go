@@ -2,6 +2,7 @@ package xmpp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -109,5 +110,57 @@ func TestRoomVCardTitleDuringAvatarRefresh(t *testing.T) {
 				t.Fatalf("fallback title %q, avatar source %q", host.fallback, host.avatarSource)
 			}
 		})
+	}
+}
+
+func TestFailedPEPAvatarStillObservesRoomVCardTitle(t *testing.T) {
+	const hash = "0123456789abcdef0123456789abcdef01234567"
+	m, e, fixture := archiveFixture(t, func(iq testArchiveIQ, index int) string {
+		var payload string
+		switch index {
+		case 0:
+			payload = `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items><item><metadata xmlns="urn:xmpp:avatar:metadata"><info bytes="1" type="image/png" id="` + hash + `"/></metadata></item></items></pubsub>`
+		case 1:
+			payload = `<pubsub xmlns="http://jabber.org/protocol/pubsub"><items/></pubsub>`
+		case 2:
+			payload = `<vCard xmlns="vcard-temp"><FN>Book club</FN></vCard>`
+		default:
+			t.Errorf("unexpected IQ %d", index)
+		}
+		return fmt.Sprintf(`<iq xmlns="jabber:client" from="%s" type="result" id="%s">%s</iq>`, iq.To, iq.ID, payload)
+	})
+	host := &roomTitleHostStub{needsFallback: true}
+	m.host = host
+	err := m.fetchAvatar(t.Context(), host, e, e.session, domain.AvatarTarget{Address: fixture.room.Address, Kind: "room"}, "")
+	if !errors.Is(err, errAvatar) || host.fallback != "Book club" || host.avatarSource != "" {
+		t.Fatalf("avatar error %v, source %q, room title %q", err, host.avatarSource, host.fallback)
+	}
+}
+
+func TestConfirmedJoinRechecksAddressOnlyRoomProfile(t *testing.T) {
+	for _, tc := range []struct {
+		title, hint              string
+		fromProfile, wantRefresh bool
+	}{
+		{"room@conference.example.test", "", false, true},
+		{"", "pending-hash", false, true},
+		{"Saved name", "", false, false},
+		{"Published name", "", true, true},
+	} {
+		m, e, slot, _ := roomFixture(t)
+		room := slot.conversation.Address
+		slot.conversation.Title = tc.title
+		slot.conversation.TitleFromRoomProfile = tc.fromProfile
+		e.avatarWake = make(chan struct{}, 1)
+		e.avatarTargets = map[string]string{room: "room"}
+		e.avatarDirty = make(map[string]string)
+		if tc.hint != "" {
+			e.avatarDirty[room] = tc.hint
+		}
+		feedRoomPresence(t, m, e, `<presence from="room@conference.example.test/Oie" id="join-request"><x xmlns="http://jabber.org/protocol/muc#user"><status code="110"/></x></presence>`)
+		hint, refresh := e.avatarDirty[room]
+		if slot.snapshot.State != "joined" || len(e.avatarWake) != 1 || refresh != tc.wantRefresh || hint != tc.hint {
+			t.Fatalf("saved title %q, state %q, refresh %v hint %q", tc.title, slot.snapshot.State, refresh, hint)
+		}
 	}
 }
