@@ -42,6 +42,25 @@ if caption!="" {
 }
 
 templ documentViewer(v view){
+<template data-ios-file-viewer>
+<dialog id="oie-file-viewer" aria-labelledby="oie-file-title" data-filename={v.Text.AttachFile} data-loading={v.Text.SharedDownloading} data-failed={v.Text.SharedActionFailed} data-unavailable={v.Text.FilePreviewUnavailable}>
+<header class="oie-document-header">
+<h2 id="oie-file-title"></h2>
+<form method="dialog">
+@button.Button(button.WithType("submit"),button.WithAppearance(button.AppearancePlain)){ {v.Text.Close} }
+</form>
+</header>
+<div class="oie-file-content">
+<p role="status"></p>
+<div data-file-preview></div>
+</div>
+<footer>
+@button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-file-share":"","hidden":true})){ {v.Text.ShareFile} }
+@link.Link("#",link.WithAttrs(templ.Attributes{"data-file-save":"","target":"oie-file-download","download":"","hidden":true})){ {v.Text.SharedDownload} }
+</footer>
+<iframe name="oie-file-download" title={v.Text.SharedDownload} sandbox="allow-downloads" hidden></iframe>
+</dialog>
+</template>
 <div data-document-copy hidden data-loading={v.Text.DocumentLoading} data-unsupported={v.Text.DocumentUnsupported} data-empty={v.Text.DocumentEmpty} data-page={v.Text.DocumentPage}></div>
 @modal.Dialog(modal.DialogConfig{ID:"oie-document-viewer",Title:v.Text.DocumentViewer,HeaderContent:documentHeader(v),Content:documentContent(v),FullscreenMobile:true})
 }

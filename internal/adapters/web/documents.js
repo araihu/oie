@@ -188,7 +188,7 @@ window.OieRuntime.register('documents', life => {
  life.cleanup(()=>{previewObserver?.disconnect();previewQueue.length=0;for(const controller of previewRequests)controller.abort();previewRequests.clear()});
  function close(){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id:'oie-document-viewer'}}))}
  life.on(document,'click',event=>{
-  const open=event.target.closest('[data-document-open]');if(open){const card=open.closest('[data-document-item]'),record=card&&validSource(card);if(!record)return;event.preventDefault();opener=open;origin=card.closest('#info-shared-results')?'info':'global';current=record;dialog.querySelector('[data-document-title]').textContent=record.filename;dialog.setAttribute('aria-labelledby','oie-document-title');const download=dialog.querySelector('[data-document-download]'),original=dialog.querySelector('[data-document-original]');download.href=record.source+'&download=1';download.hidden=record.format==='unsupported';original.href=record.original||'#';original.hidden=!record.original;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-document-viewer'}}));load();return}
+  const open=event.target.closest('[data-document-open]');if(open){const card=open.closest('[data-document-item]'),record=card&&validSource(card);if(!record)return;event.preventDefault();opener=open;origin=card.closest('#info-shared-results')?'info':'global';current=record;dialog.querySelector('[data-document-title]').textContent=record.filename;dialog.setAttribute('aria-labelledby','oie-document-title');const download=dialog.querySelector('[data-document-download]'),original=dialog.querySelector('[data-document-original]');download.href=record.source+'&download=1';download.download=record.filename;download.hidden=record.format==='unsupported';original.href=record.original||'#';original.hidden=!record.original;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-document-viewer'}}));load();return}
   if(event.target.closest('[data-document-close]')){event.preventDefault();close();return}
   if(event.target.closest('[data-document-retry]')){event.preventDefault();scroll.focus({preventScroll:true});load();return}
   if(event.target.closest('[data-document-toast] button')&&!retryRegion.hidden){retry.focus({preventScroll:true});return}
@@ -197,4 +197,120 @@ window.OieRuntime.register('documents', life => {
  life.on(dialog,'close',()=>{const id=current?.id;reset();current=null;status.textContent='';const target=opener?.isConnected?opener:document.querySelector((origin==='info'?'#info-shared-results':'#shared-content-results')+` [data-document-item="${CSS.escape(id||'')}"] [data-document-open]`);life.raf(()=>target?.focus({preventScroll:true}))});
  life.on(window,'pagehide',()=>reset());
  life.cleanup(()=>{reset();current=null;close();if(dialog.open)dialog.close()});
+});
+
+// In an iOS Home Screen app, navigating to an attachment response can replace
+// the entire workspace with Quick Look, which has no browser Back control.
+window.OieRuntime.register('ios-file-viewer', life => {
+ const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+ if (!ios) return;
+ const template = document.querySelector('template[data-ios-file-viewer]');
+ if (!template) return;
+ const dialog = template.content.firstElementChild.cloneNode(true);
+
+ const title = dialog.querySelector('h2');
+ const status = dialog.querySelector('[role="status"]');
+ const preview = dialog.querySelector('[data-file-preview]');
+ const share = dialog.querySelector('[data-file-share]');
+ const save = dialog.querySelector('[data-file-save]');
+ const mediaTypes = {
+  png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', avif:'image/avif', heic:'image/heic',
+  mp4:'video/mp4', m4v:'video/mp4', mov:'video/quicktime', webm:'video/webm',
+  mp3:'audio/mpeg', m4a:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg',
+ };
+ let request, objectURL, file, opener;
+
+ function reset() {
+  request?.abort();
+  file = null;
+  const player = preview.querySelector('video,audio');
+  if (player) {
+   player.pause();
+   player.removeAttribute('src');
+   player.load();
+  }
+  preview.replaceChildren();
+  if (objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = '';
+  share.hidden = save.hidden = true;
+  save.removeAttribute('href');
+ }
+
+ async function openFile(link) {
+  reset();
+  const controller = new AbortController();
+  request = controller;
+  opener = link;
+  const filename = link.download || dialog.dataset.filename;
+  title.textContent = filename;
+  status.textContent = dialog.dataset.loading;
+  if (!dialog.isConnected) document.body.append(dialog);
+  if (!dialog.open) dialog.showModal();
+  try {
+   const response = await life.fetch(link.href, {credentials:'same-origin', redirect:'error', signal:controller.signal});
+   if (!response.ok) throw Error('download');
+   const blob = await response.blob();
+   if (controller.signal.aborted) return;
+   const extension = filename.split('.').pop().toLowerCase();
+   const type = Object.hasOwn(mediaTypes, extension) ? mediaTypes[extension] : blob.type;
+   file = new File([blob], filename, {type});
+   save.href = link.href;
+   save.download = filename;
+   share.hidden = !navigator.canShare?.({files:[file]});
+   save.hidden = !share.hidden;
+   if (!Object.values(mediaTypes).includes(type)) {
+    status.textContent = dialog.dataset.unavailable;
+    return;
+   }
+   const image = type.startsWith('image/');
+   const media = document.createElement(image ? 'img' : type.split('/')[0]);
+   if (image) media.alt = filename;
+   else {
+    media.controls = true;
+    media.playsInline = true;
+    media.preload = 'metadata';
+   }
+   media.addEventListener('error', () => {
+    media.remove();
+    status.textContent = dialog.dataset.unavailable;
+   }, {once:true, signal:controller.signal});
+   objectURL = URL.createObjectURL(file);
+   media.src = objectURL;
+   preview.replaceChildren(media);
+   status.textContent = '';
+  } catch {
+   if (!controller.signal.aborted) status.textContent = dialog.dataset.failed;
+  }
+ }
+
+ life.on(document, 'click', event => {
+  const link = event.target.closest?.('a[download]');
+  if (!link || link === save || event.defaultPrevented || event.button !== 0 ||
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const url = new URL(link.href);
+  if (url.origin !== location.origin || !(url.pathname === '/ui/scheduling/file' ||
+      /^\/ui\/(?:omemo-attachments\/[^/]+\/\d+|shared-content\/[^/]+\/content|media\/[a-f0-9]{64})$/.test(url.pathname))) return;
+  event.preventDefault();
+  void openFile(link);
+ }, true);
+ life.on(share, 'click', async () => {
+  const current = file;
+  if (!current) return;
+  try { await navigator.share({files:[current]}); }
+  catch (error) {
+   if (file === current && error.name !== 'AbortError') {
+    status.textContent = dialog.dataset.failed;
+    save.hidden = false;
+   }
+  }
+ });
+ life.on(dialog, 'close', () => {
+  if (dialog.open) return;
+  reset();
+  if (opener?.isConnected) opener.focus({preventScroll:true});
+  opener = null;
+ });
+ life.on(window, 'pagehide', () => { dialog.close(); reset(); });
+ life.cleanup(() => { dialog.close(); reset(); dialog.remove(); });
 });

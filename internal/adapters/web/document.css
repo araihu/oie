@@ -73,3 +73,32 @@
 @media(max-width:640px){#oie-document-viewer{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0}.oie-document-header{padding:8px 10px}.oie-document-pdf-controls{gap:2px}.oie-document-text{font-size:12px;padding:10px}}
 
 .oie-document-markdown{padding:18px;color:var(--oie-text);font:14px/1.6 var(--font-sans,system-ui,sans-serif);overflow-wrap:anywhere;text-align:left}.oie-document-markdown>:first-child{margin-top:0}.oie-document-markdown :is(h1,h2,h3,h4,h5,h6){font-weight:700;line-height:1.25;margin:1.2em 0 .5em}.oie-document-markdown h1{font-size:1.8em}.oie-document-markdown h2{font-size:1.5em}.oie-document-markdown h3{font-size:1.2em}.oie-document-markdown :is(p,ul,ol,pre,blockquote,table){margin:.7em 0}.oie-document-markdown ul{list-style:disc;padding-left:1.5em}.oie-document-markdown ol{list-style:decimal;padding-left:1.5em}.oie-document-markdown blockquote{border-left:3px solid var(--oie-primary);padding-left:12px;color:var(--oie-muted)}.oie-document-markdown pre{padding:12px;background:var(--oie-raised);border-radius:5px;white-space:pre-wrap}.oie-document-markdown code{font-family:ui-monospace,monospace;font-size:.9em}.oie-document-markdown :not(pre)>code{background:var(--oie-raised);padding:2px 4px;border-radius:3px}.oie-document-markdown a{color:var(--oie-primary);text-decoration:underline}.oie-document-markdown table{display:block;max-width:100%;overflow:auto;border-collapse:collapse}.oie-document-markdown :is(th,td){border:1px solid var(--oie-border);padding:5px 8px}.oie-document-thumbnail>[data-document-markdown-preview]{display:block;font-size:11px;pointer-events:none}.oie-document-markdown[hidden]{display:none}
+
+#oie-file-viewer {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  inset: 0;
+  max-width: 100%;
+  max-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  border: 0;
+  background: var(--oie-panel);
+  color: var(--oie-text);
+}
+#oie-file-viewer[open] { display: flex; flex-direction: column; }
+#oie-file-viewer .oie-file-content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  text-align: center;
+}
+#oie-file-viewer [data-file-preview] { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+#oie-file-viewer :is(img, video) { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+#oie-file-viewer :is(video, audio) { pointer-events: auto; }
+#oie-file-viewer footer { padding: 8px; text-align: center; }
+#oie-file-viewer [hidden] { display: none; }
