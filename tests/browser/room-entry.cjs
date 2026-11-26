@@ -121,7 +121,8 @@ async function apiHandler(req, res) {
     if (u.searchParams.get('cursor') === 'second') {
       return send(200,{items:[{...contact,id:id(71),displayName:'Rui',address:'rui@fixture'}],sources:[]});
     }
-    return send(200, {items:contact.address.includes(term.toLowerCase()) ? [contact] : [], sources:[], nextCursor:term ? undefined : 'second'});
+    const friend = {...contact, id:id(72), displayName:source.title, address:source.address, conversationId:chat};
+    return send(200, {items:[contact, friend].filter(c => c.address.includes(term.toLowerCase())), sources:[], nextCursor:term ? undefined : 'second'});
   }
   if (u.pathname === '/api/v1/conversations') return send(200, {items: [source, destination].filter(c => c && (!u.searchParams.has('accountId') || c.accountId === u.searchParams.get('accountId')))});
   if (u.pathname === '/api/v1/conversations/' + chat) return send(200, source);
@@ -787,7 +788,7 @@ async function waitFor(predicate) {
 
     await page.setViewportSize({width:1440,height:950});
     conflict = true;
-    await page.goto(base + '/?' + new URLSearchParams({chat, account: alice, lang: 'en'}));
+    await page.goto(base + '/?' + new URLSearchParams({chat:room, account: alice, lang: 'en'}));
     await page.locator('body[data-oie-live-ready=true]').waitFor();
     await page.locator('[data-new-conversation]').click();
     const newMenu = page.getByRole('dialog', {name:'New conversation'});
@@ -795,15 +796,45 @@ async function waitFor(predicate) {
     assert.deepEqual((await newMenu.locator('[data-picker-actions] > a, [data-picker-actions] > button').allTextContents()).map(label=>label.trim()), ['Direct conversation','Add contact','Create group','Join group']);
     const roster = newMenu.locator('[data-picker-section=contacts]');
     const searchPeople = newMenu.getByRole('searchbox');
-    const nina = roster.getByRole('link', {name:/Nina/});
+    const nina = roster.getByRole('button', {name:/Nina/});
     await nina.waitFor();
-    const contactURL = new URL(await nina.getAttribute('href'),base);
-    assert.equal(contactURL.searchParams.get('account'),alice);
-    assert.equal(contactURL.searchParams.get('newChatAddress'),'nina@fixture');
-    assert.equal(contactURL.searchParams.get('open'),'newchat');
     assert(await searchPeople.evaluate(input => input === document.activeElement));
+    const pickerShell = page.locator('#new-conversation-picker');
+    await pickerShell.evaluate(el => el.dataset.testInstance = 'original');
+    await nina.click();
+    assert.equal(await pickerShell.getAttribute('data-test-instance'), 'original');
+    assert(await pickerShell.locator('#new-conversation-form').isVisible());
+    assert.equal(await pickerShell.locator('#peer-address').inputValue(), 'nina@fixture');
+    assert.equal(await pickerShell.locator('#new-conversation-form [name=accountId]').inputValue(), alice);
+    await pickerShell.getByRole('button', {name:'Back',exact:true}).click();
+    assert(await nina.evaluate(el => el === document.activeElement));
+    const posts = [];
+    page.on('request', req => { if (req.url().includes('/ui/conversations/open') && req.method() === 'POST') posts.push(req.url()); });
+    await roster.getByRole('link',{name:/Friend/}).click();
+    await page.waitForURL(url => url.searchParams.get('chat') === chat && !url.searchParams.has('open'));
+    await pickerShell.waitFor({state:'hidden'});
+    assert.equal(posts.length,0);
+    await page.locator('[data-new-conversation]').click();
+    await searchPeople.fill(source.address);
+    await roster.getByRole('link',{name:/Friend/}).waitFor();
+    await newMenu.getByRole('button',{name:'Direct conversation'}).click();
+    await pickerShell.waitFor({state:'hidden'});
+    assert.equal(posts.length,0);
+    await page.locator('[data-new-conversation]').click();
+    await newMenu.getByRole('button',{name:'Add contact'}).click();
+    const add = pickerShell.locator('#picker-contact-form');
+    await add.locator('[name=address]').fill('nova@fixture');
+    await page.route('**/ui/accounts/contacts', route => {
+      const payload = new URLSearchParams(route.request().postData());
+      assert.equal(payload.get('contactAction'),'add');
+      assert.equal(payload.get('accountId'),alice);
+      assert.equal(payload.get('address'),'nova@fixture');
+      return route.fulfill({json:{ok:true,message:'Saved'}});
+    }, {times:1});
+    await add.getByRole('button',{name:'Add contact'}).click();
+    await newMenu.waitFor();
     await roster.getByRole('button',{name:'More contacts'}).click();
-    await roster.getByRole('link',{name:/Rui/}).waitFor();
+    await roster.getByRole('button',{name:/Rui/}).waitFor();
     assert.equal(await nina.count(),1);
     let unblock, started;
     const pending = new Promise(resolve => { started = resolve; });
@@ -820,7 +851,7 @@ async function waitFor(predicate) {
     unblock();
     assert.equal(await searchPeople.inputValue(),'nina');
     assert.equal(await roster.getByText('stale-contact-result').count(),0);
-    await page.route('**/ui/new-conversation/results?group=contacts*', route => route.fulfill({status:503}), {times:1});
+    await page.route(url => url.pathname === '/ui/new-conversation/results' && url.searchParams.get('group') === 'contacts' && url.searchParams.get('term') === 'nina@', route => route.fulfill({status:503}), {times:1});
     await searchPeople.fill('nina@');
     await roster.getByRole('button',{name:'Try again'}).click();
     await nina.waitFor();
@@ -928,20 +959,20 @@ async function waitFor(predicate) {
           await view.addScriptTag({path: require.resolve('./fixtures/axe-core/axe.min.js')});
           const scan = id => view.evaluate(selector => window.axe.run(selector,
             {runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa']}}), id);
-          const cardIssues = await scan('[data-room-bubble]');
-          assert.deepEqual(cardIssues.violations.map(value => value.id), [], ['card', width, theme, mode].join(' '));
           const joinedIssues = await scan('#join-room-body');
           assert.deepEqual(joinedIssues.violations.map(value => value.id), [], ['join', width, theme, mode].join(' '));
           await view.screenshot({path: path.join(artifacts, `room-join-${width}-${theme}-${mode}.png`), animations: 'disabled'});
           await view.keyboard.press('Escape');
           await view.locator('#join-room-body').waitFor({state: 'hidden'});
+          const cardIssues = await scan('[data-room-bubble]');
+          assert.deepEqual(cardIssues.violations.map(value => value.id), [], ['card', width, theme, mode].join(' '));
           if (width === 390) {
             await view.locator('.oie-back-button').click();
             await view.waitForURL(url => !url.searchParams.has('chat'));
           }
           await view.locator('[data-new-conversation]').click();
           const picker = view.getByRole('dialog', {name:'New conversation'});
-          await picker.getByRole('link',{name:/Nina/}).waitFor();
+          await picker.getByRole('button',{name:/Nina/}).waitFor();
           const box = await picker.boundingBox();
           if (width === 390) {
             assert(Math.abs(box.x) < 1 && Math.abs(box.width - width) < 1 && Math.abs(box.y + box.height - 900) < 1, 'sheet meets bottom and side edges');
@@ -953,6 +984,7 @@ async function waitFor(predicate) {
           assert.deepEqual(pickerIssues.violations.map(value=>value.id), [], ['picker', width, theme, mode].join(' '));
           await picker.getByRole('button', {name:'Create group'}).click();
           await view.locator('#create-room-form').waitFor();
+          assert.deepEqual(await view.locator('#new-conversation-picker').boundingBox(), box);
           const createdIssues = await scan('#create-room-body');
           assert.deepEqual(createdIssues.violations.map(value => value.id), [], ['create', width, theme, mode].join(' '));
           await view.screenshot({path: path.join(artifacts, `room-create-${width}-${theme}-${mode}.png`), animations: 'disabled'});

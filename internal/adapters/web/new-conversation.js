@@ -1,12 +1,20 @@
 window.OieRuntime.register('new-conversation-picker', life => {
   const dialog = document.querySelector('#new-conversation-picker');
   const trigger = document.querySelector('[data-new-conversation]');
-  if (!dialog || !trigger) return;
+  if (!dialog) return;
 
   const search = dialog.querySelector('#picker-search');
   const sections = [...dialog.querySelectorAll('[data-picker-section]')];
   const accounts = new Map([...dialog.querySelector('[data-picker-accounts]').content.children]
     .map(node => [node.dataset.account, node.textContent]));
+  const title = dialog.querySelector('#picker-title');
+  const homeTitle = title.textContent;
+  const back = dialog.querySelector('[data-picker-back]');
+  const searchBar = search.closest('.oie-picker-search');
+  const list = dialog.querySelector('.oie-picker-scroll');
+  const steps = [...dialog.querySelectorAll('[data-picker-step]')];
+  let returnFocus, previousAction;
+
   let controller, timer;
 
   function cancel() {
@@ -78,22 +86,73 @@ window.OieRuntime.register('new-conversation-picker', life => {
     timer = setTimeout(() => sections.forEach(section => load(section)), delay);
   }
 
-  function openPicker() {
-    if (dialog.open) return;
-    search.value = '';
-    dialog.querySelector('details')?.removeAttribute('open');
-    // Opening the mobile keyboard here would cover the shortcuts and contacts.
+  function show(step) {
+    if (steps.some(pane => !pane.hidden && pane !== step && pane.dataset.pickerStep === 'join-room'))
+      document.dispatchEvent(new CustomEvent('oie:picker-leave-join'));
+    for (const pane of steps) pane.hidden = pane !== step;
+    title.textContent = step?.dataset.title || homeTitle;
+    back.hidden = !step;
+    searchBar.hidden = list.hidden = Boolean(step);
     const mobile = matchMedia('(max-width:720px), (pointer:coarse) and (max-height:600px)').matches;
-    const initial = mobile ? dialog.querySelector('h2') : search;
-    initial.setAttribute('autofocus', '');
-    dialog.showModal();
-    initial.focus({preventScroll:true});
-    initial.removeAttribute('autofocus');
+    const focus = step || mobile ? title : search;
+    if (!dialog.open) {
+      focus.setAttribute('autofocus', '');
+      dialog.showModal();
+      focus.removeAttribute('autofocus');
+    }
+    focus.focus({preventScroll:true});
+  }
+
+  function openPicker() {
+    returnFocus = trigger;
+    previousAction = null;
+    search.value = '';
+    show(null);
     refresh(0);
   }
+
+  function openStep(id, action) {
+    const step = steps.find(pane => pane.dataset.pickerStep === id);
+    if (!step) return;
+    previousAction = action;
+    show(step);
+  }
+
+  function closePicker() {
+    dialog.close();
+    returnFocus?.focus({preventScroll:true});
+  }
+
+  life.on(dialog, 'oie:contact-added', event => {
+    const form = event.target;
+    if (form.elements.address.value === event.detail.address) form.elements.address.value = '';
+    if (!dialog.open || !form.getClientRects().length) return;
+    show(null);
+    refresh(0);
+    previousAction?.focus({preventScroll:true});
+  });
   life.on(trigger, 'click', openPicker);
-  if (new URLSearchParams(location.search).get('open') === 'conversation-picker') openPicker();
+  life.on(document, 'oie:picker-step', event => {
+    returnFocus = event.detail.trigger;
+    openStep(event.detail.id);
+  });
+  const initial = new URLSearchParams(location.search).get('open') || document.body.dataset.openDrawer;
+  if (initial === 'conversation-picker') openPicker();
+  else if (initial) {
+    returnFocus = trigger;
+    openStep(initial);
+  }
   life.on(search, 'input', () => refresh(160));
+  life.on(dialog, 'click', event => {
+    const link = event.target.closest('a[data-picker-account]');
+    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const pane = document.querySelector('#conversation-pane[data-open-chat="true"]');
+    if (pane && pane.dataset.conversationId === new URL(link.href).searchParams.get('chat')) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    dialog.close();
+  }, {capture:true});
   life.on(dialog, 'click', event => {
     const target = event.target;
     if (target === dialog || target.closest('[data-picker-close]')) {
@@ -101,19 +160,46 @@ window.OieRuntime.register('new-conversation-picker', life => {
         const box = dialog.getBoundingClientRect();
         if (event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) return;
       }
-      dialog.close();
-      trigger.focus({preventScroll:true});
+      closePicker();
       return;
     }
-    const action = target.closest('[data-picker-drawer]');
+    if (target.closest('[data-picker-back]')) {
+      show(null);
+      if (previousAction?.isConnected) previousAction.focus({preventScroll:true});
+      else refresh(0);
+      return;
+    }
+    const person = target.closest('button[data-picker-account]');
+    if (person) {
+      const form = dialog.querySelector('#new-conversation-form');
+      if (!form || form.dataset.busy === 'true') return;
+      form.elements.accountId.value = person.dataset.pickerAccount;
+      form.elements.accountId.dispatchEvent(new Event('input', {bubbles:true}));
+      form.elements.address.value = person.dataset.pickerAddress;
+      openStep('newchat', person);
+      return;
+    }
+    const action = target.closest('[data-picker-target]');
     if (action) {
-      const id = action.dataset.pickerDrawer;
-      if (id === 'newchat' && search.value.includes('@')) {
-        const address = document.getElementById('peer-address');
-        if (address) address.value = search.value.trim();
+      const id = action.dataset.pickerTarget;
+      if (id === 'newchat') {
+        const address = search.value.trim();
+        const form = dialog.querySelector('#new-conversation-form');
+        if (form && form.dataset.busy !== 'true') {
+          if (dialog.dataset.account || accounts.size === 1) {
+            const existing = [...list.querySelectorAll('a[data-picker-address]')]
+              .find(row => row.dataset.pickerAddress === address && new URL(row.href).searchParams.has('chat')
+                && row.dataset.pickerKind === 'direct');
+            if (existing) {
+              existing.click();
+              return;
+            }
+          }
+          form.elements.address.value = address.includes('@') ? address : '';
+        }
       }
-      dialog.close();
-      document.dispatchEvent(new CustomEvent('oie:new-conversation', {detail:{id}}));
+      openStep(id, action);
+      return;
     }
     const more = target.closest('[data-picker-more]');
     if (more) load(more.closest('section'), more.dataset.pickerMore);
@@ -128,17 +214,20 @@ window.OieRuntime.register('new-conversation-picker', life => {
   });
   life.on(header, 'pointerup', event => {
     if (drag?.id === event.pointerId && event.clientY - drag.y > 60) {
-      dialog.close();
-      trigger.focus({preventScroll:true});
+      closePicker();
     }
     drag = undefined;
   });
   life.on(header, 'lostpointercapture', () => { drag = undefined; });
   life.on(dialog, 'cancel', () => {
-    dialog.close();
-    trigger.focus({preventScroll:true});
+    closePicker();
   });
-  life.on(dialog, 'close', () => { if (!dialog.open) cancel(); });
+  life.on(dialog, 'close', () => {
+    if (dialog.open) return;
+    cancel();
+    if (dialog.querySelector('[data-picker-step="join-room"]:not([hidden])'))
+      document.dispatchEvent(new CustomEvent('oie:picker-leave-join'));
+  });
   life.cleanup(() => {
     cancel();
     if (dialog.open) dialog.close();

@@ -333,7 +333,10 @@ func (v view) addAccountHref() string {
 	return v.href("open", "accounts", "accountPage", "add", "managedAccount", "")
 }
 func (v view) initialDrawer() string {
-	if v.FormTarget == "join-room" || v.FormTarget == "create-room" {
+	if v.FormTarget == "open" {
+		return "newchat"
+	}
+	if v.FormTarget == "join-room" || v.FormTarget == "create-room" || v.FormTarget == "add-contact" {
 		return v.FormTarget
 	}
 	if v.FormTarget == "register" || v.FormTarget == "account-communication" || v.FormTarget == "contact-action" ||

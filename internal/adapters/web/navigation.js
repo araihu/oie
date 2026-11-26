@@ -551,7 +551,7 @@
   (target||root.querySelector('[data-info-heading]'))?.focus({preventScroll:true});
  }
  function closeMediaViewers(){for(const id of ['oie-image-viewer','oie-document-viewer']){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id}}));const dialog=document.getElementById(id);if(dialog?.open)dialog.close()}}
- function closeOverlays(){closeMediaViewers();for(const id of ['details','accounts','settings','diagnostics','destructive-actions','about','newchat','join-room','create-room','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
+ function closeOverlays(){closeMediaViewers();document.getElementById('new-conversation-picker')?.close();for(const id of ['details','accounts','settings','diagnostics','destructive-actions','about','sender','message-history'])window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id}}));}
  function workspaceResponse(ctx,nextApp,next){
   if(ctx.oieKind===routeID){
    if(!next||!nextApp||ctx.response?.status!==200)return false;

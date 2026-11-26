@@ -219,11 +219,6 @@ if v.CanResetData {
 }
 			@accounts(v)
 @newConversationPicker(v)
-@newConversation(v)
-if !v.Preview {
-@roomEntryDrawer(v,false)
-@roomEntryDrawer(v,true)
-}
 if !v.CompactSource {
 <div data-route-viewers>
 @quickMessageSearch(v)
@@ -917,7 +912,6 @@ func accountOptions(v view,all bool)[]selectfield.Option{
  for _,a:=range v.Accounts{out=append(out,selectfield.Option{Value:a.Id,Label:a.Label+" · "+a.Address,Selected:selected==a.Id})};return out
 }
 templ newConversation(v view){
-@workspaceDrawer(drawer.Config{ID:"newchat",Title:v.Text.DirectConversation}){
 <div class="oie-settings">
 if len(v.Accounts)==0 {
 @emptystate.EmptyState(emptystate.Config{Title:v.Text.EmptyTitle,Description:v.Text.NoChatsBody})
@@ -932,7 +926,6 @@ if len(v.Accounts)==0 {
 }
 }
 </div>
-}
 }
 
 templ newConversationTrigger(v view) {

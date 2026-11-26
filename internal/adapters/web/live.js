@@ -2437,6 +2437,11 @@ window.OieRuntime.register('live', (life, route) => {
         } else {
           feedback(form,sending ? '' : result.message || '');
         }
+        if (form.dataset.oieAction === 'picker-contact') {
+          feedback(form, '');
+          if (result.message) window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'success',message:result.message}}));
+          form.dispatchEvent(new CustomEvent('oie:contact-added', {bubbles:true, detail:{address:fields.get('address')}}));
+        }
         if (sending && result.accepted) {
           if(!completeSubmission(result))feedback(form,text('pending'),true);
           renderReply();
@@ -2608,7 +2613,7 @@ window.OieRuntime.register('live', (life, route) => {
   life.timeout(resumeOfflineSends, 0);
   if(recoveringView) scheduleRefresh();
   const open = new URLSearchParams(location.search).get('open') || body.dataset.openDrawer;
-  if (open === 'sender' || open === 'accounts' || open === 'newchat' || open === 'details' || open === 'settings') {
+  if (open === 'sender' || open === 'accounts' || open === 'details' || open === 'settings') {
     const show = () => {
       dispatchEvent(new CustomEvent('drawer:open',{detail:{id:open}}));
       if (open === 'settings') {
