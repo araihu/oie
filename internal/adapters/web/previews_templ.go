@@ -405,7 +405,7 @@ func previewThumbnail(v view, p engineapi.MessagePreview) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<picture><source media=\"(prefers-reduced-motion: no-preference)\" x-bind:srcset=\"previewFile && previewFile !== failedOriginal && ($el.closest('.oie-sticker') || (previewMime === 'image/gif' && $el.closest('.oie-bubble'))) ? previewFile : null\"> <img class=\"oie-preview-thumbnail\" loading=\"lazy\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<picture><source media=\"(prefers-reduced-motion: no-preference)\" x-bind:srcset=\"previewFile && previewFile !== failedOriginal && ($el.closest('.oie-sticker') || (previewMime === 'image/gif' && $el.closest('.oie-bubble'))) ? previewFile + '?original=1' : null\"> <img class=\"oie-preview-thumbnail\" loading=\"lazy\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -441,13 +441,13 @@ func previewThumbnail(v view, p engineapi.MessagePreview) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" x-bind:src=\"previewImage || null\" x-effect=\"previewImage; previewImageFailed=false\" x-on:error=\"if (previewFile && $el.currentSrc.endsWith(previewFile) && failedOriginal !== previewFile) { failedOriginal=previewFile } else { previewImageFailed=true; $dispatch('oie:image-preview-error') }\"></picture>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" x-bind:src=\"previewImage || null\" x-effect=\"previewImage; previewImageFailed=false\" x-on:error=\"if (previewFile && $el.currentSrc.endsWith(previewFile + '?original=1') && failedOriginal !== previewFile) { failedOriginal=previewFile } else { previewImageFailed=true; $dispatch('oie:image-preview-error') }\"></picture>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-preview-image-button"), button.WithAttrs(templ.Attributes{"type": "button", "data-preview-expand": "", "x-cloak": "", "aria-label": v.Text.OpenImage, "x-show": "previewImage && !previewImageFailed", "x-bind:disabled": "previewBusy"})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.WithAppearance(button.AppearancePlain), button.WithRootClass("oie-preview-image-button"), button.WithAttrs(templ.Attributes{"type": "button", "data-preview-expand": "", "x-cloak": "", "aria-label": v.Text.OpenImage, "x-bind:aria-description": "$el.closest('.oie-sticker-artwork')?.dataset.stickerDescription || null", "x-show": "previewImage && !previewImageFailed", "x-bind:disabled": "previewBusy"})).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

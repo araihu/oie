@@ -1280,7 +1280,7 @@ templ messageStarIndicator(v view,id string){
 templ messageBody(v view,m messageView){
 @replyCard(v,m)
 if m.StickerUrl!=nil {
-<div class="oie-sticker-artwork">@messageTextAndPreviews(v,m)</div>
+<div class="oie-sticker-artwork" data-sticker-description={m.presentationText()}>@messageTextAndPreviews(v,m)</div>
 }else{
 @messageTextAndPreviews(v,m)
 }

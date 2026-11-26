@@ -284,6 +284,7 @@ function thumbnail(color,width=8,height=8){
   await row.locator('#load-preview-'+first.id).waitFor();
   assert.equal(await secondAction.isVisible(),false);
   const sticker=addAnimation(19,true), gif=addAnimation(21,false);
+  messages[19].originalText='🎉 https://example.test/celebrate';
   const downloadedSticker={...sticker};
   resetImage(sticker);
   await page.reload();
@@ -310,7 +311,7 @@ function thumbnail(color,width=8,height=8){
     await page.emulateMedia({reducedMotion:motion});
     for(const p of [sticker,gif]) {
      const image=scope(page,p).locator('img.oie-preview-thumbnail');
-     const hash=motion==='reduce'?thumbHash:animatedHash;
+     const hash=motion==='reduce'?thumbHash:animatedHash+'?original=1';
      await until(()=>image.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),hash),'inline image source for '+motion);
     }
     const frame=messageRow(19).locator('.oie-sticker .oie-image-frame');
@@ -321,8 +322,36 @@ function thumbnail(color,width=8,height=8){
     assert.equal(await messageRow(21).locator('.oie-bubble').count(),1);
    }
   }
-  await scope(page,sticker).locator('[data-preview-expand]').first().click();
-  await until(()=>page.locator('.oie-expanded-image').evaluate(img=>img.complete && img.naturalWidth===2),'open animated original with reduced motion');
+  assert.equal(await stickerRow.locator('[data-message-presentation] a:visible').count(),0);
+  assert.match(await scope(page,sticker).locator('[data-preview-expand]').first().getAttribute('aria-description'),/🎉/);
+  const originalResponse=await page.request.get(base+'/ui/media/'+animatedHash+'?original=1');
+  assert.equal(originalResponse.headers()['cache-control'],'private, no-cache');
+  for(const p of [sticker,gif]) {
+   await scope(page,p).locator('[data-preview-expand]').first().click();
+   await until(()=>page.locator('.oie-expanded-image').evaluate(img=>img.complete && img.naturalWidth===2),'open animated original with reduced motion');
+   await page.keyboard.press('Escape');
+   await page.locator('#oie-image-viewer').waitFor({state:'hidden'});
+  }
+  // A fresh document avoids reusing a decoded GIF from the viewer above.
+  const retryContext=await browser.newContext({reducedMotion:'no-preference'});
+  await retryContext.addInitScript(key=>localStorage.setItem(key,'false'),preferenceKey);
+  const retryPage=await retryContext.newPage();
+  const originalRoute='**/ui/media/'+animatedHash+'?original=1';
+  let originalFailures=0;
+  await retryPage.route(originalRoute,async route=>{originalFailures++;await route.abort()});
+  await retryPage.goto(page.url());
+  const gifImage=scope(retryPage,gif).locator('img.oie-preview-thumbnail');
+  await gifImage.scrollIntoViewIfNeeded();
+  await until(()=>gifImage.evaluate((img,hash)=>img.complete && img.naturalWidth>0 && img.currentSrc.endsWith(hash),thumbHash).then(still=>originalFailures>0 && still),'fallback after failed animation');
+  await retryPage.unroute(originalRoute);
+  const previousFile={...gif};
+  resetImage(gif);
+  emit('message.preview_changed');
+  await until(async()=>await scope(retryPage,gif).getAttribute('data-preview-file')==='','removed original');
+  Object.assign(gif,previousFile,{revisionId:id(994)});
+  emit('message.preview_changed');
+  await until(()=>gifImage.evaluate((img,hash)=>img.complete && img.currentSrc.endsWith(hash+'?original=1'),animatedHash),'restored original can animate after failure');
+  await retryContext.close();
   console.log('PASS: lazy automatic/device-controlled image downloads, structured cards, expansion, safe retries, focus/drafts, no provider browser requests and own alignment');
  }finally{await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(r=>api.close(r))}
 })().catch(error=>{console.error(error);process.exitCode=1});

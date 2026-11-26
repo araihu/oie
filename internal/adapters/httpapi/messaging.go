@@ -60,11 +60,11 @@ func message(m domain.Message) engineapi.Message {
 	if len(m.AudioURLs) > 0 {
 		out.AudioAttachmentUrls = &m.AudioURLs
 	}
+	if sticker, ok := domain.StickerFile(m.FileReferences); ok && !m.IsWithdrawn() {
+		out.StickerUrl = new(sticker.URL)
+	}
 	var videoURLs []string
 	for _, file := range m.FileReferences {
-		if file.Sticker && file.Kind == "image" && !m.IsWithdrawn() {
-			out.StickerUrl = new(file.URL)
-		}
 		if file.Kind == "video" {
 			videoURLs = append(videoURLs, file.URL)
 		}

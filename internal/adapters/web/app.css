@@ -372,7 +372,7 @@ html[data-sidebar-collapsed] .oie-list-account{display:flex}
 .oie-message-own .oie-sticker{margin-inline-start:auto}
 .oie-sticker .oie-message-body-compact{padding-inline-end:0}
 .oie-sticker .oie-message-stamp{margin-inline-end:0}
-.oie-sticker:has([data-image-visible=true]) :is([data-rendered-message],[data-original-message]){position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.oie-sticker-artwork:has([data-image-visible=true])>[data-message-presentation]{display:none}
 :is(.oie-timeline,.oie-starred-bubble) .oie-sticker .oie-image-frame{display:block;width:100%;aspect-ratio:1;background:transparent}
 :is(.oie-timeline,.oie-starred-bubble) .oie-sticker .oie-preview-thumbnail{object-fit:contain}
 .oie-sticker .oie-image-frame .oie-preview-image-button{border-radius:0}

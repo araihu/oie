@@ -149,9 +149,10 @@ func TestArchiveRecoversStickerOnMatchingRetainedImage(t *testing.T) {
 	e, _, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
 	c := openTestConversation(t, e, "alice@localhost")
 	const source = "https://files.example.org/animation"
+	const mirror = "https://mirror.example.org/animation"
 	incoming := application.Incoming{
 		AccountID: c.AccountID, Address: "bob@localhost", ProviderID: "sticker-source", OriginalText: "🎉",
-		FileReferences: []domain.SharedReference{{Kind: "image", URL: source, Sticker: false}},
+		FileReferences: []domain.SharedReference{{Kind: "image", URL: source}, {Kind: "image", URL: mirror}},
 	}
 	if err := e.Receive(t.Context(), incoming); err != nil {
 		t.Fatal(err)
@@ -167,7 +168,7 @@ func TestArchiveRecoversStickerOnMatchingRetainedImage(t *testing.T) {
 	}
 	replay := func(address string) {
 		t.Helper()
-		incoming.FileReferences = []domain.SharedReference{{Kind: "image", URL: address, Sticker: true}}
+		incoming.FileReferences = []domain.SharedReference{{Kind: "image", URL: address, Sticker: true}, {Kind: "image", URL: mirror, Sticker: true}}
 		if err := e.Receive(t.Context(), incoming); err != nil {
 			t.Fatal(err)
 		}
@@ -179,6 +180,14 @@ func TestArchiveRecoversStickerOnMatchingRetainedImage(t *testing.T) {
 	}
 	replay(source)
 	marked := read()
+	previews, err := e.ConversationPreviews(t.Context(), c.ID, []domain.ID{marked.ID})
+	if err != nil || len(previews) != 1 || previews[0].URL != source {
+		t.Fatalf("sticker previews: %v, %v", previews, err)
+	}
+	files := application.MessageSharedReferences(marked)
+	if len(files) != 1 || files[0].URL != source {
+		t.Fatal("duplicate shared sticker", files)
+	}
 	replay(source)
 	if marked.RevisionID == before.RevisionID || read().RevisionID != marked.RevisionID {
 		t.Fatal("expected one new revision for the recovered marker")

@@ -269,6 +269,9 @@ func normalizeFileReferences(candidates []domain.SharedReference) []domain.Share
 }
 
 func MessageSharedReferences(message domain.Message) []domain.SharedReference {
+	if sticker, ok := domain.StickerFile(message.FileReferences); ok {
+		return []domain.SharedReference{sticker}
+	}
 	refs := SharedReferences(domain.DisplayBody(message))
 	for _, file := range message.FileReferences {
 		index := slices.IndexFunc(refs, func(ref domain.SharedReference) bool { return ref.URL == file.URL })

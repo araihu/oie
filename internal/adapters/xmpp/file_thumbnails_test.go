@@ -84,13 +84,13 @@ func TestStickerRequiresDirectNamespacedMarkerAndSharedImage(t *testing.T) {
 		{"audio", marker, "audio/mpeg", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			raw := "<message xmlns='jabber:client'>" + tc.marker + "<file-sharing xmlns='urn:xmpp:sfs:0'><file xmlns='urn:xmpp:file:metadata:0'><media-type>" + tc.mediaType + "</media-type></file><sources><url-data xmlns='http://jabber.org/protocol/url-data' target='" + source + "'/></sources></file-sharing></message>"
+			raw := "<message xmlns='jabber:client'>" + tc.marker + "<file-sharing xmlns='urn:xmpp:sfs:0'><file xmlns='urn:xmpp:file:metadata:0'><media-type>" + tc.mediaType + "</media-type></file><sources><url-data xmlns='http://jabber.org/protocol/url-data' target='" + source + "'/><url-data xmlns='http://jabber.org/protocol/url-data' target='https://mirror.example/art'/></sources></file-sharing></message>"
 			var msg archiveMessage
 			if err := xml.Unmarshal([]byte(raw), &msg); err != nil {
 				t.Fatal(err)
 			}
 			refs := decodeFileReferences(msg.fileSharingMetadata)
-			if len(refs) != 1 || refs[0].Sticker != tc.want || refs[0].URL != source {
+			if len(refs) != 2 || refs[0].Sticker != tc.want || refs[1].Sticker != tc.want || refs[0].URL != source {
 				t.Fatalf("references: %+v", refs)
 			}
 		})

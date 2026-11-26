@@ -1165,7 +1165,7 @@ func (s *Store) RecordConnection(ctx context.Context, c domain.Connection) error
 
 // Older releases retained the shared image but discarded its sticker marker.
 func recoverArchivedSticker(ctx context.Context, q *dbgen.Queries, id string, incoming domain.Message) error {
-	if incoming.ArchiveID == "" || len(incoming.FileReferences) != 1 || !incoming.FileReferences[0].Sticker {
+	if _, marked := domain.StickerFile(incoming.FileReferences); incoming.ArchiveID == "" || !marked {
 		return nil
 	}
 	row, err := q.GetMessage(ctx, id)
@@ -1177,14 +1177,13 @@ func recoverArchivedSticker(ctx context.Context, q *dbgen.Queries, id string, in
 		return err
 	}
 	if old.AccountID != incoming.AccountID || old.Sender.DisplayName != incoming.Sender.DisplayName ||
-		old.SourceBodyHash() != incoming.SourceBodyHash() || len(old.FileReferences) != 1 {
+		old.SourceBodyHash() != incoming.SourceBodyHash() || !sameReferencedFiles(old.FileReferences, incoming.FileReferences) {
 		return nil
 	}
-	file := &old.FileReferences[0]
-	if file.Sticker || file.Kind != "image" || file.URL != incoming.FileReferences[0].URL {
+	if _, marked := domain.StickerFile(old.FileReferences); marked {
 		return nil
 	}
-	file.Sticker = true
+	old.FileReferences = incoming.FileReferences
 	parents := jsonText([]domain.ID{old.RevisionID})
 	old.RevisionID = incoming.RevisionID
 	payload := jsonText(old)
@@ -1193,6 +1192,9 @@ func recoverArchivedSticker(ctx context.Context, q *dbgen.Queries, id string, in
 	}
 	at := incoming.ReceivedAt
 	if err = q.InsertMessageRevision(ctx, dbgen.InsertMessageRevisionParams{ID: string(old.RevisionID), EntityID: id, Parents: parents, Payload: payload, CreatedAt: stamp(at)}); err != nil {
+		return err
+	}
+	if err = q.InvalidateSharedContent(ctx, id); err != nil {
 		return err
 	}
 	_, err = emitCanonicalMessageEvent(ctx, q, "message.updated", old, at)

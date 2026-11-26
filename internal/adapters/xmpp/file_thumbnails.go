@@ -159,9 +159,6 @@ func decodeFileReferences(meta fileSharingMetadata) []domain.SharedReference {
 			if sourceKind != "" && sourceKind != "link" {
 				sticker := meta.Sticker != nil && len(meta.Files) == 1 && sourceKind == "image"
 				refs = append(refs, domain.SharedReference{URL: source.Target, Kind: sourceKind, FileName: name, Sticker: sticker})
-				if sticker {
-					break // Additional sources are alternate locations for the same sticker.
-				}
 			}
 		}
 	}

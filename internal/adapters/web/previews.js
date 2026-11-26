@@ -105,6 +105,7 @@ window.OieRuntime.register('previews', life => {
   function apply(scope,values) {
     const previousRevision=scope.dataset.previewRevision;
     const data=state(scope);
+    if(data && Object.hasOwn(values,'previewFile') && values.previewFile!==scope.dataset.previewFile) data.failedOriginal='';
     for(const field of fields) if(Object.hasOwn(values,field)) {
       scope.dataset[field]=values[field];if(data)data[field]=values[field];
     }

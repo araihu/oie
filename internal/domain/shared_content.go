@@ -5,6 +5,18 @@ type SharedReference struct {
 	URL, Kind, FileName string
 	Sticker             bool `json:",omitempty"`
 }
+
+// StickerFile selects one image for display. XEP-0447 sources of a marked
+// file are alternate locations for the same artwork.
+func StickerFile(files []SharedReference) (SharedReference, bool) {
+	for _, file := range files {
+		if file.Sticker && file.Kind == "image" {
+			return file, true
+		}
+	}
+	return SharedReference{}, false
+}
+
 type SharedContentItem struct {
 	SharedReference
 	AccountLabel, ConversationTitle string
