@@ -21,11 +21,8 @@ async function until(check, label) {
   throw Error('Timed out: ' + label);
 }
 async function assertMobileControlOwnership(page) {
-  const controls=await page.evaluate(()=>({
-    navigation:document.querySelector('button[aria-label="Open navigation"]')?.getAttribute('aria-controls'),
-    account:document.querySelector('[data-navigation-footer="mobile-navigation"] [data-account-switcher]')?.getAttribute('aria-controls'),
-  }));
-  assert.deepEqual(controls,{navigation:'mobile-navigation-panel',account:'account-switcher-mobile-navigation-panel'},'nested account popover must not replace sidebar trigger ownership');
+  assert.equal(await page.locator('.oie-mobile-nav [data-account-switcher]').getAttribute('aria-controls'),'mobile-accounts-panel');
+  assert.equal(await page.locator('.oie-mobile-nav a[aria-current=page]').count(),1);
 }
 (async () => {
   const engine=id(1), alpha=id(2), beta=id(3), chatA=id(4), chatB=id(5), revision=id(6);
@@ -152,12 +149,8 @@ async function assertMobileControlOwnership(page) {
       inboxPage.on('pageerror',error=>errors.push(error.message));
       inboxPage.on('request',request=>{if(request.resourceType()==='eventsource')subscriptions++;});
       const navigate=async label=>{
-        const navigation=width<500?'#mobile-navigation-panel':'.oie-sidebar';
-        if(width<500){
-          await inboxPage.locator('[aria-controls=mobile-navigation-panel]:visible').click();
-          await inboxPage.locator(navigation).waitFor({state:'visible'});
-        }
-        await inboxPage.locator(navigation+' a').filter({hasText:label}).click({noWaitAfter:true});
+        const navigation=width<500?'.oie-mobile-nav':'.oie-sidebar';
+        await inboxPage.locator(navigation).getByRole('link',{name: new RegExp('^'+label)}).click({noWaitAfter:true});
       };
       try {
         const initialRefresh=inboxPage.waitForResponse(response=>new URL(response.url()).pathname==='/ui/refresh');
@@ -189,7 +182,7 @@ async function assertMobileControlOwnership(page) {
             const desktop=document.getElementById('desktop-navigation'),mobile=document.querySelector('.oie-mobile-nav');
             const navigation=width<500?mobile:desktop;
             const controls=[navigation,...navigation.querySelectorAll('a[data-oie-navigation-item],[data-account-switcher]')];
-            window.sidebarBefore={desktop,mobile,controls};
+            window.sidebarBefore={navigation,controls};
             window.sidebarIdentity=()=>desktop===document.getElementById('desktop-navigation')&&
               mobile===document.querySelector('.oie-mobile-nav')&&controls.every(node=>node.isConnected);
           },width);
@@ -238,7 +231,7 @@ async function assertMobileControlOwnership(page) {
           await inboxPage.evaluate(()=>{
             window.firstInboxFrame=undefined;
             window.sidebarFrames=[];
-            const sidebar=window.sidebarBefore.desktop,links=[...sidebar.querySelectorAll('a[data-oie-navigation-item]')];
+            const sidebar=window.sidebarBefore.navigation,links=[...sidebar.querySelectorAll('a[data-oie-navigation-item]')];
             const rects=()=>[sidebar,...links].map(node=>{
               const {x,y,width,height}=node.getBoundingClientRect();
               return [x,y,width,height];
@@ -247,7 +240,8 @@ async function assertMobileControlOwnership(page) {
             function sample(){
               const returned=!!document.querySelector('.oie-workspace');
               const movement=Math.max(...rects().flatMap((rect,index)=>rect.map((value,axis)=>Math.abs(value-before[index][axis]))));
-              window.sidebarFrames.push({retained:window.sidebarIdentity(),movement,active:links.find(link=>link.getAttribute('aria-current')==='page')?.title});
+              const current=links.find(link=>link.getAttribute('aria-current')==='page');
+              window.sidebarFrames.push({retained:window.sidebarIdentity(),movement,active:current?.getAttribute('aria-label')||current?.title});
               if(!returned){requestAnimationFrame(sample);return;}
               const list=document.getElementById('conversation-list');
               window.firstInboxFrame={top:list?.scrollTop,retained:list===window.inboxBefore,rows:list?.querySelectorAll('[data-conversation-row]').length,anchorTop:window.inboxAnchor?.getBoundingClientRect().top,chat:document.querySelector('#conversation-pane')?.dataset.conversationId};
@@ -282,7 +276,9 @@ async function assertMobileControlOwnership(page) {
           const expectedChat=change==='archived'?chatB:changed&&change!=='explicit'?incomingChat.id:chatA;
           assert.equal(firstFrame.chat,expectedChat,'first painted pane follows current inbox ordering');
           const frames=await inboxPage.evaluate(()=>window.sidebarFrames);
-          assert(frames.every(frame=>frame.retained&&frame.movement<=1),JSON.stringify(frames));
+          assert(frames.every(frame=>frame.retained),JSON.stringify(frames));
+          const visibleFrames=width<500&&change==='explicit'?frames.slice(0,-1):frames;
+          assert(visibleFrames.every(frame=>frame.movement<=1),JSON.stringify(frames));
           assert(frames.slice(0,-1).every(frame=>frame.active===mediaLabel),JSON.stringify(frames));
           assert.equal(frames.at(-1).active,chatsLabel);
           if(width>=500&&change!=='explicit')assert(await inboxPage.evaluate(()=>document.activeElement?.matches('#desktop-navigation a[aria-current="page"]')));
@@ -303,7 +299,7 @@ async function assertMobileControlOwnership(page) {
             assert.equal(subscriptions,1);
             assert.deepEqual([...streams],[stream]);
           }
-          inboxChecks.push({lang,width,change,firstFrameScroll:firstFrame.top,inboxReads:state.inboxReads-reads,subscriptions,sidebarFrames:frames.length,maxSidebarMovement:Math.max(...frames.map(frame=>frame.movement))});
+          inboxChecks.push({lang,width,change,firstFrameScroll:firstFrame.top,inboxReads:state.inboxReads-reads,subscriptions,sidebarFrames:frames.length,maxSidebarMovement:Math.max(...visibleFrames.map(frame=>frame.movement))});
           if(change==='explicit'&&width<500){
             await inboxPage.locator('.oie-back-button').click();
             await until(()=>inboxPage.locator('#conversation-list').evaluate(list=>list.scrollTop===360),'inbox scroll after closing the mobile conversation');
@@ -544,18 +540,34 @@ async function assertMobileControlOwnership(page) {
     const denied=await browser.newContext({viewport:{width:390,height:844},locale:'en'});await denied.addInitScript(()=>{if(location.origin==='null')return;window.documentToken=Math.random();window.navTrace=[];for(const name of ['htmx:before:request','htmx:after:request','htmx:before:swap','htmx:after:settle','htmx:error'])document.addEventListener(name,event=>{const ctx=event.detail.ctx;window.navTrace.push({event:name,action:ctx?.request?.action,target:ctx?.target?.id,kind:ctx?.oieKind,response:ctx?.response?.status,location:location.href,generation:window.OieRuntime?.generation,pane:document.querySelector('#conversation-pane')?.dataset.openChat,workspace:document.querySelector('#workspace')?.className});});for(const name of ['getItem','setItem','removeItem'])Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('Denied','SecurityError');}});});const mobile=await denied.newPage(),mobileDocuments=[],mobileHX=[],mobileErrors=[];debuggingPage=mobile;mobile.on('pageerror',error=>mobileErrors.push(error.message));mobile.on('request',request=>{if(request.resourceType()==='document')mobileDocuments.push(request.url());if(request.headers()['hx-request']==='true')mobileHX.push(request.url())});await mobile.goto(base+'/?chat='+chatA+'&lang=en&theme=light');await until(async()=>mobile.evaluate(()=>!!window.OieRuntime?.generation),'mobile runtime');await assertMobileControlOwnership(mobile);
     await mobile.locator('#message-composer').fill('Session fallback draft');await mobile.locator('.oie-back-button').click();await until(async()=>await mobile.locator('[data-account-switcher]:visible').count()>0,'mobile conversation list');await assertMobileControlOwnership(mobile);await mobile.locator('[data-account-switcher]:visible').first().click();await mobile.locator('[data-switch-account="'+beta+'"]:visible').click();await until(async()=>mobile.locator('[data-account-switcher]:visible').textContent().then(t=>t.includes('Work')),'mobile Work');await mobile.locator('[data-account-switcher]:visible').first().click();await mobile.locator('[data-switch-account="'+alpha+'"]:visible').click();await mobile.locator('a[data-conversation-id="'+chatA+'"]').click();await until(async()=>await mobile.locator('#message-composer').inputValue()==='Session fallback draft','denied-storage draft survives route');const mobileToken=await mobile.evaluate(()=>window.documentToken);let mobileGeneration=await mobile.evaluate(()=>window.OieRuntime.generation);await mobile.locator('.oie-back-button').click();
     const mobileRoute=async section=>{await until(async()=>new URL(mobile.url()).searchParams.get('section')===section&&await mobile.evaluate(()=>window.OieRuntime.generation)>mobileGeneration,'mobile sidebar '+section);await assertMobileControlOwnership(mobile);mobileGeneration=await mobile.evaluate(()=>window.OieRuntime.generation);assert.equal(await mobile.evaluate(()=>window.documentToken),mobileToken);assert.equal(mobileDocuments.length,1);await until(()=>streams.size===1,'one mobile stream')};
-    await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();
-    await mobile.locator('#mobile-navigation-panel a[data-oie-navigation-item]').filter({hasText:'Scheduled'}).click();
+    const tabs=mobile.locator('.oie-mobile-nav');
+    await tabs.getByRole('link',{name:'Scheduled'}).click();
     await mobileRoute('scheduled');
-    await mobile.locator('#mobile-navigation-panel').waitFor({state:'hidden'});
-    await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();
-    const mobileBrand=mobile.locator('#mobile-navigation-panel a').filter({has:mobile.locator('.oie-brand')});
-    assert.equal(new URL(await mobileBrand.getAttribute('href'),base).searchParams.get('account'),null,'mobile logo follows the all-accounts schedule');
-    await mobileBrand.click();
+    const chatsTab=tabs.getByRole('link',{name:'Chats'});
+    assert.equal(new URL(await chatsTab.getAttribute('href'),base).searchParams.get('account'),null,'Chats follows the all-accounts schedule');
+    await chatsTab.click();
     await mobileRoute('chats');
     assert.equal(new URL(mobile.url()).searchParams.get('account'),null);
-    for(const [section,label]of sidebarDestinations){await mobile.locator('[aria-controls=mobile-navigation-panel]:visible').click();await mobile.locator('#mobile-navigation-panel').waitFor({state:'visible'});await mobile.locator('#mobile-navigation-panel a').filter({hasText:label}).click();await mobileRoute(section);await mobile.locator('#mobile-navigation-panel').waitFor({state:'hidden'});assert((await mobile.locator('#mobile-navigation-panel a[aria-current=page]').textContent()).includes(label))}
-    await mobile.goBack();await mobileRoute('scheduled');await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile overlay routes all sidebar destinations, closes after each fragment, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
+    for(const [section,label] of sidebarDestinations){
+      const tab=tabs.getByRole('link',{name:label,exact:true});
+      await tab.click();
+      await mobileRoute(section);
+      assert.equal(await tab.getAttribute('aria-current'),'page');
+    }
+    const mobileAccounts=tabs.locator('[data-account-switcher]');
+    const accountPanel=tabs.locator('[data-popover-panel]');
+    await mobileAccounts.press('Enter');
+    await until(()=>accountPanel.evaluate(panel=>panel.contains(document.activeElement)),'account popover keyboard focus');
+    await mobile.goBack();
+    await mobileRoute('scheduled');
+    await accountPanel.waitFor({state:'hidden'});
+    assert.equal(await mobileAccounts.getAttribute('aria-expanded'),'false');
+    await until(()=>mobileAccounts.evaluate(node=>node===document.activeElement),'Back restores focus to the visible account control');
+    await mobileAccounts.press('Enter');
+    await accountPanel.waitFor({state:'visible'});
+    await mobile.keyboard.press('Escape');
+    await accountPanel.waitFor({state:'hidden'});
+    await mobile.goForward();await mobileRoute('chats');assert(mobileHX.length>=6);assert.deepEqual(mobileErrors,[]);findings.push('Mobile tabs route directly to all destinations, updates active state and preserves the document through Back/Forward');assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await mobile.addScriptTag({path:require.resolve('./fixtures/axe-core/axe.min.js')});const axe=await mobile.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(axe.violations.map(v=>v.id),[]);await denied.close();findings.push('Mobile light layout preserves denied-storage session draft and has no horizontal overflow or WCAG A/AA violations');
     const native=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}}),fallback=await native.newPage();
     await fallback.goto(base+'/?chat='+chatA+'&lang=en');
     for(const [section,label]of sidebarDestinations){
@@ -572,7 +584,7 @@ async function assertMobileControlOwnership(page) {
     await native.close();findings.push('Direct native links, including the archived row, remain usable when JavaScript is disabled');
     const artifact=path.join(__dirname,'artifacts');await fs.mkdir(artifact,{recursive:true});await fs.writeFile(path.join(artifact,'fragment-navigation-report.json'),JSON.stringify({findings,inboxChecks,fragmentRequests:hx.length,documentRequests:documents.length,completedFragmentShapes:completedFragments.length,mobileDocumentRequests:mobileDocuments.length,mobileFragmentRequests:mobileHX.length,earlyDocumentRequests:earlyDocuments.length,intents:2,mutations:state.effects,pageErrors:errors},null,2));console.log('PASS: HTMX fragment navigation, cached inbox first frame and request counts, scoped drafts, Back/Forward, stale-response/failure recovery, one stream and one effect per intent, mobile accessibility and native fallback');
   } catch(error) {
-    if(debuggingPage&&!debuggingPage.isClosed())console.error('Fragment failure evidence',JSON.stringify(await debuggingPage.evaluate(()=>({url:location.href,ready:document.readyState,generation:window.OieRuntime?.generation,account:document.body.dataset.accountId,chat:document.body.dataset.conversationId,status:document.querySelector('[data-navigation-status]')?.textContent,labels:[...document.querySelectorAll('[data-account-switcher]')].map(e=>e.textContent),boosted:document.querySelectorAll('[hx-boost]').length,form:document.querySelector('form.oie-search')?.outerHTML,trace:window.navTrace?.slice(-30),workspace:document.querySelector('#workspace')?.className,paneOpen:document.querySelector('#conversation-pane')?.dataset.openChat,navigationControls:[...document.querySelectorAll('button[aria-label="Open navigation"]')].map(node=>({controls:node.getAttribute('aria-controls'),expanded:node.getAttribute('aria-expanded')}))})).catch(()=>({unavailable:true}))), 'streams',streams.size, 'BFF log',log);
+    if(debuggingPage&&!debuggingPage.isClosed())console.error('Fragment failure evidence',JSON.stringify(await debuggingPage.evaluate(()=>({url:location.href,ready:document.readyState,generation:window.OieRuntime?.generation,account:document.body.dataset.accountId,chat:document.body.dataset.conversationId,status:document.querySelector('[data-navigation-status]')?.textContent,labels:[...document.querySelectorAll('[data-account-switcher]')].map(e=>e.textContent),boosted:document.querySelectorAll('[hx-boost]').length,form:document.querySelector('form.oie-search')?.outerHTML,trace:window.navTrace?.slice(-30),workspace:document.querySelector('#workspace')?.className,paneOpen:document.querySelector('#conversation-pane')?.dataset.openChat,navigationControls:[...document.querySelectorAll('button[data-account-switcher]')].map(node=>({controls:node.getAttribute('aria-controls'),expanded:node.getAttribute('aria-expanded')}))})).catch(()=>({unavailable:true}))), 'streams',streams.size, 'BFF log',log);
     throw error;
   } finally {releaseDelayedSearch?.();await browser.close();child.kill('SIGTERM');for(const stream of streams)stream.end();api.closeAllConnections();await new Promise(resolve=>api.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

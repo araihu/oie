@@ -303,7 +303,7 @@ async function run() {
     await until(() => streams.size === 2, 'both live streams');
     const settings = async page => {
       if (page.viewportSize().width === 390) {
-        await page.getByRole('button', {name: 'Abrir navegação', exact: true}).click();
+        await page.locator('.oie-mobile-nav [data-account-switcher]').click();
       }
       await page.locator('[data-navigation-settings]:visible').click();
       await page.locator('[data-settings-target=device]:visible').click();
@@ -464,7 +464,7 @@ async function run() {
     await quietWindow();
 
     const pick = async (label, value) => {
-      await second.getByRole('combobox', {name: 'Som nas salas'}).click();
+      await second.getByRole('combobox', {name: 'Som nos grupos'}).click();
       await second.getByRole('option', {name: label, exact: true}).click();
       await until(() => second.evaluate(value => localStorage.getItem('oie.notifications.room-sound') === value, value),
         'room sound preference saved: ' + value);

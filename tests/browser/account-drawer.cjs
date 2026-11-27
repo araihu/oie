@@ -80,7 +80,7 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const phone=await phoneContext.newPage();
   for (const theme of ['light', 'dark']) {
    await phone.goto(base+'/?lang=pt-BR&theme='+theme);
-   const switcher = phone.locator('.oie-list-account .oie-profile-trigger');
+   const switcher = phone.locator('.oie-mobile-nav .oie-profile-trigger');
    await switcher.waitFor();
    const safeArea = await switcher.evaluate(trigger => {
     document.documentElement.style.setProperty('--oie-safe-bottom', '34px');

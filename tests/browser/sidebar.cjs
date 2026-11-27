@@ -156,21 +156,18 @@ async function assertAccessibleControls(page) {
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.locator(toggle).isVisible(), false);
     assert.equal(await page.locator(splitter).isVisible(), false);
-    const mobile = page.getByRole("button", { name: "Abrir navegação", exact: true });
-    assert.equal(await mobile.count(), 1);
-    assert.equal(await mobile.locator("use").getAttribute("href"), menuIcon);
-    await mobile.click();
-    const overlay = page.locator("#mobile-navigation-panel");
-    await overlay.waitFor();
-    const mobileChats = overlay.getByRole("link", { name: /^Conversas\b/ });
-    assert.equal(await mobileChats.locator("use").getAttribute("href"), chatIcon);
-    const box = await overlay.boundingBox();
-    assert(box.width > 0 && box.height > 0 && box.x < 390 && box.y < 844);
-    await page.screenshot({ path: "artifacts/sidebar-mobile-overlay.png" });
-    await page.keyboard.press("Escape");
-    await overlay.waitFor({ state: "hidden" });
-    assert.equal(await mobile.getAttribute("aria-expanded"), "false");
-    assert(await mobile.evaluate(button => button === document.activeElement));
+    const mobile = page.locator(".oie-mobile-nav");
+    await mobile.waitFor();
+    const chats = mobile.getByRole("link", { name: "Conversas", exact: true });
+    assert.equal(await chats.locator("use").getAttribute("href"), chatIcon);
+    assert.equal(await chats.getAttribute("aria-current"), "page");
+    const box = await mobile.boundingBox();
+    assert(box.x > 0 && box.y > 750 && box.y + box.height < 844);
+    for (const item of await mobile.locator(".oie-mobile-tab,[data-account-switcher]").all()) {
+      const target = await item.boundingBox();
+      assert(target.width >= 44 && target.height >= 44);
+    }
+    await page.screenshot({ path: "artifacts/sidebar-mobile-tabs.png" });
     await assertNoOverflow(page);
     await page.setViewportSize({ width: 768, height: 900 });
     await assertToggle(page, false, "Expandir barra lateral");
@@ -191,7 +188,7 @@ async function assertAccessibleControls(page) {
     assert.equal(await width(noStorage), 188);
     await noStorage.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: desktop and medium sidebar resizing, keyboard, persistence, routes, and mobile overlay");
+    console.log("PASS: desktop and medium sidebar resizing, keyboard, persistence, routes, and floating mobile navigation");
   } finally {
     await browser.close();
   }

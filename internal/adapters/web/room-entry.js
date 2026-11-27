@@ -5,10 +5,7 @@ window.OieRuntime.register('room-entry', life => {
   let request, directoryRequest;
   const directory = join?.querySelector('[data-room-directory]');
   const results = directory?.querySelector('[data-room-directory-results]');
-  let lastTrigger;
-  let activeDrawer;
   let openedStatus = false;
-  const drawer = (type, id) => window.dispatchEvent(new CustomEvent('drawer:' + type, {detail: {id}}));
 
   function clearPreview() {
     request?.abort();
@@ -80,9 +77,7 @@ window.OieRuntime.register('room-entry', life => {
     }
   }
 
-  function openDrawer(id, trigger, address) {
-    activeDrawer = id;
-    lastTrigger = trigger;
+  function openInvitation(trigger, address) {
     if (address && join && join.dataset.busy !== 'true') {
       const currentAccount = document.body.dataset.accountId;
       const account = join.elements.accountId;
@@ -99,7 +94,7 @@ window.OieRuntime.register('room-entry', life => {
         void showPreview();
       }
     }
-    drawer('open', id);
+    document.dispatchEvent(new CustomEvent('oie:picker-step', {detail: {id:'join-room', trigger}}));
   }
 
   life.on(document, 'click', event => {
@@ -108,13 +103,7 @@ window.OieRuntime.register('room-entry', life => {
     const id = 'join-room';
     if (!document.getElementById(id + '-body')) return;
     event.preventDefault();
-    openDrawer(id, trigger, trigger.dataset.roomInvitation);
-  });
-
-  life.on(document, 'oie:new-conversation', event => {
-    const id = event.detail?.id;
-    if (!['newchat', 'join-room', 'create-room'].includes(id) || !document.getElementById(id + '-body')) return;
-    openDrawer(id, document.querySelector('[data-new-conversation]'));
+    openInvitation(trigger, trigger.dataset.roomInvitation);
   });
 
   if (join) {
@@ -135,21 +124,14 @@ window.OieRuntime.register('room-entry', life => {
     });
   }
 
-  function restoreFocus(event) {
-    if (!activeDrawer || event.detail?.id !== activeDrawer) return;
-    activeDrawer = undefined;
+  life.on(document, 'oie:picker-leave-join', () => {
     clearDirectory();
-    if (request && !request.signal.aborted && preview?.textContent === preview.dataset.loading) clearPreview();
-    const trigger = lastTrigger;
-    life.timeout(() => trigger?.isConnected && trigger.focus({preventScroll: true}), 220);
-  }
-  life.on(window, 'drawer:close-request', restoreFocus);
+    if (preview && preview.textContent === preview.dataset.loading) clearPreview();
+  });
 
   const target = new URLSearchParams(location.search).get('open') || document.body.dataset.openDrawer;
   const showInitial = () => {
-    if (target === 'join-room' || target === 'create-room') {
-      openDrawer(target);
-    } else if (target === 'room-session' && document.querySelector('#room-session-status:not([data-room-state="joined"])')) {
+    if (target === 'room-session' && document.querySelector('#room-session-status:not([data-room-state="joined"])')) {
       openedStatus = true;
       window.dispatchEvent(new CustomEvent('modal:open', {detail: {id: 'room-session-dialog'}}));
     }

@@ -1,19 +1,18 @@
 # XMPP room entry
 
-Open the **New conversation** menu and choose **Join room** or **Create room**. In a
+Select **+ (New conversation)** and choose **Join group** or **Create group**. In a
 message, activate an `xmpp:room@service?join` link to open the same entry form
 with the address filled in. Visible invitations also show a compact room card
-in the message bubble. **View room** opens the same entry form. The card
+in the message bubble. **View group** opens the same entry form. The card
 loads automatically for MUC services discovered on the account server. For
-other services, opening the invitation from a message or selecting **Preview
-room** loads the preview. You can also paste the link into the room address
+other services, opening the invitation from a message or selecting **Preview group** loads the preview. You can also paste the link into the room address
 field. Choose the XMPP account and optionally enter a room nickname before
 confirming. The room preview can show the published name, description, topic,
 occupant count, and avatar. Its availability depends on what the room publishes
 to the selected account.
 
 This flow accepts bare room addresses and credential-free `?join` links.
-Enter a room password separately when required. **Browse public rooms** lists
+Enter a room password separately when required. **Browse public groups** lists
 rooms advertised by the selected account's service. Select a result to fill
 the address and review the room before entry. Creation enables persistence
 and preserves the other defaults of the service configuration form. The room
@@ -59,7 +58,7 @@ behavior.
 | State | Action | Expected response | Context and focus | Effects |
 | --- | --- | --- | --- | --- |
 | Invitation card visible | Load room details | Show available name, photo and description in the existing card | Keep the action, composer and timeline geometry stable. | Read-only preview for the conversation account |
-| Invitation card with missing details | View room | Open the entry form from the fallback card | Keep the invite address and restore focus on dismissal. | Zero room-entry commands |
+| Invitation card with missing details | View group | Open the entry form from the fallback card | Keep the invite address and restore focus on dismissal. | Zero room-entry commands |
 | Invitation in a message | Activate the link | Open the prefilled room form and request a preview | Keep the conversation, scroll and draft. Escape returns focus to the link. | Zero room-entry commands |
 | Preview pending | Change account or dismiss | Discard the stale response. Request a new preview for the selected account when the form stays open. | Keep typed input and the source conversation geometry. | Zero room-entry commands |
 | Preview unavailable | Retry preview or explicitly confirm entry | Show available information or a localized lookup result | Keep the selected account, room and nickname. | Retry sends only a preview request |
