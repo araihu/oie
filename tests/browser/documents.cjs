@@ -3,7 +3,7 @@
 const {checkIOSFileViewer, iosAttachmentFixture} = require('./fixtures/ios-file-viewer.cjs');
 const {openConversationDetails} = require('./fixtures/conversation-menu.cjs');
 const assert=require('node:assert/strict'),http=require('node:http'),path=require('node:path'),fs=require('node:fs/promises');
-const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
+const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium,devices}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const text=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.txt')),pdfBytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-document.pdf'));
@@ -315,6 +315,32 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const beforeZoom=await canvas.evaluate(canvas=>canvas.width);await viewer(page).locator('[data-document-zoom-in]').click();await until(async()=>await canvas.evaluate(canvas=>canvas.width)>beforeZoom,'PDF zoom re-renders original page');await viewer(page).locator('[data-document-fit]').click();await downloaded(page,pdf);await close(page);await until(async()=>await canvas.getAttribute('width')==='0','PDF close releases canvas');findings.push('PDF.js decodes the original two-page PDF into painted canvas pixels; page bounds, navigation, zoom/fit and exact original download work without a native PDF plugin');
   // The drawer uses the same viewer and current engine/account/source identity.
   await page.goto(base+'/?'+new URLSearchParams({chat,account,lang:'en',theme:'dark'}));await openConversationDetails(page);await page.locator('[data-info-entry=media]').click();await page.locator('[data-shared-tab=documents]').click();await page.locator('#info-shared-results [data-document-open]').first().waitFor({state:'visible'});const drawer=page.locator(`#info-shared-results [data-document-item="${good}"] [data-document-open]`);await drawer.click();await loaded(page);await close(page);assert(await drawer.evaluate(button=>document.activeElement===button));await page.keyboard.press('Escape');findings.push('Conversation drawer document cards reuse the scoped viewer and restore focus to their original opener');await context.close();
+  {
+   const mobile = await browser.newContext(devices['iPhone 13']);
+   try {
+    const phone = await mobile.newPage();
+    await phone.goto(base + '/?' + new URLSearchParams({chat,account,lang:'pt-BR'}));
+    await openConversationDetails(phone);
+    await phone.locator('[data-info-entry=media]').click();
+    await phone.locator('[data-shared-tab=documents]').click();
+    const opener = phone.locator('#info-shared-results [data-document-item="' + good + '"] [data-document-open]');
+    await opener.click();
+    await loaded(phone);
+    const download = viewer(phone).locator('[data-document-download]');
+    await download.click();
+    const attachment = phone.locator('#oie-file-viewer');
+    await attachment.waitFor();
+    await phone.keyboard.press('Escape');
+    await attachment.waitFor({state:'hidden'});
+    assert(await viewer(phone).isVisible());
+    assert(await download.evaluate(link => link === document.activeElement));
+    assert(await phone.locator('#details-body').isVisible(), 'Escape preserves the underlying details drawer');
+    await close(phone);
+    assert(await opener.evaluate(button => button === document.activeElement));
+   } finally {
+    await mobile.close();
+   }
+  }
   // Browser storage denial still permits the generated preview and memory reuse.
   {const isolated=await contextFor();await isolated.context.addInitScript(()=>{indexedDB.open=()=>{throw new DOMException('Blocked','SecurityError')}});await isolated.page.goto(docsURL());const preview=card(isolated.page,pdf);await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-state')==='ready','PDF preview with denied storage');const before=pdfRanges();await tab(isolated.page,'media');await tab(isolated.page,'documents');await preview.scrollIntoViewIfNeeded();await until(async()=>await preview.getAttribute('data-document-preview-cache')==='hit','memory fallback after storage denial');assert.equal(pdfRanges(),before+1);await isolated.context.close();findings.push('Storage denial falls back to bounded memory without breaking PDF preview or navigation')}
   for(const config of [{locale:'en',width:1280,theme:'light'},{locale:'pt-BR',width:390,theme:'dark'}]){({page,context}=await contextFor(config.locale,config.width));await page.goto(docsURL(config.locale,config.theme));if(config.locale==='pt-BR'){

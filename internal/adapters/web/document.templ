@@ -55,6 +55,7 @@ templ documentViewer(v view){
 <div data-file-preview></div>
 </div>
 <footer>
+<p role="status" data-file-share-feedback></p>
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithAttrs(templ.Attributes{"data-file-share":"","hidden":true})){ {v.Text.ShareFile} }
 @link.Link("#",link.WithAttrs(templ.Attributes{"data-file-save":"","target":"oie-file-download","download":"","hidden":true})){ {v.Text.SharedDownload} }
 </footer>

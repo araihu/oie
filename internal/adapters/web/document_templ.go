@@ -430,7 +430,7 @@ func documentViewer(v view) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</form></header><div class=\"oie-file-content\"><p role=\"status\"></p><div data-file-preview></div></div><footer>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</form></header><div class=\"oie-file-content\"><p role=\"status\"></p><div data-file-preview></div></div><footer><p role=\"status\" data-file-share-feedback></p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -449,7 +449,7 @@ func documentViewer(v view) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.ShareFile)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 58, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 59, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -476,7 +476,7 @@ func documentViewer(v view) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SharedDownload)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 59, Col: 150}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 60, Col: 150}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -495,7 +495,7 @@ func documentViewer(v view) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SharedDownload).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 61, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 62, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -508,7 +508,7 @@ func documentViewer(v view) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.DocumentLoading).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 64, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 65, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -521,7 +521,7 @@ func documentViewer(v view) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.DocumentUnsupported).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 64, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 65, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
@@ -534,7 +534,7 @@ func documentViewer(v view) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.DocumentEmpty).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 64, Col: 147}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 65, Col: 147}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -547,7 +547,7 @@ func documentViewer(v view) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.DocumentPage).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 64, Col: 179}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 65, Col: 179}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
@@ -589,7 +589,7 @@ func documentHeader(v view) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.DocumentViewer)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 69, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 70, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -757,7 +757,7 @@ func documentContent(v view) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.DocumentFit)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 83, Col: 201}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 84, Col: 201}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -820,7 +820,7 @@ func documentContent(v view) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.DocumentViewer).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 88, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 89, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -833,7 +833,7 @@ func documentContent(v view) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.DocumentViewer).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 92, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/document.templ`, Line: 93, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {

@@ -213,6 +213,7 @@ window.OieRuntime.register('ios-file-viewer', life => {
  const status = dialog.querySelector('[role="status"]');
  const preview = dialog.querySelector('[data-file-preview]');
  const share = dialog.querySelector('[data-file-share]');
+ const shareFeedback = dialog.querySelector('[data-file-share-feedback]');
  const save = dialog.querySelector('[data-file-save]');
  const mediaTypes = {
   png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', avif:'image/avif', heic:'image/heic',
@@ -220,6 +221,25 @@ window.OieRuntime.register('ios-file-viewer', life => {
   mp3:'audio/mpeg', m4a:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg',
  };
  let request, objectURL, file, opener;
+
+ function responseFilename(response, fallback) {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  let filename = fallback;
+  for (const match of disposition.matchAll(/;\s*([^\s=;]+)\s*=\s*(?:"((?:\\.|[^"\\])*)"|([^;]*))/g)) {
+   const key = match[1].toLowerCase();
+   if (key !== 'filename' && key !== 'filename*') continue;
+   let value = match[2]?.replace(/\\(.)/g, '$1') ?? match[3].trim();
+   if (key === 'filename*') {
+    const encoded = /^utf-8'[^']*'(.*)$/i.exec(value);
+    if (!encoded) continue;
+    try { value = decodeURIComponent(encoded[1]); } catch { continue; }
+   }
+   if (!value || /[\x00-\x1f\x7f/\\]/.test(value) || value === '.' || value === '..') continue;
+   if (key === 'filename*') return value;
+   filename = value;
+  }
+  return filename;
+ }
 
  function reset() {
   request?.abort();
@@ -233,16 +253,57 @@ window.OieRuntime.register('ios-file-viewer', life => {
   preview.replaceChildren();
   if (objectURL) URL.revokeObjectURL(objectURL);
   objectURL = '';
+  shareFeedback.textContent = '';
   share.hidden = save.hidden = true;
   save.removeAttribute('href');
+ }
+
+ // Bound the bytes kept for local preview and sharing on an iPhone. Larger
+ // media uses the existing streaming route; the download link stays available.
+ const fileBudget = 32 * 1024 * 1024;
+ async function previewFile(response, filename, type) {
+  const size = response.headers.get('Content-Length');
+  if (size !== null && Number(size) > fileBudget) {
+   await response.body?.cancel();
+   return null;
+  }
+  if (size !== null && !response.headers.has('Content-Encoding')) {
+   return new File([await response.blob()], filename, {type});
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks = [];
+  let total = 0;
+  try {
+   for (;;) {
+    const {done, value} = await reader.read();
+    if (done) return new File(chunks, filename, {type});
+    total += value.byteLength;
+    if (total > fileBudget) {
+     await reader.cancel();
+     return null;
+    }
+    chunks.push(value);
+   }
+  } finally { reader.releaseLock(); }
+ }
+
+ function streamSource(href, type) {
+  const url = new URL(href);
+  if (!type.startsWith('video/') && !type.startsWith('audio/')) return '';
+  if (url.pathname === '/ui/scheduling/file') {
+   if (type.startsWith('video/')) url.searchParams.set('play', '1');
+  } else if (!url.pathname.startsWith('/ui/shared-content/')) return '';
+  url.searchParams.delete('download');
+  return url.href;
  }
 
  async function openFile(link) {
   reset();
   const controller = new AbortController();
   request = controller;
-  opener = link;
-  const filename = link.download || dialog.dataset.filename;
+  opener = link.closest('[data-message-menu-slot]')?.querySelector('[data-message-menu-trigger]') || link;
+  let filename = link.download || dialog.dataset.filename;
   title.textContent = filename;
   status.textContent = dialog.dataset.loading;
   if (!dialog.isConnected) document.body.append(dialog);
@@ -250,16 +311,27 @@ window.OieRuntime.register('ios-file-viewer', life => {
   try {
    const response = await life.fetch(link.href, {credentials:'same-origin', redirect:'error', signal:controller.signal});
    if (!response.ok) throw Error('download');
-   const blob = await response.blob();
    if (controller.signal.aborted) return;
+   filename = responseFilename(response, filename);
+   title.textContent = filename;
    const extension = filename.split('.').pop().toLowerCase();
-   const type = Object.hasOwn(mediaTypes, extension) ? mediaTypes[extension] : blob.type;
-   file = new File([blob], filename, {type});
-   save.href = link.href;
+   const declaredType = (response.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+   const type = (!declaredType || declaredType === 'application/octet-stream') && Object.hasOwn(mediaTypes, extension)
+    ? mediaTypes[extension] : declaredType;
+   const loaded = await previewFile(response, filename, type);
+   if (controller.signal.aborted) return;
+   file = loaded;
+   const supported = Object.values(mediaTypes).includes(type);
+   if (file) {
+    // Keep non-media downloads inert even if WebKit displays the target.
+    objectURL = URL.createObjectURL(supported ? file : file.slice(0, file.size, 'application/octet-stream'));
+   }
+   save.href = objectURL || link.href;
    save.download = filename;
-   share.hidden = !navigator.canShare?.({files:[file]});
+   share.hidden = !file || !navigator.canShare?.({files:[file]});
    save.hidden = !share.hidden;
-   if (!Object.values(mediaTypes).includes(type)) {
+   const source = supported && (objectURL || streamSource(link.href, type));
+   if (!source) {
     status.textContent = dialog.dataset.unavailable;
     return;
    }
@@ -275,8 +347,7 @@ window.OieRuntime.register('ios-file-viewer', life => {
     media.remove();
     status.textContent = dialog.dataset.unavailable;
    }, {once:true, signal:controller.signal});
-   objectURL = URL.createObjectURL(file);
-   media.src = objectURL;
+   media.src = source;
    preview.replaceChildren(media);
    status.textContent = '';
   } catch {
@@ -285,7 +356,7 @@ window.OieRuntime.register('ios-file-viewer', life => {
  }
 
  life.on(document, 'click', event => {
-  const link = event.target.closest?.('a[download]');
+  const link = event.target.closest?.('a[download], a[id^="download-video-"]');
   if (!link || link === save || event.defaultPrevented || event.button !== 0 ||
       event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const url = new URL(link.href);
@@ -297,13 +368,19 @@ window.OieRuntime.register('ios-file-viewer', life => {
  life.on(share, 'click', async () => {
   const current = file;
   if (!current) return;
+  shareFeedback.textContent = '';
   try { await navigator.share({files:[current]}); }
   catch (error) {
    if (file === current && error.name !== 'AbortError') {
-    status.textContent = dialog.dataset.failed;
+    shareFeedback.textContent = dialog.dataset.failed;
     save.hidden = false;
    }
   }
+ });
+ // Native dialog dismissal handles Escape. Keep that keystroke away from the
+ // underlying drawer's window listener when the attachment opens above it.
+ life.on(dialog, 'keydown', event => {
+  if (event.key === 'Escape') event.stopPropagation();
  });
  life.on(dialog, 'close', () => {
   if (dialog.open) return;

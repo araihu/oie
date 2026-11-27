@@ -10,9 +10,10 @@ function iosAttachmentFixture(messageID) {
   let resume;
   const pending = new Promise(resolve => { resume = resolve; });
   const fixture = {
-    filenames, resume, fail:false,
+    filenames, resume, fail:false, reads:0,
     serve(pathname, response) {
       if (!pathname.startsWith(prefix)) return false;
+      fixture.reads++;
       const index = Number(pathname.slice(prefix.length));
       if (fixture.fail || !files[index]) {
         response.writeHead(404);
@@ -36,6 +37,18 @@ async function checkIOSFileViewer(browser, url, fixture) {
   const context = await browser.newContext({...devices['iPhone 13']});
   const page = await context.newPage();
   try {
+    await page.addInitScript(() => {
+      const shared = [];
+      window.sharedFiles = shared;
+      Object.defineProperties(navigator, {
+        canShare: {value: ({files}) => files?.length === 1 && files[0] instanceof File},
+        share: {value: async ({files:[file]}) => {
+          shared.push({name:file.name, bytes:Array.from(new Uint8Array(await file.arrayBuffer()))});
+          if (shared.length === 1) throw new DOMException('Cancelled', 'AbortError');
+          if (shared.length === 2) throw new DOMException('Denied', 'NotAllowedError');
+        }},
+      });
+    });
     await page.goto(url);
     const links = page.locator('a[download][href^="/ui/omemo-attachments/"]');
     const dialog = page.locator('#oie-file-viewer');
@@ -59,6 +72,40 @@ async function checkIOSFileViewer(browser, url, fixture) {
           const img = document.querySelector('#oie-file-viewer img');
           return img?.naturalWidth && img.getBoundingClientRect().width > 0;
         });
+        const share = dialog.getByRole('button', {name:'Compartilhar arquivo'});
+        const feedback = dialog.locator('[data-file-share-feedback]');
+        const save = dialog.locator('[data-file-save]');
+        const original = readFileSync(path.join(__dirname, 'video-poster.png'));
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          await share.click();
+          await page.waitForFunction(count => window.sharedFiles.length === count, attempt);
+          if (attempt === 2) {
+            await page.waitForFunction(() => {
+              const viewer = document.querySelector('#oie-file-viewer');
+              const feedback = viewer.querySelector('[data-file-share-feedback]');
+              const rect = feedback.getBoundingClientRect();
+              return feedback.textContent === viewer.dataset.failed && rect.height > 0 &&
+                document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === feedback;
+            });
+            const reads = fixture.reads;
+            fixture.fail = true;
+            try {
+              const [download] = await Promise.all([page.waitForEvent('download'), save.click()]);
+              assert.equal(await download.failure(), null);
+              assert.equal(download.suggestedFilename(), filename);
+              assert.deepEqual(readFileSync(await download.path()), original);
+              assert.equal(fixture.reads, reads, 'Save reuses the bytes that were opened');
+              assert(await dialog.isVisible());
+            } finally {
+              fixture.fail = false;
+            }
+          } else {
+            assert.equal(await feedback.textContent(), '');
+            if (attempt === 1) assert(await save.isHidden());
+          }
+        }
+        const expected = {name:filename, bytes:[...original]};
+        assert.deepEqual(await page.evaluate(() => window.sharedFiles), [expected, expected, expected]);
       } else if (index === 1) {
         await page.waitForFunction(() => {
           const video = document.querySelector('#oie-file-viewer video');
