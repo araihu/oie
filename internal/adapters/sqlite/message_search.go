@@ -47,7 +47,17 @@ func (s *Store) searchMessages(ctx context.Context, query domain.MessageSearchQu
 		retracted = 1
 	}
 	accountIDs := jsonText(nonNilIDs(query.AccountIDs))
-	rows, err := selectRows(ctx, tx, q, dbgen.SearchMessagesParams{AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), IncludeHistory: history, IncludeRetracted: retracted, Search: query.Search, ParserVersion: application.SharedContentVersion, PageLimit: int64(query.Limit + 1), CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, CursorCurrent: cursor.Current, CursorRevisionAt: cursor.RevisionAt, CursorRevisionID: string(cursor.RevisionID)})
+	// Stored timeline positions have millisecond precision.
+	var fromMS, lastMS *int64
+	if query.SentFrom != nil {
+		first := query.SentFrom.Add(time.Millisecond - time.Nanosecond).UnixMilli()
+		fromMS = &first
+	}
+	if query.SentBefore != nil {
+		last := query.SentBefore.Add(-time.Nanosecond).UnixMilli()
+		lastMS = &last
+	}
+	rows, err := selectRows(ctx, tx, q, dbgen.SearchMessagesParams{SenderName: query.SenderName, Sender: query.Sender, FromMs: fromMS, LastMs: lastMS, AccountID: string(query.AccountID), AccountIds: accountIDs, ConversationID: string(query.ConversationID), IncludeHistory: history, IncludeRetracted: retracted, Search: query.Search, ParserVersion: application.SharedContentVersion, PageLimit: int64(query.Limit + 1), CursorID: string(cursor.ID), CursorMs: cursor.Milliseconds, CursorCurrent: cursor.Current, CursorRevisionAt: cursor.RevisionAt, CursorRevisionID: string(cursor.RevisionID)})
 	if err != nil {
 		return page, err
 	}

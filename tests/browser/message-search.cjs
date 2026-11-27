@@ -77,6 +77,7 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     const u = new URL(req.url,'http://fixture');
     res.setHeader('Content-Type','application/json');
     const send = (status, body) => {res.statusCode=status;res.end(JSON.stringify(body))};
+    if(u.pathname==='/api/v1/conversations/'+archiveRoom.id+'/room-participants')return send(200,{state:'available',truncated:false,participants:[{nickname:'Peer Two',role:'participant',affiliation:'member'}]});
     if (u.pathname==='/api/v1/conversations/'+archiveRoom.id+'/archive' && req.method==='PUT') {
       let raw='';
       for await (const chunk of req) raw+=chunk;
@@ -131,8 +132,9 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       if (state.mode==='unavailable') return send(503,{code:'unavailable'});
       const q=u.searchParams.get('q')?.trim(), selectedAccount=u.searchParams.get('accountId')||'', conversation=u.searchParams.get('conversationId')||'', history=u.searchParams.get('includeEditHistory')==='true';
       const includeRetracted=u.searchParams.get('includeRetracted')==='true';
-      const matchesScope=m=>(!selectedAccount||m.accountId===selectedAccount)&&(!accountIds.length||accountIds.includes(m.accountId))&&(!conversation||m.conversationId===conversation)&&(includeRetracted||m.id!==withdrawnId);
-      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,accountIds,conversation,history,includeRetracted]);
+      const sender=u.searchParams.get('senderName')||'',from=u.searchParams.get('sentFrom'),before=u.searchParams.get('sentBefore');
+      const matchesScope=m=>(!sender||m.sender.displayName===sender)&&(!from||Date.parse(m.createdAt)>=Date.parse(from))&&(!before||Date.parse(m.createdAt)<Date.parse(before))&&(!selectedAccount||m.accountId===selectedAccount)&&(!accountIds.length||accountIds.includes(m.accountId))&&(!conversation||m.conversationId===conversation)&&(includeRetracted||m.id!==withdrawnId);
+      const fingerprint=JSON.stringify([state.engine,q,selectedAccount,accountIds,conversation,history,includeRetracted,sender,from,before]);
       let offset=0;
       if (u.searchParams.has('cursor')) {try {const cursor=JSON.parse(Buffer.from(u.searchParams.get('cursor'),'base64url'));if(cursor.scope!==fingerprint)throw Error('scope');offset=cursor.offset}catch{return send(400,{code:'invalid_cursor'})}}
       let hits=corpus.filter(matchesScope).flatMap(m=>{
@@ -910,10 +912,42 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
     }
     for(const width of [390,1440]){
       const lang=width===390?'pt-BR':'en',roomPage=await fresh({viewport:{width,height:900},locale:lang,reducedMotion:'reduce'});
+      await roomPage.goto(base+'/?chat='+chat.id+'&chatSearch=1&chatSender=Peer');
+      await roomPage.locator('#conversation-search-query').waitFor({state:'visible'});
+      assert.equal(await roomPage.locator('#chat-search-sender').count(),0);
       await roomPage.goto(base+'/?chat='+archiveRoom.id+'&account='+account+'&lang='+lang+'&theme=dark&chatSearch=1');
       const roomSearch=roomPage.locator('[data-conversation-search]'),field=roomSearch.locator('#conversation-search-query');
       await field.waitFor({state:'visible'});
       await roomPage.waitForFunction(()=>window.OieRuntime?.generation>0);
+      let releaseMembers;
+      await roomPage.route('**/ui/info?**infoView=participants**',async route=>{
+        await new Promise(resolve=>releaseMembers=resolve);
+        await route.continue();
+      },{times:1});
+      await roomSearch.locator('summary').click();
+      const sender=roomSearch.getByLabel(lang==='en'?'Sender':'Remetente',{exact:true});
+      await until(()=>releaseMembers,'request group participants when filters open');
+      await sender.focus();
+      await roomPage.evaluate(()=>{
+        const nodes=['#chat-search-sender','#message-timeline','#message-composer'].map(id=>document.querySelector(id)).filter(Boolean);
+        const measure=()=>nodes.flatMap(node=>{const r=node.getBoundingClientRect();return [r.y,r.height]});
+        const start=measure(),sample=window.senderFrames={delta:0};
+        const frame=()=>{sample.delta=Math.max(sample.delta,...measure().map((n,i)=>Math.abs(start[i]-n)));sample.id=requestAnimationFrame(frame)};
+        frame();
+      });
+      releaseMembers();
+      await sender.locator('option[value="Peer Two"]').waitFor({state:'attached'});
+      assert(await sender.evaluate(node=>node===document.activeElement));
+      assert(await roomPage.evaluate(()=>{cancelAnimationFrame(window.senderFrames.id);return window.senderFrames.delta<=1}));
+      await sender.selectOption('Peer');
+      const from=roomSearch.locator('[name=fromDate]'),to=roomSearch.locator('[name=toDate]');
+      await from.fill('2026-11-09');await to.fill('2026-11-09');
+      await until(async()=>await roomSearch.getAttribute('data-search-selected')===savedMatch.id&&state.searchReads.some(r=>r.senderName==='Peer'&&r.sentBefore&&r.sentFrom),'filter without search text');
+      await sender.focus();await sender.selectOption('Peer Two');
+      await until(async()=>await roomSearch.getAttribute('data-search-complete')==='true'&&await roomSearch.getAttribute('data-search-loaded')==='0','different sender has no results');
+      assert(await sender.evaluate(node=>node===document.activeElement));
+      await sender.selectOption('');await from.fill('');await to.fill('');
+      await roomSearch.locator('summary').click();
       releaseSearch=null;
       await field.fill('Archive keyword');
       await until(async()=>await roomSearch.getAttribute('data-search-selected')===savedMatch.id,'local room search before remote completion');
@@ -935,6 +969,14 @@ const id = n => '019a5df0-0000-7000-8000-' + String(n).padStart(12, '0');
       await roomSearch.locator('[data-conversation-search-older]').click();
       await until(async()=>await roomSearch.getAttribute('data-search-selected')===remoteMatch.id,'remote result opens its context');
       assert(archiveRequests.some(r=>r.action==='context'&&r.messageId===remoteMatch.id));
+      await roomSearch.locator('summary').click();
+      releaseSearch=null;
+      await to.fill('2026-11-02');
+      await until(()=>typeof releaseSearch==='function','filtered remote search starts');
+      releaseSearch();
+      await until(async()=>await roomSearch.getAttribute('data-search-selected')===remoteMatch.id&&await roomSearch.getAttribute('data-search-complete')==='true','only the older archive hit matches the date');
+      assert.equal(await roomSearch.getAttribute('data-search-loaded'),'1');
+      await roomSearch.locator('summary').click();
       const previous=archiveRequests.length;
       await field.fill('Discarded term 1');
       await field.fill('Discarded term 2');

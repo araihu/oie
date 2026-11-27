@@ -159,6 +159,13 @@ func TestExperimentalMessageIndexParity(t *testing.T) {
 	assertIndexedCandidate(t, s, "docun", first.ID)
 	assertScopedIndexedCandidate(t, s, dbgen.SearchMessagesParams{Search: "docunabstrato", AccountIds: "[]", AccountID: string(c.AccountID), ConversationID: string(room.ID)}, roomHit.ID)
 	checkIndexParity(t, s, domain.MessageSearchQuery{Search: "docunabstrato", AccountID: c.AccountID, ConversationID: room.ID, Limit: 1})
+	// The full index and the small-conversation SQL fallback must discard
+	// candidates outside a sender or time bound before applying the page limit.
+	past := at.Add(-time.Hour)
+	for _, scope := range []domain.Conversation{room, c} {
+		checkIndexParity(t, s, domain.MessageSearchQuery{ConversationID: scope.ID, Search: "docun", Sender: "absent sender", Limit: 1})
+		checkIndexParity(t, s, domain.MessageSearchQuery{ConversationID: scope.ID, Search: "docun", SentBefore: &past, Limit: 1})
+	}
 	for _, term := range []string{"docun", "arqiuvo", "viedo", "orcamento", "arquivo 漢字右左", ".", strings.Repeat("Ａ", 60), "inexistente"} {
 		for _, history := range []bool{false, true} {
 			checkIndexParity(t, s, domain.MessageSearchQuery{Search: term, IncludeEditHistory: history, Limit: 1})

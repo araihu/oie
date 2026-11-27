@@ -291,9 +291,9 @@ function editSavedHistory({age, kept} = {}) {
 // identities that the offline timeline uses.
 async function saveSecondChat(page, until, {account, chat, messageID, emojiID, text}) {
   const {engine, checkpoint} = await page.evaluate(savedHistory);
-  const entry = {account, chat, title: 'Mira', label: 'Work', messages: [{
+  const entry = {account, chat, kind: 'room', title: 'Mira', label: 'Work', messages: [{
     id: messageID, sender: 'Mira', date: '2026-11-06T17:00:00Z', text, own: false,
-  }, {id: emojiID, sender: 'Mira', date: '2026-11-06T18:00:00Z', text: '🧪'.repeat(200), own: false}]};
+  }, {id: emojiID, sender: 'Mira Luz', date: '2026-11-06T18:00:00Z', text: '🧪'.repeat(200), own: false}]};
   await page.evaluate(data => navigator.serviceWorker.controller.postMessage(data), {
     type: 'oie:offline-history-save', engine, cursor: checkpoint, entry,
   });
@@ -376,9 +376,19 @@ async function checkSavedSearch(page, until, {root, account, chat, latest, withd
   await page.goto(root + '&chat=' + chat + '&searchMode=messages&searchQuery=Texto+literal&searchAccount=' + second.account);
   await until(async () => await links.count() === 1, 'compact search URL restores its own account filters');
   assert((await links.innerText()).includes(second.text));
+  // The Nov 6 UTC fixture messages are displayed on Nov 7 in Tokyo.
+  await page.goto(root + '&account=' + second.account + '&chat=' + second.chat +
+    '&chatSearch=1&chatSender=Mira&chatFromDate=2026-11-07&chatToDate=2026-11-07');
+  await until(async () => await links.count() === 1, 'offline sender and day without message text');
+  await page.locator('#offline-to').fill('2026-11-05');
+  await until(async () => await links.count() === 0 && await status.innerText() === await page.locator('#offline-filters').getAttribute('data-date-order'), 'offline reversed dates');
+  await page.locator('#offline-to').fill('2026-11-07');
+  await page.locator('#offline-sender').selectOption('Mira Luz');
+  await until(async () => (await links.innerText()).includes('🧪'), 'offline selected participant');
   await page.goto(root + '&chat=' + chat + '&chatSearch=1&chatQuery=Texto+literal');
   await until(async () => await links.count() === 1, 'in-chat search URL restores its query and scope');
   assert((await links.innerText()).includes('queda'));
+  assert(await page.locator('#offline-sender').isHidden());
   await page.goto(root + '&account=' + account);
   await search('Texto literal', 1);
   assert((await links.innerText()).includes('queda'), 'account-scoped search excludes other accounts');

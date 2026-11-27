@@ -26,7 +26,7 @@ func (s *Server) removeAccount(ctx context.Context, r *http.Request, text copy) 
 		q.Del("account")
 	}
 	if filterRemoved || r.Form.Get("viewAccount") == id {
-		for _, key := range []string{"chat", "message", "infoView", "infoType", "infoCursor", "infoQuery", "chatSearch", "chatQuery", "chatIncludeHistory", "chatIncludeRetracted", "chatSearchRevision", "contentConversation", "contentCursor", "favoritesCursor", "scheduleCursor"} {
+		for _, key := range []string{"chat", "message", "infoView", "infoType", "infoCursor", "infoQuery", "chatSearch", "chatQuery", "chatSender", "chatFromDate", "chatToDate", "chatIncludeHistory", "chatIncludeRetracted", "chatSearchRevision", "contentConversation", "contentCursor", "favoritesCursor", "scheduleCursor"} {
 			q.Del(key)
 		}
 		q.Set("inbox", "1")

@@ -28,6 +28,10 @@ WITH initial_revisions AS (
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+ AND (CAST(sqlc.arg(sender_name) AS TEXT)='' OR json_extract(m.payload,'$.Sender.DisplayName')=CAST(sqlc.arg(sender_name) AS TEXT))
+ AND (CAST(sqlc.arg(sender) AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(sqlc.arg(sender) AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(sqlc.narg(from_ms) AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(sqlc.narg(last_ms) AS INTEGER),9223372036854775807)
 ), variants AS (
  SELECT roots.*,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL

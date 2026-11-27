@@ -333,10 +333,14 @@ WITH page AS (
  AND (CAST(?4 AS TEXT)='' OR m.account_id=CAST(?4 AS TEXT))
  AND (CAST(?5 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
  AND (CAST(?6 AS TEXT)='' OR m.conversation_id=CAST(?6 AS TEXT))
- AND COALESCE(m.timeline_at_ms,m.created_at_ms) <= ?7
- AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id,1,'','')<(CAST(?7 AS INTEGER),CAST(?8 AS TEXT),CAST(?9 AS INTEGER),CAST(?10 AS TEXT),CAST(?11 AS TEXT))
+ AND (CAST(?7 AS TEXT)='' OR json_extract(m.payload,'$.Sender.DisplayName')=CAST(?7 AS TEXT))
+ AND (CAST(?8 AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(?8 AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(?9 AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(?10 AS INTEGER),9223372036854775807)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms) <= ?11
+ AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id,1,'','')<(CAST(?11 AS INTEGER),CAST(?12 AS TEXT),CAST(?13 AS INTEGER),CAST(?14 AS TEXT),CAST(?15 AS TEXT))
  AND oie_search_match(CAST(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText') AS TEXT)||' '||CAST(COALESCE((SELECT group_concat(sc.url||' '||sc.file_name||' '||COALESCE(json_extract(p.payload,'$.Title'),'')||' '||COALESCE(json_extract(p.payload,'$.Description'),''),' ') FROM shared_content sc JOIN shared_content_state state ON state.message_id=sc.message_id AND state.parser_version>=?2 LEFT JOIN message_previews p ON p.message_id=sc.message_id AND p.url=sc.url WHERE sc.message_id=m.id),'') AS TEXT),CAST(?1 AS TEXT))=1
- ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?12
+ ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?16
 )
 SELECT page.id,page.position_ms,page.timeline_at_ms,page.payload,a.label AS account_label,a.address AS account_address,c.payload AS conversation_payload,
  CAST(COALESCE(head_source.id,first_source.id) AS TEXT) AS matched_revision_id,
@@ -356,6 +360,10 @@ type SearchMessagesChronologicalParams struct {
 	AccountID        string
 	AccountIds       string
 	ConversationID   string
+	SenderName       string
+	Sender           string
+	FromMs           *int64
+	LastMs           *int64
 	CursorMs         *int64
 	CursorID         string
 	CursorCurrent    int64
@@ -390,6 +398,10 @@ func (q *Queries) SearchMessagesChronological(ctx context.Context, arg SearchMes
 		arg.AccountID,
 		arg.AccountIds,
 		arg.ConversationID,
+		arg.SenderName,
+		arg.Sender,
+		arg.FromMs,
+		arg.LastMs,
 		arg.CursorMs,
 		arg.CursorID,
 		arg.CursorCurrent,
@@ -454,10 +466,14 @@ WITH page AS (
  AND (CAST(?4 AS TEXT)='' OR m.account_id=CAST(?4 AS TEXT))
  AND (CAST(?5 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?5 AS TEXT))))
  AND m.conversation_id=CAST(?6 AS TEXT)
- AND COALESCE(m.timeline_at_ms,m.created_at_ms) <= ?7
- AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id,1,'','')<(CAST(?7 AS INTEGER),CAST(?8 AS TEXT),CAST(?9 AS INTEGER),CAST(?10 AS TEXT),CAST(?11 AS TEXT))
+ AND (CAST(?7 AS TEXT)='' OR json_extract(m.payload,'$.Sender.DisplayName')=CAST(?7 AS TEXT))
+ AND (CAST(?8 AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(?8 AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(?9 AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(?10 AS INTEGER),9223372036854775807)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms) <= ?11
+ AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id,1,'','')<(CAST(?11 AS INTEGER),CAST(?12 AS TEXT),CAST(?13 AS INTEGER),CAST(?14 AS TEXT),CAST(?15 AS TEXT))
  AND oie_search_match(CAST(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText') AS TEXT)||' '||CAST(COALESCE((SELECT group_concat(sc.url||' '||sc.file_name||' '||COALESCE(json_extract(p.payload,'$.Title'),'')||' '||COALESCE(json_extract(p.payload,'$.Description'),''),' ') FROM shared_content sc JOIN shared_content_state state ON state.message_id=sc.message_id AND state.parser_version>=?2 LEFT JOIN message_previews p ON p.message_id=sc.message_id AND p.url=sc.url WHERE sc.message_id=m.id),'') AS TEXT),CAST(?1 AS TEXT))=1
- ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?12
+ ORDER BY COALESCE(m.timeline_at_ms,m.created_at_ms) DESC,m.id DESC LIMIT ?16
 )
 SELECT page.id,page.position_ms,page.timeline_at_ms,page.payload,a.label AS account_label,a.address AS account_address,c.payload AS conversation_payload,
  CAST(COALESCE(head_source.id,first_source.id) AS TEXT) AS matched_revision_id,
@@ -477,6 +493,10 @@ type SearchRoomMessagesChronologicalParams struct {
 	AccountID        string
 	AccountIds       string
 	ConversationID   string
+	SenderName       string
+	Sender           string
+	FromMs           *int64
+	LastMs           *int64
 	CursorMs         *int64
 	CursorID         string
 	CursorCurrent    int64
@@ -511,6 +531,10 @@ func (q *Queries) SearchRoomMessagesChronological(ctx context.Context, arg Searc
 		arg.AccountID,
 		arg.AccountIds,
 		arg.ConversationID,
+		arg.SenderName,
+		arg.Sender,
+		arg.FromMs,
+		arg.LastMs,
 		arg.CursorMs,
 		arg.CursorID,
 		arg.CursorCurrent,
@@ -608,6 +632,10 @@ WITH candidate_ids AS (
  AND (CAST(?10 AS TEXT)='' OR m.account_id=CAST(?10 AS TEXT))
  AND (CAST(?11 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?11 AS TEXT))))
  AND (CAST(?12 AS TEXT)='' OR m.conversation_id=CAST(?12 AS TEXT))
+ AND (CAST(?13 AS TEXT)='' OR json_extract(m.payload,'$.Sender.DisplayName')=CAST(?13 AS TEXT))
+ AND (CAST(?14 AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(?14 AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(?15 AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(?16 AS INTEGER),9223372036854775807)
 ), variants AS (
  SELECT roots.id, roots.position_ms, roots.timeline_at_ms, roots.payload, roots.account_label, roots.account_address, roots.conversation_payload, roots.content_payload, roots.matched_revision_id, roots.matched_at, roots.metadata,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
@@ -616,13 +644,13 @@ WITH candidate_ids AS (
  JOIN message_correction_facts f ON f.message_id=roots.id OR f.message_id IN (SELECT alias_id FROM message_canonical_aliases WHERE canonical_id=roots.id)
  JOIN message_revisions r ON r.id=f.source_revision_id
  JOIN message_revisions source ON source.rowid=(SELECT min(r.rowid) FROM message_revisions r WHERE r.entity_id=f.message_id)
- WHERE CAST(?13 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
+ WHERE CAST(?17 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
  AND f.source_hash=COALESCE(json_extract(r.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(r.payload,'$.OriginalText')))
  AND f.source_hash=COALESCE(json_extract(source.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(source.payload,'$.OriginalText')))
  GROUP BY roots.id,source.id
 ), matched AS (
- SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?14 AS TEXT)) AS INTEGER) AS text_match FROM variants
- WHERE oie_search_match(body||' '||metadata,CAST(?14 AS TEXT))=1
+ SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, matched_revision_id, matched_at, metadata, body, is_current, revision_key_at, revision_key_id,CAST(oie_search_match(body,CAST(?18 AS TEXT)) AS INTEGER) AS text_match FROM variants
+ WHERE oie_search_match(body||' '||metadata,CAST(?18 AS TEXT))=1
 )
 SELECT id,position_ms,timeline_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
 WHERE (CAST(?1 AS TEXT)='' OR (position_ms,id,is_current,revision_key_at,revision_key_id)<(CAST(?2 AS INTEGER),CAST(?1 AS TEXT),CAST(?3 AS INTEGER),CAST(?4 AS TEXT),CAST(?5 AS TEXT)))
@@ -642,6 +670,10 @@ type VerifyIndexedMessagesParams struct {
 	AccountID        string
 	AccountIds       string
 	ConversationID   string
+	SenderName       string
+	Sender           string
+	FromMs           *int64
+	LastMs           *int64
 	IncludeHistory   int64
 	Search           string
 }
@@ -678,6 +710,10 @@ func (q *Queries) VerifyIndexedMessages(ctx context.Context, arg VerifyIndexedMe
 		arg.AccountID,
 		arg.AccountIds,
 		arg.ConversationID,
+		arg.SenderName,
+		arg.Sender,
+		arg.FromMs,
+		arg.LastMs,
 		arg.IncludeHistory,
 		arg.Search,
 	)

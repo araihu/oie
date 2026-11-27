@@ -654,6 +654,30 @@ paths:
       operationId: requestBrowserRoomArchive
       tags: [Conversations]
       summary: Request an archive page for the selected room
+      parameters:
+      - in: query
+        name: sender
+        description: Part of the sender name in this conversation.
+        schema:
+          type: string
+          maxLength: 200
+      - in: query
+        name: fromDate
+        description: First calendar day to include.
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: toDate
+        description: Last calendar day to include.
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: timeZone
+        description: IANA time zone for calendar dates. Defaults to UTC.
+        schema:
+          type: string
       requestBody:
         description: Room archive action or mode submitted by the current view.
         required: true
@@ -1250,7 +1274,7 @@ paths:
       operationId: searchBrowserMessages
       tags: [Messages]
       summary: Render scoped retained message search results
-      description: Returns escaped plain-text result HTML only. Blank queries do not call engine message search. No read receipt, provider operation, profile/media download or preview enrichment is triggered. Query and cursor are scoped to one engine, account, conversation and explicit edit-history choice. This fragment is separate from conversation-title filtering. Native GET /search accepts the same search fields and renders the application shell.
+      description: Returns escaped plain-text result HTML only. A conversation filter also works without search text. No read receipt, provider operation, profile/media download or preview enrichment is triggered. Query and cursor are scoped to one engine, account, conversation and explicit edit-history choice. This fragment is separate from conversation-title filtering. Native GET /search accepts the same search fields and renders the application shell.
       parameters:
       - in: query
         name: engineId
@@ -1261,7 +1285,7 @@ paths:
           format: uuid
       - in: query
         name: q
-        description: Retained text/metadata query, trimmed before engine search. Empty means the local initial state.
+        description: Retained text/metadata query, trimmed before engine search. May be empty with a conversation filter.
         schema:
           type: string
           maxLength: 200
@@ -1277,6 +1301,29 @@ paths:
         schema:
           type: string
           format: uuid
+      - in: query
+        name: sender
+        description: Part of the sender name in this conversation.
+        schema:
+          type: string
+          maxLength: 200
+      - in: query
+        name: fromDate
+        description: First calendar day to include.
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: toDate
+        description: Last calendar day to include.
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: timeZone
+        description: IANA time zone for calendar dates. Defaults to UTC.
+        schema:
+          type: string
       - in: query
         name: includeRetracted
         description: Include retained content from retracted messages.

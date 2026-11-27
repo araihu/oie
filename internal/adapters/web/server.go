@@ -222,6 +222,7 @@ type view struct {
 	RoomArchive                                          *engineapi.RoomArchive
 	ConversationSearchOpen                               bool
 	ConversationSearchQuery                              string
+	ConversationFilters                                  conversationSearchFilters
 	ConversationSearchRetracted                          bool
 	ConversationSearchHistory                            bool
 	ConversationSearchRevision                           string
@@ -338,6 +339,7 @@ type copy struct {
 	SearchContactsCoverage, SearchContacts, SearchContactsPartial, SearchContactsLimited                                                                                                                            string
 
 	SearchEverything, SearchCancel, SearchConversations, SearchMessagesGroup, SearchConversationsLimited, SearchAllResults, SearchResultCategories, SearchConversationsEmpty, SearchResultsLoading, SearchResultsFailed string
+	SearchFilters, SearchSender, SearchAllSenders, SearchFromDate, SearchToDate, SearchDateOrder                                                                                                                        string
 	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing                                                                                      string
 
 	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
@@ -1224,6 +1226,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.configureMessageSearch(r)
 	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages" && v.MessageSearch.Query != ""
 	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
+	v.ConversationFilters = conversationSearchFilters{Sender: r.URL.Query().Get("chatSender"), FromDate: r.URL.Query().Get("chatFromDate"), ToDate: r.URL.Query().Get("chatToDate")}
 	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
 	v.ConversationSearchRetracted = r.URL.Query().Get("chatIncludeRetracted") == "true"
 	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"
@@ -1232,6 +1235,11 @@ func (s *Server) baseView(r *http.Request) view {
 	}
 	return v
 }
+func (v *view) requestLanguage(_ context.Context, req *http.Request) error {
+	req.Header.Set("Accept-Language", v.Locale)
+	return nil
+}
+
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	fragment := ""
 	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" {
@@ -1251,10 +1259,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	if fragment == "appearance" {
 		return
 	}
-	editor := func(_ context.Context, req *http.Request) error {
-		req.Header.Set("Accept-Language", v.Locale)
-		return nil
-	}
+	editor := v.requestLanguage
 	rawEngine, err := s.client.GetEngine(ctx, editor)
 	v.OfflineEngineStatus = offlineEngineStatus(rawEngine, err)
 	if err != nil {
@@ -1534,6 +1539,9 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	v.Selected = c
+	if c.Kind != "room" {
+		v.ConversationFilters.Sender = ""
+	}
 	v.ChatID = selected
 	latestPane := paneOnly && r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "conversation" &&
 		v.PagePresentationSupported && !v.Preview && v.requestKind() == "" && c.UnreadCount == 0 &&

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"golang.org/x/net/html"
@@ -156,5 +157,18 @@ func TestConversationSearchDetailsLinkHasLocalizedVisibleName(t *testing.T) {
 				t.Fatal("native search link lost its owning conversation scope", address, err)
 			}
 		})
+	}
+}
+
+func TestSearchCalendarBounds(t *testing.T) {
+	for _, tc := range []struct{ day, zone, first, last string }{
+		{"2026-03-08", "America/New_York", "2026-03-08T05:00:00Z", "2026-03-09T04:00:00Z"},
+		{"2018-11-04", "America/Sao_Paulo", "2018-11-04T03:00:00Z", "2018-11-05T02:00:00Z"},
+		{"2026-11-01", "America/New_York", "2026-11-01T04:00:00Z", "2026-11-02T05:00:00Z"},
+	} {
+		from, before, ok := (conversationSearchFilters{FromDate: tc.day, ToDate: tc.day, TimeZone: tc.zone}).bounds()
+		if !ok || from.Format(time.RFC3339) != tc.first || before.Format(time.RFC3339) != tc.last {
+			t.Fatalf("%+v: %v %v", tc, from, before)
+		}
 	}
 }

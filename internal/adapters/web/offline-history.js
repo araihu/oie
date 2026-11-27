@@ -332,7 +332,7 @@
       const title = header.querySelector('h2')?.textContent;
       const label = uuid(accountId)
         ? document.querySelector(`[data-switch-account="${accountId}"] .oie-profile-identity strong`)?.textContent : '';
-      if (title) data.entry = {account: accountId, chat: conversationId, title, label, messages};
+      if (title) data.entry = {account: accountId, chat: conversationId, title, label, kind: header.querySelector('[data-conversation-preference-state]')?.dataset.kind, messages};
     }
     return data;
   }
@@ -415,18 +415,45 @@
     });
   }
 
-  function enableOfflineSearch(scope, params) {
+  function enableOfflineSearch(scope, params, entry) {
     const search = document.getElementById('offline-search');
-    if (refreshSearch) { refreshSearch(); return; }
+    if (refreshSearch) { refreshSearch(entry); return; }
     if (!search) return; // The previous offline shell can still be open during an update.
     const input = document.getElementById('offline-query');
     const results = document.getElementById('offline-results');
     const status = document.getElementById('offline-search-status');
     const main = search.closest('main');
-    if (scope.chat) search.querySelector('label').textContent = search.dataset.chatLabel;
-    search.hidden = false;
+    const filters = search.querySelector('#offline-filters');
+    const sender = filters?.querySelector('#offline-sender');
+    const from = filters?.querySelector('#offline-from');
+    const to = filters?.querySelector('#offline-to');
+    function updateSenders(entry, selected) {
+      if (!sender || !entry) return;
+      if (!sender.options) {
+        sender.closest('label').hidden = true;
+        sender.value = '';
+        return;
+      }
+      const room = entry.kind === 'room';
+      sender.closest('[data-offline-sender-field]').hidden = !room;
+      const names = room ? [...new Set(entry.messages.map(m => m.sender).filter(Boolean))].sort() : [];
+      sender.replaceChildren(sender.options[0], ...names.map(name => new Option(name, name, false, name === selected)));
+    }
     const remembered = history.state?.offlineSearch;
     if (remembered?.engine === scope.engine) input.value = remembered.query;
+    if (scope.chat) {
+      search.querySelector('label').textContent = search.dataset.chatLabel;
+      if (filters) {
+        const route = new URLSearchParams(location.search);
+        const saved = remembered?.engine === scope.engine && remembered.chat === scope.chat ? remembered : {};
+        updateSenders(entry, saved.sender ?? route.get('sender') ?? route.get('chatSender'));
+        from.value = saved.fromDate ?? route.get('fromDate') ?? route.get('chatFromDate') ?? '';
+        to.value = saved.toDate ?? route.get('toDate') ?? route.get('chatToDate') ?? '';
+        filters.open = Boolean(sender.value || from.value || to.value);
+        filters.hidden = false;
+      }
+    }
+    search.hidden = false;
     let generation = 0;
     let timer;
 
@@ -434,13 +461,21 @@
       clearTimeout(timer);
       const turn = ++generation;
       const query = input.value.trim();
-      if (event || !query) {
+      const senderName = sender?.value.trim() || '';
+      const fromDate = from?.value || '';
+      const toDate = to?.value || '';
+      const active = Boolean(query || senderName || fromDate || toDate);
+      if (event || !active) {
         results.replaceChildren();
         results.hidden = true;
         status.textContent = '';
       }
-      main.classList.toggle('offline-searching', Boolean(query));
-      if (!query) return;
+      main.classList.toggle('offline-searching', active);
+      if (!active) return;
+      if (fromDate && toDate && fromDate > toDate) {
+        status.textContent = filters.dataset.dateOrder;
+        return;
+      }
       if (query.length > 400 || Array.from(query).length > 200) {
         results.replaceChildren();
         results.hidden = true;
@@ -449,7 +484,8 @@
       }
       timer = setTimeout(async () => {
         const registration = await navigator.serviceWorker.getRegistration('/').catch(() => null);
-        const hits = await request(registration?.active, {type: 'oie:offline-history-search', ...scope, query});
+        const hits = await request(registration?.active, {type: 'oie:offline-history-search', ...scope, query,
+          senderName, fromDate, toDate, timeZone: window.OieTime?.timeZone() || 'UTC'});
         if (generation !== turn) return;
         const focused = results.contains(document.activeElement) ? document.activeElement.href : '';
         if (!Array.isArray(hits)) {
@@ -488,10 +524,13 @@
     }
     function remember() {
       // Preserve Back from a result without putting the offline query in a URL.
-      history.replaceState({...history.state, offlineSearch: {engine: scope.engine, query: input.value}}, '');
+      history.replaceState({...history.state, offlineSearch: {engine: scope.engine, chat: scope.chat, query: input.value,
+        sender: sender?.value || '', fromDate: from?.value || '', toDate: to?.value || ''}}, '');
     }
     input.addEventListener('change', remember);
     input.addEventListener('input', update);
+    filters?.addEventListener('input', update);
+    filters?.addEventListener('change', remember);
     results.addEventListener('click', remember);
     input.addEventListener('keydown', event => {
       if (event.key === 'Escape' && input.value) {
@@ -501,13 +540,20 @@
         update(event);
       }
     });
-    refreshSearch = () => { if (input.value.trim()) update(); };
+    refreshSearch = entry => { updateSenders(entry, sender?.value); update(); };
     stopSearch = () => {
       refreshSearch = null;
       input.value = '';
+      if (filters) {
+        sender.value = from.value = to.value = '';
+        filters.open = false;
+        filters.hidden = true;
+      }
       update();
       history.replaceState({...history.state, offlineSearch: null}, '');
       input.removeEventListener('input', update);
+      filters?.removeEventListener('input', update);
+      filters?.removeEventListener('change', remember);
       input.removeEventListener('change', remember);
       results.removeEventListener('click', remember);
       stopSearch = null;
@@ -615,7 +661,7 @@
       empty.hidden = false;
       return;
     }
-    enableOfflineSearch({engine: displayedEngine, account: entry.account, chat}, params);
+    enableOfflineSearch({engine: displayedEngine, account: entry.account, chat}, params, entry);
     title.textContent = entry.title;
     empty.hidden = true;
     const template = document.getElementById('offline-message');

@@ -81,6 +81,9 @@ func shortenSearchExcerpt(text string, limit int) string {
 }
 
 type messageSearchView struct {
+	Room                                                                         bool
+	Filters                                                                      conversationSearchFilters
+	SentFrom, SentBefore                                                         *time.Time
 	Compact                                                                      bool
 	ConversationHighlight                                                        bool
 	Contacts                                                                     []engineapi.Contact
@@ -133,6 +136,12 @@ func (v *view) configureMessageSearch(r *http.Request) {
 			s.AccountID, s.AccountIDs = searchAccountSelection(q["nativeAccountId"])
 		}
 		s.ConversationID = q.Get("conversationId")
+		s.Filters = readConversationFilters(q)
+		var valid bool
+		s.SentFrom, s.SentBefore, valid = s.Filters.bounds()
+		if !valid || s.Filters.active() && s.ConversationID == "" {
+			s.State, s.Status = "invalid", 400
+		}
 		s.Cursor = q.Get("cursor")
 		s.RequestedEngine = q.Get("engineId")
 	} else {
@@ -205,7 +214,7 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 		return
 	}
 	if state.ConversationID != "" {
-		owner, err := s.client.GetConversationWithResponse(ctx, state.ConversationID)
+		owner, err := s.client.GetConversationWithResponse(ctx, state.ConversationID, v.requestLanguage)
 		if err != nil {
 			state.State = "unavailable"
 			state.Status = 503
@@ -222,8 +231,24 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 			return
 		}
 		state.ConversationTitle = owner.JSON200.Title
+		state.Room = owner.JSON200.Kind == "room"
+		if !state.Room {
+			state.Filters.Sender = ""
+		}
+		if state.Room && v.NativeMessageSearch {
+			roster, err := s.client.GetRoomParticipantsWithResponse(ctx, state.ConversationID, v.requestLanguage)
+			if err == nil {
+				v.InfoParticipants = roster.JSON200
+			}
+			messages, err := s.client.ListMessagesWithResponse(ctx, state.ConversationID, &engineapi.ListMessagesParams{}, v.requestLanguage)
+			if err == nil && messages.JSON200 != nil {
+				for _, m := range messages.JSON200.Items {
+					v.Messages = append(v.Messages, messageView{Message: m})
+				}
+			}
+		}
 	}
-	if state.Query == "" {
+	if state.Query == "" && !state.Filters.active() {
 		state.State = "blank"
 		return
 	}
@@ -240,6 +265,10 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 		return
 	}
 	params := engineapi.SearchMessagesParams{Q: state.Query, IncludeEditHistory: &state.IncludeHistory, IncludeRetracted: &state.IncludeRetracted, Limit: &state.Limit}
+	params.SentFrom, params.SentBefore = state.SentFrom, state.SentBefore
+	if state.Filters.Sender != "" {
+		params.SenderName = &state.Filters.Sender
+	}
 	if state.AccountID != "" {
 		params.AccountId = &state.AccountID
 	}
@@ -252,7 +281,7 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 	if state.Cursor != "" {
 		params.Cursor = &state.Cursor
 	}
-	response, err := s.client.SearchMessagesWithResponse(ctx, &params)
+	response, err := s.client.SearchMessagesWithResponse(ctx, &params, v.requestLanguage)
 	if err != nil {
 		return
 	}
@@ -315,6 +344,9 @@ func validMessageSearchPage(page engineapi.MessageSearchPage, request messageSea
 	for i, hit := range page.Items {
 		m := hit.Message
 		if !validOperationKey(m.Id) || !validOperationKey(m.RevisionId) || !validOperationKey(m.AccountId) || !validOperationKey(m.ConversationId) || !validOperationKey(hit.MatchedRevisionId) || m.CreatedAt.IsZero() || hit.MatchedAt.IsZero() || len([]rune(hit.Excerpt)) > 512 {
+			return false
+		}
+		if !matchesConversationFilters(m, request.Filters.Sender, request.SentFrom, request.SentBefore) {
 			return false
 		}
 		if !request.includesAccount(m.AccountId) || request.ConversationID != "" && m.ConversationId != request.ConversationID {
@@ -412,6 +444,7 @@ func (v view) messageSearchHref(account, conversation string) string {
 }
 func (v view) messageSearchNativeHref(cursor string) string {
 	q := url.Values{"q": {v.MessageSearch.Query}, "lang": {v.Locale}, "theme": {v.Theme}}
+	v.MessageSearch.Filters.writeQuery(q)
 	if v.MessageSearch.Category != "" {
 		q.Set("searchType", v.MessageSearch.Category)
 	}

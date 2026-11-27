@@ -68,7 +68,12 @@ func ParseMessageSearchCursor(value, scope string) (MessageSearchCursor, error) 
 func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery) (domain.MessageSearchPage, error) {
 	empty := domain.MessageSearchPage{Items: []domain.MessageSearchHit{}}
 	q.Search = strings.TrimSpace(q.Search)
-	if q.Search == "" || !utf8.ValidString(q.Search) || strings.ContainsRune(q.Search, 0) || utf8.RuneCountInString(q.Search) > 200 || q.Limit < 1 || q.Limit > 100 {
+	q.Sender = strings.TrimSpace(q.Sender)
+	filtered := q.Sender != "" || q.SenderName != "" || q.SentFrom != nil || q.SentBefore != nil
+	if !utf8.ValidString(q.SenderName) || strings.ContainsRune(q.SenderName, 0) || utf8.RuneCountInString(q.SenderName) > 200 || filtered && q.ConversationID == "" || !utf8.ValidString(q.Sender) || strings.ContainsRune(q.Sender, 0) || utf8.RuneCountInString(q.Sender) > 200 || q.SentFrom != nil && q.SentBefore != nil && !q.SentFrom.Before(*q.SentBefore) {
+		return empty, ErrInvalid
+	}
+	if q.Search == "" && !filtered || !utf8.ValidString(q.Search) || strings.ContainsRune(q.Search, 0) || utf8.RuneCountInString(q.Search) > 200 || q.Limit < 1 || q.Limit > 100 {
 		return empty, ErrInvalid
 	}
 	accountIDs, err := e.validateSearchAccounts(ctx, q.AccountID, q.AccountIDs)
@@ -99,7 +104,9 @@ func (e *Engine) SearchMessages(ctx context.Context, q domain.MessageSearchQuery
 		History                   bool
 		Retracted                 bool        `json:",omitempty"`
 		AccountIDs                []domain.ID `json:",omitempty"`
-	}{snapshot.ID, q.Search, q.AccountID, q.ConversationID, q.IncludeEditHistory, q.IncludeRetracted, q.AccountIDs})
+		Sender, SenderName        string      `json:",omitempty"`
+		SentFrom, SentBefore      *time.Time  `json:",omitempty"`
+	}{snapshot.ID, q.Search, q.AccountID, q.ConversationID, q.IncludeEditHistory, q.IncludeRetracted, q.AccountIDs, q.Sender, q.SenderName, q.SentFrom, q.SentBefore})
 	if _, err = ParseMessageSearchCursor(q.Cursor, q.ScopeHash); err != nil {
 		return empty, err
 	}

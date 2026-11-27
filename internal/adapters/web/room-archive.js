@@ -3,12 +3,12 @@
  function current() {
   return document.getElementById('message-timeline')?.dataset;
  }
- async function request(life, payload, signal, method = 'POST') {
+ async function request(life, payload, signal, method = 'POST', filters) {
   const {engineId, accountId, conversationId} = document.body.dataset;
   const csrf = document.querySelector('meta[name="oie-csrf"]')?.content;
   const timeline = current();
   if (!timeline?.roomArchive || !csrf || !conversationId) return null;
-  const response = await life.fetch('/ui/room-archive/' + encodeURIComponent(conversationId), {
+  const response = await life.fetch('/ui/room-archive/' + encodeURIComponent(conversationId) + (filters ? '?' + filters : ''), {
    method, signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf, 'X-Oie-Engine-ID': engineId, 'X-Oie-Account-ID': accountId},
    body: JSON.stringify(payload),
