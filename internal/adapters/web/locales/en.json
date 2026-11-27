@@ -174,6 +174,8 @@
   "SharedDownload": "Download",
   "SharedActionFailed": "This action could not be completed. Try again.",
   "SharedLinkCopied": "Link copied.",
+  "ShareFile": "Share file",
+  "FilePreviewUnavailable": "No preview available.",
   "SharedDownloading": "Preparing download…",
   "RefreshPreview": "Refresh link preview",
   "RefreshPreviewFailed": "The preview could not be refreshed. Try again.",

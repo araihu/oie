@@ -357,6 +357,7 @@ type copy struct {
 	SharedDownload                                                                                                                                                                                           string
 	SharedActionFailed                                                                                                                                                                                       string
 	SharedLinkCopied                                                                                                                                                                                         string
+	ShareFile, FilePreviewUnavailable                                                                                                                                                                        string
 	SharedDownloading                                                                                                                                                                                        string
 	RoomDiscover                                                                                                                                                                                             string
 	RoomService                                                                                                                                                                                              string

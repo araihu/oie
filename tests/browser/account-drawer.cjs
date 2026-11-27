@@ -59,7 +59,10 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     if(count===35){
      assert(await list.evaluate(el=>el.scrollHeight>el.clientHeight),'fixture did not overflow');
      await list.hover();await page.mouse.wheel(0,900);await until(()=>list.evaluate(el=>el.scrollTop>0),'wheel scroll');
-     await list.locator('[data-manage-account]').last().scrollIntoViewIfNeeded();
+     await list.evaluate(el=>{
+      const rows=el.querySelectorAll('[data-manage-account]');
+      rows[rows.length-1].scrollIntoView({block:'nearest',behavior:'instant'});
+     });
      const last=await list.locator('[data-manage-account]').last().boundingBox();assert(last.y+last.height<=footer.y+1,'last account obscured by footer');
      assert(Math.abs((await action.boundingBox()).y-button.y)<1,'action moved with list');
      const scroll=await list.evaluate(el=>el.scrollTop);await action.focus();state.changed=true;emit();

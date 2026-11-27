@@ -188,7 +188,7 @@ window.OieRuntime.register('documents', life => {
  life.cleanup(()=>{previewObserver?.disconnect();previewQueue.length=0;for(const controller of previewRequests)controller.abort();previewRequests.clear()});
  function close(){window.dispatchEvent(new CustomEvent('modal:close',{detail:{id:'oie-document-viewer'}}))}
  life.on(document,'click',event=>{
-  const open=event.target.closest('[data-document-open]');if(open){const card=open.closest('[data-document-item]'),record=card&&validSource(card);if(!record)return;event.preventDefault();opener=open;origin=card.closest('#info-shared-results')?'info':'global';current=record;dialog.querySelector('[data-document-title]').textContent=record.filename;dialog.setAttribute('aria-labelledby','oie-document-title');const download=dialog.querySelector('[data-document-download]'),original=dialog.querySelector('[data-document-original]');download.href=record.source+'&download=1';download.hidden=record.format==='unsupported';original.href=record.original||'#';original.hidden=!record.original;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-document-viewer'}}));load();return}
+  const open=event.target.closest('[data-document-open]');if(open){const card=open.closest('[data-document-item]'),record=card&&validSource(card);if(!record)return;event.preventDefault();opener=open;origin=card.closest('#info-shared-results')?'info':'global';current=record;dialog.querySelector('[data-document-title]').textContent=record.filename;dialog.setAttribute('aria-labelledby','oie-document-title');const download=dialog.querySelector('[data-document-download]'),original=dialog.querySelector('[data-document-original]');download.href=record.source+'&download=1';download.download=record.filename;download.hidden=record.format==='unsupported';original.href=record.original||'#';original.hidden=!record.original;window.dispatchEvent(new CustomEvent('modal:open',{detail:{id:'oie-document-viewer'}}));load();return}
   if(event.target.closest('[data-document-close]')){event.preventDefault();close();return}
   if(event.target.closest('[data-document-retry]')){event.preventDefault();scroll.focus({preventScroll:true});load();return}
   if(event.target.closest('[data-document-toast] button')&&!retryRegion.hidden){retry.focus({preventScroll:true});return}
@@ -197,4 +197,186 @@ window.OieRuntime.register('documents', life => {
  life.on(dialog,'close',()=>{const id=current?.id;reset();current=null;status.textContent='';const target=opener?.isConnected?opener:document.querySelector((origin==='info'?'#info-shared-results':'#shared-content-results')+` [data-document-item="${CSS.escape(id||'')}"] [data-document-open]`);life.raf(()=>target?.focus({preventScroll:true}))});
  life.on(window,'pagehide',()=>reset());
  life.cleanup(()=>{reset();current=null;close();if(dialog.open)dialog.close()});
+});
+
+// In an iOS Home Screen app, navigating to an attachment response can replace
+// the entire workspace with Quick Look, which has no browser Back control.
+window.OieRuntime.register('ios-file-viewer', life => {
+ if (!window.OieRuntime.onIOSFileOpen) return;
+ const template = document.querySelector('template[data-ios-file-viewer]');
+ if (!template) return;
+ const dialog = template.content.firstElementChild.cloneNode(true);
+
+ const title = dialog.querySelector('h2');
+ const status = dialog.querySelector('[role="status"]');
+ const preview = dialog.querySelector('[data-file-preview]');
+ const share = dialog.querySelector('[data-file-share]');
+ const shareFeedback = dialog.querySelector('[data-file-share-feedback]');
+ const save = dialog.querySelector('[data-file-save]');
+ const mediaTypes = {
+  png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', avif:'image/avif', heic:'image/heic',
+  mp4:'video/mp4', m4v:'video/mp4', mov:'video/quicktime', webm:'video/webm',
+  mp3:'audio/mpeg', m4a:'audio/mp4', wav:'audio/wav', ogg:'audio/ogg',
+ };
+ let request, objectURL, file, opener;
+
+ function responseFilename(response, fallback) {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  let filename = fallback;
+  for (const match of disposition.matchAll(/;\s*([^\s=;]+)\s*=\s*(?:"((?:\\.|[^"\\])*)"|([^;]*))/g)) {
+   const key = match[1].toLowerCase();
+   if (key !== 'filename' && key !== 'filename*') continue;
+   let value = match[2]?.replace(/\\(.)/g, '$1') ?? match[3].trim();
+   if (key === 'filename*') {
+    const encoded = /^utf-8'[^']*'(.*)$/i.exec(value);
+    if (!encoded) continue;
+    try { value = decodeURIComponent(encoded[1]); } catch { continue; }
+   }
+   if (!value || /[\x00-\x1f\x7f/\\]/.test(value) || value === '.' || value === '..') continue;
+   if (key === 'filename*') return value;
+   filename = value;
+  }
+  return filename;
+ }
+
+ function reset() {
+  request?.abort();
+  file = null;
+  const player = preview.querySelector('video,audio');
+  if (player) {
+   player.pause();
+   player.removeAttribute('src');
+   player.load();
+  }
+  preview.replaceChildren();
+  if (objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = '';
+  shareFeedback.textContent = '';
+  share.hidden = save.hidden = true;
+  save.removeAttribute('href');
+ }
+
+ // Bound the bytes kept for local preview and sharing on an iPhone. Larger
+ // media uses the existing streaming route; the download link stays available.
+ const fileBudget = 32 * 1024 * 1024;
+ async function previewFile(response, filename, type) {
+  const size = response.headers.get('Content-Length');
+  if (size !== null && Number(size) > fileBudget) {
+   await response.body?.cancel();
+   return null;
+  }
+  if (size !== null && !response.headers.has('Content-Encoding')) {
+   return new File([await response.blob()], filename, {type});
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks = [];
+  let total = 0;
+  try {
+   for (;;) {
+    const {done, value} = await reader.read();
+    if (done) return new File(chunks, filename, {type});
+    total += value.byteLength;
+    if (total > fileBudget) {
+     await reader.cancel();
+     return null;
+    }
+    chunks.push(value);
+   }
+  } finally { reader.releaseLock(); }
+ }
+
+ function streamSource(href, type) {
+  const url = new URL(href);
+  if (!type.startsWith('video/') && !type.startsWith('audio/')) return '';
+  if (url.pathname === '/ui/scheduling/file') {
+   if (type.startsWith('video/')) url.searchParams.set('play', '1');
+  } else if (!url.pathname.startsWith('/ui/shared-content/')) return '';
+  url.searchParams.delete('download');
+  return url.href;
+ }
+
+ async function openFile(link) {
+  reset();
+  const controller = new AbortController();
+  request = controller;
+  opener = link.oieDownloadOpener || link.closest('[data-message-menu-slot]')?.querySelector('[data-message-menu-trigger]') || link;
+  let filename = link.download || dialog.dataset.filename;
+  title.textContent = filename;
+  status.textContent = dialog.dataset.loading;
+  if (!dialog.isConnected) document.body.append(dialog);
+  if (!dialog.open) dialog.showModal();
+  try {
+   const response = await life.fetch(link.href, {credentials:'same-origin', redirect:'error', signal:controller.signal});
+   if (!response.ok) throw Error('download');
+   if (controller.signal.aborted) return;
+   filename = responseFilename(response, filename);
+   title.textContent = filename;
+   const extension = filename.split('.').pop().toLowerCase();
+   const declaredType = (response.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+   const type = (!declaredType || declaredType === 'application/octet-stream') && Object.hasOwn(mediaTypes, extension)
+    ? mediaTypes[extension] : declaredType;
+   const loaded = await previewFile(response, filename, type);
+   if (controller.signal.aborted) return;
+   file = loaded;
+   const supported = Object.values(mediaTypes).includes(type);
+   if (file) {
+    // Keep non-media downloads inert even if WebKit displays the target.
+    objectURL = URL.createObjectURL(supported ? file : file.slice(0, file.size, 'application/octet-stream'));
+   }
+   save.href = objectURL || link.href;
+   save.download = filename;
+   share.hidden = !file || !navigator.canShare?.({files:[file]});
+   save.hidden = !share.hidden;
+   const source = supported && (objectURL || streamSource(link.href, type));
+   if (!source) {
+    status.textContent = dialog.dataset.unavailable;
+    return;
+   }
+   const image = type.startsWith('image/');
+   const media = document.createElement(image ? 'img' : type.split('/')[0]);
+   if (image) media.alt = filename;
+   else {
+    media.controls = true;
+    media.playsInline = true;
+    media.preload = 'metadata';
+   }
+   media.addEventListener('error', () => {
+    media.remove();
+    status.textContent = dialog.dataset.unavailable;
+   }, {once:true, signal:controller.signal});
+   media.src = source;
+   preview.replaceChildren(media);
+   status.textContent = '';
+  } catch {
+   if (!controller.signal.aborted) status.textContent = dialog.dataset.failed;
+  }
+ }
+
+ life.on(share, 'click', async () => {
+  const current = file;
+  if (!current) return;
+  shareFeedback.textContent = '';
+  try { await navigator.share({files:[current]}); }
+  catch (error) {
+   if (file === current && error.name !== 'AbortError') {
+    shareFeedback.textContent = dialog.dataset.failed;
+    save.hidden = false;
+   }
+  }
+ });
+ // Native dialog dismissal handles Escape. Keep that keystroke away from the
+ // underlying drawer's window listener when the attachment opens above it.
+ life.on(dialog, 'keydown', event => {
+  if (event.key === 'Escape') event.stopPropagation();
+ });
+ life.on(dialog, 'close', () => {
+  if (dialog.open) return;
+  reset();
+  if (opener?.isConnected) opener.focus({preventScroll:true});
+  opener = null;
+ });
+ life.on(window, 'pagehide', () => { dialog.close(); reset(); });
+ life.cleanup(() => { dialog.close(); reset(); dialog.remove(); });
+ window.OieRuntime.onIOSFileOpen(life, openFile);
 });

@@ -288,16 +288,8 @@ window.OieRuntime.register('audio', life => {
     if (!card?.dataset.audioDownload) return;
     const address = card.dataset.audioDownload, name = card.dataset.audioFilename;
     try {
-      if (window.OieDesktop?.saveFile) {
-        await window.OieDesktop.saveFile(address, name);
-      } else {
-        const link = document.createElement('a');
-        link.href = address;
-        link.download = name;
-        document.body.append(link);
-        link.click();
-        link.remove();
-      }
+      const opener = action.closest('[data-message-menu-slot]')?.querySelector('[data-message-menu-trigger]');
+      await window.OieRuntime.saveFile(address, name, opener);
     } catch {
       if (!life.signal.aborted) window.dispatchEvent(new CustomEvent('notify', {detail:{kind:'toast', tone:'danger', message:card.dataset.audioDownloadFailed}}));
     }

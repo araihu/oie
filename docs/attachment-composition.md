@@ -8,7 +8,10 @@ video to watch it before sending. Previews wrap onto new rows when space
 is limited. Use the composer to send or schedule
 the message. Flatpak opens the native chooser for both menu entries. Click a
 staged filename to download its original bytes. The desktop app opens the
-system save dialog with the file’s name.
+system save dialog with the file’s name. On iPhone and iPad, tapping an
+attachment filename opens it over the current screen. Use **Close** to return.
+Choose **Share file** to save a copy through the system share sheet, or use
+**Download** when offered.
 
 ## State and effects
 

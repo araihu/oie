@@ -2,7 +2,7 @@
 // are metadata only; no real accounts, provider downloads, or mutations occur.
 const {openConversationDetails} = require('./fixtures/conversation-menu.cjs');
 const assert=require('node:assert/strict'),http=require('node:http'),path=require('node:path'),fs=require('node:fs/promises');
-const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium}=require('playwright');
+const {spawn}=require('node:child_process'),{once}=require('node:events'),{chromium,devices}=require('playwright');
 const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const bytes=await fs.readFile(path.join(__dirname,'fixtures/tiny-video.webm'));
@@ -51,11 +51,19 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     res.end(indexBody);
     return;
    }
+   if (state.largeDownload && ref === good && u.search === '?download=true') {
+    res.writeHead(200, {'Content-Type':'video/webm', 'Content-Length':64 * 1024 * 1024,
+      'Content-Disposition':'attachment; filename="large.webm"'});
+    res.once('close', () => { state.largeDownloadCancelled = !res.writableEnded; });
+    res.flushHeaders();
+    return;
+   }
+   if (state.largeDownload && ref === good && !u.search) state.largePlaybackRange = req.headers.range;
    assert(['','?download=true'].includes(u.search));
    if(useIndex) indexedRanges.push(req.headers.range);state.reads.set(ref,count(ref)+1);if(ref===bad&&state.badUnavailable)return send(404,{type:'urn:oie:problem:not_found',title:'Not found',status:404,code:'not_found'});
    const body=useIndex?indexed:state.corrupt?Buffer.from('not a supported video container'):state.hevc?hevc:bytes;let start=0,end=body.length-1,status=200;
    if(req.headers.range&&!state.ignoreRange){const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range);if(!range||Number(range[1])>=body.length){res.setHeader('Content-Range','bytes */'+body.length);return send(416,{status:416,code:'invalid_range'})}start=Number(range[1]);if(range[2])end=Math.min(Number(range[2]),end);status=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${body.length}`)}
-   res.setHeader('Content-Type',useIndex?'video/mp4':state.hevc?'video/x-matroska':'video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition','inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
+   res.setHeader('Content-Type',useIndex?'video/mp4':state.hevc?'video/x-matroska':'video/webm');res.setHeader('Content-Length',end-start+1);res.setHeader('Accept-Ranges','bytes');res.setHeader('ETag','"fixture-video-v1"');res.setHeader('Content-Disposition',state.disposition || 'inline; filename="tiny-video.webm"');res.writeHead(status);res.end(body.subarray(start,end+1));return;
   }
   if(u.pathname==='/api/v1/events'){res.setHeader('Content-Type','text/event-stream');res.write(': ready\n\n');streams.add(res);res.on('close',()=>streams.delete(res));return}
   send(404,{status:404});
@@ -102,6 +110,56 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
   const [file]=await Promise.all([page.waitForEvent('download'),download.click()]);
   assert.equal(file.suggestedFilename(),'tiny-video.webm');
   assert.deepEqual(await fs.readFile(await file.path()),bytes);
+  const iphone = await browser.newContext({...devices['iPhone 13']});
+  try {
+   await iphone.addInitScript(() => {
+    localStorage.setItem('oie.device.auto-video-previews.v1','false');
+    Object.defineProperties(navigator, {
+     canShare:{value:({files}) => files.length === 1},
+     share:{value:async ({files:[file]}) => {
+      window.sharedOriginal = {name:file.name, type:file.type, bytes:[...new Uint8Array(await file.arrayBuffer())]};
+     }},
+    });
+   });
+   const mobile = await iphone.newPage();
+   const chatURL = base + '/?chat=' + chat + '&lang=en';
+   await mobile.goto(chatURL);
+   const trigger = mobile.locator('[data-message-menu-trigger="'+messages[0].id+'"]');
+   const viewer = mobile.locator('#oie-file-viewer');
+   const names = [
+    ['inline; filename="scene; \\"two\\".webm"', 'scene; "two".webm'],
+    ["inline; filename*=UTF-8''take%20%C3%A1udio.webm", 'take áudio.webm'],
+   ];
+   for (const [disposition, name] of names) {
+    state.disposition = disposition;
+    await trigger.click();
+    await mobile.getByRole('menuitem',{name:'Download original',exact:true}).click();
+    await viewer.getByRole('button',{name:'Share file'}).click();
+    await until(() => mobile.evaluate(expected => window.sharedOriginal?.name === expected, name), 'iOS shares the server filename');
+    assert.deepEqual(await mobile.evaluate(() => window.sharedOriginal), {name, type:'video/webm', bytes:[...bytes]});
+    assert.equal(await viewer.locator('h2').textContent(), name);
+    await viewer.getByRole('button',{name:'Close'}).click();
+    await until(() => trigger.evaluate(node => node === document.activeElement && node.getAttribute('aria-expanded') === 'false'), 'iOS returns focus to the message menu trigger');
+    assert.equal(mobile.url(), chatURL);
+   }
+   state.largeDownload = true;
+   await trigger.click();
+   await mobile.getByRole('menuitem',{name:'Download original',exact:true}).click();
+   const save = viewer.getByRole('link',{name:'Download',exact:true});
+   await save.waitFor();
+   const source = '/ui/shared-content/' + good + '/content?engineId=' + engine;
+   assert.equal(await save.getAttribute('href'), base + source + '&download=1');
+   assert.equal(await save.getAttribute('download'), 'large.webm');
+   assert.equal(await viewer.locator('iframe').getAttribute('name'), await save.getAttribute('target'));
+   assert.equal(await viewer.locator('video').getAttribute('src'), base + source);
+   await until(() => state.largeDownloadCancelled && Boolean(state.largePlaybackRange), 'large download is cancelled and inline video uses ranges');
+   await viewer.getByRole('button',{name:'Close'}).click();
+   assert.equal(mobile.url(), chatURL);
+  } finally {
+   delete state.largeDownload;
+   delete state.disposition;
+   await iphone.close();
+  }
   await page.keyboard.press('Escape');
   assert.equal(await player(good).getAttribute('src'),null);
   await card(good).locator('[data-video-play]').click();await until(()=>player(good).evaluate(video=>video.currentTime>0.05),'chat native video playback');await player(good).evaluate(video=>{video.loop=true;window.chatVideo=video});

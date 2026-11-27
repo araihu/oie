@@ -45,7 +45,6 @@ window.OieRuntime.register('shared-actions', life => {
   outlet.append(toast);
   scheduleDismissal();
  }
- async function save(url,name){if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(url,name||'');const anchor=document.createElement('a');anchor.href=url;anchor.download=name||'';document.body.append(anchor);anchor.click();anchor.remove();return true;}
  async function copy(value){
   if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return;}
   const previous=document.activeElement,field=document.createElement('textarea');field.value=value;field.readOnly=true;field.style.cssText='position:fixed;left:-10000px;top:0';document.body.append(field);field.select();
@@ -81,14 +80,15 @@ window.OieRuntime.register('shared-actions', life => {
    return;
   }
   if(scope.dataset.sharedEngine!==document.body.dataset.engineId){feedback(scope,labels.failed);return;}
+  const opener=scope.querySelector('[data-shared-menu-trigger]');
   if(scope.dataset.sharedKind==='image'){
    pending.add(key);feedback(scope,labels.downloading);
-   document.dispatchEvent(new CustomEvent('oie:preview-save-request',{detail:{id:scope.dataset.sharedPreview,engineId:scope.dataset.sharedEngine,accountId:scope.dataset.sharedAccount,conversationId:scope.dataset.sharedConversation,messageId:scope.dataset.sharedMessage,url:address,alive:()=>!life.signal.aborted&&scope.isConnected,onState:state=>{if(state!=='loading')pending.delete(key);if(life.signal.aborted||!scope.isConnected)return;feedback(scope,state==='failed'?labels.failed:state==='loading'?labels.downloading:'');}}}));return;
+   document.dispatchEvent(new CustomEvent('oie:preview-save-request',{detail:{opener,id:scope.dataset.sharedPreview,engineId:scope.dataset.sharedEngine,accountId:scope.dataset.sharedAccount,conversationId:scope.dataset.sharedConversation,messageId:scope.dataset.sharedMessage,url:address,alive:()=>!life.signal.aborted&&scope.isConnected,onState:state=>{if(state!=='loading')pending.delete(key);if(life.signal.aborted||!scope.isConnected)return;feedback(scope,state==='failed'?labels.failed:state==='loading'?labels.downloading:'');}}}));return;
   }
   const path=scope.dataset.sharedDownload,expected='/ui/shared-content/'+encodeURIComponent(key)+'/content';let target;try{target=new URL(path,location.origin);}catch{return;}
   if(!['video','audio','document'].includes(scope.dataset.sharedKind)||target.origin!==location.origin||target.pathname!==expected||target.searchParams.get('engineId')!==document.body.dataset.engineId){feedback(scope,labels.failed);return;}
   target.searchParams.set('download','1');pending.add(key);
-  try{await save(target.pathname+target.search,scope.dataset.sharedName);if(!life.signal.aborted&&scope.isConnected)feedback(scope,'');}
+  try{await window.OieRuntime.saveFile(target.pathname+target.search,scope.dataset.sharedName,opener);if(!life.signal.aborted&&scope.isConnected)feedback(scope,'');}
   catch{if(!life.signal.aborted&&scope.isConnected)feedback(scope,labels.failed);}
   finally{pending.delete(key);}
  });
