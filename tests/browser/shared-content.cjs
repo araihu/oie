@@ -226,14 +226,22 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
    await native.waitFor({state:'hidden'});
    assert.equal((await controls.boundingBox()).height,height);
    await until(()=>menu.evaluate(trigger=>trigger===document.activeElement),'failed audio returns focus to its menu');
+   async function openAudioMenu() {
+    await menu.press('Enter');
+    // Keyboard opening focuses the first item after the dropdown is positioned.
+    await until(()=>card.getByRole('menu').evaluate(panel=>
+     document.activeElement===panel.querySelector('[role="menuitem"]') &&
+     getComputedStyle(panel).opacity==='1' && panel.getAnimations().length===0
+    ),'audio menu opened with keyboard focus');
+   }
    unavailable=false;
-   await menu.press('Enter');
+   await openAudioMenu();
    await retry.waitFor();
    await retry.press('Enter');
    await page.waitForFunction(player=>player.currentTime>.05&&!player.error,await native.elementHandle());
    await until(()=>menu.evaluate(trigger=>trigger===document.activeElement&&trigger.getAttribute('aria-expanded')==='false'),'audio retry closes only its menu and restores focus');
    assert.equal((await controls.boundingBox()).height,height);
-   await menu.press('Enter');
+   await openAudioMenu();
    const downloadAction=card.getByRole('menuitem',{name:'Download audio',exact:true});
    await downloadAction.waitFor();
    assert.equal(await retry.count(),0);
