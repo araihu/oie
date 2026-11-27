@@ -340,8 +340,20 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     const cardMenu = phone.locator('#info-shared-results [data-shared-actions="' + good + '"]');
     const trigger = cardMenu.locator('[data-shared-menu-trigger]');
     await trigger.click();
-    await cardMenu.locator('[id^="shared-download-"]').click();
+    // On iOS a tap can leave the page body focused once the card menu closes.
+    // Chromium otherwise restores the focused trigger through dialog.close().
+    await phone.evaluate(() => {
+     function unfocusMenu(event) {
+      if (!event.target.matches('body > a[download]')) return;
+      window.removeEventListener('click', unfocusMenu, true);
+      document.activeElement.blur();
+      window.bodyFocusedWhenOpeningFile = document.activeElement === document.body;
+     }
+     window.addEventListener('click', unfocusMenu, true);
+    });
+    await cardMenu.locator('[id^="shared-download-"]').tap();
     await attachment.waitFor();
+    assert(await phone.evaluate(() => window.bodyFocusedWhenOpeningFile), 'Touch opened the file without focus on the card menu');
     await attachment.getByRole('button', {name:'Fechar'}).click();
     await attachment.waitFor({state:'hidden'});
     assert(await trigger.evaluate(button => button === document.activeElement), 'File viewer returns focus to the shared card menu');
