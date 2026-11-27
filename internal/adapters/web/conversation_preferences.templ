@@ -39,7 +39,7 @@ templ conversationPreferenceFeedback(v view){
 
 templ conversationPreferenceData(v view){
 if v.Selected!=nil {
-<div data-conversation-preference-state hidden data-conversation={v.Selected.Id} data-account={v.Selected.AccountId} data-revision={v.Selected.RevisionId} data-archived={strconv.FormatBool(v.Selected.Archived)} data-favorite={strconv.FormatBool(v.Selected.Favorite)} data-read={strconv.FormatBool(!hasUnread(*v.Selected))}></div>
+<div data-conversation-preference-state data-kind={string(v.Selected.Kind)} hidden data-conversation={v.Selected.Id} data-account={v.Selected.AccountId} data-revision={v.Selected.RevisionId} data-archived={strconv.FormatBool(v.Selected.Archived)} data-favorite={strconv.FormatBool(v.Selected.Favorite)} data-read={strconv.FormatBool(!hasUnread(*v.Selected))}></div>
 }
 }
 

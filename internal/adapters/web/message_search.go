@@ -81,6 +81,7 @@ func shortenSearchExcerpt(text string, limit int) string {
 }
 
 type messageSearchView struct {
+	Room                                                                         bool
 	Filters                                                                      conversationSearchFilters
 	SentFrom, SentBefore                                                         *time.Time
 	Compact                                                                      bool
@@ -230,6 +231,22 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 			return
 		}
 		state.ConversationTitle = owner.JSON200.Title
+		state.Room = owner.JSON200.Kind == "room"
+		if !state.Room {
+			state.Filters.Sender = ""
+		}
+		if state.Room && v.NativeMessageSearch {
+			roster, err := s.client.GetRoomParticipantsWithResponse(ctx, state.ConversationID)
+			if err == nil {
+				v.InfoParticipants = roster.JSON200
+			}
+			messages, err := s.client.ListMessagesWithResponse(ctx, state.ConversationID, &engineapi.ListMessagesParams{})
+			if err == nil && messages.JSON200 != nil {
+				for _, m := range messages.JSON200.Items {
+					v.Messages = append(v.Messages, messageView{Message: m})
+				}
+			}
+		}
 	}
 	if state.Query == "" && !state.Filters.active() {
 		state.State = "blank"
@@ -250,7 +267,7 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 	params := engineapi.SearchMessagesParams{Q: state.Query, IncludeEditHistory: &state.IncludeHistory, IncludeRetracted: &state.IncludeRetracted, Limit: &state.Limit}
 	params.SentFrom, params.SentBefore = state.SentFrom, state.SentBefore
 	if state.Filters.Sender != "" {
-		params.Sender = &state.Filters.Sender
+		params.SenderName = &state.Filters.Sender
 	}
 	if state.AccountID != "" {
 		params.AccountId = &state.AccountID

@@ -60,6 +60,10 @@ func TestConversationSenderAndTimeBounds(t *testing.T) {
 	if len(second.Items) != 1 || second.Items[0].Message.Id != ids[1] || second.NextCursor != "" {
 		t.Fatal(second)
 	}
+	exact := url.Values{"q": {""}, "conversationId": {string(c.ID)}, "senderName": {"Nina"}, "sentFrom": {start.Format(time.RFC3339)}, "sentBefore": {start.Add(3 * time.Hour).Format(time.RFC3339)}}
+	if result := searchHTTP(t, server.URL, exact); len(result.Items) != 1 || result.Items[0].Message.Id != ids[3] {
+		t.Fatal(result)
+	}
 	for _, key := range []string{"sender", "sentFrom", "sentBefore", "conversationId"} {
 		old := q.Get(key)
 		q.Del(key)

@@ -84,7 +84,7 @@ if v.NativeMessageSearch {
 }
 
 if v.NativeMessageSearch && v.MessageSearch.ConversationID!="" {
-@conversationFilterFields(v.Text,"native-search",v.MessageSearch.Filters)
+@conversationFilterFields(v.Text,"native-search",v.MessageSearch.Filters,v.MessageSearch.Room,v.Messages,v.InfoParticipants)
 <input type="hidden" name="timeZone" value={v.MessageSearch.Filters.TimeZone}/>
 }
 @messageSearchAccountFilter(v)

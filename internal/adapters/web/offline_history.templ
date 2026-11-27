@@ -24,7 +24,7 @@ templ offlineHistoryPage(lang string, text copy) {
 					<input type="search" id="offline-query" maxlength="400" autocomplete="off"/>
 				<details id="offline-filters" hidden data-date-order={text.SearchDateOrder}>
       <summary>{text.SearchFilters}</summary>
-      <label>{text.SearchSender}<input id="offline-sender" type="text" maxlength="400"/></label>
+      <div data-offline-sender-field hidden><label for="offline-sender">{text.SearchSender}</label><select id="offline-sender"><option value="">{text.SearchAllSenders}</option></select></div>
       <label>{text.SearchFromDate}<input id="offline-from" type="date"/></label>
       <label>{text.SearchToDate}<input id="offline-to" type="date"/></label>
      </details>

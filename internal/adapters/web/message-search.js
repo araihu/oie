@@ -70,9 +70,9 @@ window.OieRuntime.register('message-search',life=>{
  const accountSet=values=>[...new Set(values.filter(Boolean))].sort();
  let selectedAccounts=accountSet((initial?.dataset.searchAccount||'').split(','));
  const filterFields=()=>{
-  if(!native||!conversation.value||!form.elements.sender)return {};
+  if(!native||!conversation.value||!form.elements.fromDate)return {};
   const {sender,fromDate,toDate,timeZone}=form.elements;
-  return {sender:sender.value.trim(),fromDate:fromDate.value,toDate:toDate.value,timeZone:fromDate.value||toDate.value?(timeZone.value||window.OieTime?.timeZone()||'UTC'):''};
+  return {sender:sender?.value||'',fromDate:fromDate.value,toDate:toDate.value,timeZone:fromDate.value||toDate.value?(timeZone.value||window.OieTime?.timeZone()||'UTC'):''};
  };
  const searching=s=>Boolean(s.q||s.sender||s.fromDate||s.toDate);
  const value=()=>({...filterFields(),q:query.value.trim(),accounts:selectedAccounts,conversationId:conversation.value,includeEditHistory:String(historyField.checked),includeRetracted:String(retractedField.checked),searchType:category.value,engineId:engine});
@@ -175,8 +175,8 @@ window.OieRuntime.register('message-search',life=>{
      state.accounts.length&&!state.accounts.includes(message.accountId))return;
   if(removeSearchHits(results,query,new Set([message.id]),state.includeRetracted==='true')||busy)invalidateResults();
  });
- if(form.elements.sender){
-  life.on(form.elements.sender,'input',event=>{if(!event.isComposing)changed(250)});
+ if(form.elements.sender)life.on(form.elements.sender,'change',()=>changed());
+ if(form.elements.fromDate){
   for(const field of [form.elements.fromDate,form.elements.toDate])life.on(field,'change',()=>changed());
  }
  life.on(query,'compositionstart',()=>abort());life.on(query,'input',event=>{if(!event.isComposing)changed(300)});life.on(query,'compositionend',()=>changed(300));

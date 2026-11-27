@@ -913,6 +913,7 @@
   "ConversationSearchNewer": "Próxima correspondência",
   "ConversationSearchClose": "Fechar pesquisa na conversa",
   "SearchFilters": "Filtros",
+  "SearchAllSenders": "Todos os remetentes",
   "SearchSender": "Remetente",
   "SearchFromDate": "Data inicial",
   "SearchToDate": "Data final",

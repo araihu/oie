@@ -913,6 +913,7 @@
   "ConversationSearchNewer": "Next match",
   "ConversationSearchClose": "Close conversation search",
   "SearchFilters": "Filters",
+  "SearchAllSenders": "All senders",
   "SearchSender": "Sender",
   "SearchFromDate": "From date",
   "SearchToDate": "Through date",

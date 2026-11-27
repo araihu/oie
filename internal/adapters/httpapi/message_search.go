@@ -9,6 +9,9 @@ import (
 func (s *Server) SearchMessages(ctx context.Context, r engineapi.SearchMessagesRequestObject) (engineapi.SearchMessagesResponseObject, error) {
 	q := domain.MessageSearchQuery{Search: r.Params.Q, Limit: 50, AccountIDs: searchAccountIDs(r.Params.AccountIds)}
 	q.SentFrom, q.SentBefore = r.Params.SentFrom, r.Params.SentBefore
+	if r.Params.SenderName != nil {
+		q.SenderName = *r.Params.SenderName
+	}
 	if r.Params.Sender != nil {
 		q.Sender = *r.Params.Sender
 	}

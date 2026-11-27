@@ -805,6 +805,9 @@ func build76(server string, input cliruntime.Input) (*http.Request, error) {
 	if err := input.Decode("query", "sender", &params.Sender); err != nil {
 		return nil, err
 	}
+	if err := input.Decode("query", "senderName", &params.SenderName); err != nil {
+		return nil, err
+	}
 	if err := input.Decode("query", "sentFrom", &params.SentFrom); err != nil {
 		return nil, err
 	}

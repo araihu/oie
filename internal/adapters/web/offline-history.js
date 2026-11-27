@@ -332,7 +332,7 @@
       const title = header.querySelector('h2')?.textContent;
       const label = uuid(accountId)
         ? document.querySelector(`[data-switch-account="${accountId}"] .oie-profile-identity strong`)?.textContent : '';
-      if (title) data.entry = {account: accountId, chat: conversationId, title, label, messages};
+      if (title) data.entry = {account: accountId, chat: conversationId, title, label, kind: header.querySelector('[data-conversation-preference-state]')?.dataset.kind, messages};
     }
     return data;
   }
@@ -415,9 +415,9 @@
     });
   }
 
-  function enableOfflineSearch(scope, params) {
+  function enableOfflineSearch(scope, params, entry) {
     const search = document.getElementById('offline-search');
-    if (refreshSearch) { refreshSearch(); return; }
+    if (refreshSearch) { refreshSearch(entry); return; }
     if (!search) return; // The previous offline shell can still be open during an update.
     const input = document.getElementById('offline-query');
     const results = document.getElementById('offline-results');
@@ -427,6 +427,18 @@
     const sender = filters?.querySelector('#offline-sender');
     const from = filters?.querySelector('#offline-from');
     const to = filters?.querySelector('#offline-to');
+    function updateSenders(entry, selected) {
+      if (!sender || !entry) return;
+      if (!sender.options) {
+        sender.closest('label').hidden = true;
+        sender.value = '';
+        return;
+      }
+      const room = entry.kind === 'room';
+      sender.closest('[data-offline-sender-field]').hidden = !room;
+      const names = room ? [...new Set(entry.messages.map(m => m.sender).filter(Boolean))].sort() : [];
+      sender.replaceChildren(sender.options[0], ...names.map(name => new Option(name, name, false, name === selected)));
+    }
     const remembered = history.state?.offlineSearch;
     if (remembered?.engine === scope.engine) input.value = remembered.query;
     if (scope.chat) {
@@ -434,7 +446,7 @@
       if (filters) {
         const route = new URLSearchParams(location.search);
         const saved = remembered?.engine === scope.engine && remembered.chat === scope.chat ? remembered : {};
-        sender.value = saved.sender ?? route.get('sender') ?? route.get('chatSender') ?? '';
+        updateSenders(entry, saved.sender ?? route.get('sender') ?? route.get('chatSender'));
         from.value = saved.fromDate ?? route.get('fromDate') ?? route.get('chatFromDate') ?? '';
         to.value = saved.toDate ?? route.get('toDate') ?? route.get('chatToDate') ?? '';
         filters.open = Boolean(sender.value || from.value || to.value);
@@ -528,7 +540,7 @@
         update(event);
       }
     });
-    refreshSearch = () => update();
+    refreshSearch = entry => { updateSenders(entry, sender?.value); update(); };
     stopSearch = () => {
       refreshSearch = null;
       input.value = '';
@@ -649,7 +661,7 @@
       empty.hidden = false;
       return;
     }
-    enableOfflineSearch({engine: displayedEngine, account: entry.account, chat}, params);
+    enableOfflineSearch({engine: displayedEngine, account: entry.account, chat}, params, entry);
     title.textContent = entry.title;
     empty.hidden = true;
     const template = document.getElementById('offline-message');

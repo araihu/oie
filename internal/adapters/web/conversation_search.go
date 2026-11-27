@@ -3,13 +3,13 @@ package web
 import (
 	_ "embed"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	_ "time/tzdata" // The hosted scratch image has no system zoneinfo.
 	"unicode/utf8"
 
 	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
-	"golang.org/x/text/cases"
 )
 
 // The toolbar composes public Goshtoso textinput, checkbox and button controls.
@@ -27,6 +27,27 @@ func (v view) conversationSearchCloseHref() string {
 
 type conversationSearchFilters struct {
 	Sender, FromDate, ToDate, TimeZone string
+}
+
+func senderChoices(messages []messageView, roster *engineapi.RoomParticipants, selected string) []string {
+	names := []string{}
+	if selected != "" {
+		names = append(names, selected)
+	}
+	for _, message := range messages {
+		if name := message.Sender.DisplayName; name != "" {
+			names = append(names, name)
+		}
+	}
+	if roster != nil && roster.State == "available" {
+		for _, member := range roster.Participants {
+			if member.Nickname != "" {
+				names = append(names, member.Nickname)
+			}
+		}
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
 }
 
 func (f conversationSearchFilters) active() bool {
@@ -99,5 +120,5 @@ func matchesConversationFilters(m engineapi.Message, sender string, from, before
 	if m.TimelineAt != nil {
 		at = *m.TimelineAt
 	}
-	return (from == nil || !at.Before(*from)) && (before == nil || at.Before(*before)) && (sender == "" || strings.Contains(cases.Fold().String(m.Sender.DisplayName), cases.Fold().String(sender)))
+	return (from == nil || !at.Before(*from)) && (before == nil || at.Before(*before)) && (sender == "" || m.Sender.DisplayName == sender)
 }

@@ -278,7 +278,7 @@ func (s *Server) sampleMessages(ctx context.Context, c previewapi.Conversation, 
 // These read-only routes implement the engine contracts for sample data. They do
 // not turn preview fixtures into a protocol adapter or infer roster contacts.
 type sampleSearch struct {
-	Sender                               string
+	Sender, SenderName                   string
 	SentFrom, SentBefore                 *time.Time
 	Query, Account, Conversation, Cursor string
 	History, Retracted                   bool
@@ -289,6 +289,7 @@ func readSampleSearch(r *http.Request, messages bool) (sampleSearch, bool) {
 	q := r.URL.Query()
 	state := sampleSearch{Query: strings.TrimSpace(q.Get("q")), Account: q.Get("accountId"), Conversation: q.Get("conversationId"), Cursor: q.Get("cursor"), Limit: 50}
 	if messages {
+		state.SenderName = q.Get("senderName")
 		state.Sender = strings.TrimSpace(q.Get("sender"))
 		for key, bound := range map[string]**time.Time{"sentFrom": &state.SentFrom, "sentBefore": &state.SentBefore} {
 			if q.Has(key) {
@@ -299,12 +300,12 @@ func readSampleSearch(r *http.Request, messages bool) (sampleSearch, bool) {
 				*bound = &instant
 			}
 		}
-		filtered := state.Sender != "" || state.SentFrom != nil || state.SentBefore != nil
-		if filtered && state.Conversation == "" || !filtered && state.Query == "" || utf8.RuneCountInString(state.Sender) > 200 || strings.ContainsRune(state.Sender, 0) || state.SentFrom != nil && state.SentBefore != nil && !state.SentFrom.Before(*state.SentBefore) {
+		filtered := state.SenderName != "" || state.Sender != "" || state.SentFrom != nil || state.SentBefore != nil
+		if utf8.RuneCountInString(state.SenderName) > 200 || strings.ContainsRune(state.SenderName, 0) || filtered && state.Conversation == "" || !filtered && state.Query == "" || utf8.RuneCountInString(state.Sender) > 200 || strings.ContainsRune(state.Sender, 0) || state.SentFrom != nil && state.SentBefore != nil && !state.SentFrom.Before(*state.SentBefore) {
 			return state, false
 		}
 	}
-	for _, key := range []string{"q", "sender", "sentFrom", "sentBefore", "accountId", "conversationId", "includeEditHistory", "includeRetracted", "cursor", "limit"} {
+	for _, key := range []string{"q", "sender", "senderName", "sentFrom", "sentBefore", "accountId", "conversationId", "includeEditHistory", "includeRetracted", "cursor", "limit"} {
 		if len(q[key]) > 1 {
 			return state, false
 		}
@@ -410,7 +411,7 @@ func (s *Server) searchMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	data, _ := json.Marshal([]any{id(1), state.Query, state.Account, state.Conversation, state.History, state.Retracted, state.Sender, state.SentFrom, state.SentBefore, r.Context().Value(localeKey{})})
+	data, _ := json.Marshal([]any{id(1), state.Query, state.Account, state.Conversation, state.History, state.Retracted, state.Sender, state.SenderName, state.SentFrom, state.SentBefore, r.Context().Value(localeKey{})})
 	scope := fmt.Sprintf("%x", sha256.Sum256(data))
 	cursor := sampleSearchCursor{}
 	if state.Cursor != "" {
@@ -454,7 +455,7 @@ func (s *Server) searchMessages(w http.ResponseWriter, r *http.Request) {
 		page.MetadataIndexing.TotalMessages += int64(len(messages.Items))
 		page.MetadataIndexing.IndexedMessages += int64(len(messages.Items))
 		for _, source := range messages.Items {
-			if state.SentFrom != nil && source.CreatedAt.Before(*state.SentFrom) || state.SentBefore != nil && !source.CreatedAt.Before(*state.SentBefore) || state.Sender != "" && !strings.Contains(cases.Fold().String(source.Sender.DisplayName), cases.Fold().String(state.Sender)) {
+			if state.SentFrom != nil && source.CreatedAt.Before(*state.SentFrom) || state.SentBefore != nil && !source.CreatedAt.Before(*state.SentBefore) || state.SenderName != "" && source.Sender.DisplayName != state.SenderName || state.Sender != "" && !strings.Contains(cases.Fold().String(source.Sender.DisplayName), cases.Fold().String(state.Sender)) {
 				continue
 			}
 			content, kind := source.OriginalText, engineapi.MessageSearchHitMatchKind("text")

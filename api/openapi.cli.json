@@ -335,6 +335,15 @@
             }
           },
           {
+            "name": "senderName",
+            "in": "query",
+            "description": "Exact retained sender display name selected in a conversation. Requires conversationId.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
             "name": "sentFrom",
             "in": "query",
             "description": "Inclusive lower bound on the message timeline time. Requires conversationId.",

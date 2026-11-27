@@ -339,7 +339,7 @@ type copy struct {
 	SearchContactsCoverage, SearchContacts, SearchContactsPartial, SearchContactsLimited                                                                                                                            string
 
 	SearchEverything, SearchCancel, SearchConversations, SearchMessagesGroup, SearchConversationsLimited, SearchAllResults, SearchResultCategories, SearchConversationsEmpty, SearchResultsLoading, SearchResultsFailed string
-	SearchFilters, SearchSender, SearchFromDate, SearchToDate, SearchDateOrder                                                                                                                                          string
+	SearchFilters, SearchSender, SearchAllSenders, SearchFromDate, SearchToDate, SearchDateOrder                                                                                                                        string
 	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing                                                                                      string
 
 	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
@@ -1536,6 +1536,9 @@ func (s *Server) loadConversation(ctx context.Context, r *http.Request, v *view,
 		return
 	}
 	v.Selected = c
+	if c.Kind != "room" {
+		v.ConversationFilters.Sender = ""
+	}
 	v.ChatID = selected
 	latestPane := paneOnly && r.URL.Path == "/" && r.Header.Get("X-Oie-Fragment") == "conversation" &&
 		v.PagePresentationSupported && !v.Preview && v.requestKind() == "" && c.UnreadCount == 0 &&

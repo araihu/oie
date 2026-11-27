@@ -8,9 +8,9 @@ window.OieRuntime.register('conversation-search',life=>{
  let lastSearchFocus=true;
  let archiveTimer=0, archiveController, contextController, archiveCursor='', archivePending=false, archiveFailed=false, localCoverage='';
  const {sender,fromDate,toDate}=form.elements;
- const activeSearch=()=>Boolean(query.value.trim()||sender.value.trim()||fromDate.value||toDate.value);
+ const activeSearch=()=>Boolean(query.value.trim()||(sender?.value || '')||fromDate.value||toDate.value);
  const archiveSearch=()=>Boolean(query.value.trim())&&window.OieRoomArchive?.search()===true;
- const state=()=>({sender:sender.value.trim(),fromDate:fromDate.value,toDate:toDate.value,
+ const state=()=>({sender:(sender?.value || ''),fromDate:fromDate.value,toDate:toDate.value,
   timeZone:fromDate.value||toDate.value?(window.OieTime?.timeZone()||'UTC'):'',q:query.value.trim(),includeEditHistory:String(history.checked),includeRetracted:String(retracted.checked),engineId:engine,accountId:account,conversationId:conversation});
  const valid=()=>!life.signal.aborted&&root.isConnected&&document.body.dataset.engineId===engine&&document.body.dataset.accountId===account&&document.body.dataset.conversationId===conversation;
  const same=(request)=>{const current=state();return Object.keys(current).every(key=>current[key]===request[key])};
@@ -162,7 +162,7 @@ window.OieRuntime.register('conversation-search',life=>{
  }
  function address(clearRevision=false){
   const url=new URL(location.href);
-  const fields={chatSearch:'1',chatQuery:query.value,chatSender:sender.value,chatFromDate:fromDate.value,chatToDate:toDate.value,
+  const fields={chatSearch:'1',chatQuery:query.value,chatSender:sender?.value,chatFromDate:fromDate.value,chatToDate:toDate.value,
    chatIncludeHistory:history.checked?'true':'',chatIncludeRetracted:retracted.checked?'true':''};
   for(const [key,value] of Object.entries(fields)){
    if(opened&&value)url.searchParams.set(key,value);else url.searchParams.delete(key);
@@ -316,9 +316,31 @@ window.OieRuntime.register('conversation-search',life=>{
  life.on(document,'oie:conversation-search-open',open);
  life.on(document,'click',event=>{const link=event.target.closest?.('[data-open-conversation-search]');if(link&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&(!link.dataset.searchConversation||link.dataset.searchConversation===conversation)){event.preventDefault();event.stopImmediatePropagation();window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'details'}}));open()}},true);
  life.on(form,'submit',event=>{event.preventDefault();changed(0)});
- life.on(sender,'input',event=>{if(!event.isComposing)changed()});
- life.on(sender,'compositionstart',()=>{composing=true;abort()});
- life.on(sender,'compositionend',()=>{composing=false;changed()});
+ if(sender){
+  const filters=sender.closest('details');
+  let loadingMembers=false;
+  async function loadMembers(){
+   if(!opened||!filters.open||loadingMembers)return;
+   loadingMembers=true;
+   try {
+    const params=new URLSearchParams({chat:conversation,account,infoView:'participants',open:'details'});
+    const response=await life.fetch('/ui/info?'+params,{cache:'no-store'});
+    if(!response.ok||!valid())return;
+    const html=new DOMParser().parseFromString(await response.text(),'text/html');
+    const info=html.querySelector('#oie-info-fragment');
+    if(!valid()||info?.dataset.engineId!==engine||info.dataset.accountId!==account||info.dataset.conversationId!==conversation)return;
+    const names=new Set([...sender.options].slice(1).map(option=>option.value));
+    for(const row of info.querySelectorAll('[data-room-list-match]'))names.add(row.dataset.roomListMatch);
+    for(const row of document.querySelectorAll('#message-timeline [data-message-sender-name]'))names.add(row.dataset.messageSenderName);
+    const selected=sender.value;
+    sender.replaceChildren(sender.options[0],...[...names].filter(Boolean).sort((a,b)=>a.localeCompare(b)).map(name=>new Option(name,name,false,name===selected)));
+   }catch { /* The senders in the conversation are available offline. */ }
+   finally {loadingMembers=false}
+  }
+  life.on(filters,'toggle',loadMembers);
+  life.on(sender,'change',()=>changed(0));
+  if(opened&&filters.open)loadMembers();
+ }
  for(const field of [fromDate,toDate])life.on(field,'change',()=>changed(0));
  life.on(document,'oie:time-zone',()=>{if(fromDate.value||toDate.value)changed(0)});
  life.on(query,'compositionstart',()=>{composing=true;abort()});life.on(query,'compositionend',()=>{composing=false;changed()});life.on(query,'input',event=>{if(!event.isComposing&&!composing)changed()});life.on(history,'change',()=>changed(0));life.on(retracted,'change',()=>changed(0));
@@ -334,5 +356,5 @@ window.OieRuntime.register('conversation-search',life=>{
   if(direction){event.preventDefault();if(!direction.disabled)direction.click();}
  });
  life.on(document,'oie:timeline-content',()=>{if(opened&&selected)highlight()});life.on(document,'oie:previews-refresh',()=>{if(opened&&selected)life.raf(highlight)});life.on(document,'change',event=>{if(event.target.matches('[data-render-markdown]')&&opened&&selected)life.raf(highlight)});life.on(window,'storage',event=>{if(event.key==='oie.device.render-markdown.v1'&&opened&&selected)life.raf(highlight)});
- life.cleanup(()=>{abort();clearHighlights()});controls();if(opened&&activeSearch()){address();const focusResult=!new URL(location.href).searchParams.has('message');archivePending=archiveSearch();request('',0,focusResult);if(archivePending)archiveTimer=life.timeout(()=>searchArchive('',focusResult),350);}
+ life.cleanup(()=>{abort();clearHighlights()});controls();if(opened&&!sender)address();if(opened&&activeSearch()){address();const focusResult=!new URL(location.href).searchParams.has('message');archivePending=archiveSearch();request('',0,focusResult);if(archivePending)archiveTimer=life.timeout(()=>searchArchive('',focusResult),350);}
 });

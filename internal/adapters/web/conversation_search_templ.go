@@ -15,6 +15,7 @@ import (
 	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/oie/internal/adapters/httpapi/engineapi"
 	"strconv"
 )
 
@@ -53,7 +54,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.EngineID).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 165}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 165}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 			if templ_7745c5c3_Err != nil {
@@ -66,7 +67,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Selected.AccountId).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 208}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 208}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -79,7 +80,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Selected.Id).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 249}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 249}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -92,7 +93,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(strconv.FormatBool(v.ConversationSearchOpen)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 313}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 313}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -105,7 +106,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.RoomArchiveLocalResults).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 373}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 373}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -118,7 +119,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchLoading).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 416}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 416}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
@@ -131,7 +132,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchFailed).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 457}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 457}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
@@ -144,7 +145,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.EngineChanged).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 507}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 507}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -157,7 +158,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchDateOrder).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 555}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 555}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -170,7 +171,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchInvalid).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 598}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 598}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -183,7 +184,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchEmptyTitle).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 642}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 642}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
@@ -196,7 +197,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.ConversationSearchResult).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 701}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 701}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -209,7 +210,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.ConversationSearchMissing).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 756}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 756}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
@@ -222,7 +223,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchPriorVersion).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 813}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 813}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -235,7 +236,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.MessageRetracted).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 867}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 867}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -248,7 +249,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchMessages).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 14, Col: 902}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 15, Col: 902}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
@@ -271,7 +272,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Text.SearchMessages + " · " + v.Selected.Title).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 19, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 20, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -284,7 +285,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.EngineID).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 20, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 21, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 			if templ_7745c5c3_Err != nil {
@@ -297,7 +298,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Selected.AccountId).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 20, Col: 122}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 21, Col: 122}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
@@ -310,7 +311,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Selected.Id).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 20, Col: 188}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 21, Col: 188}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 			if templ_7745c5c3_Err != nil {
@@ -323,7 +324,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Locale).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 20, Col: 239}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 21, Col: 239}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
@@ -336,7 +337,7 @@ func conversationSearchBar(v view) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Theme).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 20, Col: 290}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 21, Col: 290}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -432,7 +433,7 @@ func conversationSearchBar(v view) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = conversationFilterFields(v.Text, "chat-search", v.ConversationFilters).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = conversationFilterFields(v.Text, "chat-search", v.ConversationFilters, v.Selected.Kind == "room", v.Messages, v.InfoParticipants).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -467,7 +468,7 @@ func conversationSearchBar(v view) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.Retry)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 34, Col: 222}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 35, Col: 222}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -498,7 +499,7 @@ func conversationSearchBar(v view) templ.Component {
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(v.Text.SearchMessages)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 36, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 37, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -519,7 +520,7 @@ func conversationSearchBar(v view) templ.Component {
 	})
 }
 
-func conversationFilterFields(text copy, prefix string, filters conversationSearchFilters) templ.Component {
+func conversationFilterFields(text copy, prefix string, filters conversationSearchFilters, room bool, messages []messageView, roster *engineapi.RoomParticipants) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -553,7 +554,7 @@ func conversationFilterFields(text copy, prefix string, filters conversationSear
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(text.SearchFilters)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 46, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 47, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
@@ -563,9 +564,109 @@ func conversationFilterFields(text copy, prefix string, filters conversationSear
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: prefix + "-sender", Name: "sender", Label: text.SearchSender, Value: filters.Sender, InputAttrs: templ.Attributes{"maxlength": "400", "autocomplete": "off"}}).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		if room {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<div class=\"oie-search-sender\"><label for=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var33 string
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templruntime.NewAttributeExpression(prefix + "-sender").Resolve(ctx)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 50, Col: 59}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var34 string
+			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(text.SearchSender)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 50, Col: 79}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</label> <select id=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var35 string
+			templ_7745c5c3_Var35, templ_7745c5c3_Err = templruntime.NewAttributeExpression(prefix + "-sender").Resolve(ctx)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 51, Col: 28}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" name=\"sender\"><option value=\"\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var36 string
+			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(text.SearchAllSenders)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 52, Col: 39}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</option> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, name := range senderChoices(messages, roster, filters.Sender) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<option value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var37 string
+				templ_7745c5c3_Var37, templ_7745c5c3_Err = templruntime.NewAttributeExpression(name).Resolve(ctx)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 54, Col: 19}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if name == filters.Sender {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, " selected")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, ">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var38 string
+				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/adapters/web/conversation_search.templ`, Line: 54, Col: 59}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</option>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</select></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		templ_7745c5c3_Err = textinput.TextInput(textinput.Config{ID: prefix + "-from", Name: "fromDate", Type: textinput.TypeDate, Label: text.SearchFromDate, Value: filters.FromDate}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
@@ -575,7 +676,7 @@ func conversationFilterFields(text copy, prefix string, filters conversationSear
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -738,7 +738,7 @@ func messageSearchContent(v view) templ.Component {
 			}
 		}
 		if v.NativeMessageSearch && v.MessageSearch.ConversationID != "" {
-			templ_7745c5c3_Err = conversationFilterFields(v.Text, "native-search", v.MessageSearch.Filters).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = conversationFilterFields(v.Text, "native-search", v.MessageSearch.Filters, v.MessageSearch.Room, v.Messages, v.InfoParticipants).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

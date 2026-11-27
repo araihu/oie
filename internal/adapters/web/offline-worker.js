@@ -109,7 +109,7 @@ function searchSaved(current, {engine, account, accounts = [], chat, query, send
       accounts.some(value => !id.test(value)) || (chat !== null && !id.test(chat)) ||
       typeof query !== 'string' || query.length > 400 || Array.from(query.trim()).length > 200 || !query.trim() && !filtered) return hits;
 
-  const sender = senderName.toLowerCase();
+
   let calendar;
   if (fromDate || toDate) {
     try { calendar = new Intl.DateTimeFormat('sv-SE', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'}); }
@@ -121,7 +121,7 @@ function searchSaved(current, {engine, account, accounts = [], chat, query, send
         (chat && entry.chat !== chat)) continue;
     for (const message of entry.messages) {
       if (message.withdrawn || !id.test(message.id) || typeof message.text !== 'string') continue;
-      if (sender && !message.sender?.toLowerCase().includes(sender)) continue;
+      if (senderName && (entry.kind !== 'room' || message.sender !== senderName)) continue;
       if (calendar) {
         const instant = Date.parse(message.date);
         if (!Number.isFinite(instant)) continue;
