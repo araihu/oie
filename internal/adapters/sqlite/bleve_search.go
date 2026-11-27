@@ -30,8 +30,8 @@ func (i *messageIndex) selectRows(ctx context.Context, _ *sql.Tx, q *dbgen.Queri
 		return nil, nil
 	}
 	verified, err := q.VerifyIndexedMessages(ctx, dbgen.VerifyIndexedMessagesParams{
-		MessageIds: jsonText(ids),
-		CursorID:   p.CursorID, CursorMs: p.CursorMs, CursorCurrent: p.CursorCurrent,
+		MessageIds: jsonText(ids), Sender: p.Sender, FromMs: p.FromMs, LastMs: p.LastMs,
+		CursorID: p.CursorID, CursorMs: p.CursorMs, CursorCurrent: p.CursorCurrent,
 		CursorRevisionAt: p.CursorRevisionAt, CursorRevisionID: p.CursorRevisionID, PageLimit: p.PageLimit,
 		ParserVersion: p.ParserVersion, AccountID: p.AccountID, AccountIds: p.AccountIds,
 		ConversationID: p.ConversationID, IncludeHistory: p.IncludeHistory, IncludeRetracted: p.IncludeRetracted, Search: p.Search,
@@ -108,7 +108,7 @@ func searchChronological(ctx context.Context, q *dbgen.Queries, p dbgen.SearchMe
 		p.CursorID, p.CursorMs = "~", math.MaxInt64
 	}
 	params := dbgen.SearchMessagesChronologicalParams{
-		Search: p.Search, IncludeRetracted: p.IncludeRetracted, ParserVersion: p.ParserVersion, AccountID: p.AccountID, AccountIds: p.AccountIds,
+		Sender: p.Sender, FromMs: p.FromMs, LastMs: p.LastMs, Search: p.Search, IncludeRetracted: p.IncludeRetracted, ParserVersion: p.ParserVersion, AccountID: p.AccountID, AccountIds: p.AccountIds,
 		ConversationID: p.ConversationID, CursorMs: &p.CursorMs, CursorID: p.CursorID, CursorCurrent: p.CursorCurrent,
 		CursorRevisionAt: p.CursorRevisionAt, CursorRevisionID: p.CursorRevisionID, PageLimit: p.PageLimit,
 	}

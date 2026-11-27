@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -87,6 +88,12 @@ func (s *Server) browserRoomArchive(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	filters := readConversationFilters(r.URL.Query())
+	from, before, valid := filters.bounds()
+	if !valid || filters.active() && body.Action != "search" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	response, err := s.archiveClient.RequestRoomArchiveWithResponse(ctx, id, body)
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -106,6 +113,9 @@ func (s *Server) browserRoomArchive(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
+	}
+	if filters.active() {
+		result.Items = slices.DeleteFunc(result.Items, func(m engineapi.Message) bool { return !matchesConversationFilters(m, filters.Sender, from, before) })
 	}
 	_ = json.NewEncoder(w).Encode(result)
 }

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Oie Engine API
-  version: 0.45.0
+  version: 0.46.0
   description: >-
     Native engine API for account metadata, XMPP connections, text conversations, reply composition, explicit room sessions, durable message
     acceptance, and replayable SSE. Credentials are write-only and stored only by the owning engine. All timestamps
@@ -213,12 +213,30 @@ paths:
       - name: q
         in: query
         required: true
-        description: Trimmed nonblank UTF-8 search text, at most 200 Unicode code points; NUL is invalid.
+        allowEmptyValue: true
+        description: Message text to match. May be empty when a conversation sender or time bound is supplied.
         example: software livre
         schema:
           type: string
-          minLength: 1
           maxLength: 200
+      - name: sender
+        in: query
+        description: Case-insensitive substring of the retained sender display name. Requires conversationId.
+        schema:
+          type: string
+          maxLength: 200
+      - name: sentFrom
+        in: query
+        description: Inclusive lower bound on the message timeline time. Requires conversationId.
+        schema:
+          type: string
+          format: date-time
+      - name: sentBefore
+        in: query
+        description: Exclusive upper bound on the message timeline time. Requires conversationId.
+        schema:
+          type: string
+          format: date-time
       - name: accountId
         in: query
         description: Restrict to one owning account, or omit for all accounts.
@@ -4778,6 +4796,7 @@ components:
           - 0.43.0
           - 0.44.0
           - 0.45.0
+          - 0.46.0
         omemoEnabled:
           type: boolean
           description: The owning engine has an OMEMO profile. Hosted engines keep its private keys on the server.

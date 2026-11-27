@@ -12,3 +12,12 @@
  white-space:nowrap;
 }
 .oie-conversation-search[data-has-room-archive] .oie-conversation-search-coverage[hidden] { visibility:hidden }
+
+.oie-conversation-search-filters {flex-basis:100%;font-size:.875rem}
+.oie-conversation-search-filters summary {cursor:pointer;width:fit-content}
+.oie-conversation-search-fields {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem;margin:.375rem 0}
+.oie-conversation-search-fields input {min-width:0;max-width:100%}
+@media(max-width:600px){
+ .oie-conversation-search-fields {grid-template-columns:repeat(2,minmax(0,1fr))}
+ .oie-conversation-search-fields > :first-child {grid-column:1 / -1}
+}

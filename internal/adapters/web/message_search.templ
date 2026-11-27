@@ -83,6 +83,10 @@ if v.NativeMessageSearch {
 <input type="hidden" name="q" value={v.MessageSearch.Query}/>
 }
 
+if v.NativeMessageSearch && v.MessageSearch.ConversationID!="" {
+@conversationFilterFields(v.Text,"native-search",v.MessageSearch.Filters)
+<input type="hidden" name="timeZone" value={v.MessageSearch.Filters.TimeZone}/>
+}
 @messageSearchAccountFilter(v)
 <div class="oie-message-search-scope" data-message-search-scope hidden?={v.MessageSearch.ConversationID==""}>
 <span>{v.Text.SearchScope}: <strong data-message-search-scope-name>{v.MessageSearch.ConversationTitle}</strong></span>
@@ -135,7 +139,7 @@ for _,option:=range cfg.Source.Static {
 }
 
 templ messageSearchResponse(v view){
-<div data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-retracted={strconv.FormatBool(v.MessageSearch.IncludeRetracted)} data-search-type={v.MessageSearch.Category} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
+<div data-search-sender={v.MessageSearch.Filters.Sender} data-search-from={v.MessageSearch.Filters.FromDate} data-search-to={v.MessageSearch.Filters.ToDate} data-search-zone={v.MessageSearch.Filters.TimeZone} data-message-search-response data-search-engine={v.EngineID} data-search-query={v.MessageSearch.Query} data-search-account={strings.Join(v.MessageSearch.accounts(),",")} data-search-conversation={v.MessageSearch.ConversationID} data-search-history={strconv.FormatBool(v.MessageSearch.IncludeHistory)} data-search-retracted={strconv.FormatBool(v.MessageSearch.IncludeRetracted)} data-search-type={v.MessageSearch.Category} data-search-cursor={v.MessageSearch.Cursor} data-search-state={v.MessageSearch.State} data-search-next={v.messageSearchNext()}>
 <div data-message-search-items>
 if v.MessageSearch.Category=="" {
 if v.MessageSearch.ConversationID==""&&v.MessageSearch.Query!=""&&v.MessageSearch.Page!=nil&&len(v.MessageSearch.Page.Items)==0&&len(v.MessageSearch.Conversations)==0&&len(v.MessageSearch.Contacts)==0&&!v.MessageSearch.ContactsKnown {

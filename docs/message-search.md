@@ -189,3 +189,17 @@ details-search links retain their visible localized name and native account/chat
 scope. The live preview serves the verified styles and both search controllers,
 with its existing account connected. See [local CI](local-ci.md) for the exact
 source and evidence directory.
+
+### Sender and dates in a conversation
+
+Open **Search messages → Filters** in a direct chat or a room. The sender field
+matches part of the retained display name. Either date can stand alone, and both
+calendar days are inclusive in the selected presentation time zone. The fields
+also work without message text. A text query can include room archive results
+when the server supports it. Filter-only searches use retained messages.
+Offline conversation search applies the filters to the saved copy on the device.
+
+The engine accepts `sender`, `sentFrom` (inclusive) and `sentBefore` (exclusive)
+on conversation-scoped message searches. Bounds use the timeline timestamp,
+falling back to creation time. All three filters apply before pagination and
+are bound to the search cursor.

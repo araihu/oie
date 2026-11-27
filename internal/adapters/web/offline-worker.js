@@ -100,19 +100,34 @@ function read() {
 }
 
 // Search the same verified, age-pruned snapshot used by the offline reader.
-function searchSaved(current, {engine, account, accounts = [], chat, query}) {
+function searchSaved(current, {engine, account, accounts = [], chat, query, senderName = '', fromDate = '', toDate = '', timeZone = 'UTC'}) {
   const hits = [];
+  const filtered = Boolean(senderName || fromDate || toDate);
+  if (filtered && !chat || typeof senderName !== 'string' || Array.from(senderName).length > 200) return hits;
   if (current.blocked || current.engine !== engine || !id.test(engine) ||
       (account !== null && !id.test(account)) || !Array.isArray(accounts) || accounts.length > 100 ||
       accounts.some(value => !id.test(value)) || (chat !== null && !id.test(chat)) ||
-      typeof query !== 'string' || query.length > 400 || Array.from(query.trim()).length > 200 || !query.trim()) return hits;
+      typeof query !== 'string' || query.length > 400 || Array.from(query.trim()).length > 200 || !query.trim() && !filtered) return hits;
 
+  const sender = senderName.toLowerCase();
+  let calendar;
+  if (fromDate || toDate) {
+    try { calendar = new Intl.DateTimeFormat('sv-SE', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'}); }
+    catch { return hits; }
+  }
   const pattern = new RegExp(query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
   for (const entry of current.entries) {
     if ((account && entry.account !== account) || (accounts.length && !accounts.includes(entry.account)) ||
         (chat && entry.chat !== chat)) continue;
     for (const message of entry.messages) {
       if (message.withdrawn || !id.test(message.id) || typeof message.text !== 'string') continue;
+      if (sender && !message.sender?.toLowerCase().includes(sender)) continue;
+      if (calendar) {
+        const instant = Date.parse(message.date);
+        if (!Number.isFinite(instant)) continue;
+        const day = calendar.format(instant);
+        if (fromDate && day < fromDate || toDate && day > toDate) continue;
+      }
       const match = pattern.exec(message.text);
       if (!match) continue;
       const start = Math.max(0, match.index - 48);

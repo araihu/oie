@@ -376,6 +376,15 @@ async function checkSavedSearch(page, until, {root, account, chat, latest, withd
   await page.goto(root + '&chat=' + chat + '&searchMode=messages&searchQuery=Texto+literal&searchAccount=' + second.account);
   await until(async () => await links.count() === 1, 'compact search URL restores its own account filters');
   assert((await links.innerText()).includes(second.text));
+  // The Nov 6 UTC fixture messages are displayed on Nov 7 in Tokyo.
+  await page.goto(root + '&account=' + second.account + '&chat=' + second.chat +
+    '&chatSearch=1&chatSender=mir&chatFromDate=2026-11-07&chatToDate=2026-11-07');
+  await until(async () => await links.count() === 2, 'offline sender and day without message text');
+  await page.locator('#offline-to').fill('2026-11-05');
+  await until(async () => await links.count() === 0 && await status.innerText() === await page.locator('#offline-filters').getAttribute('data-date-order'), 'offline reversed dates');
+  await page.locator('#offline-to').fill('2026-11-07');
+  await page.locator('#offline-sender').fill('someone else');
+  await until(async () => await status.innerText() === empty, 'offline sender applied before listing');
   await page.goto(root + '&chat=' + chat + '&chatSearch=1&chatQuery=Texto+literal');
   await until(async () => await links.count() === 1, 'in-chat search URL restores its query and scope');
   assert((await links.innerText()).includes('queda'));

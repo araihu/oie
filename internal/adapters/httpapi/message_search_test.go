@@ -38,6 +38,39 @@ type searchHTTPPage struct {
 	}
 }
 
+func TestConversationSenderAndTimeBounds(t *testing.T) {
+	e, store, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
+	c := openTestConversation(t, e, "account@localhost")
+	start := time.Date(2026, 11, 9, 3, 0, 0, 0, time.UTC)
+	var ids []string
+	for i, name := range []string{"Nina", "NINA", "Sam", "Nina", "Nina"} {
+		m := domain.Message{ID: id(), RevisionID: id(), AccountID: c.AccountID, ConversationID: c.ID, Sender: domain.Sender{ID: c.PeerID, DisplayName: name}, OriginalText: "retained", CreatedAt: start.Add(time.Duration(i-1) * time.Hour), SendState: "received"}
+		if err := store.ReceiveMessage(t.Context(), c, m, id()); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, string(m.ID))
+	}
+	q := url.Values{"q": {""}, "conversationId": {string(c.ID)}, "sender": {"ni"}, "sentFrom": {start.Format(time.RFC3339)}, "sentBefore": {start.Add(3 * time.Hour).Format(time.RFC3339)}, "limit": {"1"}}
+	first := searchHTTP(t, server.URL, q)
+	if len(first.Items) != 1 || first.Items[0].Message.Id != ids[3] || first.NextCursor == "" {
+		t.Fatal(first)
+	}
+	q.Set("cursor", first.NextCursor)
+	second := searchHTTP(t, server.URL, q)
+	if len(second.Items) != 1 || second.Items[0].Message.Id != ids[1] || second.NextCursor != "" {
+		t.Fatal(second)
+	}
+	for _, key := range []string{"sender", "sentFrom", "sentBefore", "conversationId"} {
+		old := q.Get(key)
+		q.Del(key)
+		status, _ := request(t, server.URL, http.MethodGet, "/api/v1/messages/search?"+q.Encode(), "", "")
+		if status != 400 {
+			t.Fatalf("changed %s accepted cursor: %d", key, status)
+		}
+		q.Set(key, old)
+	}
+}
+
 func TestSearchAccountSelectionAppliesBeforePagination(t *testing.T) {
 	e, store, server := newMessagingEngine(t, t.TempDir(), &protocolStub{})
 	conversations := []domain.Conversation{

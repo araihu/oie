@@ -222,6 +222,7 @@ type view struct {
 	RoomArchive                                          *engineapi.RoomArchive
 	ConversationSearchOpen                               bool
 	ConversationSearchQuery                              string
+	ConversationFilters                                  conversationSearchFilters
 	ConversationSearchRetracted                          bool
 	ConversationSearchHistory                            bool
 	ConversationSearchRevision                           string
@@ -338,6 +339,7 @@ type copy struct {
 	SearchContactsCoverage, SearchContacts, SearchContactsPartial, SearchContactsLimited                                                                                                                            string
 
 	SearchEverything, SearchCancel, SearchConversations, SearchMessagesGroup, SearchConversationsLimited, SearchAllResults, SearchResultCategories, SearchConversationsEmpty, SearchResultsLoading, SearchResultsFailed string
+	SearchFilters, SearchSender, SearchFromDate, SearchToDate, SearchDateOrder                                                                                                                                          string
 	ConversationSearchOlder, ConversationSearchNewer, ConversationSearchClose, ConversationSearchResult, ConversationSearchMissing                                                                                      string
 
 	SearchMessages, SearchSavedMessages, SearchQuery, IncludeEditHistory, SearchHistoryHelp, SearchPriorVersion, SearchBlankTitle, SearchBlankBody, SearchEmptyTitle, SearchEmptyBody, SearchLoading, SearchFailed, SearchInvalid, SearchMissing, SearchRestart, SearchScope, SearchAllConversations, SearchMetadataPending, SearchMore string
@@ -1223,6 +1225,7 @@ func (s *Server) baseView(r *http.Request) view {
 	v.configureMessageSearch(r)
 	v.GlobalMessageSearch = r.URL.Query().Get("searchMode") == "messages" && v.MessageSearch.Query != ""
 	v.ConversationSearchOpen = r.URL.Query().Get("chatSearch") == "1"
+	v.ConversationFilters = conversationSearchFilters{Sender: r.URL.Query().Get("chatSender"), FromDate: r.URL.Query().Get("chatFromDate"), ToDate: r.URL.Query().Get("chatToDate")}
 	v.ConversationSearchQuery = strings.TrimSpace(r.URL.Query().Get("chatQuery"))
 	v.ConversationSearchRetracted = r.URL.Query().Get("chatIncludeRetracted") == "true"
 	v.ConversationSearchHistory = r.URL.Query().Get("chatIncludeHistory") == "true"

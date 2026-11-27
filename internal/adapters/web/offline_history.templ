@@ -22,7 +22,13 @@ templ offlineHistoryPage(lang string, text copy) {
 				<search id="offline-search" hidden data-chat-label={ text.OfflineSearchChat } data-count={ text.OfflineSearchCount } data-empty={ text.OfflineSearchEmpty } data-failed={ text.SearchResultsFailed } data-too-long={ text.OfflineSearchTooLong }>
 					<label for="offline-query">{ text.OfflineSearchAll }</label>
 					<input type="search" id="offline-query" maxlength="400" autocomplete="off"/>
-				</search>
+				<details id="offline-filters" hidden data-date-order={text.SearchDateOrder}>
+      <summary>{text.SearchFilters}</summary>
+      <label>{text.SearchSender}<input id="offline-sender" type="text" maxlength="400"/></label>
+      <label>{text.SearchFromDate}<input id="offline-from" type="date"/></label>
+      <label>{text.SearchToDate}<input id="offline-to" type="date"/></label>
+     </details>
+    </search>
 				<p id="offline-search-status" role="status"></p>
 				<ul id="offline-results" aria-labelledby="offline-search-status" hidden></ul>
 				<p id="offline-full" role="status" hidden>{ text.OfflineHistoryFull }</p>

@@ -104,6 +104,9 @@ WITH candidate_ids AS (
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+ AND (CAST(sqlc.arg(sender) AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(sqlc.arg(sender) AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(sqlc.narg(from_ms) AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(sqlc.narg(last_ms) AS INTEGER),9223372036854775807)
 ), variants AS (
  SELECT roots.*,CAST(json_extract(content_payload,'$.OriginalText') AS TEXT) AS body,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
@@ -144,6 +147,9 @@ WITH page AS (
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND (CAST(sqlc.arg(conversation_id) AS TEXT)='' OR m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT))
+ AND (CAST(sqlc.arg(sender) AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(sqlc.arg(sender) AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(sqlc.narg(from_ms) AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(sqlc.narg(last_ms) AS INTEGER),9223372036854775807)
  AND COALESCE(m.timeline_at_ms,m.created_at_ms) <= sqlc.arg(cursor_ms)
  AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id,1,'','')<(CAST(sqlc.arg(cursor_ms) AS INTEGER),CAST(sqlc.arg(cursor_id) AS TEXT),CAST(sqlc.arg(cursor_current) AS INTEGER),CAST(sqlc.arg(cursor_revision_at) AS TEXT),CAST(sqlc.arg(cursor_revision_id) AS TEXT))
  AND oie_search_match(CAST(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText') AS TEXT)||' '||CAST(COALESCE((SELECT group_concat(sc.url||' '||sc.file_name||' '||COALESCE(json_extract(p.payload,'$.Title'),'')||' '||COALESCE(json_extract(p.payload,'$.Description'),''),' ') FROM shared_content sc JOIN shared_content_state state ON state.message_id=sc.message_id AND state.parser_version>=sqlc.arg(parser_version) LEFT JOIN message_previews p ON p.message_id=sc.message_id AND p.url=sc.url WHERE sc.message_id=m.id),'') AS TEXT),CAST(sqlc.arg(search) AS TEXT))=1
@@ -179,6 +185,9 @@ WITH page AS (
  AND (CAST(sqlc.arg(account_id) AS TEXT)='' OR m.account_id=CAST(sqlc.arg(account_id) AS TEXT))
  AND (CAST(sqlc.arg(account_ids) AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(sqlc.arg(account_ids) AS TEXT))))
  AND m.conversation_id=CAST(sqlc.arg(conversation_id) AS TEXT)
+ AND (CAST(sqlc.arg(sender) AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(sqlc.arg(sender) AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(sqlc.narg(from_ms) AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(sqlc.narg(last_ms) AS INTEGER),9223372036854775807)
  AND COALESCE(m.timeline_at_ms,m.created_at_ms) <= sqlc.arg(cursor_ms)
  AND (COALESCE(m.timeline_at_ms,m.created_at_ms),m.id,1,'','')<(CAST(sqlc.arg(cursor_ms) AS INTEGER),CAST(sqlc.arg(cursor_id) AS TEXT),CAST(sqlc.arg(cursor_current) AS INTEGER),CAST(sqlc.arg(cursor_revision_at) AS TEXT),CAST(sqlc.arg(cursor_revision_id) AS TEXT))
  AND oie_search_match(CAST(json_extract(COALESCE(h.payload,m.payload),'$.OriginalText') AS TEXT)||' '||CAST(COALESCE((SELECT group_concat(sc.url||' '||sc.file_name||' '||COALESCE(json_extract(p.payload,'$.Title'),'')||' '||COALESCE(json_extract(p.payload,'$.Description'),''),' ') FROM shared_content sc JOIN shared_content_state state ON state.message_id=sc.message_id AND state.parser_version>=sqlc.arg(parser_version) LEFT JOIN message_previews p ON p.message_id=sc.message_id AND p.url=sc.url WHERE sc.message_id=m.id),'') AS TEXT),CAST(sqlc.arg(search) AS TEXT))=1

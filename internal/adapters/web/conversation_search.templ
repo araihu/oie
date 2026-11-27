@@ -11,7 +11,7 @@ import (
 
 templ conversationSearchBar(v view) {
 if v.Selected!=nil {
-<section id="conversation-message-search" class="oie-conversation-search" hidden?={!v.ConversationSearchOpen} data-conversation-search data-search-engine={v.EngineID} data-search-account={v.Selected.AccountId} data-search-conversation={v.Selected.Id} data-search-open={strconv.FormatBool(v.ConversationSearchOpen)} data-archive-local-results={v.Text.RoomArchiveLocalResults} data-search-loading={v.Text.SearchLoading} data-search-failed={v.Text.SearchFailed} data-search-engine-changed={v.Text.EngineChanged} data-search-invalid={v.Text.SearchInvalid} data-search-empty={v.Text.SearchEmptyTitle} data-search-result-label={v.Text.ConversationSearchResult} data-search-missing={v.Text.ConversationSearchMissing} data-search-historical-label={v.Text.SearchPriorVersion} data-search-retracted-label={v.Text.MessageRetracted} aria-label={v.Text.SearchMessages}
+<section id="conversation-message-search" class="oie-conversation-search" hidden?={!v.ConversationSearchOpen} data-conversation-search data-search-engine={v.EngineID} data-search-account={v.Selected.AccountId} data-search-conversation={v.Selected.Id} data-search-open={strconv.FormatBool(v.ConversationSearchOpen)} data-archive-local-results={v.Text.RoomArchiveLocalResults} data-search-loading={v.Text.SearchLoading} data-search-failed={v.Text.SearchFailed} data-search-engine-changed={v.Text.EngineChanged} data-search-date-order={v.Text.SearchDateOrder} data-search-invalid={v.Text.SearchInvalid} data-search-empty={v.Text.SearchEmptyTitle} data-search-result-label={v.Text.ConversationSearchResult} data-search-missing={v.Text.ConversationSearchMissing} data-search-historical-label={v.Text.SearchPriorVersion} data-search-retracted-label={v.Text.MessageRetracted} aria-label={v.Text.SearchMessages}
  if v.RoomArchive != nil {
   data-has-room-archive
  }
@@ -26,6 +26,7 @@ if v.Selected!=nil {
 @button.Button(button.WithType("button"),button.WithAppearance(button.AppearancePlain),button.WithRootClass("oie-icon-button"),button.WithAttrs(templ.Attributes{"data-conversation-search-newer":"","disabled":true,"aria-label":v.Text.ConversationSearchNewer,"title":v.Text.ConversationSearchNewer})) { @glyph(heroicons.Icon16SolidChevronDown) }
 @link.Link(v.conversationSearchCloseHref(),link.WithRootClass("oie-icon-button"),link.WithAttrs(templ.Attributes{"data-conversation-search-close":"","aria-label":v.Text.ConversationSearchClose,"title":v.Text.ConversationSearchClose})) { @glyph(heroicons.Icon16SolidXMark) }
 </div>
+@conversationFilterFields(v.Text,"chat-search",v.ConversationFilters)
 <div class="oie-conversation-search-options">
 @checkbox.Checkbox(checkbox.Config{ID:"conversation-search-retracted",Name:"includeRetracted",Value:"true",Label:v.Text.IncludeRetracted,Checked:v.ConversationSearchRetracted})
 @checkbox.Checkbox(checkbox.Config{ID:"conversation-search-history",Name:"includeEditHistory",Value:"true",Label:v.Text.IncludeEditHistory,Checked:v.ConversationSearchHistory})
@@ -38,4 +39,15 @@ if v.Selected!=nil {
 <p class="oie-conversation-search-coverage" data-conversation-search-coverage hidden></p>
 </section>
 }
+}
+
+templ conversationFilterFields(text copy, prefix string, filters conversationSearchFilters) {
+<details class="oie-conversation-search-filters" open?={filters.active()}>
+<summary>{text.SearchFilters}</summary>
+<div class="oie-conversation-search-fields">
+@textinput.TextInput(textinput.Config{ID:prefix+"-sender",Name:"sender",Label:text.SearchSender,Value:filters.Sender,InputAttrs:templ.Attributes{"maxlength":"400","autocomplete":"off"}})
+@textinput.TextInput(textinput.Config{ID:prefix+"-from",Name:"fromDate",Type:textinput.TypeDate,Label:text.SearchFromDate,Value:filters.FromDate})
+@textinput.TextInput(textinput.Config{ID:prefix+"-to",Name:"toDate",Type:textinput.TypeDate,Label:text.SearchToDate,Value:filters.ToDate})
+</div>
+</details>
 }

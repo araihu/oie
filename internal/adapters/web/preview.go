@@ -170,6 +170,11 @@ func (v view) href(pairs ...string) string {
 	if v.ConversationSearchOpen {
 		q.Set("chatSearch", "1")
 		q.Set("chatQuery", v.ConversationSearchQuery)
+		for key, value := range map[string]string{"chatSender": v.ConversationFilters.Sender, "chatFromDate": v.ConversationFilters.FromDate, "chatToDate": v.ConversationFilters.ToDate} {
+			if value != "" {
+				q.Set(key, value)
+			}
+		}
 		if v.ConversationSearchRetracted {
 			q.Set("chatIncludeRetracted", "true")
 		}
@@ -188,7 +193,7 @@ func (v view) href(pairs ...string) string {
 			}
 		}
 		if pairs[i] == "section" && (pairs[i+1] == "media" || pairs[i+1] == "scheduled" || pairs[i+1] == "favorites") {
-			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "includeRetracted", "chatSearch", "chatQuery", "chatIncludeHistory", "chatIncludeRetracted", "chatSearchRevision"} {
+			for _, key := range []string{"searchMode", "searchQuery", "searchAccount", "searchType", "searchEngine", "includeEditHistory", "includeRetracted", "chatSearch", "chatQuery", "chatSender", "chatFromDate", "chatToDate", "chatIncludeHistory", "chatIncludeRetracted", "chatSearchRevision"} {
 				q.Del(key)
 			}
 		}
@@ -218,6 +223,9 @@ func (v view) href(pairs ...string) string {
 		if pairs[i] == "chat" && pairs[i+1] != v.ChatID {
 			q.Del("chatSearch")
 			q.Del("chatQuery")
+			q.Del("chatSender")
+			q.Del("chatFromDate")
+			q.Del("chatToDate")
 			q.Del("chatIncludeHistory")
 			q.Del("chatIncludeRetracted")
 			q.Del("chatSearchRevision")

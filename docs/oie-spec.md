@@ -1204,7 +1204,7 @@ A separate native daemon is an accepted future option. Wails desktop packaging i
 
 | ID | Deferred item, in priority order |
 | --- | --- |
-| **B32** | Message search by sender, date range, and content type. Start with sender and date range in the current conversation. See O08 for search filter design. |
+| **B32** | Conversation message search supports a sender name and inclusive calendar dates in the presentation time zone, with or without message text. Content-type filtering remains deferred. See O08 for search filter design. |
 | **B26** | A per-account **Note to self** shortcut for sending text and links to the account's own address. Verify that messages appear in both Oiê and Gajim when using the same XMPP account. |
 | **B27** | Explore an activity view for incoming mentions and reactions to the user's messages. Open the source message and follow the existing active-conversation, mute, and Do Not Disturb policies. |
 | **B28** | Select multiple messages and export an individual conversation as a readable file. Start with copying selected messages. Bulk deletion depends on the deletion scopes and recovery behavior in section 9.1 and O10. |

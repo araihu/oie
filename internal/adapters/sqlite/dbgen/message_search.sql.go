@@ -101,6 +101,9 @@ WITH initial_revisions AS (
  AND (CAST(?9 AS TEXT)='' OR m.account_id=CAST(?9 AS TEXT))
  AND (CAST(?10 AS TEXT)='[]' OR m.account_id IN (SELECT value FROM json_each(CAST(?10 AS TEXT))))
  AND (CAST(?11 AS TEXT)='' OR m.conversation_id=CAST(?11 AS TEXT))
+ AND (CAST(?12 AS TEXT)='' OR instr(oie_casefold(json_extract(m.payload,'$.Sender.DisplayName')),oie_casefold(CAST(?12 AS TEXT)))>0)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)>=COALESCE(CAST(?13 AS INTEGER),-9223372036854775807-1)
+ AND COALESCE(m.timeline_at_ms,m.created_at_ms)<=COALESCE(CAST(?14 AS INTEGER),9223372036854775807)
 ), variants AS (
  SELECT roots.id, roots.position_ms, roots.timeline_at_ms, roots.payload, roots.account_label, roots.account_address, roots.conversation_payload, roots.content_payload, roots.source_id, roots.matched_revision_id, roots.matched_at, roots.metadata,1 AS is_current,'' AS revision_key_at,'' AS revision_key_id FROM roots
  UNION ALL
@@ -110,7 +113,7 @@ WITH initial_revisions AS (
  JOIN message_revisions r ON r.id=f.source_revision_id
  JOIN initial_revisions first ON first.entity_id=f.message_id
  JOIN message_revisions source ON source.rowid=first.revision_row
- WHERE CAST(?12 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
+ WHERE CAST(?15 AS INTEGER)=1 AND source.id<>roots.matched_revision_id
  AND f.source_hash=COALESCE(json_extract(r.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(r.payload,'$.OriginalText')))
  AND f.source_hash=COALESCE(json_extract(source.payload,'$.WireBodySHA256'),oie_source_hash(json_extract(source.payload,'$.OriginalText')))
  GROUP BY roots.id,source.id
@@ -121,8 +124,8 @@ WITH initial_revisions AS (
  AND json_extract(content_payload,'$.WireBodySHA256') IS NULL
  AND r.body_hash=oie_source_hash(json_extract(content_payload,'$.OriginalText'))
 ), matched AS (
- SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, source_id, matched_revision_id, matched_at, metadata, is_current, revision_key_at, revision_key_id, body,CAST(oie_search_match(body,CAST(?13 AS TEXT)) AS INTEGER) AS text_match FROM bodies
- WHERE oie_search_match(body||' '||metadata,CAST(?13 AS TEXT))=1
+ SELECT id, position_ms, timeline_at_ms, payload, account_label, account_address, conversation_payload, content_payload, source_id, matched_revision_id, matched_at, metadata, is_current, revision_key_at, revision_key_id, body,CAST(oie_search_match(body,CAST(?16 AS TEXT)) AS INTEGER) AS text_match FROM bodies
+ WHERE oie_search_match(body||' '||metadata,CAST(?16 AS TEXT))=1
 )
 SELECT id,position_ms,timeline_at_ms,payload,account_label,account_address,conversation_payload,matched_revision_id,matched_at,body,metadata,is_current,revision_key_at,revision_key_id,text_match FROM matched
 WHERE (CAST(?1 AS TEXT)='' OR (position_ms,id,is_current,revision_key_at,revision_key_id)<(CAST(?2 AS INTEGER),CAST(?1 AS TEXT),CAST(?3 AS INTEGER),CAST(?4 AS TEXT),CAST(?5 AS TEXT)))
@@ -141,6 +144,9 @@ type SearchMessagesParams struct {
 	AccountID        string
 	AccountIds       string
 	ConversationID   string
+	Sender           string
+	FromMs           *int64
+	LastMs           *int64
 	IncludeHistory   int64
 	Search           string
 }
@@ -176,6 +182,9 @@ func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) 
 		arg.AccountID,
 		arg.AccountIds,
 		arg.ConversationID,
+		arg.Sender,
+		arg.FromMs,
+		arg.LastMs,
 		arg.IncludeHistory,
 		arg.Search,
 	)

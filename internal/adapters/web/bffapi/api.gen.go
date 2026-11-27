@@ -1539,7 +1539,7 @@ type SearchBrowserMessagesParams struct {
 	// EngineId Engine identity that owns this browser search session.
 	EngineId openapi_types.UUID `form:"engineId" json:"engineId"`
 
-	// Q Retained text/metadata query, trimmed before engine search. Empty means the local initial state.
+	// Q Retained text/metadata query, trimmed before engine search. May be empty with a conversation filter.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 
 	// AccountId Optional owning account scope.
@@ -1547,6 +1547,18 @@ type SearchBrowserMessagesParams struct {
 
 	// ConversationId Optional conversation scope, validated within account when both are supplied.
 	ConversationId *openapi_types.UUID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
+
+	// Sender Part of the sender name in this conversation.
+	Sender *string `form:"sender,omitempty" json:"sender,omitempty"`
+
+	// FromDate First calendar day to include.
+	FromDate *openapi_types.Date `form:"fromDate,omitempty" json:"fromDate,omitempty"`
+
+	// ToDate Last calendar day to include.
+	ToDate *openapi_types.Date `form:"toDate,omitempty" json:"toDate,omitempty"`
+
+	// TimeZone IANA time zone for calendar dates. Defaults to UTC.
+	TimeZone *string `form:"timeZone,omitempty" json:"timeZone,omitempty"`
 
 	// IncludeRetracted Include retained content from retracted messages.
 	IncludeRetracted *bool `form:"includeRetracted,omitempty" json:"includeRetracted,omitempty"`
@@ -1725,6 +1737,18 @@ type PrepareBrowserReplyParamsLang string
 
 // RequestBrowserRoomArchiveParams defines parameters for RequestBrowserRoomArchive.
 type RequestBrowserRoomArchiveParams struct {
+	// Sender Part of the sender name in this conversation.
+	Sender *string `form:"sender,omitempty" json:"sender,omitempty"`
+
+	// FromDate First calendar day to include.
+	FromDate *openapi_types.Date `form:"fromDate,omitempty" json:"fromDate,omitempty"`
+
+	// ToDate Last calendar day to include.
+	ToDate *openapi_types.Date `form:"toDate,omitempty" json:"toDate,omitempty"`
+
+	// TimeZone IANA time zone for calendar dates. Defaults to UTC.
+	TimeZone *string `form:"timeZone,omitempty" json:"timeZone,omitempty"`
+
 	// XOieEngineID Selected engine identity.
 	XOieEngineID openapi_types.UUID `json:"X-Oie-Engine-ID"`
 

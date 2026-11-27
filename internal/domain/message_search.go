@@ -4,6 +4,8 @@ import "time"
 
 type MessageSearchQuery struct {
 	Search, Cursor, ScopeHash string
+	Sender                    string
+	SentFrom, SentBefore      *time.Time
 	AccountID, ConversationID ID
 	AccountIDs                []ID
 	IncludeEditHistory        bool

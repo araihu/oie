@@ -7,11 +7,15 @@ window.OieRuntime.register('conversation-search',life=>{
  let opened=root.dataset.searchOpen==='true',epoch=0,selectionEpoch=0,timer=0,controller=null,busy=false,composing=false,hits=[],index=-1,next='',complete=false,lastCursor='',failure='',selected='',returnFocus=null;
  let lastSearchFocus=true;
  let archiveTimer=0, archiveController, contextController, archiveCursor='', archivePending=false, archiveFailed=false, localCoverage='';
- const state=()=>({q:query.value.trim(),includeEditHistory:String(history.checked),includeRetracted:String(retracted.checked),engineId:engine,accountId:account,conversationId:conversation});
+ const {sender,fromDate,toDate}=form.elements;
+ const activeSearch=()=>Boolean(query.value.trim()||sender.value.trim()||fromDate.value||toDate.value);
+ const archiveSearch=()=>Boolean(query.value.trim())&&window.OieRoomArchive?.search()===true;
+ const state=()=>({sender:sender.value.trim(),fromDate:fromDate.value,toDate:toDate.value,
+  timeZone:fromDate.value||toDate.value?(window.OieTime?.timeZone()||'UTC'):'',q:query.value.trim(),includeEditHistory:String(history.checked),includeRetracted:String(retracted.checked),engineId:engine,accountId:account,conversationId:conversation});
  const valid=()=>!life.signal.aborted&&root.isConnected&&document.body.dataset.engineId===engine&&document.body.dataset.accountId===account&&document.body.dataset.conversationId===conversation;
  const same=(request)=>{const current=state();return Object.keys(current).every(key=>current[key]===request[key])};
  function status(value){feedback.textContent=value||'';retry.hidden=!failure;}
- function controls(){older.disabled=busy||!opened||!hits.length||index+1>=hits.length&&!next&&!archiveCursor;newer.disabled=busy||!opened||index<=0;root.dataset.searchSelected=selected;root.dataset.searchIndex=String(index);root.dataset.searchLoaded=String(hits.length);root.dataset.searchComplete=String(complete);root.setAttribute('aria-busy',String(busy));if(!busy&&returnFocus){const previous=returnFocus;returnFocus=null;if(document.activeElement===document.body||document.activeElement===previous){const target=!previous.disabled&&!previous.hidden?previous:!newer.disabled?newer:query;target.focus({preventScroll:true})}}}
+ function controls(){older.disabled=busy||!opened||index+1>=hits.length&&!next&&(!archiveCursor||archivePending);newer.disabled=busy||!opened||index<=0;root.dataset.searchSelected=selected;root.dataset.searchIndex=String(index);root.dataset.searchLoaded=String(hits.length);root.dataset.searchComplete=String(complete);root.setAttribute('aria-busy',String(busy));if(!busy&&returnFocus){const previous=returnFocus;returnFocus=null;if(document.activeElement===document.body||document.activeElement===previous){const target=!previous.disabled&&!previous.hidden?previous:!newer.disabled?newer:query;target.focus({preventScroll:true})}}}
  const highlightName='oie-room-search';
  function clearHighlights(){
   CSS.highlights?.delete(highlightName);
@@ -156,12 +160,21 @@ window.OieRuntime.register('conversation-search',life=>{
    }
   }
  }
- function address(clearRevision=false){const url=new URL(location.href);if(opened){url.searchParams.set('chatSearch','1');if(query.value)url.searchParams.set('chatQuery',query.value);else url.searchParams.delete('chatQuery');if(history.checked)url.searchParams.set('chatIncludeHistory','true');else url.searchParams.delete('chatIncludeHistory');if(retracted.checked)url.searchParams.set('chatIncludeRetracted','true');else url.searchParams.delete('chatIncludeRetracted')}else for(const key of ['chatSearch','chatQuery','chatIncludeHistory','chatIncludeRetracted'])url.searchParams.delete(key);if(clearRevision||!opened)url.searchParams.delete('chatSearchRevision');window.OieNavigation?.addressSearch(url);}
+ function address(clearRevision=false){
+  const url=new URL(location.href);
+  const fields={chatSearch:'1',chatQuery:query.value,chatSender:sender.value,chatFromDate:fromDate.value,chatToDate:toDate.value,
+   chatIncludeHistory:history.checked?'true':'',chatIncludeRetracted:retracted.checked?'true':''};
+  for(const [key,value] of Object.entries(fields)){
+   if(opened&&value)url.searchParams.set(key,value);else url.searchParams.delete(key);
+  }
+  if(clearRevision||!opened)url.searchParams.delete('chatSearchRevision');
+  window.OieNavigation?.addressSearch(url);
+ }
  function abort(){epoch++;selectionEpoch++;clearTimeout(timer);clearTimeout(archiveTimer);controller?.abort();archiveController?.abort();contextController?.abort();controller=null;busy=false;window.OieTimeline?.cancelFocus?.();}
  function reset(){hits=[];index=-1;selected='';next='';archiveCursor='';archivePending=false;archiveFailed=false;localCoverage='';complete=false;failure='';lastCursor='';excerpt.hidden=true;excerpt.textContent='';coverage.hidden=true;coverage.textContent='';clearHighlights();status('');controls();}
  function parse(html,request,cursor){
   const document=new DOMParser().parseFromString(html,'text/html'),envelope=document.querySelector('[data-message-search-response]');
-  if(!envelope||envelope.dataset.searchEngine!==engine||envelope.dataset.searchAccount!==account||envelope.dataset.searchConversation!==conversation||envelope.dataset.searchQuery!==request.q||envelope.dataset.searchHistory!==request.includeEditHistory||envelope.dataset.searchRetracted!==request.includeRetracted||envelope.dataset.searchCursor!==cursor||envelope.dataset.searchState!=='ready')throw Error('scope');
+  if(!envelope||envelope.dataset.searchEngine!==engine||envelope.dataset.searchAccount!==account||envelope.dataset.searchConversation!==conversation||envelope.dataset.searchQuery!==request.q||envelope.dataset.searchHistory!==request.includeEditHistory||envelope.dataset.searchRetracted!==request.includeRetracted||envelope.dataset.searchSender!==request.sender||envelope.dataset.searchFrom!==request.fromDate||envelope.dataset.searchTo!==request.toDate||envelope.dataset.searchZone!==request.timeZone||envelope.dataset.searchCursor!==cursor||envelope.dataset.searchState!=='ready')throw Error('scope');
   const nextCursor=envelope.dataset.searchNext||'';if(nextCursor.length>2048||nextCursor&&nextCursor===cursor)throw Error('cursor');
   const rows=[...envelope.querySelectorAll('[data-message-search-hit]')];if(rows.length>50||!rows.length&&nextCursor)throw Error('bounds');
   const known=new Set(),items=[];
@@ -187,7 +200,7 @@ window.OieRuntime.register('conversation-search',life=>{
   }catch{if(valid()&&generation===epoch&&selection===selectionEpoch){busy=false;failure='focus';status(root.dataset.searchFailed);controls()}}
  }
  async function request(cursor='',position=0,focusResult=true){
-  if(!valid()||!opened||busy||composing)return;const request=state(),generation=epoch;if(!request.q){reset();return}if(Array.from(request.q).length>200){failure='';status(root.dataset.searchInvalid);controls();return}
+  if(!valid()||!opened||busy||composing)return;const request=state(),generation=epoch;if(!activeSearch()){reset();return}if(Array.from(request.q).length>200){failure='';status(root.dataset.searchInvalid);controls();return}
   const current=()=>valid()&&opened&&generation===epoch&&same(request);
   busy=true;failure='';lastSearchFocus=focusResult;status(root.dataset.searchLoading);controls();controller=new AbortController();const ownController=controller,timeout=life.timeout(()=>ownController.abort(),12000);
   try{
@@ -232,7 +245,7 @@ window.OieRuntime.register('conversation-search',life=>{
  }
  function updateCoverage(){
   const archive=window.OieRoomArchive;
-  const localOnly=archive?.partial()&&(archiveFailed||!archive.search());
+  const localOnly=archive?.partial()&&(archiveFailed||!archiveSearch());
   coverage.textContent=localOnly?root.dataset.archiveLocalResults:localCoverage;
   coverage.hidden=!coverage.textContent;
   complete=!next&&!archiveCursor&&!archivePending;
@@ -240,13 +253,13 @@ window.OieRuntime.register('conversation-search',life=>{
  async function searchArchive(cursor='', focusResult=true){
   if(!valid()||!opened||composing)return;
   const generation=epoch,request=state();
-  if(!window.OieRoomArchive?.search()||!request.q||Array.from(request.q).length>200){archivePending=false;updateCoverage();controls();return}
+  if(!archiveSearch()||request.fromDate&&request.toDate&&request.fromDate>request.toDate||!request.q||Array.from(request.q).length>200){archivePending=false;updateCoverage();controls();return}
   archivePending=true;
   const controller=new AbortController();
   archiveController=controller;
   const timeout=life.timeout(()=>controller.abort(),65000);
   try{
-   const result=await window.OieRoomArchive.request(life,{action:'search',query:request.q,...(cursor?{cursor}:{})},controller.signal);
+   const result=await window.OieRoomArchive.request(life,{action:'search',query:request.q,...(cursor?{cursor}:{})},controller.signal,'POST',new URLSearchParams({sender:request.sender,fromDate:request.fromDate,toDate:request.toDate,timeZone:request.timeZone}));
    if(!valid()||!opened||generation!==epoch||!same(request))return;
    archivePending=false;
    if(!result||!['stored','complete'].includes(result.outcome)){archiveFailed=true;archiveCursor='';updateCoverage();controls();return}
@@ -275,32 +288,39 @@ window.OieRuntime.register('conversation-search',life=>{
  function changed(delay=100){
   if(!opened)return;
   returnFocus=null;abort();reset();address(true);
-  if(!composing&&state().q){
-   archivePending=window.OieRoomArchive?.search()===true;
+  toDate.min=fromDate.value;fromDate.max=toDate.value;
+  if(fromDate.value&&toDate.value&&fromDate.value>toDate.value){status(root.dataset.searchDateOrder);return}
+  if(!composing&&activeSearch()){
+   archivePending=archiveSearch();
    timer=life.timeout(()=>request(),delay);
    if(archivePending)archiveTimer=life.timeout(()=>searchArchive(),350);
   }
  }
- function open(){if(!valid())return;const menu=document.getElementById('chat-options'),item=menu?.contains(document.activeElement)?document.activeElement:menu?.querySelector('[role=menuitem]');item?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));opened=true;root.hidden=false;root.dataset.searchOpen='true';address();query.focus({preventScroll:true});if(state().q&&index<0)changed(0);}
+ function open(){if(!valid())return;const menu=document.getElementById('chat-options'),item=menu?.contains(document.activeElement)?document.activeElement:menu?.querySelector('[role=menuitem]');item?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));opened=true;root.hidden=false;root.dataset.searchOpen='true';address();query.focus({preventScroll:true});if(activeSearch()&&index<0)changed(0);}
  function close(){opened=false;root.hidden=true;root.dataset.searchOpen='false';abort();clearHighlights();address();controls();document.getElementById('chat-search-messages')?.focus({preventScroll:true});}
  life.on(document,'oie:history-pruned',event=>{
   if(!opened||event.detail.conversationId!==conversation)return;
   abort();reset();
-  if(state().q)timer=life.timeout(()=>request('',0,false),100);
+  if(activeSearch())timer=life.timeout(()=>request('',0,false),100);
  });
  life.on(window.OieEvents?.target,'message.updated',event=>{
-  if(!valid()||!opened||!state().q)return;
+  if(!valid()||!opened||!activeSearch())return;
   let message;try{message=JSON.parse(event.detail.data).message}catch{return;}
   if(message?.accountId!==account||message.conversationId!==conversation||!(message.retraction||message.moderation))return;
   if(!busy&&!archivePending&&!hits.some(hit=>hit.id===message.id&&!hit.retracted))return;
   abort();reset();
-  archivePending=window.OieRoomArchive?.search()===true;
+  archivePending=archiveSearch();
   timer=life.timeout(()=>request('',0,false),100);
   if(archivePending)archiveTimer=life.timeout(()=>searchArchive('',false),350);
  });
  life.on(document,'oie:conversation-search-open',open);
  life.on(document,'click',event=>{const link=event.target.closest?.('[data-open-conversation-search]');if(link&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&(!link.dataset.searchConversation||link.dataset.searchConversation===conversation)){event.preventDefault();event.stopImmediatePropagation();window.dispatchEvent(new CustomEvent('drawer:close',{detail:{id:'details'}}));open()}},true);
  life.on(form,'submit',event=>{event.preventDefault();changed(0)});
+ life.on(sender,'input',event=>{if(!event.isComposing)changed()});
+ life.on(sender,'compositionstart',()=>{composing=true;abort()});
+ life.on(sender,'compositionend',()=>{composing=false;changed()});
+ for(const field of [fromDate,toDate])life.on(field,'change',()=>changed(0));
+ life.on(document,'oie:time-zone',()=>{if(fromDate.value||toDate.value)changed(0)});
  life.on(query,'compositionstart',()=>{composing=true;abort()});life.on(query,'compositionend',()=>{composing=false;changed()});life.on(query,'input',event=>{if(!event.isComposing&&!composing)changed()});life.on(history,'change',()=>changed(0));life.on(retracted,'change',()=>changed(0));
  life.on(older,'click',()=>{if(busy)return;returnFocus=older;if(index+1<hits.length)select(index+1);else if(next)request(next,index+1);else if(archiveCursor&&!archivePending)searchArchive(archiveCursor)});
  life.on(newer,'click',()=>{if(!busy&&index>0){returnFocus=newer;select(index-1)}});
@@ -314,5 +334,5 @@ window.OieRuntime.register('conversation-search',life=>{
   if(direction){event.preventDefault();if(!direction.disabled)direction.click();}
  });
  life.on(document,'oie:timeline-content',()=>{if(opened&&selected)highlight()});life.on(document,'oie:previews-refresh',()=>{if(opened&&selected)life.raf(highlight)});life.on(document,'change',event=>{if(event.target.matches('[data-render-markdown]')&&opened&&selected)life.raf(highlight)});life.on(window,'storage',event=>{if(event.key==='oie.device.render-markdown.v1'&&opened&&selected)life.raf(highlight)});
- life.cleanup(()=>{abort();clearHighlights()});controls();if(opened&&state().q){address();const focusResult=!new URL(location.href).searchParams.has('message');archivePending=window.OieRoomArchive?.search()===true;request('',0,focusResult);if(archivePending)archiveTimer=life.timeout(()=>searchArchive('',focusResult),350);}
+ life.cleanup(()=>{abort();clearHighlights()});controls();if(opened&&activeSearch()){address();const focusResult=!new URL(location.href).searchParams.has('message');archivePending=archiveSearch();request('',0,focusResult);if(archivePending)archiveTimer=life.timeout(()=>searchArchive('',focusResult),350);}
 });
