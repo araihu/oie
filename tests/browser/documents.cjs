@@ -337,6 +337,14 @@ const id=n=>'019a5df0-0000-7000-8000-'+String(n).padStart(12,'0');
     assert(await phone.locator('#details-body').isVisible(), 'Escape preserves the underlying details drawer');
     await close(phone);
     assert(await opener.evaluate(button => button === document.activeElement));
+    const cardMenu = phone.locator('#info-shared-results [data-shared-actions="' + good + '"]');
+    const trigger = cardMenu.locator('[data-shared-menu-trigger]');
+    await trigger.click();
+    await cardMenu.locator('[id^="shared-download-"]').click();
+    await attachment.waitFor();
+    await attachment.getByRole('button', {name:'Fechar'}).click();
+    await attachment.waitFor({state:'hidden'});
+    assert(await trigger.evaluate(button => button === document.activeElement), 'File viewer returns focus to the shared card menu');
    } finally {
     await mobile.close();
    }

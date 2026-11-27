@@ -33,10 +33,55 @@ function iosAttachmentFixture(messageID) {
   return fixture;
 }
 
+async function checkColdFileTap(context, url, fixture, changeRoute) {
+  const page = await context.newPage();
+  let release;
+  const ready = new Promise(resolve => { release = resolve; });
+  try {
+    await page.route('**/ui/documents.js', async route => {
+      await ready;
+      await route.continue();
+    });
+    await page.goto(url, {waitUntil:'commit'});
+    const links = page.locator('a[download][href^="/ui/omemo-attachments/"]');
+    await links.first().waitFor({state:'visible'});
+    await page.evaluate(() => {
+      window.fileTaps = [];
+      document.addEventListener('click', event => {
+        if (event.target.closest?.('a[download]')) window.fileTaps.push(event.defaultPrevented);
+      });
+    });
+    const reads = fixture.reads;
+    await links.first().tap();
+    // The synthetic download link is detached immediately after the click.
+    await links.nth(1).evaluate(link => window.OieRuntime.saveFile(link.href, link.download, link));
+    assert.deepEqual(await page.evaluate(() => window.fileTaps), [true, true]);
+    assert.equal(fixture.reads, reads);
+    if (changeRoute) await page.evaluate(() => history.replaceState(null, '', '/?inbox=1'));
+    release();
+    await page.waitForLoadState('domcontentloaded');
+    const dialog = page.locator('#oie-file-viewer');
+    if (changeRoute) {
+      assert.equal(await dialog.count(), 0);
+      assert.equal(fixture.reads, reads);
+    } else {
+      await dialog.getByRole('button', {name:'Fechar'}).waitFor();
+      assert.equal(await dialog.locator('h2').textContent(), fixture.filenames[1]);
+      await dialog.getByRole('button', {name:'Fechar'}).click();
+      assert.equal(page.url(), url);
+    }
+  } finally {
+    release();
+    await page.close();
+  }
+}
+
 async function checkIOSFileViewer(browser, url, fixture) {
-  const context = await browser.newContext({...devices['iPhone 13']});
+  const context = await browser.newContext({...devices['iPhone 13'], serviceWorkers:'block'});
   const page = await context.newPage();
   try {
+    await checkColdFileTap(context, url, fixture, false);
+    await checkColdFileTap(context, url, fixture, true);
     await page.addInitScript(() => {
       const shared = [];
       window.sharedFiles = shared;

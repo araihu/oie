@@ -4,10 +4,6 @@ window.OieRuntime.register('previews', life => {
   const viewer=document.querySelector('[data-image-viewer]');
   const dialog=document.querySelector('#oie-image-viewer');
   const csrf=document.querySelector('meta[name="oie-csrf"]')?.content || '';
-  async function saveFile(path,name){
-    if(window.OieDesktop?.saveFile)return window.OieDesktop.saveFile(path,name);
-    const anchor=document.createElement('a');anchor.href=path;anchor.download=name;document.body.append(anchor);anchor.click();anchor.remove();return true;
-  }
   const downloading=new Map(),refreshing=new Set();
   const preferenceKey='oie.device.auto-image-downloads.v1';
   let automatic=true;
@@ -280,7 +276,7 @@ window.OieRuntime.register('previews', life => {
         const file=current.dataset.previewFile;
         if(/^\/ui\/media\/[0-9a-f]{64}$/.test(file||'')){
           const name=current.dataset.previewName||'image';
-          const saved=await saveFile(file+'?download='+encodeURIComponent(name),name);notify(saved?'saved':'cancelled');return;
+          const saved=await window.OieRuntime.saveFile(file+'?download='+encodeURIComponent(name),name,request.opener);notify(saved?'saved':'cancelled');return;
         }
         if(current.dataset.previewDownload==='failed')throw Error('download_failed');
         const response=await life.fetch('/ui/api/v1/previews/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store',headers:{'X-Oie-Engine-ID':request.engineId},signal:controller.signal});
@@ -379,10 +375,11 @@ window.OieRuntime.register('previews', life => {
     const scope=button.closest('[data-preview-id]')||(menu&&find(id));if(!scope||scope.dataset.previewKind!=='image')return;
     event.preventDefault();
     if(menu?.id.startsWith('save-preview-')){
+      const opener = menu.closest('[data-message-menu-slot]')?.querySelector('[data-message-menu-trigger]') || scope.querySelector('[data-image-menu-trigger]');
       if(!await download(scope))return;
       const path=scope.dataset.previewFile;if(!/^\/ui\/media\/[0-9a-f]{64}$/.test(path||''))return;
       const name=scope.dataset.previewName||'image';
-      try{await saveFile(path+'?download='+encodeURIComponent(name),name);}catch{if(!life.signal.aborted)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:labels.failed||''}}));}return;
+      try{await window.OieRuntime.saveFile(path+'?download='+encodeURIComponent(name),name,opener);}catch{if(!life.signal.aborted)window.dispatchEvent(new CustomEvent('notify',{detail:{kind:'toast',tone:'danger',message:labels.failed||''}}));}return;
     }
     if(menu?.id.startsWith('info-preview-')){
       if(scope.dataset.previewFile)registerOriginal(scope);

@@ -202,9 +202,7 @@ window.OieRuntime.register('documents', life => {
 // In an iOS Home Screen app, navigating to an attachment response can replace
 // the entire workspace with Quick Look, which has no browser Back control.
 window.OieRuntime.register('ios-file-viewer', life => {
- const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
- if (!ios) return;
+ if (!window.OieRuntime.onIOSFileOpen) return;
  const template = document.querySelector('template[data-ios-file-viewer]');
  if (!template) return;
  const dialog = template.content.firstElementChild.cloneNode(true);
@@ -302,7 +300,7 @@ window.OieRuntime.register('ios-file-viewer', life => {
   reset();
   const controller = new AbortController();
   request = controller;
-  opener = link.closest('[data-message-menu-slot]')?.querySelector('[data-message-menu-trigger]') || link;
+  opener = link.oieDownloadOpener || link.closest('[data-message-menu-slot]')?.querySelector('[data-message-menu-trigger]') || link;
   let filename = link.download || dialog.dataset.filename;
   title.textContent = filename;
   status.textContent = dialog.dataset.loading;
@@ -355,16 +353,6 @@ window.OieRuntime.register('ios-file-viewer', life => {
   }
  }
 
- life.on(document, 'click', event => {
-  const link = event.target.closest?.('a[download], a[id^="download-video-"]');
-  if (!link || link === save || event.defaultPrevented || event.button !== 0 ||
-      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  const url = new URL(link.href);
-  if (url.origin !== location.origin || !(url.pathname === '/ui/scheduling/file' ||
-      /^\/ui\/(?:omemo-attachments\/[^/]+\/\d+|shared-content\/[^/]+\/content|media\/[a-f0-9]{64})$/.test(url.pathname))) return;
-  event.preventDefault();
-  void openFile(link);
- }, true);
  life.on(share, 'click', async () => {
   const current = file;
   if (!current) return;
@@ -390,4 +378,5 @@ window.OieRuntime.register('ios-file-viewer', life => {
  });
  life.on(window, 'pagehide', () => { dialog.close(); reset(); });
  life.cleanup(() => { dialog.close(); reset(); dialog.remove(); });
+ window.OieRuntime.onIOSFileOpen(life, openFile);
 });
