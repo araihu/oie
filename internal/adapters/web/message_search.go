@@ -214,7 +214,7 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 		return
 	}
 	if state.ConversationID != "" {
-		owner, err := s.client.GetConversationWithResponse(ctx, state.ConversationID)
+		owner, err := s.client.GetConversationWithResponse(ctx, state.ConversationID, v.requestLanguage)
 		if err != nil {
 			state.State = "unavailable"
 			state.Status = 503
@@ -236,11 +236,11 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 			state.Filters.Sender = ""
 		}
 		if state.Room && v.NativeMessageSearch {
-			roster, err := s.client.GetRoomParticipantsWithResponse(ctx, state.ConversationID)
+			roster, err := s.client.GetRoomParticipantsWithResponse(ctx, state.ConversationID, v.requestLanguage)
 			if err == nil {
 				v.InfoParticipants = roster.JSON200
 			}
-			messages, err := s.client.ListMessagesWithResponse(ctx, state.ConversationID, &engineapi.ListMessagesParams{})
+			messages, err := s.client.ListMessagesWithResponse(ctx, state.ConversationID, &engineapi.ListMessagesParams{}, v.requestLanguage)
 			if err == nil && messages.JSON200 != nil {
 				for _, m := range messages.JSON200.Items {
 					v.Messages = append(v.Messages, messageView{Message: m})
@@ -281,7 +281,7 @@ func (s *Server) loadMessageSearch(ctx context.Context, v *view) {
 	if state.Cursor != "" {
 		params.Cursor = &state.Cursor
 	}
-	response, err := s.client.SearchMessagesWithResponse(ctx, &params)
+	response, err := s.client.SearchMessagesWithResponse(ctx, &params, v.requestLanguage)
 	if err != nil {
 		return
 	}

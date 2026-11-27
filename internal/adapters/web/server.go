@@ -1234,6 +1234,11 @@ func (s *Server) baseView(r *http.Request) view {
 	}
 	return v
 }
+func (v *view) requestLanguage(_ context.Context, req *http.Request) error {
+	req.Header.Set("Accept-Language", v.Locale)
+	return nil
+}
+
 func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	fragment := ""
 	if r.URL.Path == "/" && r.Header.Get("HX-Request") == "true" {
@@ -1253,10 +1258,7 @@ func (s *Server) load(ctx context.Context, r *http.Request, v *view) {
 	if fragment == "appearance" {
 		return
 	}
-	editor := func(_ context.Context, req *http.Request) error {
-		req.Header.Set("Accept-Language", v.Locale)
-		return nil
-	}
+	editor := v.requestLanguage
 	rawEngine, err := s.client.GetEngine(ctx, editor)
 	v.OfflineEngineStatus = offlineEngineStatus(rawEngine, err)
 	if err != nil {
